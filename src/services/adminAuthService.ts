@@ -13,7 +13,6 @@ import {
   addDoc,
   getDocFromServer
 } from 'firebase/firestore';
-import { signInAnonymously } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 import { Admin, AdminRole } from '../types';
 import { useState, useEffect } from 'react';
@@ -32,45 +31,30 @@ async function testConnection() {
 
 testConnection();
 
+import { signInWithCustomToken } from 'firebase/auth';
+
 export const loginAdmin = async (username: string, password: string): Promise<Admin | null> => {
   try {
-    // 1. Sign in anonymously FIRST to get a valid request.auth.uid for Firestore rules
-    // This ensures that even the initial query is performed by an authenticated user
-    const userCredential = await signInAnonymously(auth);
-    const uid = userCredential.user.uid;
-
-    // 2. Find the admin document by username and password
-    const q = query(
-      collection(db, 'admins'), 
-      where('username', '==', username), 
-      where('password', '==', password)
-    );
-    
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) {
-      // If login fails, we should probably sign out or just leave it anonymous
-      // but for now, we return null
-      return null;
-    }
-    
-    const docData = snapshot.docs[0];
-    const adminData = docData.data() as Admin;
-
-    // 3. Create a session document at /admin_sessions/{uid} for security rules
-    // This allows rules to verify the user is a valid admin without knowing their username
-    await setDoc(doc(db, 'admin_sessions', uid), {
-      username: adminData.username,
-      role: adminData.role,
-      permissions: adminData.permissions || [],
-      adminDocId: docData.id,
-      createdAt: serverTimestamp()
+    // 1. Call the backend API to verify credentials and get a Custom Token
+    const response = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
     });
 
-    const loggedAdmin = { ...adminData, id: docData.id, uid };
-    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Identifiants incorrects");
+    }
+
+    const { token, admin } = await response.json();
+
+    // 2. Sign in with the Custom Token to get a valid request.auth.uid for Firestore rules
+    await signInWithCustomToken(auth, token);
+
     // Store in localStorage for persistence
-    localStorage.setItem('neopay_admin', JSON.stringify(loggedAdmin));
-    return loggedAdmin;
+    localStorage.setItem('neopay_admin', JSON.stringify(admin));
+    return admin;
   } catch (error: any) {
     console.error("Admin login error:", error);
     throw new Error(error.message || "Erreur de connexion");
