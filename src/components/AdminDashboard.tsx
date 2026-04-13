@@ -24,9 +24,7 @@ import {
   Gamepad2,
   Bell,
   Filter,
-  ArrowUpDown,
-  UserPlus,
-  ShieldAlert
+  ArrowUpDown
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -46,9 +44,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame } from '../services/parcelService';
 import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus, resetMonthlyStats, awardMonthlyPrizes, clearMonthlyWinners, useMonthlyRankings } from '../services/affiliateService';
-import { useAllAdmins, createSubAdmin, updateAdmin, deleteAdmin } from '../services/adminAuthService';
-import { useAuth } from '../hooks/useAuth';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, Admin, AdminRole } from '../types';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game } from '../types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -99,7 +95,6 @@ const compressImage = (file: File): Promise<Blob> => {
 };
 
 export default function AdminDashboard() {
-  const { profile, isSuperAdmin } = useAuth();
   const { parcels, loading: parcelsLoading } = useParcels();
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
@@ -107,7 +102,6 @@ export default function AdminDashboard() {
   const { affiliates, loading: affiliatesLoading } = useAllAffiliates();
   const { withdrawals: allWithdrawals, loading: allWithdrawalsLoading } = useAllWithdrawals();
   const { requests: affiliateRequests, loading: affiliateRequestsLoading } = useAllAffiliateRequests();
-  const { admins, loading: adminsLoading } = useAllAdmins();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -130,17 +124,6 @@ export default function AdminDashboard() {
     description: '',
     priceRange: '',
     whatsappMessage: ''
-  });
-
-  const [isAdminDialogOpen, setIsAdminDialogOpen] = useState(false);
-  const [editingAdmin, setEditingAdmin] = useState<Admin | null>(null);
-  const [isAdminDeleteDialogOpen, setIsAdminDeleteDialogOpen] = useState(false);
-  const [adminToDelete, setAdminToDelete] = useState<Admin | null>(null);
-  const [adminFormData, setAdminFormData] = useState<Partial<Admin>>({
-    username: '',
-    password: '',
-    name: '',
-    role: 'parcel_manager'
   });
 
   const [isAwarding, setIsAwarding] = useState(false);
@@ -612,69 +595,6 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleOpenAdminDialog = (admin?: Admin) => {
-    if (admin) {
-      setEditingAdmin(admin);
-      setAdminFormData(admin);
-    } else {
-      setEditingAdmin(null);
-      setAdminFormData({
-        username: '',
-        password: '',
-        name: '',
-        role: 'parcel_manager'
-      });
-    }
-    setIsAdminDialogOpen(true);
-  };
-
-  const handleSaveAdmin = async () => {
-    setIsSaving(true);
-    try {
-      if (editingAdmin) {
-        await updateAdmin(editingAdmin.id!, adminFormData);
-        toast.success("Administrateur mis à jour !");
-      } else {
-        await createSubAdmin(adminFormData);
-        toast.success("Nouvel administrateur créé !");
-      }
-      setIsAdminDialogOpen(false);
-    } catch (error: any) {
-      toast.error(error.message || "Erreur lors de l'enregistrement");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleConfirmDeleteAdmin = async () => {
-    if (!adminToDelete?.id) return;
-    setIsDeleting(true);
-    try {
-      await deleteAdmin(adminToDelete.id);
-      toast.success("Administrateur supprimé.");
-      setIsAdminDeleteDialogOpen(false);
-    } catch (error) {
-      toast.error("Erreur lors de la suppression.");
-    } finally {
-      setIsDeleting(false);
-      setAdminToDelete(null);
-    }
-  };
-
-  const canAccess = (tab: string) => {
-    if (isSuperAdmin) return true;
-    const role = profile?.role;
-    switch (tab) {
-      case 'parcels': return role === 'parcel_manager';
-      case 'affiliates':
-      case 'notifications': return role === 'affiliate_manager';
-      case 'products':
-      case 'games':
-      case 'settings': return role === 'settings_manager';
-      default: return false;
-    }
-  };
-
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'Livré': return <CheckCircle2 className="h-4 w-4 text-green-500" />;
@@ -691,61 +611,43 @@ export default function AdminDashboard() {
         <p className="text-sm sm:text-base text-gray-500">Gérez les colis, les produits et les paramètres du site.</p>
       </div>
 
-      <Tabs defaultValue={isSuperAdmin ? "parcels" : (profile?.role === 'parcel_manager' ? 'parcels' : (profile?.role === 'affiliate_manager' ? 'affiliates' : 'products'))} className="space-y-6">
+      <Tabs defaultValue="parcels" className="space-y-6">
         <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide">
           <TabsList className="bg-white border p-1 rounded-xl h-auto flex flex-nowrap sm:flex-wrap gap-1 sm:gap-2 min-w-max sm:min-w-0">
-            {canAccess('parcels') && (
-              <TabsTrigger value="parcels" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
-                <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                Colis
-              </TabsTrigger>
-            )}
-            {canAccess('products') && (
-              <TabsTrigger value="products" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
-                <LayoutGrid className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                Produits / Services
-              </TabsTrigger>
-            )}
-            {canAccess('games') && (
-              <TabsTrigger value="games" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
-                <Gamepad2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                Top-up Jeux
-              </TabsTrigger>
-            )}
-            {canAccess('affiliates') && (
-              <TabsTrigger value="affiliates" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap relative">
-                <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                Affiliés
-                {totalPending > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white">
-                    {totalPending}
-                  </span>
-                )}
-              </TabsTrigger>
-            )}
-            {canAccess('notifications') && (
-              <TabsTrigger value="notifications" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap relative">
-                <Bell className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                Notifications
-                {totalPending > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white">
-                    {totalPending}
-                  </span>
-                )}
-              </TabsTrigger>
-            )}
-            {isSuperAdmin && (
-              <TabsTrigger value="admins" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
-                <ShieldAlert className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                Administrateurs
-              </TabsTrigger>
-            )}
-            {canAccess('settings') && (
-              <TabsTrigger value="settings" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
-                <SettingsIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                Paramètres
-              </TabsTrigger>
-            )}
+            <TabsTrigger value="parcels" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
+              <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              Colis
+            </TabsTrigger>
+            <TabsTrigger value="products" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
+              <LayoutGrid className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              Produits / Services
+            </TabsTrigger>
+            <TabsTrigger value="games" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
+              <Gamepad2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              Top-up Jeux
+            </TabsTrigger>
+            <TabsTrigger value="affiliates" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap relative">
+              <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              Affiliés
+              {totalPending > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white">
+                  {totalPending}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap relative">
+              <Bell className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              Notifications
+              {totalPending > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white">
+                  {totalPending}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
+              <SettingsIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              Paramètres
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -1540,82 +1442,6 @@ export default function AdminDashboard() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="admins" className="space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <h2 className="text-xl font-bold">Gestion des Administrateurs</h2>
-            <Button onClick={() => handleOpenAdminDialog()} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2">
-              <UserPlus className="h-4 w-4" />
-              Nouvel Admin
-            </Button>
-          </div>
-
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Username</TableHead>
-                  <TableHead>Rôle</TableHead>
-                  <TableHead>Date Création</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {adminsLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8">
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
-                    </TableCell>
-                  </TableRow>
-                ) : admins.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-gray-500">
-                      Aucun administrateur trouvé.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  admins.map((admin) => (
-                    <TableRow key={admin.id}>
-                      <TableCell className="font-medium">{admin.name}</TableCell>
-                      <TableCell>{admin.username}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {admin.role.replace('_', ' ')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {admin.createdAt ? format(admin.createdAt.toDate(), 'dd MMM yyyy', { locale: fr }) : '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => handleOpenAdminDialog(admin)}
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => {
-                              setAdminToDelete(admin);
-                              setIsAdminDeleteDialogOpen(true);
-                            }}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-
         <TabsContent value="settings" className="space-y-6">
           <h2 className="text-xl font-bold text-center sm:text-left">Paramètres du Site</h2>
           <Card className="max-w-2xl mx-auto sm:mx-0">
@@ -1709,102 +1535,6 @@ export default function AdminDashboard() {
       </Tabs>
 
       {/* Affiliate Edit/Add Dialog */}
-      {/* Admin Dialog */}
-      <Dialog open={isAdminDialogOpen} onOpenChange={setIsAdminDialogOpen}>
-        <DialogContent className="sm:max-w-[450px]">
-          <DialogHeader>
-            <DialogTitle>{editingAdmin ? 'Modifier' : 'Nouvel'} Administrateur</DialogTitle>
-            <DialogDescription>
-              {editingAdmin ? 'Modifiez les informations de l\'administrateur.' : 'Créez un nouvel administrateur avec des tâches spécifiques.'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="admin-name">Nom Complet</Label>
-              <Input 
-                id="admin-name" 
-                value={adminFormData.name} 
-                onChange={(e) => setAdminFormData({...adminFormData, name: e.target.value})}
-                placeholder="Ex: Jean Dupont"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="admin-username">Nom d'utilisateur</Label>
-              <Input 
-                id="admin-username" 
-                value={adminFormData.username} 
-                onChange={(e) => setAdminFormData({...adminFormData, username: e.target.value})}
-                placeholder="Ex: jean_admin"
-                disabled={!!editingAdmin}
-              />
-            </div>
-            {!editingAdmin && (
-              <div className="space-y-2">
-                <Label htmlFor="admin-password">Mot de passe</Label>
-                <Input 
-                  id="admin-password" 
-                  type="password"
-                  value={adminFormData.password} 
-                  onChange={(e) => setAdminFormData({...adminFormData, password: e.target.value})}
-                  placeholder="••••••••"
-                />
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="admin-role">Rôle / Tâche</Label>
-              <Select 
-                value={adminFormData.role} 
-                onValueChange={(value: AdminRole) => setAdminFormData({...adminFormData, role: value})}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un rôle" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="super_admin">Super Admin (Tout)</SelectItem>
-                  <SelectItem value="parcel_manager">Gestionnaire de Colis</SelectItem>
-                  <SelectItem value="affiliate_manager">Gestionnaire d'Affiliés</SelectItem>
-                  <SelectItem value="settings_manager">Gestionnaire de Paramètres</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-[10px] text-gray-500 mt-1">
-                Le rôle définit les onglets auxquels cet administrateur aura accès.
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAdminDialogOpen(false)}>Annuler</Button>
-            <Button onClick={handleSaveAdmin} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-              {editingAdmin ? 'Mettre à jour' : 'Créer'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Admin Delete Confirmation */}
-      <Dialog open={isAdminDeleteDialogOpen} onOpenChange={setIsAdminDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirmer la suppression</DialogTitle>
-            <DialogDescription>
-              Êtes-vous sûr de vouloir supprimer l'administrateur <strong>{adminToDelete?.name}</strong> ? 
-              Cette action est irréversible.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAdminDeleteDialogOpen(false)}>Annuler</Button>
-            <Button 
-              variant="destructive" 
-              onClick={handleConfirmDeleteAdmin} 
-              disabled={isDeleting}
-            >
-              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
-              Supprimer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={isAffiliateDialogOpen} onOpenChange={setIsAffiliateDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>

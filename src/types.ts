@@ -13,24 +13,10 @@ export interface Parcel {
   updatedAt: any;
 }
 
-export type AdminRole = 'super_admin' | 'parcel_manager' | 'affiliate_manager' | 'settings_manager';
-
-export interface Admin {
-  id?: string;
-  username: string;
-  password?: string;
-  name: string;
-  role: AdminRole;
-  permissions?: string[];
-  createdAt: any;
-  updatedAt: any;
-}
-
 export interface UserProfile {
   uid: string;
   email: string;
-  role: 'admin' | AdminRole;
-  username?: string;
+  role: 'admin';
 }
 
 export interface Product {
