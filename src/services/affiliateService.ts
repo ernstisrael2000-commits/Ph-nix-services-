@@ -12,7 +12,8 @@ import {
   serverTimestamp, 
   orderBy, 
   limit, 
-  onSnapshot 
+  onSnapshot,
+  setDoc
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { Affiliate, WithdrawalRequest, AffiliateRequest } from '../types';
@@ -338,22 +339,46 @@ export const updateAffiliateRequestStatus = async (requestId: string, status: 'a
   }
 };
 
+export const usePendingCounts = () => {
+  const [counts, setCounts] = useState({ registrations: 0, withdrawals: 0, total: 0 });
+
+  useEffect(() => {
+    const qReg = query(collection(db, 'affiliate_requests'), where('status', '==', 'pending'));
+    const qWith = query(collection(db, 'withdrawals'), where('status', '==', 'pending'));
+
+    const unsubReg = onSnapshot(qReg, (snapReg) => {
+      const regCount = snapReg.size;
+      const unsubWith = onSnapshot(qWith, (snapWith) => {
+        const withCount = snapWith.size;
+        setCounts({
+          registrations: regCount,
+          withdrawals: withCount,
+          total: regCount + withCount
+        });
+      });
+      return () => unsubWith();
+    });
+
+    return () => unsubReg();
+  }, []);
+
+  return counts;
+};
+
 export const useMonthlyRankings = () => {
-  const [rankings, setRankings] = useState<Affiliate[]>([]);
+  const [rankings, setRankings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Fetch all affiliates and filter/sort client-side to avoid index requirements
-    const q = query(collection(db, 'affiliates'));
+    const docRef = doc(db, 'settings', 'global');
     
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as Affiliate))
-        .filter(a => a.isMonthlyWinner === true)
-        .sort((a, b) => (b.points || 0) - (a.points || 0))
-        .slice(0, 3);
-        
-      setRankings(data);
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as any;
+        setRankings(data.officialWinners || []);
+      } else {
+        setRankings([]);
+      }
       setLoading(false);
     }, (error) => {
       console.error("Error fetching rankings:", error);
@@ -368,6 +393,7 @@ export const useMonthlyRankings = () => {
 
 export const clearMonthlyWinners = async () => {
   try {
+    // 1. Clear flags on affiliates
     const snapshot = await getDocs(query(collection(db, 'affiliates'), where('isMonthlyWinner', '==', true)));
     const promises = snapshot.docs.map(docSnap => 
       updateDoc(doc(db, 'affiliates', docSnap.id), {
@@ -376,6 +402,13 @@ export const clearMonthlyWinners = async () => {
       })
     );
     await Promise.all(promises);
+
+    // 2. Clear official winners in settings
+    const settingsRef = doc(db, 'settings', 'global');
+    await setDoc(settingsRef, {
+      officialWinners: [],
+      updatedAt: serverTimestamp()
+    }, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, 'affiliates');
   }
@@ -412,6 +445,7 @@ export const awardMonthlyPrizes = async () => {
     const awardedWinners: Affiliate[] = [];
 
     // 4. Award prizes and mark as winners
+    const officialWinners = [];
     for (let i = 0; i < eligible.length; i++) {
       const affiliateRef = doc(db, 'affiliates', eligible[i].id!);
       const prize = prizes[i];
@@ -422,12 +456,30 @@ export const awardMonthlyPrizes = async () => {
         updatedAt: serverTimestamp()
       }));
       
+      const winnerInfo = {
+        id: eligible[i].id!,
+        name: eligible[i].name,
+        points: eligible[i].points || 0,
+        prize: prize,
+        monthlySales: eligible[i].monthlySales || 0,
+        monthlyReferredClients: eligible[i].monthlyReferredClients || 0
+      };
+      
+      officialWinners.push(winnerInfo);
+      
       awardedWinners.push({
         ...eligible[i],
         balance: (eligible[i].balance || 0) + prize,
         isMonthlyWinner: true
       });
     }
+
+    // 5. Update official winners in settings
+    const settingsRef = doc(db, 'settings', 'global');
+    promises.push(setDoc(settingsRef, {
+      officialWinners: officialWinners,
+      updatedAt: serverTimestamp()
+    }, { merge: true }));
 
     await Promise.all(promises);
     return awardedWinners;

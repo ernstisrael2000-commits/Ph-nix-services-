@@ -4,24 +4,31 @@ import { auth } from '@/lib/firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { useAuth } from '../hooks/useAuth';
 import { useSettings } from '../services/parcelService';
+import { usePendingCounts } from '../services/affiliateService';
+import { toast } from 'sonner';
 
 export default function Navbar({ currentView, onViewChange }: { currentView: string, onViewChange: (view: any) => void }) {
   const { user, isAdmin } = useAuth();
   const { settings } = useSettings();
-
-  const handleLogin = async () => {
+  const { total: pendingCount } = usePendingCounts();
+  
+  const handleGoogleLogin = async () => {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
+      toast.success("Connexion réussie !");
     } catch (error) {
       console.error("Login failed:", error);
+      toast.error("Échec de la connexion Google");
     }
   };
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      localStorage.removeItem('neopay_admin');
       onViewChange('home');
+      toast.success("Déconnexion réussie");
     } catch (error) {
       console.error("Logout failed:", error);
     }
@@ -79,35 +86,38 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
               <span className="hidden sm:inline">Affiliés</span>
             </Button>
             
-            {isAdmin && (
-              <Button 
-                variant={currentView === 'admin' ? 'secondary' : 'outline'} 
-                onClick={() => onViewChange('admin')} 
-                className="flex items-center gap-2 border-blue-200 hover:bg-blue-50 text-blue-700 px-2 sm:px-4"
-              >
-                <ShieldCheck className="h-4 w-4" />
-                <span className="hidden sm:inline">Admin</span>
-              </Button>
-            )}
+            <Button 
+              variant={currentView === 'admin' ? 'secondary' : 'ghost'} 
+              onClick={() => onViewChange('admin')} 
+              className="flex items-center gap-2 px-2 sm:px-4 relative"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              <span className="hidden sm:inline">Admin</span>
+              {isAdmin && pendingCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white">
+                  {pendingCount}
+                </span>
+              )}
+            </Button>
 
             {user ? (
               <div className="flex items-center gap-3">
                 <img 
-                  src={user.photoURL || ''} 
+                  src={user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}`} 
                   alt={user.displayName || ''} 
                   className="h-8 w-8 rounded-full border hidden xs:block"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}`;
-                  }}
                 />
                 <Button variant="ghost" size="sm" onClick={handleLogout} className="text-gray-500 hover:text-red-600">
                   <LogOut className="h-4 w-4" />
                 </Button>
               </div>
             ) : (
-              <Button onClick={handleLogin} className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2">
+              <Button 
+                onClick={handleGoogleLogin}
+                className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+              >
                 <LogIn className="h-4 w-4" />
-                <span className="hidden xs:inline">Connexion</span>
+                <span className="hidden xs:inline">Connexion Google</span>
               </Button>
             )}
           </div>

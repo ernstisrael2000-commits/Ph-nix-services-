@@ -77,11 +77,23 @@
     },
     "settings": {
       "title": "Settings",
-      "description": "Global app settings like logo.",
+      "description": "Global app settings like logo and official winners.",
       "type": "object",
       "properties": {
         "logoUrl": { "type": "string" },
-        "whatsappAdminNumber": { "type": "string" }
+        "whatsappAdminNumber": { "type": "string" },
+        "officialWinners": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "points": { "type": "number" },
+              "prize": { "type": "number" }
+            }
+          }
+        }
       }
     },
     "affiliate": {
@@ -116,6 +128,24 @@
       },
       "required": ["affiliateId", "amount", "method", "status"]
     },
+    "admin": {
+      "title": "Admin",
+      "description": "Represents an administrator with specific permissions.",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["super_admin", "parcel_manager", "affiliate_manager", "settings_manager"] },
+        "permissions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["username", "password", "name", "role"]
+    },
     "game": {
       "title": "Game",
       "description": "Represents a game for top-up services.",
@@ -129,6 +159,21 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "image", "description", "priceRange"]
+    },
+    "affiliate_request": {
+      "title": "Affiliate Request",
+      "description": "Represents a request to join the affiliate program.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "phone", "status"]
     }
   },
   "firestore": {
@@ -155,6 +200,14 @@
     "/withdrawals/{withdrawalId}": {
       "schema": "withdrawal",
       "description": "Collection of withdrawal requests."
+    },
+    "/affiliate_requests/{requestId}": {
+      "schema": "affiliate_request",
+      "description": "Collection of requests to join the affiliate program."
+    },
+    "/admins/{adminId}": {
+      "schema": "admin",
+      "description": "Collection of administrators."
     },
     "/games/{gameId}": {
       "schema": "game",

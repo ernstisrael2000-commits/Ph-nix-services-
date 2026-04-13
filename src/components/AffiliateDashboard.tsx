@@ -4,7 +4,8 @@ import {
   useTopAffiliates, 
   submitWithdrawal, 
   useAffiliateWithdrawals,
-  useMonthlyRankings
+  useMonthlyRankings,
+  useAllAffiliates
 } from '../services/affiliateService';
 import { Affiliate, WithdrawalRequest } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
@@ -53,6 +54,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const { affiliate, loading: affiliateLoading } = useAffiliateData(affiliateId);
   const { topAffiliates, loading: topLoading } = useTopAffiliates();
   const { rankings: monthlyRankings, loading: rankingsLoading } = useMonthlyRankings();
+  const { affiliates, loading: affiliatesLoading } = useAllAffiliates();
   const { withdrawals, loading: withdrawalsLoading } = useAffiliateWithdrawals(affiliateId);
   const { settings } = useSettings();
 
@@ -67,6 +69,13 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     if (!affiliate) return 0;
     return topAffiliates.findIndex(a => a.id === affiliate.id) + 1;
   }, [topAffiliates, affiliate?.id]);
+
+  const winnersQueue = React.useMemo(() => {
+    return [...affiliates]
+      .filter(a => (a.points || 0) > 0)
+      .sort((a, b) => (b.points || 0) - (a.points || 0))
+      .slice(0, 3);
+  }, [affiliates]);
 
   if (affiliateLoading) {
     return (
@@ -324,6 +333,39 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                         </Badge>
                       </div>
                     ))
+                  ) : winnersQueue.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 mb-2 px-1">
+                        <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 text-[10px] py-0 h-5">FILE D'ATTENTE</Badge>
+                        <span className="text-[10px] text-gray-500 italic">Classement provisoire du mois</span>
+                      </div>
+                      {winnersQueue.map((a, idx) => (
+                        <div key={a.id} className="flex items-center justify-between p-4 rounded-xl bg-white border shadow-sm opacity-80">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
+                              idx === 0 ? 'bg-amber-500 text-white' : 
+                              idx === 1 ? 'bg-gray-400 text-white' : 
+                              'bg-orange-500 text-white'
+                            }`}>
+                              {idx + 1}
+                            </div>
+                            <div>
+                              <p className="font-bold text-gray-900">{a.name}</p>
+                              <p className="text-xs font-bold text-blue-600">
+                                {a.points || 0} points
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] font-bold text-amber-600">Candidat</p>
+                            <p className="text-[9px] text-gray-400">{idx === 0 ? 'Prix: 500 G' : idx === 1 ? 'Prix: 250 G' : 'Prix: 150 G'}</p>
+                          </div>
+                        </div>
+                      ))}
+                      <p className="text-[10px] text-center text-gray-400 mt-2 italic">
+                        Ce classement est provisoire jusqu'à la validation finale par l'admin.
+                      </p>
+                    </div>
                   ) : (
                     <div className="text-center py-10 text-gray-400 bg-white/50 rounded-xl border border-dashed border-amber-200">
                       <Trophy className="h-10 w-10 mx-auto mb-3 opacity-20 text-amber-500" />

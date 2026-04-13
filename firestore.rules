@@ -25,6 +25,15 @@ service cloud.firestore {
     //
     // ===============================================================
 
+    // Collection: admins
+    // Document ID: userId (auth.uid)
+    // Fields:
+    //   - username: string (required)
+    //   - name: string (required)
+    //   - role: string (required, enum) - super_admin, parcel_manager, affiliate_manager, settings_manager
+    //
+    // ===============================================================
+
     // ===============================================================
     // Helper Functions
     // ===============================================================
@@ -38,8 +47,33 @@ service cloud.firestore {
         (
           (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-          request.auth.token.email == "ernstisrael2000@gmail.com"
+          exists(/databases/$(database)/documents/admin_sessions/$(request.auth.uid)) ||
+          (request.auth.token.email == "ernstisrael2000@gmail.com" && request.auth.token.email_verified == true)
         );
+    }
+
+    function getAdminData() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data :
+        (exists(/databases/$(database)/documents/admin_sessions/$(request.auth.uid)) ?
+          get(/databases/$(database)/documents/admin_sessions/$(request.auth.uid)).data :
+          ((request.auth.token.email == "ernstisrael2000@gmail.com" && request.auth.token.email_verified == true) ? { "role": "super_admin" } : { "role": "none" }));
+    }
+
+    function isSuperAdmin() {
+      return isAdmin() && getAdminData().role == 'super_admin';
+    }
+
+    function canManageParcels() {
+      return isSuperAdmin() || (getAdminData() != null && getAdminData().role == 'parcel_manager');
+    }
+
+    function canManageAffiliates() {
+      return isSuperAdmin() || (getAdminData() != null && getAdminData().role == 'affiliate_manager');
+    }
+
+    function canManageSettings() {
+      return isSuperAdmin() || (getAdminData() != null && getAdminData().role == 'settings_manager');
     }
 
     function isValidAffiliate(data) {
@@ -70,56 +104,79 @@ service cloud.firestore {
              data.price is string;
     }
 
+    function isValidGame(data) {
+      return data.keys().hasAll(['name', 'image', 'description', 'priceRange']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.image is string &&
+             data.description is string &&
+             data.priceRange is string;
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
 
     match /parcels/{parcelId} {
       allow read: if true; 
-      allow create: if isAdmin() && isValidParcel(request.resource.data);
-      allow update: if isAdmin() && isValidParcel(request.resource.data);
-      allow delete: if isAdmin();
+      allow create: if canManageParcels() && isValidParcel(request.resource.data);
+      allow update: if canManageParcels() && isValidParcel(request.resource.data);
+      allow delete: if canManageParcels();
     }
 
     match /products/{productId} {
       allow read: if true;
-      allow create: if isAdmin() && isValidProduct(request.resource.data);
-      allow update: if isAdmin() && isValidProduct(request.resource.data);
-      allow delete: if isAdmin();
+      allow create: if canManageSettings() && isValidProduct(request.resource.data);
+      allow update: if canManageSettings() && isValidProduct(request.resource.data);
+      allow delete: if canManageSettings();
     }
 
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if canManageSettings();
     }
 
     match /affiliates/{affiliateId} {
       allow read: if true; 
-      allow create: if isAdmin() && isValidAffiliate(request.resource.data);
-      allow update: if isAdmin() && isValidAffiliate(request.resource.data);
-      allow delete: if isAdmin();
+      allow create: if canManageAffiliates() && isValidAffiliate(request.resource.data);
+      allow update: if canManageAffiliates() && isValidAffiliate(request.resource.data);
+      allow delete: if canManageAffiliates();
     }
 
     match /withdrawals/{withdrawalId} {
-      allow read: if true; // Allow affiliates to see their requests and admins to see all
-      allow create: if true; // Affiliates can create requests
-      allow update: if isAdmin(); // Only admins can approve/reject
-      allow delete: if isAdmin();
+      allow read: if true; 
+      allow create: if true; 
+      allow update: if canManageAffiliates(); 
+      allow delete: if canManageAffiliates();
     }
 
     match /affiliate_requests/{requestId} {
+      allow read: if canManageAffiliates();
+      allow create: if true; 
+      allow update: if canManageAffiliates();
+      allow delete: if canManageAffiliates();
+    }
+
+    match /games/{gameId} {
+      allow read: if true;
+      allow create: if canManageSettings() && isValidGame(request.resource.data);
+      allow update: if canManageSettings() && isValidGame(request.resource.data);
+      allow delete: if canManageSettings();
+    }
+
+    match /admins/{adminId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+    match /admin_sessions/{sessionId} {
       allow read: if isAdmin();
-      allow create: if true; // Public can request to join
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create: if isAuthenticated() && request.auth.uid == sessionId;
+      allow delete: if isSuperAdmin() || (isAuthenticated() && request.auth.uid == sessionId);
     }
 
     match /users/{userId} {
-      // Users can only read their own profile
       allow read: if isAuthenticated() && request.auth.uid == userId;
-      
-      // Only admins can manage users (or the system bootstraps the first admin)
-      allow write: if isAdmin();
+      allow write: if isSuperAdmin();
     }
   }
 }

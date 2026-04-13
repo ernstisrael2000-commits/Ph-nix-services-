@@ -13,10 +13,24 @@ export interface Parcel {
   updatedAt: any;
 }
 
+export type AdminRole = 'super_admin' | 'parcel_manager' | 'affiliate_manager' | 'settings_manager';
+
+export interface Admin {
+  id?: string;
+  username: string;
+  password?: string;
+  name: string;
+  role: AdminRole;
+  permissions?: string[];
+  createdAt: any;
+  updatedAt: any;
+}
+
 export interface UserProfile {
   uid: string;
   email: string;
-  role: 'admin';
+  role: 'admin' | AdminRole;
+  username?: string;
 }
 
 export interface Product {
@@ -61,6 +75,14 @@ export interface WithdrawalRequest {
 export interface AppSettings {
   logoUrl?: string;
   whatsappAdminNumber?: string;
+  officialWinners?: {
+    id: string;
+    name: string;
+    points: number;
+    prize: number;
+    monthlySales: number;
+    monthlyReferredClients: number;
+  }[];
 }
 
 export interface Game {
