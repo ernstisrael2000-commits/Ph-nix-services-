@@ -11,8 +11,8 @@ export const useAuth = () => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setUser(firebaseUser);
       if (firebaseUser) {
-        setUser(firebaseUser);
         // Try users collection first (Google Auth admins)
         const userDocRef = doc(db, 'users', firebaseUser.uid);
         const userDocSnap = await getDoc(userDocRef);
@@ -20,17 +20,16 @@ export const useAuth = () => {
         if (userDocSnap.exists()) {
           setProfile(userDocSnap.data() as UserProfile);
         } else {
-          // Check admin_sessions (sub-admins)
-          const sessionDocRef = doc(db, 'admin_sessions', firebaseUser.uid);
-          const sessionDocSnap = await getDoc(sessionDocRef);
+          // Try admins collection (Username/Password admins)
+          const adminDocRef = doc(db, 'admins', firebaseUser.uid);
+          const adminDocSnap = await getDoc(adminDocRef);
           
-          if (sessionDocSnap.exists()) {
-            const sessionData = sessionDocSnap.data();
+          if (adminDocSnap.exists()) {
             setProfile({
               uid: firebaseUser.uid,
-              email: '',
-              role: sessionData.role as AdminRole,
-              username: sessionData.username
+              email: firebaseUser.email || '',
+              role: adminDocSnap.data().role as AdminRole,
+              username: adminDocSnap.data().username
             });
           } else if (firebaseUser.email === 'ernstisrael2000@gmail.com') {
             // Hardcoded super admin
@@ -42,21 +41,7 @@ export const useAuth = () => {
           }
         }
       } else {
-        // Check for simple admin login in localStorage
-        const savedAdmin = localStorage.getItem('neopay_admin');
-        if (savedAdmin) {
-          const adminData = JSON.parse(savedAdmin);
-          setUser(null);
-          setProfile({
-            uid: adminData.id,
-            email: '',
-            role: adminData.role,
-            username: adminData.username
-          });
-        } else {
-          setUser(null);
-          setProfile(null);
-        }
+        setProfile(null);
       }
       setLoading(false);
     });
@@ -65,8 +50,7 @@ export const useAuth = () => {
   }, []);
 
   const isAdmin = !!profile?.role;
-  const isSuperAdmin = profile?.role === 'super_admin' || 
-                       (user?.email === 'ernstisrael2000@gmail.com' && user?.emailVerified);
+  const isSuperAdmin = profile?.role === 'super_admin' || user?.email === 'ernstisrael2000@gmail.com';
 
   return { user, profile, loading, isAdmin, isSuperAdmin };
 };

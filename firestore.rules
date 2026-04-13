@@ -47,33 +47,36 @@ service cloud.firestore {
         (
           (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-          exists(/databases/$(database)/documents/admin_sessions/$(request.auth.uid)) ||
-          (request.auth.token.email == "ernstisrael2000@gmail.com" && request.auth.token.email_verified == true)
+          exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+          request.auth.token.email == "ernstisrael2000@gmail.com"
         );
     }
 
     function getAdminData() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data :
-        (exists(/databases/$(database)/documents/admin_sessions/$(request.auth.uid)) ?
-          get(/databases/$(database)/documents/admin_sessions/$(request.auth.uid)).data :
-          ((request.auth.token.email == "ernstisrael2000@gmail.com" && request.auth.token.email_verified == true) ? { "role": "super_admin" } : { "role": "none" }));
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data;
     }
 
     function isSuperAdmin() {
-      return isAdmin() && getAdminData().role == 'super_admin';
+      return isAdmin() && (
+        request.auth.token.email == "ernstisrael2000@gmail.com" ||
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && 
+         getAdminData().role == 'super_admin')
+      );
     }
 
     function canManageParcels() {
-      return isSuperAdmin() || (getAdminData() != null && getAdminData().role == 'parcel_manager');
+      return isSuperAdmin() || (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && 
+                                getAdminData().role == 'parcel_manager');
     }
 
     function canManageAffiliates() {
-      return isSuperAdmin() || (getAdminData() != null && getAdminData().role == 'affiliate_manager');
+      return isSuperAdmin() || (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && 
+                                getAdminData().role == 'affiliate_manager');
     }
 
     function canManageSettings() {
-      return isSuperAdmin() || (getAdminData() != null && getAdminData().role == 'settings_manager');
+      return isSuperAdmin() || (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && 
+                                getAdminData().role == 'settings_manager');
     }
 
     function isValidAffiliate(data) {
@@ -164,14 +167,8 @@ service cloud.firestore {
     }
 
     match /admins/{adminId} {
-      allow read: if isAuthenticated();
-      allow write: if isSuperAdmin();
-    }
-
-    match /admin_sessions/{sessionId} {
       allow read: if isAdmin();
-      allow create: if isAuthenticated() && request.auth.uid == sessionId;
-      allow delete: if isSuperAdmin() || (isAuthenticated() && request.auth.uid == sessionId);
+      allow write: if isSuperAdmin();
     }
 
     match /users/{userId} {

@@ -4,7 +4,6 @@ import TrackingView from './components/TrackingView';
 import AdminDashboard from './components/AdminDashboard';
 import HomeView from './components/HomeView';
 import AffiliateLogin from './components/AffiliateLogin';
-import AdminLogin from './components/AdminLogin';
 import AffiliateDashboard from './components/AffiliateDashboard';
 import { Toaster } from './components/ui/sonner';
 import { useAuth } from './hooks/useAuth';
@@ -62,7 +61,21 @@ export default function App() {
             isAdmin ? (
               <AdminDashboard />
             ) : (
-              <AdminLogin />
+              <div className="max-w-md mx-auto mt-20 p-8 text-center bg-white rounded-2xl shadow-sm border">
+                <div className="bg-red-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <ShieldAlert className="h-8 w-8 text-red-600" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Accès restreint</h2>
+                <p className="text-gray-600 mb-6">
+                  Vous devez être administrateur pour accéder à cette section.
+                </p>
+                <button 
+                  onClick={() => setView('home')}
+                  className="text-blue-600 font-semibold hover:underline"
+                >
+                  Retour à l'accueil
+                </button>
+              </div>
             )
           )}
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Plus, 
   Search, 
@@ -99,7 +99,7 @@ const compressImage = (file: File): Promise<Blob> => {
 };
 
 export default function AdminDashboard() {
-  const { profile, isSuperAdmin, loading } = useAuth();
+  const { profile, isSuperAdmin } = useAuth();
   const { parcels, loading: parcelsLoading } = useParcels();
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
@@ -134,7 +134,7 @@ export default function AdminDashboard() {
 
   const [isAdminDialogOpen, setIsAdminDialogOpen] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState<Admin | null>(null);
-  const [isAdminDeleteConfirmOpen, setIsAdminDeleteConfirmOpen] = useState(false);
+  const [isAdminDeleteDialogOpen, setIsAdminDeleteDialogOpen] = useState(false);
   const [adminToDelete, setAdminToDelete] = useState<Admin | null>(null);
   const [adminFormData, setAdminFormData] = useState<Partial<Admin>>({
     username: '',
@@ -147,18 +147,7 @@ export default function AdminDashboard() {
   const [isClearingWinners, setIsClearingWinners] = useState(false);
 
   const [isAffiliateDialogOpen, setIsAffiliateDialogOpen] = useState(false);
-  const [isAffiliateDeleteConfirmOpen, setIsAffiliateDeleteConfirmOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>("");
-
-  useEffect(() => {
-    if (!loading && profile) {
-      const defaultTab = isSuperAdmin ? "parcels" : 
-        (profile.role === 'parcel_manager' ? 'parcels' : 
-        (profile.role === 'affiliate_manager' ? 'affiliates' : 'products'));
-      setActiveTab(defaultTab);
-    }
-  }, [loading, profile, isSuperAdmin]);
-
+  const [isAffiliateDeleteDialogOpen, setIsAffiliateDeleteDialogOpen] = useState(false);
   const [affiliateToDelete, setAffiliateToDelete] = useState<Affiliate | null>(null);
   const [editingAffiliate, setEditingAffiliate] = useState<Affiliate | null>(null);
   const [affiliateFormData, setAffiliateFormData] = useState<Partial<Affiliate>>({
@@ -519,7 +508,7 @@ export default function AdminDashboard() {
 
   const handleOpenAffiliateDeleteDialog = (affiliate: Affiliate) => {
     setAffiliateToDelete(affiliate);
-    setIsAffiliateDeleteConfirmOpen(true);
+    setIsAffiliateDeleteDialogOpen(true);
   };
 
   const handleConfirmAffiliateDelete = async () => {
@@ -528,7 +517,7 @@ export default function AdminDashboard() {
     try {
       await deleteAffiliate(affiliateToDelete.id);
       toast.success("Affilié supprimé avec succès.");
-      setIsAffiliateDeleteConfirmOpen(false);
+      setIsAffiliateDeleteDialogOpen(false);
     } catch (error) {
       console.error(error);
       toast.error("Erreur lors de la suppression.");
@@ -640,40 +629,18 @@ export default function AdminDashboard() {
   };
 
   const handleSaveAdmin = async () => {
-    console.log("Saving admin:", adminFormData);
-    if (!adminFormData.name || !adminFormData.username || (!editingAdmin && !adminFormData.password)) {
-      toast.error("Veuillez remplir tous les champs obligatoires");
-      return;
-    }
-
     setIsSaving(true);
-    const loadingToast = toast.loading(editingAdmin ? "Mise à jour..." : "Création de l'administrateur...");
-    
     try {
       if (editingAdmin) {
         await updateAdmin(editingAdmin.id!, adminFormData);
-        toast.success("Administrateur mis à jour !", { id: loadingToast });
+        toast.success("Administrateur mis à jour !");
       } else {
         await createSubAdmin(adminFormData);
-        toast.success("Nouvel administrateur créé !", { id: loadingToast });
+        toast.success("Nouvel administrateur créé !");
       }
       setIsAdminDialogOpen(false);
     } catch (error: any) {
-      console.error("Error saving admin:", error);
-      let message = error.message;
-      if (message.startsWith('{')) {
-        try {
-          const errData = JSON.parse(message);
-          if (errData.error?.includes('permission-denied')) {
-            message = "Permissions insuffisantes. Seul le Super Admin peut créer des administrateurs.";
-          } else {
-            message = errData.error;
-          }
-        } catch (e) {
-          // Fallback to original message
-        }
-      }
-      toast.error(message || "Erreur lors de l'enregistrement", { id: loadingToast });
+      toast.error(error.message || "Erreur lors de l'enregistrement");
     } finally {
       setIsSaving(false);
     }
@@ -685,7 +652,7 @@ export default function AdminDashboard() {
     try {
       await deleteAdmin(adminToDelete.id);
       toast.success("Administrateur supprimé.");
-      setIsAdminDeleteConfirmOpen(false);
+      setIsAdminDeleteDialogOpen(false);
     } catch (error) {
       toast.error("Erreur lors de la suppression.");
     } finally {
@@ -724,7 +691,7 @@ export default function AdminDashboard() {
         <p className="text-sm sm:text-base text-gray-500">Gérez les colis, les produits et les paramètres du site.</p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs defaultValue={isSuperAdmin ? "parcels" : (profile?.role === 'parcel_manager' ? 'parcels' : (profile?.role === 'affiliate_manager' ? 'affiliates' : 'products'))} className="space-y-6">
         <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide">
           <TabsList className="bg-white border p-1 rounded-xl h-auto flex flex-nowrap sm:flex-wrap gap-1 sm:gap-2 min-w-max sm:min-w-0">
             {canAccess('parcels') && (
@@ -1633,7 +1600,7 @@ export default function AdminDashboard() {
                             size="sm" 
                             onClick={() => {
                               setAdminToDelete(admin);
-                              setIsAdminDeleteConfirmOpen(true);
+                              setIsAdminDeleteDialogOpen(true);
                             }}
                             className="text-red-600 hover:text-red-700 hover:bg-red-50"
                           >
@@ -1806,12 +1773,7 @@ export default function AdminDashboard() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAdminDialogOpen(false)}>Annuler</Button>
-            <Button 
-              type="button"
-              onClick={handleSaveAdmin} 
-              disabled={isSaving} 
-              className="bg-blue-600 hover:bg-blue-700"
-            >
+            <Button onClick={handleSaveAdmin} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
               {editingAdmin ? 'Mettre à jour' : 'Créer'}
             </Button>
@@ -1820,7 +1782,7 @@ export default function AdminDashboard() {
       </Dialog>
 
       {/* Admin Delete Confirmation */}
-      <Dialog open={isAdminDeleteConfirmOpen} onOpenChange={setIsAdminDeleteConfirmOpen}>
+      <Dialog open={isAdminDeleteDialogOpen} onOpenChange={setIsAdminDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Confirmer la suppression</DialogTitle>
@@ -1830,7 +1792,7 @@ export default function AdminDashboard() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAdminDeleteConfirmOpen(false)}>Annuler</Button>
+            <Button variant="outline" onClick={() => setIsAdminDeleteDialogOpen(false)}>Annuler</Button>
             <Button 
               variant="destructive" 
               onClick={handleConfirmDeleteAdmin} 
@@ -1941,7 +1903,7 @@ export default function AdminDashboard() {
       </Dialog>
 
       {/* Affiliate Delete Confirmation Dialog */}
-      <Dialog open={isAffiliateDeleteConfirmOpen} onOpenChange={setIsAffiliateDeleteConfirmOpen}>
+      <Dialog open={isAffiliateDeleteDialogOpen} onOpenChange={setIsAffiliateDeleteDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
@@ -1954,7 +1916,7 @@ export default function AdminDashboard() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setIsAffiliateDeleteConfirmOpen(false)} disabled={isDeleting}>
+            <Button variant="outline" onClick={() => setIsAffiliateDeleteDialogOpen(false)} disabled={isDeleting}>
               Annuler
             </Button>
             <Button variant="destructive" onClick={handleConfirmAffiliateDelete} disabled={isDeleting}>
