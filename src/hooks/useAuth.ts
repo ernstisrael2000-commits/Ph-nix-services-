@@ -38,5 +38,11 @@ export const useAuth = () => {
 
   const isAdmin = profile?.role === 'admin' || user?.email === 'ernstisrael2000@gmail.com';
 
+  useEffect(() => {
+    if (user) {
+      console.log("Current user:", user.email, "isAdmin:", isAdmin);
+    }
+  }, [user, isAdmin]);
+
   return { user, profile, loading, isAdmin };
 };

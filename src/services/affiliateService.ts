@@ -13,10 +13,12 @@ import {
   orderBy, 
   limit, 
   onSnapshot,
-  setDoc
+  setDoc,
+  increment,
+  writeBatch
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { Affiliate, WithdrawalRequest, AffiliateRequest } from '../types';
+import { Affiliate, WithdrawalRequest, AffiliateRequest, AffiliateNotification } from '../types';
 
 enum OperationType {
   CREATE = 'create',
@@ -114,7 +116,7 @@ export const useTopAffiliates = () => {
 export const submitWithdrawal = async (
   affiliate: Affiliate, 
   amount: number, 
-  method: 'MonCash' | 'NatCash',
+  method: 'MonCash' | 'NatCash' | 'Physical',
   accountNumber: string
 ) => {
   if (amount > affiliate.balance) {
@@ -339,10 +341,15 @@ export const updateAffiliateRequestStatus = async (requestId: string, status: 'a
   }
 };
 
-export const usePendingCounts = () => {
+export const usePendingCounts = (enabled: boolean = false) => {
   const [counts, setCounts] = useState({ registrations: 0, withdrawals: 0, total: 0 });
 
   useEffect(() => {
+    if (!enabled) {
+      setCounts({ registrations: 0, withdrawals: 0, total: 0 });
+      return;
+    }
+
     const qReg = query(collection(db, 'affiliate_requests'), where('status', '==', 'pending'));
     const qWith = query(collection(db, 'withdrawals'), where('status', '==', 'pending'));
 
@@ -355,12 +362,16 @@ export const usePendingCounts = () => {
           withdrawals: withCount,
           total: regCount + withCount
         });
+      }, (error) => {
+        console.error("Error fetching pending withdrawals:", error);
       });
       return () => unsubWith();
+    }, (error) => {
+      console.error("Error fetching pending registrations:", error);
     });
 
     return () => unsubReg();
-  }, []);
+  }, [enabled]);
 
   return counts;
 };
@@ -389,6 +400,72 @@ export const useMonthlyRankings = () => {
   }, []);
 
   return { rankings, loading };
+};
+
+// Notification Services
+export const useNotifications = (affiliateId: string | null) => {
+  const [notifications, setNotifications] = useState<AffiliateNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!affiliateId) {
+      setLoading(false);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'notifications'),
+      where('affiliateId', '==', affiliateId),
+      orderBy('createdAt', 'desc'),
+      limit(20)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as AffiliateNotification[];
+      setNotifications(data);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching notifications:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [affiliateId]);
+
+  return { notifications, loading };
+};
+
+export const markNotificationAsRead = async (notificationId: string) => {
+  const ref = doc(db, 'notifications', notificationId);
+  await updateDoc(ref, { read: true });
+};
+
+export const createNotification = async (
+  affiliateId: string, 
+  title: string, 
+  message: string, 
+  type: AffiliateNotification['type']
+) => {
+  await addDoc(collection(db, 'notifications'), {
+    affiliateId,
+    title,
+    message,
+    type,
+    read: false,
+    createdAt: serverTimestamp()
+  });
+};
+
+// Level Calculation Helper
+export const getAffiliateLevelInfo = (points: number) => {
+  if (points >= 5000) return { level: 'VIP', nextThreshold: Infinity, progress: 100 };
+  if (points >= 2500) return { level: 'Elite', nextThreshold: 5000, progress: ((points - 2500) / 2500) * 100 };
+  if (points >= 1000) return { level: 'Gold', nextThreshold: 2500, progress: ((points - 1000) / 1500) * 100 };
+  if (points >= 250) return { level: 'Silver', nextThreshold: 1000, progress: ((points - 250) / 750) * 100 };
+  return { level: 'Bronze', nextThreshold: 250, progress: (points / 250) * 100 };
 };
 
 export const clearMonthlyWinners = async () => {
@@ -502,6 +579,96 @@ export const resetMonthlyStats = async () => {
       })
     );
     await Promise.all(promises);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, 'affiliates');
+  }
+};
+
+export const recordPurchase = async (affiliateId: string, type: 'purchase' | 'subscription' | 'virtual_card') => {
+  try {
+    const affiliateRef = doc(db, 'affiliates', affiliateId);
+    const affiliateSnap = await getDoc(affiliateRef);
+    
+    if (!affiliateSnap.exists()) throw new Error("Affilié non trouvé");
+    
+    const affiliateData = affiliateSnap.data() as Affiliate;
+    
+    // Commission rates
+    let directCommission = 2.5; // Default for general purchase
+    let pointsEarned = 1;
+    
+    if (type === 'subscription') {
+      directCommission = 100;
+      pointsEarned = 10;
+    } else if (type === 'virtual_card') {
+      directCommission = 500;
+      pointsEarned = 50;
+    }
+    
+    const indirectCommission = 0.5;
+    
+    const batch = writeBatch(db);
+    
+    // 1. Update Direct Affiliate
+    batch.update(affiliateRef, {
+      balance: increment(directCommission),
+      directRevenue: increment(directCommission),
+      totalEarnings: increment(directCommission),
+      points: increment(pointsEarned),
+      monthlySales: increment(1),
+      updatedAt: serverTimestamp()
+    });
+    
+    // 2. Update Parent Affiliate (Indirect Revenue)
+    if (affiliateData.parentAffiliateId) {
+      const parentRef = doc(db, 'affiliates', affiliateData.parentAffiliateId);
+      const parentSnap = await getDoc(parentRef);
+      
+      if (parentSnap.exists()) {
+        batch.update(parentRef, {
+          balance: increment(indirectCommission),
+          indirectRevenue: increment(indirectCommission),
+          totalEarnings: increment(indirectCommission),
+          updatedAt: serverTimestamp()
+        });
+        
+        // Create notification for parent
+        const notifRef = doc(collection(db, 'notifications'));
+        batch.set(notifRef, {
+          affiliateId: affiliateData.parentAffiliateId,
+          title: "Revenu Indirect !",
+          message: `Vous avez reçu ${indirectCommission} Goud grâce à une vente de votre affilié ${affiliateData.name}.`,
+          type: 'revenue',
+          read: false,
+          createdAt: serverTimestamp()
+        });
+      }
+    }
+    
+    // Create notification for direct affiliate
+    const directNotifRef = doc(collection(db, 'notifications'));
+    batch.set(directNotifRef, {
+      affiliateId: affiliateId,
+      title: "Nouvelle Vente !",
+      message: `Félicitations ! Vous avez gagné ${directCommission} Goud et ${pointsEarned} points.`,
+      type: 'revenue',
+      read: false,
+      createdAt: serverTimestamp()
+    });
+    
+    await batch.commit();
+    
+    // Check for level up (async)
+    const updatedAffiliateSnap = await getDoc(affiliateRef);
+    if (updatedAffiliateSnap.exists()) {
+      const updatedData = updatedAffiliateSnap.data() as Affiliate;
+      const { level: newLevel } = getAffiliateLevelInfo(updatedData.points || 0);
+      
+      if (newLevel !== updatedData.level) {
+        await updateDoc(affiliateRef, { level: newLevel });
+        await createNotification(affiliateId, "Niveau Supérieur !", `Félicitations ! Vous êtes maintenant au niveau ${newLevel}.`, 'level_up');
+      }
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, 'affiliates');
   }

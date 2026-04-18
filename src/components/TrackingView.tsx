@@ -49,148 +49,181 @@ export default function TrackingView() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-12">
-      <div className="text-center mb-12 px-2">
-        <motion.h1 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-4 leading-tight"
+    <div className="min-h-screen bg-gray-50">
+      {/* Hero Search Section with Background Image */}
+      <div className="relative py-20 px-4 overflow-hidden">
+        {/* Background Image Layer with Animation */}
+        <motion.div 
+          initial={{ scale: 1.1 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 20, repeat: Infinity, repeatType: "reverse", ease: "linear" }}
+          className="absolute inset-0 z-0"
+          style={{
+            backgroundImage: 'url("https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=2070&auto=format&fit=crop")',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
         >
-          Suivez votre colis en temps réel
-        </motion.h1>
-        <motion.p 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          className="text-base sm:text-lg text-gray-600"
-        >
-          Entrez votre numéro de suivi Neopay pour voir l'état actuel de votre livraison.
-        </motion.p>
+          {/* Blur and Dark Overlay */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-[3px]" />
+        </motion.div>
+
+        <div className="relative z-10 max-w-4xl mx-auto">
+          <div className="text-center mb-10">
+            <motion.h1 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-3xl sm:text-5xl font-extrabold text-white mb-4 leading-tight drop-shadow-lg"
+            >
+              Suivez votre colis en temps réel
+            </motion.h1>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="text-base sm:text-xl text-blue-50 font-medium drop-shadow-md"
+            >
+              Entrez votre numéro de suivi Neopay pour voir l'état actuel de votre livraison.
+            </motion.p>
+          </div>
+
+          <Card className="shadow-2xl border-0 bg-white/90 backdrop-blur-md mb-0 rounded-2xl overflow-hidden">
+            <CardContent className="pt-8 pb-8 px-6 sm:px-10">
+              <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-gray-400" />
+                  <Input
+                    placeholder="Ex: NP123456789"
+                    value={trackingNumber}
+                    onChange={(e) => setTrackingNumber(e.target.value)}
+                    className="pl-12 h-14 text-lg border-gray-200 focus:ring-blue-500 focus:border-blue-500 rounded-xl bg-white shadow-inner"
+                  />
+                </div>
+                <Button 
+                  type="submit" 
+                  disabled={loading}
+                  className="h-14 px-10 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg rounded-xl transition-all active:scale-95 shadow-lg shadow-blue-500/30"
+                >
+                  {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : 'Rechercher'}
+                </Button>
+              </form>
+              {error && (
+                <motion.p 
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4 text-red-600 text-sm font-bold flex items-center gap-2"
+                >
+                  <Clock className="h-4 w-4" />
+                  {error}
+                </motion.p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      <Card className="shadow-xl border-0 bg-white/50 backdrop-blur-sm mb-8">
-        <CardContent className="pt-6">
-          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <Input
-                placeholder="Ex: NP123456789"
-                value={trackingNumber}
-                onChange={(e) => setTrackingNumber(e.target.value)}
-                className="pl-10 h-12 text-lg border-gray-200 focus:ring-blue-500 focus:border-blue-500 rounded-xl"
-              />
-            </div>
-            <Button 
-              type="submit" 
-              disabled={loading}
-              className="h-12 px-8 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all active:scale-95"
+      {/* Results Section */}
+      <div className="max-w-4xl mx-auto px-4 py-12">
+        <AnimatePresence>
+          {parcel && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="space-y-6"
             >
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Rechercher'}
-            </Button>
-          </form>
-          {error && <p className="mt-3 text-red-500 text-sm font-medium">{error}</p>}
-        </CardContent>
-      </Card>
-
-      <AnimatePresence>
-        {parcel && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="space-y-6"
-          >
-            <Card className="overflow-hidden border-0 shadow-lg">
-              <CardHeader className="bg-gray-50/50 border-b">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle className="text-xl text-gray-900">Détails du colis</CardTitle>
-                    <CardDescription className="font-mono mt-1">#{parcel.trackingNumber}</CardDescription>
+              <Card className="overflow-hidden border-0 shadow-xl rounded-2xl bg-white">
+                <CardHeader className="bg-gray-50/80 border-b px-6 py-6">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                      <CardTitle className="text-2xl font-bold text-gray-900">Détails de l'expédition</CardTitle>
+                      <CardDescription className="font-mono text-blue-600 font-bold mt-1 text-lg">#{parcel.trackingNumber}</CardDescription>
+                    </div>
+                    <Badge className={`px-4 py-1.5 text-sm font-bold rounded-full border shadow-sm ${getStatusColor(parcel.status)}`}>
+                      {parcel.status}
+                    </Badge>
                   </div>
-                  <Badge className={`px-3 py-1 text-sm font-semibold rounded-full border ${getStatusColor(parcel.status)}`}>
-                    {parcel.status}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x">
-                  <div className="p-6 space-y-6">
-                    <div className="flex items-start gap-4">
-                      <div className="bg-blue-50 p-2 rounded-lg">
-                        <MapPin className="h-5 w-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Localisation actuelle</p>
-                        <p className="text-lg font-semibold text-gray-900">{parcel.currentLocation}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-4">
-                      <div className="bg-purple-50 p-2 rounded-lg">
-                        <Calendar className="h-5 w-5 text-purple-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Date estimée d'arrivée</p>
-                        <p className="text-lg font-semibold text-gray-900">
-                          {parcel.estimatedArrival ? format(new Date(parcel.estimatedArrival), 'PPP', { locale: fr }) : 'Non spécifiée'}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-4">
-                      <div className="bg-emerald-50 p-2 rounded-lg">
-                        <CreditCard className="h-5 w-5 text-emerald-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500 uppercase tracking-wider">Statut du paiement</p>
-                        <Badge variant={parcel.paymentStatus === 'Payé' ? 'default' : 'destructive'} className="mt-1">
-                          {parcel.paymentStatus}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-6 bg-gray-50/30">
-                    <p className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-                      <ImageIcon className="h-4 w-4" />
-                      Preuve de livraison
-                    </p>
-                    {parcel.status === 'Livré' && parcel.proofOfDelivery ? (
-                      <div className="rounded-xl overflow-hidden border shadow-sm group relative bg-gray-100">
-                        <img 
-                          src={parcel.proofOfDelivery} 
-                          alt="Preuve de livraison" 
-                          className="w-full h-64 object-contain transition-transform group-hover:scale-105"
-                          referrerPolicy="no-referrer"
-                        />
-                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <Button variant="secondary" size="sm" onClick={() => window.open(parcel.proofOfDelivery, '_blank')}>
-                            Voir en grand
-                          </Button>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x border-b">
+                    <div className="p-8 space-y-8">
+                      <div className="flex items-start gap-5">
+                        <div className="bg-blue-100 p-3 rounded-2xl shadow-sm">
+                          <MapPin className="h-6 w-6 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Localisation actuelle</p>
+                          <p className="text-xl font-bold text-gray-900">{parcel.currentLocation}</p>
                         </div>
                       </div>
-                    ) : (
-                      <div className="h-48 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 bg-white">
-                        {parcel.status === 'Livré' ? (
-                          <>
-                            <Clock className="h-8 w-8 mb-2 opacity-50" />
-                            <p className="text-sm">Image en cours de traitement...</p>
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="h-8 w-8 mb-2 opacity-20" />
-                            <p className="text-sm">Disponible après livraison</p>
-                          </>
-                        )}
+
+                      <div className="flex items-start gap-5">
+                        <div className="bg-purple-100 p-3 rounded-2xl shadow-sm">
+                          <Calendar className="h-6 w-6 text-purple-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Date estimée d'arrivée</p>
+                          <p className="text-xl font-bold text-gray-900">
+                            {parcel.estimatedArrival ? format(new Date(parcel.estimatedArrival), 'PPP', { locale: fr }) : 'Non spécifiée'}
+                          </p>
+                        </div>
                       </div>
-                    )}
+
+                      <div className="flex items-start gap-5">
+                        <div className="bg-emerald-100 p-3 rounded-2xl shadow-sm">
+                          <CreditCard className="h-6 w-6 text-emerald-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Statut du paiement</p>
+                          <Badge variant={parcel.paymentStatus === 'Payé' ? 'default' : 'destructive'} className="mt-1 font-bold px-3 py-1">
+                            {parcel.paymentStatus}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-8 bg-gray-50/40">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <ImageIcon className="h-4 w-4" />
+                        Preuve de livraison
+                      </p>
+                      {parcel.status === 'Livré' && parcel.proofOfDelivery ? (
+                        <div className="rounded-2xl overflow-hidden border-2 border-white shadow-2xl group relative bg-white aspect-video flex items-center justify-center">
+                          <img 
+                            src={parcel.proofOfDelivery} 
+                            alt="Preuve de livraison" 
+                            className="max-w-full max-h-full object-contain transition-transform duration-500 group-hover:scale-110"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="absolute inset-0 bg-blue-600/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                            <Button variant="secondary" className="font-bold shadow-lg" onClick={() => window.open(parcel.proofOfDelivery, '_blank')}>
+                              Agrandir l'image
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="aspect-video rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 bg-white shadow-inner">
+                          {parcel.status === 'Livré' ? (
+                            <>
+                              <Loader2 className="h-10 w-10 mb-3 animate-spin text-blue-400 opacity-50" />
+                              <p className="text-sm font-medium">Image en cours de traitement...</p>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="h-12 w-12 mb-3 opacity-10" />
+                              <p className="text-sm font-medium">Disponible après livraison</p>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import { db, storage, auth } from '../lib/firebase';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Game } from '../types';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Game, ShippingConfig } from '../types';
 
 // Helper for resumable uploads with progress
 const uploadWithProgress = (
@@ -184,15 +184,18 @@ export const useGames = () => {
 };
 
 export const saveGame = async (gameData: Partial<Game>, id?: string) => {
+  const { id: _, createdAt: __, updatedAt: ___, ...dataToSave } = gameData;
   if (id) {
     const gameRef = doc(db, 'games', id);
     await updateDoc(gameRef, {
-      ...gameData,
+      ...dataToSave,
+      updatedAt: serverTimestamp(),
     });
   } else {
     await addDoc(collection(db, 'games'), {
-      ...gameData,
+      ...dataToSave,
       createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
   }
 };
@@ -238,4 +241,52 @@ export const uploadLogo = async (
     console.error("Error uploading logo:", error);
     throw new Error("Échec du téléchargement du logo.");
   }
+};
+
+// Shipping Services
+export const useShippingConfigs = () => {
+  const [configs, setConfigs] = useState<ShippingConfig[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = collection(db, 'shipping_configs');
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as ShippingConfig[];
+      setConfigs(data);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching shipping configs:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return { configs, loading };
+};
+
+export const saveShippingConfig = async (configData: Partial<ShippingConfig>) => {
+  const { id: _id, type, ...dataWithoutId } = configData as any;
+  
+  if (!type) {
+    throw new Error("L'option de type est requise pour la configuration.");
+  }
+
+  const payload = {
+    ...dataWithoutId,
+    type,
+    updatedAt: serverTimestamp()
+  };
+
+  // On utilise le 'type' comme ID du document pour garantir l'unicité
+  const configRef = doc(db, 'shipping_configs', type);
+  await setDoc(configRef, payload, { merge: true });
+};
+
+export const deleteShippingConfig = async (id: string) => {
+  const configRef = doc(db, 'shipping_configs', id);
+  await deleteDoc(configRef);
 };

@@ -131,6 +131,17 @@
     @apply bg-background text-foreground;
     }
   html {
-    @apply font-sans;
+    @apply font-sans scroll-smooth;
     }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+* {
+  -webkit-overflow-scrolling: touch;
 }

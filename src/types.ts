@@ -29,19 +29,27 @@ export interface Product {
   createdAt: any;
 }
 
+export type AffiliateLevel = 'Bronze' | 'Silver' | 'Gold' | 'Elite' | 'VIP';
+
 export interface Affiliate {
   id?: string;
   username: string;
-  password: string; // Manually provided by admin
+  password: string; 
   name: string;
   balance: number;
   referredClients: number;
-  monthlyReferredClients: number; // For ranking
-  monthlySales: number; // For ranking
-  points: number; // Manual points counter
-  isMonthlyWinner?: boolean; // Whether the affiliate is currently featured as a winner
+  monthlyReferredClients: number;
+  monthlySales: number;
+  points: number;
+  isMonthlyWinner?: boolean;
   code: string;
+  level: AffiliateLevel;
+  parentAffiliateId?: string;
+  directRevenue: number;
+  indirectRevenue: number;
+  totalEarnings: number;
   createdAt: any;
+  updatedAt: any;
 }
 
 export interface WithdrawalRequest {
@@ -50,12 +58,22 @@ export interface WithdrawalRequest {
   affiliateName: string;
   affiliateCode: string;
   amount: number;
-  method: 'MonCash' | 'NatCash';
+  method: 'MonCash' | 'NatCash' | 'Physical';
   accountNumber: string;
   status: 'pending' | 'approved' | 'rejected';
   rejectionReason?: string;
   createdAt: any;
   updatedAt: any;
+}
+
+export interface AffiliateNotification {
+  id?: string;
+  affiliateId: string;
+  title: string;
+  message: string;
+  type: 'level_up' | 'bonus' | 'referral' | 'purchase' | 'revenue' | 'prize' | 'system';
+  read: boolean;
+  createdAt: any;
 }
 
 export interface AppSettings {
@@ -78,7 +96,20 @@ export interface Game {
   description: string;
   priceRange: string;
   whatsappMessage?: string;
+  catalog?: { id: string; name: string; price: string; whatsappMessage?: string }[];
   createdAt: any;
+  updatedAt?: any;
+}
+
+export interface ShippingConfig {
+  id?: string;
+  type: 'online_purchase' | 'dropshipping';
+  addresses: { text: string; id: string; city?: string }[];
+  websites: { url: string; name: string; id: string }[];
+  videos: { url: string; title: string; id: string }[];
+  whatsappNumber?: string;
+  whatsappMessage?: string;
+  updatedAt: any;
 }
 
 export interface AffiliateRequest {

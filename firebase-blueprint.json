@@ -106,10 +106,20 @@
         "name": { "type": "string" },
         "balance": { "type": "number" },
         "referredClients": { "type": "number" },
+        "monthlyReferredClients": { "type": "number" },
+        "monthlySales": { "type": "number" },
+        "points": { "type": "number" },
         "code": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "level": { "type": "string", "enum": ["Bronze", "Silver", "Gold", "Elite", "VIP"] },
+        "parentAffiliateId": { "type": "string" },
+        "directRevenue": { "type": "number" },
+        "indirectRevenue": { "type": "number" },
+        "totalEarnings": { "type": "number" },
+        "isMonthlyWinner": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["username", "password", "name", "balance", "referredClients", "code"]
+      "required": ["username", "password", "name", "balance", "referredClients", "code", "level"]
     },
     "withdrawal": {
       "title": "Withdrawal",
@@ -120,13 +130,42 @@
         "affiliateName": { "type": "string" },
         "affiliateCode": { "type": "string" },
         "amount": { "type": "number" },
-        "method": { "type": "string", "enum": ["MonCash", "Natcash"] },
+        "method": { "type": "string", "enum": ["MonCash", "NatCash", "Physical"] },
         "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
         "rejectionReason": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["affiliateId", "amount", "method", "status"]
+    },
+    "notification": {
+      "title": "Notification",
+      "description": "Represents a notification for an affiliate.",
+      "type": "object",
+      "properties": {
+        "affiliateId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["level_up", "bonus", "referral", "purchase", "revenue", "prize", "system"] },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["affiliateId", "title", "message", "type", "read"]
+    },
+    "affiliate_request": {
+      "title": "Affiliate Request",
+      "description": "Represents a registration request for the affiliate program.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "phone", "status"]
     },
     "game": {
       "title": "Game",
@@ -138,9 +177,66 @@
         "description": { "type": "string" },
         "priceRange": { "type": "string" },
         "whatsappMessage": { "type": "string" },
+        "catalog": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "price": { "type": "string" },
+              "whatsappMessage": { "type": "string" }
+            }
+          }
+        },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "image", "description", "priceRange"]
+    },
+    "shipping_config": {
+      "title": "Shipping Configuration",
+      "description": "Configuration for Shipping options (Online Purchase and Drop Shipping).",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["online_purchase", "dropshipping"] },
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "city": { "type": "string", "description": "Name of the city for this address." },
+              "text": { "type": "string" }
+            }
+          }
+        },
+        "websites": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "url": { "type": "string" }
+            }
+          }
+        },
+        "videos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "url": { "type": "string" }
+            }
+          }
+        },
+        "whatsappNumber": { "type": "string" },
+        "whatsappMessage": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "addresses", "websites", "videos", "updatedAt"]
     }
   },
   "firestore": {
@@ -168,9 +264,21 @@
       "schema": "withdrawal",
       "description": "Collection of withdrawal requests."
     },
+    "/notifications/{notificationId}": {
+      "schema": "notification",
+      "description": "Collection of affiliate notifications."
+    },
+    "/affiliate_requests/{requestId}": {
+      "schema": "affiliate_request",
+      "description": "Collection of affiliate program registration requests."
+    },
     "/games/{gameId}": {
       "schema": "game",
       "description": "Collection of games for top-up."
+    },
+    "/shipping_configs/{configId}": {
+      "schema": "shipping_config",
+      "description": "Collection of shipping configurations."
     }
   }
 }

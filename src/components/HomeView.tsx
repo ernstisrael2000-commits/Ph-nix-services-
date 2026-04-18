@@ -8,9 +8,11 @@ import {
   MessageCircle, 
   ArrowRight,
   CheckCircle2,
-  Info
+  Info,
+  ArrowUp
 } from 'lucide-react';
 import { Button } from './ui/button';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { useProducts, useGames } from '../services/parcelService';
 import { 
@@ -24,10 +26,23 @@ import { Badge } from './ui/badge';
 
 const WHATSAPP_NUMBER = "+50944813185";
 
-export default function HomeView({ onTrackingClick }: { onTrackingClick: () => void }) {
+export default function HomeView({ onTrackingClick, onViewChange }: { onTrackingClick: () => void, onViewChange: (view: any) => void }) {
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
   const [isGamesDialogOpen, setIsGamesDialogOpen] = React.useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const openWhatsApp = (message: string) => {
     const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
@@ -63,8 +78,8 @@ export default function HomeView({ onTrackingClick }: { onTrackingClick: () => v
       title: "Shipping",
       description: "Service global d'envoi et de réception de colis.",
       icon: <Truck className="h-8 w-8 text-amber-600" />,
-      action: () => openWhatsApp("Bonjour, je souhaite obtenir des informations sur le shipping via Neopay."),
-      buttonText: "Infos via WhatsApp",
+      action: () => onViewChange('shipping'),
+      buttonText: "Accéder au service",
       color: "bg-amber-50 border-amber-100"
     }
   ];
@@ -252,14 +267,38 @@ export default function HomeView({ onTrackingClick }: { onTrackingClick: () => v
                       {game.description}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="p-4 pt-0">
-                    <Button 
-                      onClick={() => openWhatsApp(game.whatsappMessage || `Bonjour, je souhaite faire un top-up pour le jeu : ${game.name}.`)}
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-white text-sm h-9"
-                    >
-                      <MessageCircle className="h-4 w-4 mr-2" />
-                      Commander
-                    </Button>
+                  <CardContent className="p-4 pt-0 space-y-4">
+                    {/* Catalog Section */}
+                    {game.catalog && game.catalog.length > 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Catalogue de prix</p>
+                        <div className="grid grid-cols-1 gap-2 md:max-h-[160px] md:overflow-y-auto pr-1 custom-scrollbar">
+                          {game.catalog.map((item) => (
+                            <div key={item.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100 hover:border-purple-200 transition-colors group">
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-gray-800 truncate">{item.name}</p>
+                                <p className="text-[10px] text-purple-600 font-bold">{item.price}</p>
+                              </div>
+                              <Button 
+                                size="sm" 
+                                onClick={() => openWhatsApp(item.whatsappMessage || `Bonjour, je souhaite acheter le pack ${item.name} (${item.price}) pour le jeu ${game.name}.`)}
+                                className="h-8 px-4 text-[10px] font-bold bg-purple-600 text-white hover:bg-purple-700 shadow-md rounded-full transition-all active:scale-95 border-0"
+                              >
+                                Commander
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <Button 
+                        onClick={() => openWhatsApp(game.whatsappMessage || `Bonjour, je souhaite faire un top-up pour le jeu : ${game.name}.`)}
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-white text-sm h-9"
+                      >
+                        <MessageCircle className="h-4 w-4 mr-2" />
+                        Commander
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               ))}
@@ -271,6 +310,19 @@ export default function HomeView({ onTrackingClick }: { onTrackingClick: () => v
           )}
         </DialogContent>
       </Dialog>
+      {/* Back to Top Button */}
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.5 }}
+        animate={{ opacity: showScrollTop ? 1 : 0, scale: showScrollTop ? 1 : 0 }}
+        className="fixed bottom-6 right-6 z-50 pointer-events-none"
+      >
+        <Button 
+          onClick={scrollToTop}
+          className="pointer-events-auto h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl flex items-center justify-center p-0"
+        >
+          <ArrowUp className="h-6 w-6" />
+        </Button>
+      </motion.div>
     </div>
   );
 }

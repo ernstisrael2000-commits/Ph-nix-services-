@@ -3,6 +3,7 @@ import Navbar from './components/Navbar';
 import TrackingView from './components/TrackingView';
 import AdminDashboard from './components/AdminDashboard';
 import HomeView from './components/HomeView';
+import ShippingView from './components/ShippingView';
 import AffiliateLogin from './components/AffiliateLogin';
 import AffiliateDashboard from './components/AffiliateDashboard';
 import { Toaster } from './components/ui/sonner';
@@ -12,7 +13,7 @@ import { Loader2, ShieldAlert, Package } from 'lucide-react';
 import { Affiliate } from './types';
 
 export default function App() {
-  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate'>('home');
+  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping'>('home');
   const { isAdmin, loading } = useAuth();
   const [loggedAffiliate, setLoggedAffiliate] = useState<Affiliate | null>(() => {
     const saved = localStorage.getItem('neopay_affiliate');
@@ -50,11 +51,15 @@ export default function App() {
         
         <main className="animate-in fade-in duration-500 pt-16">
           {view === 'home' && (
-            <HomeView onTrackingClick={() => setView('tracking')} />
+            <HomeView onTrackingClick={() => setView('tracking')} onViewChange={setView} />
           )}
           
           {view === 'tracking' && (
             <TrackingView />
+          )}
+
+          {view === 'shipping' && (
+            <ShippingView />
           )}
 
           {view === 'admin' && (

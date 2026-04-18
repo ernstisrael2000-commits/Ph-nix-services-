@@ -38,18 +38,19 @@ service cloud.firestore {
         (
           (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-          request.auth.token.email == "ernstisrael2000@gmail.com"
+          (request.auth.token.email == "ernstisrael2000@gmail.com")
         );
     }
 
     function isValidAffiliate(data) {
-      return data.keys().hasAll(['name', 'username', 'password', 'code']) &&
-             data.name is string && data.name.size() > 0 &&
-             data.username is string && data.username.size() > 0 &&
+      return data.keys().hasAll(['name', 'username', 'password', 'code', 'level']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.username is string && data.username.size() > 0 && data.username.size() < 50 &&
              data.password is string && data.password.size() > 0 &&
              data.code is string && data.code.size() > 0 &&
+             data.level in ['Bronze', 'Silver', 'Gold', 'Elite', 'VIP'] &&
              (!('balance' in data) || data.balance is number) &&
-             (!('referredClients' in data) || data.referredClients is number);
+             (!('points' in data) || data.points is number);
     }
 
     function isValidParcel(data) {
@@ -63,11 +64,22 @@ service cloud.firestore {
     }
 
     function isValidProduct(data) {
-      return data.keys().hasAll(['name', 'image', 'description', 'price']) &&
+      return data.keys().hasAll(['name', 'image', 'description']) && 
+             data.name is string && data.name.size() > 0;
+    }
+
+    function isValidGame(data) {
+      return data.keys().hasAll(['name', 'image', 'description']) &&
              data.name is string && data.name.size() > 0 &&
-             data.image is string &&
-             data.description is string &&
-             data.price is string;
+             (!('catalog' in data) || data.catalog is list);
+    }
+
+    function isValidWithdrawal(data) {
+      return data.keys().hasAll(['affiliateId', 'amount', 'method', 'status']) &&
+             data.affiliateId is string &&
+             data.amount is number && data.amount >= 20 &&
+             data.method in ['MonCash', 'NatCash', 'Physical'] &&
+             data.status in ['pending', 'approved', 'rejected'];
     }
 
     // ===============================================================
@@ -88,6 +100,13 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /games/{gameId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidGame(request.resource.data);
+      allow update: if isAdmin() && isValidGame(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
     match /settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin();
@@ -96,22 +115,34 @@ service cloud.firestore {
     match /affiliates/{affiliateId} {
       allow read: if true; 
       allow create: if isAdmin() && isValidAffiliate(request.resource.data);
-      allow update: if isAdmin() && isValidAffiliate(request.resource.data);
+      allow update: if isAdmin() || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'referredClients', 'points', 'monthlyReferredClients', 'monthlySales', 'isMonthlyWinner', 'updatedAt', 'level', 'directRevenue', 'indirectRevenue', 'totalEarnings']));
       allow delete: if isAdmin();
     }
 
     match /withdrawals/{withdrawalId} {
-      allow read: if true; // Allow affiliates to see their requests and admins to see all
-      allow create: if true; // Affiliates can create requests
-      allow update: if isAdmin(); // Only admins can approve/reject
+      allow read: if true; 
+      allow create: if isValidWithdrawal(request.resource.data); 
+      allow update: if isAdmin(); 
       allow delete: if isAdmin();
     }
 
     match /affiliate_requests/{requestId} {
       allow read: if isAdmin();
-      allow create: if true; // Public can request to join
+      allow create: if true; 
       allow update: if isAdmin();
       allow delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if true;
+      allow delete: if isAdmin();
+    }
+
+    match /shipping_configs/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     match /users/{userId} {

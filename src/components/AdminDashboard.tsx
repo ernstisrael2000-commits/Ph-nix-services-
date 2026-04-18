@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
   Search, 
@@ -24,7 +24,9 @@ import {
   Gamepad2,
   Bell,
   Filter,
-  ArrowUpDown
+  ArrowUpDown,
+  DollarSign,
+  ArrowUp
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -43,11 +45,13 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame } from '../services/parcelService';
-import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus, resetMonthlyStats, awardMonthlyPrizes, clearMonthlyWinners, useMonthlyRankings } from '../services/affiliateService';
+import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus, resetMonthlyStats, awardMonthlyPrizes, clearMonthlyWinners, useMonthlyRankings, recordPurchase } from '../services/affiliateService';
 import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game } from '../types';
+import AdminShippingManager from './AdminShippingManager';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { motion } from 'motion/react';
 
 // Helper for image compression
 const compressImage = (file: File): Promise<Blob> => {
@@ -94,7 +98,22 @@ const compressImage = (file: File): Promise<Blob> => {
   });
 };
 
+const generateId = () => Math.random().toString(36).substr(2, 9);
+
 export default function AdminDashboard() {
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
   const { parcels, loading: parcelsLoading } = useParcels();
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
@@ -123,15 +142,35 @@ export default function AdminDashboard() {
     image: '',
     description: '',
     priceRange: '',
-    whatsappMessage: ''
+    whatsappMessage: '',
+    catalog: []
   });
 
   const [isAwarding, setIsAwarding] = useState(false);
   const [isClearingWinners, setIsClearingWinners] = useState(false);
 
   const [isAffiliateDialogOpen, setIsAffiliateDialogOpen] = useState(false);
-  const [isAffiliateDeleteDialogOpen, setIsAffiliateDeleteDialogOpen] = useState(false);
+  const [isAffiliateDeleteConfirmOpen, setIsAffiliateDeleteConfirmOpen] = useState(false);
   const [affiliateToDelete, setAffiliateToDelete] = useState<Affiliate | null>(null);
+
+  const [isRecordSaleDialogOpen, setIsRecordSaleDialogOpen] = useState(false);
+  const [selectedAffiliateForSale, setSelectedAffiliateForSale] = useState<Affiliate | null>(null);
+  const [saleType, setSaleType] = useState<'purchase' | 'subscription' | 'virtual_card'>('purchase');
+  const [isRecordingSale, setIsRecordingSale] = useState(false);
+
+  const handleRecordSale = async () => {
+    if (!selectedAffiliateForSale?.id) return;
+    setIsRecordingSale(true);
+    try {
+      await recordPurchase(selectedAffiliateForSale.id, saleType);
+      toast.success("Vente enregistrée avec succès !");
+      setIsRecordSaleDialogOpen(false);
+    } catch (error) {
+      toast.error("Erreur lors de l'enregistrement de la vente.");
+    } finally {
+      setIsRecordingSale(false);
+    }
+  };
   const [editingAffiliate, setEditingAffiliate] = useState<Affiliate | null>(null);
   const [affiliateFormData, setAffiliateFormData] = useState<Partial<Affiliate>>({
     name: '',
@@ -141,6 +180,11 @@ export default function AdminDashboard() {
     balance: 0,
     referredClients: 0,
     points: 0,
+    level: 'Bronze',
+    directRevenue: 0,
+    indirectRevenue: 0,
+    totalEarnings: 0,
+    parentAffiliateId: ''
   });
 
   const [isSaving, setIsSaving] = useState(false);
@@ -286,7 +330,10 @@ export default function AdminDashboard() {
   const handleOpenGameDialog = (game?: Game) => {
     if (game) {
       setEditingGame(game);
-      setGameFormData(game);
+      setGameFormData({
+        ...game,
+        catalog: game.catalog || []
+      });
     } else {
       setEditingGame(null);
       setGameFormData({
@@ -294,7 +341,8 @@ export default function AdminDashboard() {
         image: '',
         description: '',
         priceRange: '',
-        whatsappMessage: ''
+        whatsappMessage: '',
+        catalog: []
       });
     }
     setIsGameDialogOpen(true);
@@ -310,12 +358,34 @@ export default function AdminDashboard() {
       await saveGame(gameFormData, editingGame?.id);
       toast.success(editingGame ? "Jeu mis à jour !" : "Jeu ajouté !");
       setIsGameDialogOpen(false);
-    } catch (error) {
-      console.error(error);
-      toast.error("Erreur lors de l'enregistrement.");
+    } catch (error: any) {
+      console.error('Save game error:', error);
+      const isPermission = error.message?.includes('permissions');
+      toast.error(isPermission ? "Erreur de permissions (Droits admin requis)" : `Erreur lors de l'enregistrement: ${error.message || 'Erreur inconnue'}`);
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const updateCatalogItem = (id: string, updates: any) => {
+    setGameFormData({
+      ...gameFormData,
+      catalog: (gameFormData.catalog || []).map(item => item.id === id ? { ...item, ...updates } : item)
+    });
+  };
+
+  const addCatalogItem = () => {
+    setGameFormData({
+      ...gameFormData,
+      catalog: [...(gameFormData.catalog || []), { id: generateId(), name: '', price: '', whatsappMessage: '' }]
+    });
+  };
+
+  const removeCatalogItem = (id: string) => {
+    setGameFormData({
+      ...gameFormData,
+      catalog: (gameFormData.catalog || []).filter(item => item.id !== id)
+    });
   };
 
   const handleConfirmDeleteGame = async () => {
@@ -491,7 +561,7 @@ export default function AdminDashboard() {
 
   const handleOpenAffiliateDeleteDialog = (affiliate: Affiliate) => {
     setAffiliateToDelete(affiliate);
-    setIsAffiliateDeleteDialogOpen(true);
+    setIsAffiliateDeleteConfirmOpen(true);
   };
 
   const handleConfirmAffiliateDelete = async () => {
@@ -500,7 +570,7 @@ export default function AdminDashboard() {
     try {
       await deleteAffiliate(affiliateToDelete.id);
       toast.success("Affilié supprimé avec succès.");
-      setIsAffiliateDeleteDialogOpen(false);
+      setIsAffiliateDeleteConfirmOpen(false);
     } catch (error) {
       console.error(error);
       toast.error("Erreur lors de la suppression.");
@@ -548,7 +618,12 @@ export default function AdminDashboard() {
           password: Math.random().toString(36).slice(-8),
           code: `AFF${Math.floor(1000 + Math.random() * 9000)}`,
           balance: 0,
-          referredClients: 0
+          referredClients: 0,
+          level: 'Bronze',
+          directRevenue: 0,
+          indirectRevenue: 0,
+          totalEarnings: 0,
+          points: 0
         });
         setIsAffiliateDialogOpen(true);
       }
@@ -647,6 +722,10 @@ export default function AdminDashboard() {
             <TabsTrigger value="settings" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
               <SettingsIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               Paramètres
+            </TabsTrigger>
+            <TabsTrigger value="shipping" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
+              <Truck className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              Shipping
             </TabsTrigger>
           </TabsList>
         </div>
@@ -1017,6 +1096,7 @@ export default function AdminDashboard() {
                           <TableRow className="bg-gray-50/50">
                             <TableHead>Nom</TableHead>
                             <TableHead>Code</TableHead>
+                            <TableHead>Niveau</TableHead>
                             <TableHead>Solde</TableHead>
                             <TableHead>Points</TableHead>
                             <TableHead>Référés</TableHead>
@@ -1028,6 +1108,11 @@ export default function AdminDashboard() {
                             <TableRow key={a.id} className="hover:bg-gray-50/50 transition-colors">
                               <TableCell className="font-medium">{a.name}</TableCell>
                               <TableCell className="font-mono text-xs">{a.code}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="font-bold uppercase text-[10px]">
+                                  {a.level || 'Bronze'}
+                                </Badge>
+                              </TableCell>
                               <TableCell className="font-bold text-blue-600">{a.balance} Goud</TableCell>
                               <TableCell>
                                 <div className="flex flex-col gap-1">
@@ -1063,6 +1148,12 @@ export default function AdminDashboard() {
                                     setIsAffiliateDialogOpen(true);
                                   }}>
                                     <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => {
+                                    setSelectedAffiliateForSale(a);
+                                    setIsRecordSaleDialogOpen(true);
+                                  }}>
+                                    <DollarSign className="h-4 w-4" />
                                   </Button>
                                   <Button variant="ghost" size="sm" onClick={() => handleOpenAffiliateDeleteDialog(a)}>
                                     <Trash2 className="h-4 w-4 text-red-500" />
@@ -1532,7 +1623,54 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="shipping">
+          <AdminShippingManager />
+        </TabsContent>
       </Tabs>
+
+      {/* Record Sale Dialog */}
+      <Dialog open={isRecordSaleDialogOpen} onOpenChange={setIsRecordSaleDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-emerald-600" />
+              Enregistrer une vente
+            </DialogTitle>
+            <DialogDescription>
+              Attribuez une vente à <span className="font-bold text-gray-900">{selectedAffiliateForSale?.name}</span>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Type de vente</Label>
+              <Select value={saleType} onValueChange={(v: any) => setSaleType(v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner le type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="purchase">Achat Général (2.5 Goud)</SelectItem>
+                  <SelectItem value="subscription">Abonnement Netflix/Prime (100 Goud)</SelectItem>
+                  <SelectItem value="virtual_card">Carte Virtuelle MasterCard (500 Goud)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+              <p className="text-xs text-blue-700">
+                L'affilié recevra la commission directe et les points correspondants. 
+                Si l'affilié a un parrain, celui-ci recevra 0.5 Goud de commission indirecte.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRecordSaleDialogOpen(false)}>Annuler</Button>
+            <Button onClick={handleRecordSale} disabled={isRecordingSale} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              {isRecordingSale ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+              Confirmer la vente
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Affiliate Edit/Add Dialog */}
       <Dialog open={isAffiliateDialogOpen} onOpenChange={setIsAffiliateDialogOpen}>
@@ -1574,6 +1712,33 @@ export default function AdminDashboard() {
                 value={affiliateFormData.code} 
                 onChange={(e) => setAffiliateFormData({...affiliateFormData, code: e.target.value})}
                 className="sm:col-span-3" 
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+              <Label className="sm:text-right">Niveau</Label>
+              <Select 
+                value={affiliateFormData.level} 
+                onValueChange={(v: any) => setAffiliateFormData({...affiliateFormData, level: v})}
+              >
+                <SelectTrigger className="sm:col-span-3">
+                  <SelectValue placeholder="Choisir un niveau" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Bronze">Bronze</SelectItem>
+                  <SelectItem value="Silver">Silver</SelectItem>
+                  <SelectItem value="Gold">Gold</SelectItem>
+                  <SelectItem value="Elite">Elite</SelectItem>
+                  <SelectItem value="VIP">VIP</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+              <Label className="sm:text-right">Parrain (ID)</Label>
+              <Input 
+                value={affiliateFormData.parentAffiliateId || ''} 
+                onChange={(e) => setAffiliateFormData({...affiliateFormData, parentAffiliateId: e.target.value})}
+                className="sm:col-span-3" 
+                placeholder="ID de l'affilié parrain"
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
@@ -1621,6 +1786,33 @@ export default function AdminDashboard() {
                 className="sm:col-span-3" 
               />
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+              <Label className="sm:text-right text-xs">Rev. Direct</Label>
+              <Input 
+                type="number"
+                value={affiliateFormData.directRevenue || 0} 
+                onChange={(e) => setAffiliateFormData({...affiliateFormData, directRevenue: Number(e.target.value)})}
+                className="sm:col-span-3" 
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+              <Label className="sm:text-right text-xs">Rev. Indirect</Label>
+              <Input 
+                type="number"
+                value={affiliateFormData.indirectRevenue || 0} 
+                onChange={(e) => setAffiliateFormData({...affiliateFormData, indirectRevenue: Number(e.target.value)})}
+                className="sm:col-span-3" 
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+              <Label className="sm:text-right text-xs">Total Gains</Label>
+              <Input 
+                type="number"
+                value={affiliateFormData.totalEarnings || 0} 
+                onChange={(e) => setAffiliateFormData({...affiliateFormData, totalEarnings: Number(e.target.value)})}
+                className="sm:col-span-3" 
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAffiliateDialogOpen(false)}>Annuler</Button>
@@ -1633,7 +1825,7 @@ export default function AdminDashboard() {
       </Dialog>
 
       {/* Affiliate Delete Confirmation Dialog */}
-      <Dialog open={isAffiliateDeleteDialogOpen} onOpenChange={setIsAffiliateDeleteDialogOpen}>
+      <Dialog open={isAffiliateDeleteConfirmOpen} onOpenChange={setIsAffiliateDeleteConfirmOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
@@ -1646,7 +1838,7 @@ export default function AdminDashboard() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setIsAffiliateDeleteDialogOpen(false)} disabled={isDeleting}>
+            <Button variant="outline" onClick={() => setIsAffiliateDeleteConfirmOpen(false)} disabled={isDeleting}>
               Annuler
             </Button>
             <Button variant="destructive" onClick={handleConfirmAffiliateDelete} disabled={isDeleting}>
@@ -1917,7 +2109,7 @@ export default function AdminDashboard() {
                 )}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Input 
+                    <input 
                       type="file" 
                       accept="image/*" 
                       onChange={handleGameImageUpload}
@@ -1940,6 +2132,74 @@ export default function AdminDashboard() {
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-4 border-t">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-bold flex items-center gap-2">
+                  <Gamepad2 className="h-4 w-4 text-purple-600" />
+                  Catalogue de prix
+                </Label>
+                <Button variant="ghost" size="sm" onClick={addCatalogItem} className="h-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+                  <Plus className="h-4 w-4 mr-1" /> Ajouter un pack
+                </Button>
+              </div>
+              
+              <div className="space-y-3 md:max-h-[500px] overflow-y-auto pr-2 custom-scrollbar overscroll-contain">
+                {gameFormData.catalog?.map((item, idx) => (
+                  <div key={item.id} className="p-4 rounded-xl border bg-gray-50 space-y-3 relative group transition-all hover:border-purple-200">
+                    <div className="flex justify-between items-center bg-white px-3 py-1 rounded-full border text-[10px] font-bold text-gray-400 w-fit shadow-sm">
+                      PACK {idx + 1}
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-[10px] uppercase text-gray-500 font-bold">Produit (ex: 100 Diamants)</Label>
+                        <Input 
+                          value={item.name} 
+                          onChange={(e) => updateCatalogItem(item.id, { name: e.target.value })} 
+                          placeholder="Ex: 500 G"
+                          className="h-9 bg-white"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] uppercase text-gray-500 font-bold">Prix (ex: 150 G)</Label>
+                        <Input 
+                          value={item.price} 
+                          onChange={(e) => updateCatalogItem(item.id, { price: e.target.value })} 
+                          placeholder="Prix"
+                          className="h-9 bg-white"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <Label className="text-[10px] uppercase text-gray-500 font-bold">Message WhatsApp personnalisé (Optionnel)</Label>
+                      <Input 
+                        value={item.whatsappMessage} 
+                        onChange={(e) => updateCatalogItem(item.id, { whatsappMessage: e.target.value })} 
+                        placeholder="Laisse vide pour message par défaut"
+                        className="h-9 bg-white"
+                      />
+                    </div>
+                    
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => removeCatalogItem(item.id)}
+                      className="absolute top-2 right-2 h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                
+                {(!gameFormData.catalog || gameFormData.catalog.length === 0) && (
+                  <div className="text-center py-6 border-2 border-dashed rounded-xl text-gray-400 text-sm">
+                    Aucun pack défini. Le bouton "Commander" utilisera le message par défaut du jeu.
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2132,6 +2392,20 @@ export default function AdminDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Back to Top Button */}
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.5 }}
+        animate={{ opacity: showScrollTop ? 1 : 0, scale: showScrollTop ? 1 : 0 }}
+        className="fixed bottom-6 right-6 z-50 pointer-events-none"
+      >
+        <Button 
+          onClick={scrollToTop}
+          className="pointer-events-auto h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl flex items-center justify-center p-0"
+        >
+          <ArrowUp className="h-6 w-6" />
+        </Button>
+      </motion.div>
     </div>
   );
 }

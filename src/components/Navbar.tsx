@@ -1,22 +1,33 @@
-import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users } from 'lucide-react';
+import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users, Truck, ExternalLink } from 'lucide-react';
 import { Button } from './ui/button';
 import { auth } from '@/lib/firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
 import { useAuth } from '../hooks/useAuth';
 import { useSettings } from '../services/parcelService';
 import { usePendingCounts } from '../services/affiliateService';
+import { toast } from 'sonner';
 
 export default function Navbar({ currentView, onViewChange }: { currentView: string, onViewChange: (view: any) => void }) {
   const { user, isAdmin } = useAuth();
   const { settings } = useSettings();
-  const { total: pendingCount } = usePendingCounts();
+  const { total: pendingCount } = usePendingCounts(isAdmin);
 
   const handleLogin = async () => {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-    } catch (error) {
+      toast.success("Connexion réussie !");
+    } catch (error: any) {
       console.error("Login failed:", error);
+      if (error.code === 'auth/popup-closed-by-user') {
+        toast.error("La fenêtre de connexion a été fermée.");
+      } else if (error.code === 'auth/unauthorized-domain') {
+        toast.error("Domaine non autorisé. Veuillez ajouter l'URL de l'application aux domaines autorisés dans la console Firebase.");
+      } else if (error.code === 'auth/network-request-failed') {
+        toast.error("Erreur réseau. Si vous utilisez Chrome, essayez d'ouvrir l'application dans un nouvel onglet.");
+      } else {
+        toast.error(`Échec de la connexion: ${error.message || 'Erreur inconnue'}`);
+      }
     }
   };
 
@@ -73,6 +84,15 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
             </Button>
 
             <Button 
+              variant={currentView === 'shipping' ? 'secondary' : 'ghost'} 
+              onClick={() => onViewChange('shipping')} 
+              className="flex items-center gap-2 px-2 sm:px-4"
+            >
+              <Truck className="h-4 w-4" />
+              <span className="hidden sm:inline">Shipping</span>
+            </Button>
+
+            <Button 
               variant={currentView === 'affiliate' ? 'secondary' : 'ghost'} 
               onClick={() => onViewChange('affiliate')} 
               className="flex items-center gap-2 px-2 sm:px-4"
@@ -98,7 +118,11 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
             )}
 
             {user ? (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="flex flex-col items-end hidden sm:flex">
+                  <span className="text-xs font-bold text-gray-900 truncate max-w-[120px]">{user.displayName}</span>
+                  <span className="text-[10px] text-gray-500 truncate max-w-[120px]">{user.email}</span>
+                </div>
                 <img 
                   src={user.photoURL || ''} 
                   alt={user.displayName || ''} 
@@ -112,10 +136,21 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
                 </Button>
               </div>
             ) : (
-              <Button onClick={handleLogin} className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2">
-                <LogIn className="h-4 w-4" />
-                <span className="hidden xs:inline">Connexion</span>
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="hidden sm:flex text-gray-400 hover:text-blue-600"
+                  onClick={() => window.open(window.location.href, '_blank')}
+                  title="Ouvrir dans un nouvel onglet"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+                <Button onClick={handleLogin} className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2">
+                  <LogIn className="h-4 w-4" />
+                  <span className="hidden xs:inline">Connexion</span>
+                </Button>
+              </div>
             )}
           </div>
         </div>
