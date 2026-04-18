@@ -91,22 +91,63 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
   return (
     <div className="max-w-7xl mx-auto px-4 py-12 space-y-20">
       {/* Hero Section */}
-      <section className="text-center space-y-6 px-2">
-        <motion.h1 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-gray-900 tracking-tight leading-tight"
-        >
-          Bienvenue sur <span className="text-blue-600">Neopay</span>
-        </motion.h1>
-        <motion.p 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto"
-        >
-          Votre plateforme complète de services digitaux, logistique et bien plus encore.
-        </motion.p>
+      <section className="text-center space-y-8 px-4 pt-10 pb-6 relative overflow-hidden">
+        {/* Background glow effect */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-blue-100/30 blur-[120px] rounded-full -z-10" />
+        
+        <div className="space-y-4 max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold tracking-wider uppercase mb-2"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+            </span>
+            Solution de paiement moderne
+          </motion.div>
+
+          <motion.h1 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1 }}
+            className="text-5xl sm:text-6xl md:text-7xl font-black text-gray-900 tracking-tight leading-[1.1]"
+          >
+            <motion.span
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.8, ease: "easeOut" }}
+              className="inline-block"
+            >
+              Bienvenue sur
+            </motion.span>{" "}
+            <motion.span
+              initial={{ x: 20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.4, duration: 0.8, ease: "easeOut" }}
+              className="relative inline-block text-blue-600"
+            >
+              Neopay
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: "100%" }}
+                transition={{ delay: 1, duration: 0.8 }}
+                className="absolute -bottom-2 left-0 h-1.5 bg-blue-600/20 rounded-full"
+              />
+            </motion.span>
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6, duration: 0.8 }}
+            className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed"
+          >
+            Votre plateforme complète de services digitaux, logistique et bien plus encore.
+          </motion.p>
+        </div>
       </section>
 
       {/* Services Section */}
@@ -333,37 +374,38 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
               <Loader2 className="h-10 w-10 animate-spin text-emerald-600" />
             </div>
           ) : cards.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
+            <div className="product-grid grid grid-cols-2 sm:grid-cols-2 gap-2 py-4">
               {cards.map((card) => (
-                <Card key={card.id} className="overflow-hidden border-gray-100 hover:shadow-md transition-shadow flex flex-col h-full">
-                  <div className="aspect-video relative bg-gray-50">
+                <Card key={card.id} className="product-card overflow-hidden border-gray-100 hover:shadow-md transition-shadow flex flex-col h-full">
+                  <div className="product-image-container relative bg-gray-50">
                     <img 
                       src={card.image} 
                       alt={card.name}
-                      className="w-full h-full object-contain"
+                      className="product-image w-full h-full object-contain"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/card/400/400';
                       }}
                     />
                     <div className="absolute top-2 right-2">
-                      <Badge className="bg-emerald-600">{card.price}</Badge>
+                      <Badge className="bg-emerald-600 text-[10px] h-5 px-1.5">{card.price}</Badge>
                     </div>
                   </div>
-                  <CardHeader className="p-4 flex-grow">
-                    <CardTitle className="text-lg">{card.name}</CardTitle>
-                    <CardDescription className="text-sm">
-                      {card.description}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0 mt-auto">
-                    <Button 
-                      onClick={() => openWhatsApp(card.whatsappMessage || `Bonjour, je souhaite recharger ma carte via le service : ${card.name}.`)}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm h-10 font-bold"
-                    >
-                      <MessageCircle className="h-4 w-4 mr-2" />
-                      Recharger via WhatsApp
-                    </Button>
-                  </CardContent>
+                  <div className="product-card-content p-2 flex-grow flex flex-col">
+                    <div className="mb-1">
+                      <h3 className="product-name line-clamp-1">{card.name}</h3>
+                      <p className="product-subtitle truncate">Activation instantanée</p>
+                    </div>
+                    
+                    <div className="product-footer mt-auto pt-2">
+                      <Button 
+                        size="sm"
+                        onClick={() => openWhatsApp(card.whatsappMessage || `Bonjour, je souhaite recharger ma carte via le service : ${card.name}.`)}
+                        className="product-buy-button w-full justify-center text-[10px] py-1 h-7"
+                      >
+                        ⚡ Recharger
+                      </Button>
+                    </div>
+                  </div>
                 </Card>
               ))}
             </div>
