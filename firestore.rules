@@ -74,6 +74,12 @@ service cloud.firestore {
              (!('catalog' in data) || data.catalog is list);
     }
 
+    function isValidCard(data) {
+      return data.keys().hasAll(['name', 'image', 'description', 'price']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.price is string && data.price.size() > 0;
+    }
+
     function isValidWithdrawal(data) {
       return data.keys().hasAll(['affiliateId', 'amount', 'method', 'status']) &&
              data.affiliateId is string &&
@@ -104,6 +110,13 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isAdmin() && isValidGame(request.resource.data);
       allow update: if isAdmin() && isValidGame(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /card_topups/{cardId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidCard(request.resource.data);
+      allow update: if isAdmin() && isValidCard(request.resource.data);
       allow delete: if isAdmin();
     }
 

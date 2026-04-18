@@ -10,6 +10,7 @@ import { Toaster } from './components/ui/sonner';
 import { useAuth } from './hooks/useAuth';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loader2, ShieldAlert, Package } from 'lucide-react';
+import { Button } from './components/ui/button';
 import { Affiliate } from './types';
 
 export default function App() {
@@ -66,20 +67,43 @@ export default function App() {
             isAdmin ? (
               <AdminDashboard />
             ) : (
-              <div className="max-w-md mx-auto mt-20 p-8 text-center bg-white rounded-2xl shadow-sm border">
-                <div className="bg-red-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <ShieldAlert className="h-8 w-8 text-red-600" />
+              <div className="max-w-md mx-auto mt-20 p-8 bg-white rounded-3xl shadow-xl border border-gray-100 animate-in zoom-in duration-300">
+                <div className="bg-amber-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-8 border border-amber-100">
+                  <ShieldAlert className="h-10 w-10 text-amber-500" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Accès restreint</h2>
-                <p className="text-gray-600 mb-6">
-                  Vous devez être administrateur pour accéder à cette section.
+                <h2 className="text-2xl font-black text-gray-900 mb-3 text-center">Accès Administrateur</h2>
+                <p className="text-gray-600 mb-8 text-sm leading-relaxed text-center">
+                  Cette section est réservée à l'administrateur. Si vous êtes Ernst, connectez-vous avec votre compte Google.
                 </p>
-                <button 
-                  onClick={() => setView('home')}
-                  className="text-blue-600 font-semibold hover:underline"
-                >
-                  Retour à l'accueil
-                </button>
+
+                <div className="space-y-4">
+                  <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 text-left">
+                    <p className="text-xs font-bold text-blue-800 mb-1 flex items-center gap-2">
+                      <Loader2 className="h-3 w-3" />
+                      Problème de connexion ?
+                    </p>
+                    <p className="text-[11px] text-blue-600 leading-tight">
+                      Si vous utilisez Google Chrome, la connexion peut être bloquée par l'aperçu. 
+                      Cliquez sur le bouton ci-dessous pour régler le problème.
+                    </p>
+                  </div>
+                  
+                  <Button 
+                    variant="outline" 
+                    className="w-full h-12 rounded-xl text-blue-600 border-blue-200 hover:bg-blue-50 font-bold"
+                    onClick={() => window.open(window.location.href, '_blank')}
+                  >
+                    Ouvrir Neopay dans un nouvel onglet
+                  </Button>
+
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => setView('home')}
+                    className="w-full text-gray-500 text-xs hover:bg-transparent hover:text-gray-800"
+                  >
+                    Retour à l'accueil
+                  </Button>
+                </div>
               </div>
             )
           )}

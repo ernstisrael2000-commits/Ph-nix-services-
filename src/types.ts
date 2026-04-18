@@ -29,6 +29,17 @@ export interface Product {
   createdAt: any;
 }
 
+export interface CardTopup {
+  id?: string;
+  name: string;
+  image: string;
+  description: string;
+  price: string;
+  whatsappMessage?: string;
+  createdAt: any;
+  updatedAt?: any;
+}
+
 export type AffiliateLevel = 'Bronze' | 'Silver' | 'Gold' | 'Elite' | 'VIP';
 
 export interface Affiliate {

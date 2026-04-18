@@ -16,7 +16,53 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import { db, storage, auth } from '../lib/firebase';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Game, ShippingConfig } from '../types';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Game, ShippingConfig, CardTopup } from '../types';
+
+// Card Topup Services
+export const useCardTopups = () => {
+  const [cards, setCards] = useState<CardTopup[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, 'card_topups'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as CardTopup[];
+      setCards(data);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching card topups:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return { cards, loading };
+};
+
+export const saveCardTopup = async (cardData: Partial<CardTopup>, id?: string) => {
+  if (id) {
+    const cardRef = doc(db, 'card_topups', id);
+    await updateDoc(cardRef, {
+      ...cardData,
+      updatedAt: serverTimestamp()
+    });
+  } else {
+    await addDoc(collection(db, 'card_topups'), {
+      ...cardData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  }
+};
+
+export const deleteCardTopup = async (id: string) => {
+  const cardRef = doc(db, 'card_topups', id);
+  await deleteDoc(cardRef);
+};
 
 // Helper for resumable uploads with progress
 const uploadWithProgress = (

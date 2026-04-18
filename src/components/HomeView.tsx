@@ -14,22 +14,26 @@ import {
 import { Button } from './ui/button';
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { useProducts, useGames } from '../services/parcelService';
+import { useProducts, useGames, useCardTopups } from '../services/parcelService';
 import { 
   Dialog, 
   DialogContent, 
   DialogHeader, 
   DialogTitle, 
-  DialogDescription 
+  DialogDescription,
+  DialogFooter
 } from './ui/dialog';
 import { Badge } from './ui/badge';
+import { Loader2 } from 'lucide-react';
 
 const WHATSAPP_NUMBER = "+50944813185";
 
 export default function HomeView({ onTrackingClick, onViewChange }: { onTrackingClick: () => void, onViewChange: (view: any) => void }) {
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
+  const { cards, loading: cardsLoading } = useCardTopups();
   const [isGamesDialogOpen, setIsGamesDialogOpen] = React.useState(false);
+  const [isCardsDialogOpen, setIsCardsDialogOpen] = React.useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
@@ -62,8 +66,8 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
       title: "Recharge carte",
       description: "Rechargez vos cartes de crédit ou prépayées rapidement.",
       icon: <CreditCard className="h-8 w-8 text-emerald-600" />,
-      action: () => openWhatsApp("Bonjour, je souhaite faire une recharge de carte via Neopay."),
-      buttonText: "Recharger via WhatsApp",
+      action: () => setIsCardsDialogOpen(true),
+      buttonText: "Voir les cartes",
       color: "bg-emerald-50 border-emerald-100"
     },
     {
@@ -156,43 +160,43 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
           </div>
         ) : products.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="product-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {products.map((product, idx) => (
               <motion.div
                 key={product.id}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: idx * 0.1 }}
+                className="mobile-product-card-wrapper"
               >
-                <Card className="overflow-hidden border-0 shadow-md hover:shadow-xl transition-shadow h-full flex flex-col">
-                  <div className="aspect-video relative overflow-hidden bg-gray-50">
+                <Card className="product-card overflow-hidden border-0 bg-white h-full flex flex-col">
+                  <div className="product-image-container relative overflow-hidden bg-gray-50">
                     <img 
                       src={product.image} 
                       alt={product.name} 
-                      className="object-contain w-full h-full hover:scale-105 transition-transform duration-500"
+                      className="product-image"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/neopay/400/400';
                       }}
                     />
-                    <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full font-bold text-blue-600 shadow-sm">
-                      {product.price}
+                  </div>
+                  <div className="product-card-content">
+                    <div className="mb-2">
+                      <h3 className="product-name">{product.name}</h3>
+                      <p className="product-subtitle truncate">Livraison rapide / Neopay</p>
+                    </div>
+                    
+                    <div className="product-footer">
+                      <span className="product-price">{product.price}</span>
+                      <Button 
+                        size="sm"
+                        onClick={() => openWhatsApp(product.whatsappMessage || `Bonjour, je suis intéressé par ce service Neopay : ${product.name}. Je souhaite passer commande.`)}
+                        className="product-buy-button"
+                      >
+                        ⚡ Acheter
+                      </Button>
                     </div>
                   </div>
-                  <CardHeader>
-                    <CardTitle>{product.name}</CardTitle>
-                    <CardDescription className="line-clamp-3">
-                      {product.description}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="mt-auto">
-                    <Button 
-                      onClick={() => openWhatsApp(product.whatsappMessage || `Bonjour, je suis intéressé par ce service Neopay : ${product.name}. Je souhaite passer commande.`)}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2"
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                      Commander via WhatsApp
-                    </Button>
-                  </CardContent>
                 </Card>
               </motion.div>
             ))}
@@ -310,11 +314,70 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
           )}
         </DialogContent>
       </Dialog>
-      {/* Back to Top Button */}
+      
+      {/* Cards Dialog */}
+      <Dialog open={isCardsDialogOpen} onOpenChange={setIsCardsDialogOpen}>
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl flex items-center gap-2">
+              <CreditCard className="h-6 w-6 text-emerald-600" />
+              Recharge Cartes
+            </DialogTitle>
+            <DialogDescription>
+              Choisissez une carte pour recharger votre compte.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {cardsLoading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-10 w-10 animate-spin text-emerald-600" />
+            </div>
+          ) : cards.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
+              {cards.map((card) => (
+                <Card key={card.id} className="overflow-hidden border-gray-100 hover:shadow-md transition-shadow flex flex-col h-full">
+                  <div className="aspect-video relative bg-gray-50">
+                    <img 
+                      src={card.image} 
+                      alt={card.name}
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/card/400/400';
+                      }}
+                    />
+                    <div className="absolute top-2 right-2">
+                      <Badge className="bg-emerald-600">{card.price}</Badge>
+                    </div>
+                  </div>
+                  <CardHeader className="p-4 flex-grow">
+                    <CardTitle className="text-lg">{card.name}</CardTitle>
+                    <CardDescription className="text-sm">
+                      {card.description}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-0 mt-auto">
+                    <Button 
+                      onClick={() => openWhatsApp(card.whatsappMessage || `Bonjour, je souhaite recharger ma carte via le service : ${card.name}.`)}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm h-10 font-bold"
+                    >
+                      <MessageCircle className="h-4 w-4 mr-2" />
+                      Recharger via WhatsApp
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-10 text-gray-500">
+              <p>Aucune carte disponible pour le moment.</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <motion.div 
         initial={{ opacity: 0, scale: 0.5 }}
         animate={{ opacity: showScrollTop ? 1 : 0, scale: showScrollTop ? 1 : 0 }}
-        className="fixed bottom-6 right-6 z-50 pointer-events-none"
+        className="fixed bottom-6 right-20 z-50 pointer-events-none"
       >
         <Button 
           onClick={scrollToTop}
@@ -323,6 +386,16 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
           <ArrowUp className="h-6 w-6" />
         </Button>
       </motion.div>
+
+      {/* Floating Chat Button */}
+      <div className="floating-chat-button-container">
+        <Button
+          onClick={() => openWhatsApp("Bonjour Neopay, je souhaite avoir plus de renseignements.")}
+          className="floating-chat-button"
+        >
+          <MessageCircle className="h-6 w-6" />
+        </Button>
+      </div>
     </div>
   );
 }

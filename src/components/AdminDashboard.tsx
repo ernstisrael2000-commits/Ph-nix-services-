@@ -26,7 +26,8 @@ import {
   Filter,
   ArrowUpDown,
   DollarSign,
-  ArrowUp
+  ArrowUp,
+  CreditCard
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -44,9 +45,9 @@ import {
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame } from '../services/parcelService';
+import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup } from '../services/parcelService';
 import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus, resetMonthlyStats, awardMonthlyPrizes, clearMonthlyWinners, useMonthlyRankings, recordPurchase } from '../services/affiliateService';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game } from '../types';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup } from '../types';
 import AdminShippingManager from './AdminShippingManager';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -117,6 +118,7 @@ export default function AdminDashboard() {
   const { parcels, loading: parcelsLoading } = useParcels();
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
+  const { cards, loading: cardsLoading } = useCardTopups();
   const { settings, loading: settingsLoading } = useSettings();
   const { affiliates, loading: affiliatesLoading } = useAllAffiliates();
   const { withdrawals: allWithdrawals, loading: allWithdrawalsLoading } = useAllWithdrawals();
@@ -145,6 +147,19 @@ export default function AdminDashboard() {
     whatsappMessage: '',
     catalog: []
   });
+
+  const [isCardDialogOpen, setIsCardDialogOpen] = useState(false);
+  const [editingCard, setEditingCard] = useState<CardTopup | null>(null);
+  const [isCardDeleteDialogOpen, setIsCardDeleteDialogOpen] = useState(false);
+  const [cardToDelete, setCardToDelete] = useState<CardTopup | null>(null);
+  const [cardFormData, setCardFormData] = useState<Partial<CardTopup>>({
+    name: '',
+    image: '',
+    description: '',
+    price: '',
+    whatsappMessage: ''
+  });
+  const [tempCardImageUrl, setTempCardImageUrl] = useState('');
 
   const [isAwarding, setIsAwarding] = useState(false);
   const [isClearingWinners, setIsClearingWinners] = useState(false);
@@ -327,12 +342,91 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleOpenCardDialog = (card?: CardTopup) => {
+    if (card) {
+      setEditingCard(card);
+      setCardFormData({ ...card });
+    } else {
+      setEditingCard(null);
+      setCardFormData({
+        name: '',
+        image: '',
+        description: '',
+        price: '',
+        whatsappMessage: ''
+      });
+    }
+    setTempCardImageUrl('');
+    setIsCardDialogOpen(true);
+  };
+
+  const handleSaveCard = async () => {
+    if (!cardFormData.name || !cardFormData.price) {
+      toast.error("Le nom et le prix sont requis.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await saveCardTopup(cardFormData, editingCard?.id);
+      toast.success(editingCard ? "Carte mise à jour." : "Carte ajoutée.");
+      setIsCardDialogOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de l'enregistrement.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleConfirmDeleteCard = async () => {
+    if (!cardToDelete?.id) return;
+    setIsDeleting(true);
+    try {
+      await deleteCardTopup(cardToDelete.id);
+      toast.success("Carte supprimée.");
+      setIsCardDeleteDialogOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la suppression.");
+    } finally {
+      setIsDeleting(false);
+      setCardToDelete(null);
+    }
+  };
+
+  const handleCardImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadProgress(0);
+    try {
+      const compressedBlob = await compressImage(file);
+      const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+      const url = await uploadLogo(compressedFile, (p) => setUploadProgress(p));
+      setCardFormData(prev => ({ ...prev, image: url }));
+      toast.success("Image carte téléchargée !");
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors du téléchargement de l'image.");
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
   const handleOpenGameDialog = (game?: Game) => {
     if (game) {
       setEditingGame(game);
       setGameFormData({
-        ...game,
-        catalog: game.catalog || []
+        name: game.name || '',
+        image: game.image || '',
+        description: game.description || '',
+        priceRange: game.priceRange || '',
+        whatsappMessage: game.whatsappMessage || '',
+        catalog: (game.catalog || []).map(item => ({
+          ...item,
+          id: item.id || generateId()
+        }))
       });
     } else {
       setEditingGame(null);
@@ -382,10 +476,12 @@ export default function AdminDashboard() {
   };
 
   const removeCatalogItem = (id: string) => {
-    setGameFormData({
-      ...gameFormData,
-      catalog: (gameFormData.catalog || []).filter(item => item.id !== id)
-    });
+    if (!id) return;
+    setGameFormData(prev => ({
+      ...prev,
+      catalog: (prev.catalog || []).filter(item => item.id !== id)
+    }));
+    toast.info("Pack retiré. N'oubliez pas d'enregistrer.");
   };
 
   const handleConfirmDeleteGame = async () => {
@@ -701,6 +797,10 @@ export default function AdminDashboard() {
               <Gamepad2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               Top-up Jeux
             </TabsTrigger>
+            <TabsTrigger value="cards" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
+              <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              Recharge Cartes
+            </TabsTrigger>
             <TabsTrigger value="affiliates" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap relative">
               <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               Affiliés
@@ -911,15 +1011,16 @@ export default function AdminDashboard() {
                             {product.description}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button variant="ghost" size="sm" onClick={() => handleOpenProductDialog(product)}>
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => handleOpenProductDialog(product)} className="h-8 w-8 p-0">
                                 <Edit2 className="h-4 w-4 text-gray-500" />
                               </Button>
                               <Button variant="ghost" size="sm" onClick={() => {
                                 setProductToDelete(product);
                                 setIsProductDeleteDialogOpen(true);
-                              }}>
-                                <Trash2 className="h-4 w-4 text-red-500" />
+                              }} className="h-8 text-red-500 hover:text-red-600 hover:bg-red-50 bg-white/50 border border-transparent hover:border-red-100 px-2 font-medium text-xs">
+                                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                <span className="hidden sm:inline">Supprimer</span>
                               </Button>
                             </div>
                           </TableCell>
@@ -990,15 +1091,16 @@ export default function AdminDashboard() {
                             {game.description}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button variant="ghost" size="sm" onClick={() => handleOpenGameDialog(game)}>
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => handleOpenGameDialog(game)} className="h-8 w-8 p-0">
                                 <Edit2 className="h-4 w-4 text-gray-500" />
                               </Button>
                               <Button variant="ghost" size="sm" onClick={() => {
                                 setGameToDelete(game);
                                 setIsGameDeleteDialogOpen(true);
-                              }}>
-                                <Trash2 className="h-4 w-4 text-red-500" />
+                              }} className="h-8 text-red-500 hover:text-red-600 hover:bg-red-50 bg-white/50 border border-transparent hover:border-red-100 px-2 font-medium text-xs">
+                                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                <span className="hidden sm:inline">Supprimer</span>
                               </Button>
                             </div>
                           </TableCell>
@@ -1008,6 +1110,86 @@ export default function AdminDashboard() {
                         <TableRow>
                           <TableCell colSpan={5} className="h-32 text-center text-gray-400">
                             Aucun jeu ajouté.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="cards" className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <h2 className="text-xl font-bold">Gestion des Cartes (Recharge)</h2>
+            <Button onClick={() => handleOpenCardDialog()} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2">
+              <Plus className="h-4 w-4" />
+              Nouvelle Carte
+            </Button>
+          </div>
+
+          <Card className="shadow-sm border-gray-200">
+            <CardContent className="p-0">
+              {cardsLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                  <p>Chargement des cartes...</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50/50">
+                        <TableHead>Image</TableHead>
+                        <TableHead>Nom</TableHead>
+                        <TableHead>Prix</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {cards.map((card) => (
+                        <TableRow key={card.id} className="hover:bg-gray-50/50 transition-colors">
+                          <TableCell>
+                            <img 
+                              src={card.image} 
+                              className="h-10 w-10 object-cover rounded-lg border"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/card/100/100';
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="font-semibold">{card.name}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50">
+                              {card.price}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-500 max-w-xs truncate">
+                            {card.description}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => handleOpenCardDialog(card)} className="h-8 w-8 p-0">
+                                <Edit2 className="h-4 w-4 text-gray-500" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => {
+                                setCardToDelete(card);
+                                setIsCardDeleteDialogOpen(true);
+                              }} className="h-8 text-red-500 hover:text-red-600 hover:bg-red-50 bg-white/50 border border-transparent hover:border-red-100 px-2 font-medium text-xs">
+                                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                <span className="hidden sm:inline">Supprimer</span>
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {cards.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="h-32 text-center text-gray-400">
+                            Aucune carte enregistrée.
                           </TableCell>
                         </TableRow>
                       )}
@@ -1894,71 +2076,73 @@ export default function AdminDashboard() {
 
       {/* Product Edit/Add Dialog */}
       <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>{editingProduct ? 'Modifier le produit' : 'Nouveau produit'}</DialogTitle>
-            <DialogDescription>Ajoutez un service ou un produit dynamique à votre plateforme.</DialogDescription>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col p-4 overflow-hidden">
+          <DialogHeader className="pb-4 border-b -mx-4 -mt-4 p-4 px-6 bg-white z-20">
+            <DialogTitle className="text-xl font-black">{editingProduct ? 'Modifier le produit' : 'Nouveau produit'}</DialogTitle>
+            <DialogDescription className="text-xs">Ajoutez un service ou un produit dynamique à votre plateforme.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-6 py-4">
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right text-sm">Nom</Label>
-              <Input 
-                value={productFormData.name} 
-                onChange={(e) => setProductFormData({...productFormData, name: e.target.value})}
-                className="sm:col-span-3" 
-                placeholder="Ex: Netflix Premium 1 Mois"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right text-sm">Prix</Label>
-              <Input 
-                value={productFormData.price} 
-                onChange={(e) => setProductFormData({...productFormData, price: e.target.value})}
-                className="sm:col-span-3" 
-                placeholder="Ex: 1500 HTG"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right text-sm">Description</Label>
-              <textarea 
-                value={productFormData.description} 
-                onChange={(e) => setProductFormData({...productFormData, description: e.target.value})}
-                className="sm:col-span-3 flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="Détails du service..."
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right text-sm">Msg WhatsApp</Label>
-              <Input 
-                value={productFormData.whatsappMessage} 
-                onChange={(e) => setProductFormData({...productFormData, whatsappMessage: e.target.value})}
-                className="sm:col-span-3" 
-                placeholder="Message auto personnalisé..."
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right text-sm">Image (Lien)</Label>
-              <div className="sm:col-span-3 flex flex-col sm:flex-row gap-2">
+          
+          <div className="flex-1 overflow-y-auto pr-2 -mr-2 py-4 custom-scrollbar overscroll-contain">
+            <div className="grid gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label className="sm:text-right text-xs font-bold uppercase text-gray-500">Nom</Label>
                 <Input 
-                  value={tempProductImageUrl} 
-                  onChange={(e) => setTempProductImageUrl(e.target.value)}
-                  placeholder="https://exemple.com/image.jpg"
-                  className="flex-1"
+                  value={productFormData.name} 
+                  onChange={(e) => setProductFormData({...productFormData, name: e.target.value})}
+                  className="sm:col-span-3 h-10 rounded-xl" 
+                  placeholder="Ex: Netflix Premium 1 Mois"
                 />
-                <Button 
-                  onClick={() => {
-                    if (tempProductImageUrl) {
-                      setProductFormData({...productFormData, image: tempProductImageUrl});
-                      setTempProductImageUrl('');
-                      toast.success("Lien d'image appliqué !");
-                    }
-                  }}
-                  className="bg-blue-600 w-full sm:w-auto"
-                >
-                  Ajouter
-                </Button>
               </div>
-            </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label className="sm:text-right text-sm">Prix</Label>
+                <Input 
+                  value={productFormData.price} 
+                  onChange={(e) => setProductFormData({...productFormData, price: e.target.value})}
+                  className="sm:col-span-3" 
+                  placeholder="Ex: 1500 HTG"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label className="sm:text-right text-sm">Description</Label>
+                <textarea 
+                  value={productFormData.description} 
+                  onChange={(e) => setProductFormData({...productFormData, description: e.target.value})}
+                  className="sm:col-span-3 flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Détails du service..."
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label className="sm:text-right text-sm">Msg WhatsApp</Label>
+                <Input 
+                  value={productFormData.whatsappMessage} 
+                  onChange={(e) => setProductFormData({...productFormData, whatsappMessage: e.target.value})}
+                  className="sm:col-span-3" 
+                  placeholder="Message auto personnalisé..."
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label className="sm:text-right text-sm">Image (Lien)</Label>
+                <div className="sm:col-span-3 flex flex-col sm:flex-row gap-2">
+                  <Input 
+                    value={tempProductImageUrl} 
+                    onChange={(e) => setTempProductImageUrl(e.target.value)}
+                    placeholder="https://exemple.com/image.jpg"
+                    className="flex-1"
+                  />
+                  <Button 
+                    onClick={() => {
+                      if (tempProductImageUrl) {
+                        setProductFormData({...productFormData, image: tempProductImageUrl});
+                        setTempProductImageUrl('');
+                        toast.success("Lien d'image appliqué !");
+                      }
+                    }}
+                    className="bg-blue-600 w-full sm:w-auto"
+                  >
+                    Ajouter
+                  </Button>
+                </div>
+              </div>
             <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-2 sm:gap-4">
               <Label className="sm:text-right text-sm">Image (Fichier)</Label>
               <div className="sm:col-span-3 space-y-4">
@@ -2009,82 +2193,108 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsProductDialogOpen(false)}>Annuler</Button>
-            <Button onClick={handleSaveProduct} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Enregistrer
-            </Button>
+          </div>
+          <DialogFooter className="sticky bottom-0 z-30 mt-auto border-t pt-4 pb-2 bg-white/95 backdrop-blur-md flex flex-row justify-between items-center sm:justify-between w-full -mx-4 px-6 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+            <div className="flex gap-2">
+              {editingProduct && (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => {
+                    setProductToDelete(editingProduct);
+                    setIsProductDeleteDialogOpen(true);
+                    setIsProductDialogOpen(false);
+                  }} 
+                  className="text-red-500 hover:bg-red-50 hover:text-red-600 px-2 h-9 text-[10px] sm:text-xs border border-transparent hover:border-red-200"
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  <span className="hidden xs:inline">Supprimer</span>
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setIsProductDialogOpen(false)} className="rounded-xl h-9 text-xs px-4">Annuler</Button>
+              <Button 
+                onClick={handleSaveProduct} 
+                disabled={isSaving} 
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-9 rounded-xl shadow-lg shadow-blue-100 border-0 px-6 min-w-[100px]"
+              >
+                {isSaving ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : null}
+                Enregistrer
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isGameDialogOpen} onOpenChange={setIsGameDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>{editingGame ? 'Modifier le jeu' : 'Nouveau jeu'}</DialogTitle>
-            <DialogDescription>Ajoutez un jeu pour le service de Top-up.</DialogDescription>
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col p-4 overflow-hidden">
+          <DialogHeader className="pb-4 border-b -mx-4 -mt-4 p-4 px-6 bg-white z-20">
+            <DialogTitle className="text-xl font-black">{editingGame ? 'Modifier le jeu' : 'Nouveau jeu'}</DialogTitle>
+            <DialogDescription className="text-xs">Ajoutez un jeu pour le service de Top-up.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-6 py-4">
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right text-sm">Nom</Label>
-              <Input 
-                value={gameFormData.name} 
-                onChange={(e) => setGameFormData({...gameFormData, name: e.target.value})}
-                className="sm:col-span-3" 
-                placeholder="Ex: Free Fire"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right text-sm">Prix (Range)</Label>
-              <Input 
-                value={gameFormData.priceRange} 
-                onChange={(e) => setGameFormData({...gameFormData, priceRange: e.target.value})}
-                className="sm:col-span-3" 
-                placeholder="Ex: À partir de 100 G"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right text-sm">Description</Label>
-              <textarea 
-                value={gameFormData.description} 
-                onChange={(e) => setGameFormData({...gameFormData, description: e.target.value})}
-                className="sm:col-span-3 flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="Détails du jeu..."
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right text-sm">Msg WhatsApp</Label>
-              <Input 
-                value={gameFormData.whatsappMessage} 
-                onChange={(e) => setGameFormData({...gameFormData, whatsappMessage: e.target.value})}
-                className="sm:col-span-3" 
-                placeholder="Message auto personnalisé..."
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right text-sm">Image (Lien)</Label>
-              <div className="sm:col-span-3 flex flex-col sm:flex-row gap-2">
+          
+          <div className="flex-1 overflow-y-auto pr-2 -mr-2 py-4 custom-scrollbar overscroll-contain">
+            <div className="grid gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label className="sm:text-right text-xs font-bold uppercase text-gray-500">Nom</Label>
                 <Input 
-                  value={tempGameImageUrl} 
-                  onChange={(e) => setTempGameImageUrl(e.target.value)}
-                  placeholder="https://exemple.com/image.jpg"
-                  className="flex-1"
+                  value={gameFormData.name} 
+                  onChange={(e) => setGameFormData({...gameFormData, name: e.target.value})}
+                  className="sm:col-span-3 h-10 rounded-xl" 
+                  placeholder="Ex: Free Fire"
                 />
-                <Button 
-                  onClick={() => {
-                    if (tempGameImageUrl) {
-                      setGameFormData({...gameFormData, image: tempGameImageUrl});
-                      setTempGameImageUrl('');
-                      toast.success("Lien d'image appliqué !");
-                    }
-                  }}
-                  className="bg-blue-600 w-full sm:w-auto"
-                >
-                  Ajouter
-                </Button>
               </div>
-            </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label className="sm:text-right text-sm">Prix (Range)</Label>
+                <Input 
+                  value={gameFormData.priceRange} 
+                  onChange={(e) => setGameFormData({...gameFormData, priceRange: e.target.value})}
+                  className="sm:col-span-3" 
+                  placeholder="Ex: À partir de 100 G"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label className="sm:text-right text-sm">Description</Label>
+                <textarea 
+                  value={gameFormData.description} 
+                  onChange={(e) => setGameFormData({...gameFormData, description: e.target.value})}
+                  className="sm:col-span-3 flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Détails du jeu..."
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label className="sm:text-right text-sm">Msg WhatsApp</Label>
+                <Input 
+                  value={gameFormData.whatsappMessage} 
+                  onChange={(e) => setGameFormData({...gameFormData, whatsappMessage: e.target.value})}
+                  className="sm:col-span-3" 
+                  placeholder="Message auto personnalisé..."
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label className="sm:text-right text-sm">Image (Lien)</Label>
+                <div className="sm:col-span-3 flex flex-col sm:flex-row gap-2">
+                  <Input 
+                    value={tempGameImageUrl} 
+                    onChange={(e) => setTempGameImageUrl(e.target.value)}
+                    placeholder="https://exemple.com/image.jpg"
+                    className="flex-1"
+                  />
+                  <Button 
+                    onClick={() => {
+                      if (tempGameImageUrl) {
+                        setGameFormData({...gameFormData, image: tempGameImageUrl});
+                        setTempGameImageUrl('');
+                        toast.success("Lien d'image appliqué !");
+                      }
+                    }}
+                    className="bg-blue-600 w-full sm:w-auto"
+                  >
+                    Ajouter
+                  </Button>
+                </div>
+              </div>
             <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-2 sm:gap-4">
               <Label className="sm:text-right text-sm">Image (Fichier)</Label>
               <div className="sm:col-span-3 space-y-4">
@@ -2135,18 +2345,18 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <div className="space-y-4 pt-4 border-t">
-              <div className="flex items-center justify-between">
+            <div className="space-y-4 pt-4 border-t relative">
+              <div className="flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-sm z-10 py-2 -mx-2 px-2 rounded-lg mb-2">
                 <Label className="text-sm font-bold flex items-center gap-2">
                   <Gamepad2 className="h-4 w-4 text-purple-600" />
                   Catalogue de prix
                 </Label>
-                <Button variant="ghost" size="sm" onClick={addCatalogItem} className="h-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+                <Button variant="ghost" size="sm" onClick={addCatalogItem} className="h-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-bold">
                   <Plus className="h-4 w-4 mr-1" /> Ajouter un pack
                 </Button>
               </div>
               
-              <div className="space-y-3 md:max-h-[500px] overflow-y-auto pr-2 custom-scrollbar overscroll-contain">
+              <div className="space-y-3">
                 {gameFormData.catalog?.map((item, idx) => (
                   <div key={item.id} className="p-4 rounded-xl border bg-gray-50 space-y-3 relative group transition-all hover:border-purple-200">
                     <div className="flex justify-between items-center bg-white px-3 py-1 rounded-full border text-[10px] font-bold text-gray-400 w-fit shadow-sm">
@@ -2187,8 +2397,12 @@ export default function AdminDashboard() {
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      onClick={() => removeCatalogItem(item.id)}
-                      className="absolute top-2 right-2 h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => {
+                        removeCatalogItem(item.id);
+                        toast.info("Pack retiré. N'oubliez pas d'enregistrer.");
+                      }}
+                      className="absolute top-2 right-2 h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600 transition-all border border-red-100 bg-white shadow-sm z-30"
+                      title="Supprimer ce pack"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -2197,18 +2411,231 @@ export default function AdminDashboard() {
                 
                 {(!gameFormData.catalog || gameFormData.catalog.length === 0) && (
                   <div className="text-center py-6 border-2 border-dashed rounded-xl text-gray-400 text-sm">
-                    Aucun pack défini. Le bouton "Commander" utilisera le message par défaut du jeu.
+                    Aucun pack défini.
                   </div>
                 )}
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsGameDialogOpen(false)}>Annuler</Button>
-            <Button onClick={handleSaveGame} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Enregistrer
+          </div>
+          <DialogFooter className="sticky bottom-0 z-30 mt-auto border-t pt-4 pb-2 bg-white/95 backdrop-blur-md flex flex-row justify-between items-center sm:justify-between w-full -mx-4 px-6 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+            <div className="flex gap-2">
+              {editingGame && (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => {
+                    setGameToDelete(editingGame);
+                    setIsGameDeleteDialogOpen(true);
+                    setIsGameDialogOpen(false);
+                  }} 
+                  className="text-red-500 hover:bg-red-50 hover:text-red-600 px-2 h-9 text-[10px] sm:text-xs border border-transparent hover:border-red-200"
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  <span className="hidden xs:inline">Supprimer</span>
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setIsGameDialogOpen(false)} className="rounded-xl h-9 text-xs px-4">Annuler</Button>
+              <Button 
+                onClick={handleSaveGame} 
+                disabled={isSaving} 
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-9 rounded-xl shadow-lg shadow-blue-100 border-0 px-6 min-w-[100px]"
+              >
+                {isSaving ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : null}
+                Enregistrer
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Card Delete Confirmation Dialog */}
+      <Dialog open={isCardDeleteDialogOpen} onOpenChange={setIsCardDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertCircle className="h-5 w-5" />
+              Supprimer la carte
+            </DialogTitle>
+            <DialogDescription>
+              Êtes-vous sûr de vouloir supprimer la carte "{cardToDelete?.name}" ? Cette action est irréversible.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsCardDeleteDialogOpen(false)}>Annuler</Button>
+            <Button variant="destructive" onClick={handleConfirmDeleteCard} disabled={isDeleting}>
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Supprimer
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Card Editor Dialog */}
+      <Dialog open={isCardDialogOpen} onOpenChange={setIsCardDialogOpen}>
+        <DialogContent className="sm:max-w-[600px] h-[90vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-2">
+            <DialogTitle className="text-2xl flex items-center gap-2">
+              <CreditCard className="h-6 w-6 text-blue-600" />
+              {editingCard ? 'Modifier la carte' : 'Ajouter une carte'}
+            </DialogTitle>
+            <DialogDescription>
+              Gérez les informations de la carte de recharge.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="grid grid-cols-1 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="card-name">Nom de la carte</Label>
+                <Input 
+                  id="card-name" 
+                  value={cardFormData.name} 
+                  onChange={(e) => setCardFormData({...cardFormData, name: e.target.value})}
+                  placeholder="Ex: Carte Visa Prépayée"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="card-price">Prix / Frais</Label>
+                <Input 
+                  id="card-price" 
+                  value={cardFormData.price} 
+                  onChange={(e) => setCardFormData({...cardFormData, price: e.target.value})}
+                  placeholder="Ex: 500 HTG"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="card-description">Description</Label>
+                <Input 
+                  id="card-description" 
+                  value={cardFormData.description} 
+                  onChange={(e) => setCardFormData({...cardFormData, description: e.target.value})}
+                  placeholder="Détails sur la carte..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="card-whatsapp">Message WhatsApp personnalisé (Optionnel)</Label>
+                <Input 
+                  id="card-whatsapp" 
+                  value={cardFormData.whatsappMessage} 
+                  onChange={(e) => setCardFormData({...cardFormData, whatsappMessage: e.target.value})}
+                  placeholder="Message automatique quand l'utilisateur clique..."
+                />
+              </div>
+
+              <div className="space-y-4">
+                <Label>Image de la carte</Label>
+                <div className="flex flex-col gap-4">
+                  <div className="flex gap-2">
+                    <Input 
+                      value={tempCardImageUrl} 
+                      onChange={(e) => setTempCardImageUrl(e.target.value)}
+                      placeholder="Coller l'URL de l'image..."
+                      className="flex-1"
+                    />
+                    <Button 
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        if (tempCardImageUrl) {
+                          setCardFormData({...cardFormData, image: tempCardImageUrl});
+                          setTempCardImageUrl('');
+                          toast.success("URL de l'image appliquée !");
+                        }
+                      }}
+                    >
+                      Appliquer
+                    </Button>
+                  </div>
+                  
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-white px-2 text-gray-400">Ou télécharger</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-4 gap-4 bg-gray-50/50">
+                    {cardFormData.image ? (
+                      <div className="relative group w-full aspect-video bg-white rounded-lg overflow-hidden border">
+                        <img 
+                          src={cardFormData.image} 
+                          className="w-full h-full object-contain"
+                          alt="Previsualisation" 
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <Button variant="destructive" size="sm" onClick={() => setCardFormData({...cardFormData, image: ''})}>
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Supprimer
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center space-y-2">
+                        <ImageIcon className="h-10 w-10 text-gray-300 mx-auto" />
+                        <p className="text-sm text-gray-500">Aucune image sélectionnée</p>
+                      </div>
+                    )}
+                    
+                    <div className="w-full">
+                      <Input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handleCardImageUpload}
+                        className="hidden" 
+                        id="card-image-upload"
+                      />
+                      <Button asChild variant="outline" className="w-full cursor-pointer" disabled={uploading}>
+                        <label htmlFor="card-image-upload">
+                          {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                          {cardFormData.image ? 'Changer l\'image' : 'Télécharger une image'}
+                        </label>
+                      </Button>
+                      {uploading && (
+                        <div className="mt-2 w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                          <div 
+                            className="bg-blue-600 h-full transition-all duration-300" 
+                            style={{ width: `${uploadProgress}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="p-6 pt-2 border-t bg-gray-50/50 sticky bottom-0 left-0 right-0 z-10 w-full flex flex-row items-center justify-between sm:justify-between">
+            <div className="flex items-center gap-2">
+              {editingCard && (
+                <Button 
+                  variant="destructive" 
+                  onClick={() => {
+                    setCardToDelete(editingCard);
+                    setIsCardDeleteDialogOpen(true);
+                  }}
+                  className="bg-red-500 hover:bg-red-600 border-0 h-10 px-4"
+                  title="Supprimer cette carte"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setIsCardDialogOpen(false)} className="h-10 px-6">Annuler</Button>
+              <Button onClick={handleSaveCard} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 h-10 px-8 text-white font-bold shadow-md shadow-blue-200 active:scale-95 transition-all">
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Enregistrer
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

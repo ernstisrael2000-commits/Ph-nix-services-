@@ -193,6 +193,20 @@
       },
       "required": ["name", "image", "description", "priceRange"]
     },
+    "card_topup": {
+      "title": "Card Topup",
+      "description": "Represents a card for recharge services.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "image": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "string" },
+        "whatsappMessage": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "image", "description", "price"]
+    },
     "shipping_config": {
       "title": "Shipping Configuration",
       "description": "Configuration for Shipping options (Online Purchase and Drop Shipping).",
@@ -275,6 +289,10 @@
     "/games/{gameId}": {
       "schema": "game",
       "description": "Collection of games for top-up."
+    },
+    "/card_topups/{cardId}": {
+      "schema": "card_topup",
+      "description": "Collection of cards for recharge."
     },
     "/shipping_configs/{configId}": {
       "schema": "shipping_config",
