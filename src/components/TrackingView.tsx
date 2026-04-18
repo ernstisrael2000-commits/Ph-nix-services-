@@ -93,16 +93,16 @@ export default function TrackingView() {
                 <div className="relative flex-1">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-gray-400" />
                   <Input
-                    placeholder="Ex: NP123456789"
+                    placeholder="Enter your tracking number"
                     value={trackingNumber}
                     onChange={(e) => setTrackingNumber(e.target.value)}
-                    className="pl-12 h-14 text-lg border-gray-200 focus:ring-blue-500 focus:border-blue-500 rounded-xl bg-white shadow-inner"
+                    className="pl-12 h-14 text-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500 rounded-2xl bg-white shadow-xl transition-all focus:shadow-2xl"
                   />
                 </div>
                 <Button 
                   type="submit" 
                   disabled={loading}
-                  className="h-14 px-10 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg rounded-xl transition-all active:scale-95 shadow-lg shadow-blue-500/30"
+                  className="h-14 px-10 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg rounded-2xl transition-all hover:shadow-xl hover:shadow-blue-500/20 active:scale-95 shadow-lg shadow-blue-500/30 border-0"
                 >
                   {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : 'Rechercher'}
                 </Button>

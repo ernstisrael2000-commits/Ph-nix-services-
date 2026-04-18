@@ -9,13 +9,33 @@ import AffiliateDashboard from './components/AffiliateDashboard';
 import { Toaster } from './components/ui/sonner';
 import { useAuth } from './hooks/useAuth';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Loader2, ShieldAlert, Package } from 'lucide-react';
+import { Loader2, ShieldAlert, Package, ChevronLeft } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Affiliate } from './types';
 
 export default function App() {
   const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping'>('home');
+  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping')[]>(['home']);
   const { isAdmin, loading } = useAuth();
+  
+  const handleViewChange = (newView: typeof view) => {
+    if (newView === view) return;
+    setHistory(prev => [...prev, newView]);
+    setView(newView);
+  };
+
+  const handleBack = () => {
+    if (history.length > 1) {
+      const newHistory = [...history];
+      newHistory.pop(); // remove current
+      const prevView = newHistory[newHistory.length - 1];
+      setHistory(newHistory);
+      setView(prevView);
+    } else {
+      setView('home');
+    }
+  };
+
   const [loggedAffiliate, setLoggedAffiliate] = useState<Affiliate | null>(() => {
     const saved = localStorage.getItem('neopay_affiliate');
     return saved ? JSON.parse(saved) : null;
@@ -44,15 +64,29 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-gray-50 font-sans selection:bg-blue-100 selection:text-blue-900">
+      <div className="min-h-screen bg-gray-50 font-sans selection:bg-blue-100 selection:text-blue-900 flex flex-col">
         <Navbar 
           currentView={view}
-          onViewChange={setView}
+          onViewChange={handleViewChange}
         />
         
-        <main className="animate-in fade-in duration-500 pt-16">
+        <main className="animate-in fade-in duration-500 pt-20 flex-grow relative">
+          {view !== 'home' && (
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleBack}
+                className="group flex items-center gap-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50/50 rounded-lg transition-all pl-2 pr-3"
+              >
+                <ChevronLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
+                <span className="text-xs font-semibold uppercase tracking-wider">Retour</span>
+              </Button>
+            </div>
+          )}
+          
           {view === 'home' && (
-            <HomeView onTrackingClick={() => setView('tracking')} onViewChange={setView} />
+            <HomeView onTrackingClick={() => handleViewChange('tracking')} onViewChange={handleViewChange} />
           )}
           
           {view === 'tracking' && (
@@ -98,10 +132,10 @@ export default function App() {
 
                   <Button 
                     variant="ghost" 
-                    onClick={() => setView('home')}
+                    onClick={handleBack}
                     className="w-full text-gray-500 text-xs hover:bg-transparent hover:text-gray-800"
                   >
-                    Retour à l'accueil
+                    Retour
                   </Button>
                 </div>
               </div>

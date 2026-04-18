@@ -93,48 +93,48 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
             <Button 
               variant={currentView === 'home' ? 'secondary' : 'ghost'} 
               onClick={() => onViewChange('home')} 
-              className="hidden md:flex items-center gap-2"
+              className={`hidden md:flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 group transition-all duration-300 rounded-xl ${currentView === 'home' ? 'bg-blue-50/80 shadow-sm' : 'hover:bg-blue-50/50'}`}
             >
-              <Home className="h-4 w-4" />
-              Accueil
+              <Home className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'home' ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`} />
+              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'home' ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`}>Accueil</span>
             </Button>
             <Button 
               variant={currentView === 'tracking' ? 'secondary' : 'ghost'} 
               onClick={() => onViewChange('tracking')} 
-              className="flex items-center gap-2 px-2 sm:px-4"
+              className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 px-2 sm:px-4 group transition-all duration-300 rounded-xl ${currentView === 'tracking' ? 'bg-blue-50/80 shadow-sm' : 'hover:bg-blue-50/50'}`}
             >
-              <Search className="h-4 w-4" />
-              <span className="hidden sm:inline">Suivi</span>
+              <Search className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'tracking' ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`} />
+              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'tracking' ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`}>Suivi</span>
             </Button>
 
             <Button 
               variant={currentView === 'shipping' ? 'secondary' : 'ghost'} 
               onClick={() => onViewChange('shipping')} 
-              className="flex items-center gap-2 px-2 sm:px-4"
+              className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 px-2 sm:px-4 group transition-all duration-300 rounded-xl ${currentView === 'shipping' ? 'bg-blue-50/80 shadow-sm' : 'hover:bg-blue-50/50'}`}
             >
-              <Truck className="h-4 w-4" />
-              <span className="hidden sm:inline">Shipping</span>
+              <Truck className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'shipping' ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`} />
+              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'shipping' ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`}>Shipping</span>
             </Button>
 
             <Button 
               variant={currentView === 'affiliate' ? 'secondary' : 'ghost'} 
               onClick={() => onViewChange('affiliate')} 
-              className="flex items-center gap-2 px-2 sm:px-4"
+              className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 px-2 sm:px-4 group transition-all duration-300 rounded-xl ${currentView === 'affiliate' ? 'bg-blue-50/80 shadow-sm' : 'hover:bg-blue-50/50'}`}
             >
-              <Users className="h-4 w-4" />
-              <span className="hidden sm:inline">Affiliés</span>
+              <Users className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'affiliate' ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`} />
+              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'affiliate' ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`}>Affiliés</span>
             </Button>
             
             {isAdmin && (
               <Button 
                 variant={currentView === 'admin' ? 'secondary' : 'outline'} 
                 onClick={() => onViewChange('admin')} 
-                className="flex items-center gap-2 border-blue-200 hover:bg-blue-50 text-blue-700 px-2 sm:px-4 relative"
+                className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 border-blue-100 px-2 sm:px-4 relative group transition-all duration-300 rounded-xl ${currentView === 'admin' ? 'bg-blue-100 shadow-sm' : 'hover:bg-blue-50 hover:shadow-md'}`}
               >
-                <ShieldCheck className="h-4 w-4" />
-                <span className="hidden sm:inline">Admin</span>
+                <ShieldCheck className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'admin' ? 'text-blue-700' : 'text-blue-400 group-hover:text-blue-700'}`} />
+                <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'admin' ? 'text-blue-700' : 'text-blue-400 group-hover:text-blue-700'}`}>Admin</span>
                 {pendingCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white">
+                  <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[9px] font-bold px-1 py-0.5 rounded-full border border-white">
                     {pendingCount}
                   </span>
                 )}

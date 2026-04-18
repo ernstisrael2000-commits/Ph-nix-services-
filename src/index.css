@@ -128,8 +128,23 @@
     @apply border-border outline-ring/50;
     }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground leading-relaxed antialiased;
     }
+  p {
+    @apply text-gray-600;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight text-gray-900;
+  }
+  .card, [class*="Card"] {
+    @apply shadow-sm border-gray-100 transition-all duration-300;
+  }
+  .card:hover, [class*="Card"]:hover {
+    @apply shadow-md;
+  }
+  input, button {
+    @apply transition-all duration-200;
+  }
   html {
     @apply font-sans scroll-smooth;
     }
