@@ -251,6 +251,18 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["type", "addresses", "websites", "videos", "updatedAt"]
+    },
+    "slider_image": {
+      "title": "Slider Image",
+      "description": "Represents an image displayed in the home hero slider.",
+      "type": "object",
+      "properties": {
+        "url": { "type": "string" },
+        "title": { "type": "string", "description": "Title overlaid on the slide." },
+        "description": { "type": "string", "description": "Description overlaid on the slide." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["url", "createdAt"]
     }
   },
   "firestore": {
@@ -297,6 +309,10 @@
     "/shipping_configs/{configId}": {
       "schema": "shipping_config",
       "description": "Collection of shipping configurations."
+    },
+    "/slider_images/{imageId}": {
+      "schema": "slider_image",
+      "description": "Collection of hero slider images."
     }
   }
 }

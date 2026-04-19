@@ -291,7 +291,7 @@ export const uploadLogo = async (
 
 // Slider Images Services
 export const useSliderImages = () => {
-  const [sliderImages, setSliderImages] = useState<{ id: string, url: string }[]>([]);
+  const [sliderImages, setSliderImages] = useState<{ id: string, url: string, title?: string, description?: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -300,7 +300,7 @@ export const useSliderImages = () => {
       const data = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      })) as { id: string, url: string }[];
+      })) as { id: string, url: string, title?: string, description?: string }[];
       setSliderImages(data);
       setLoading(false);
     }, (error) => {
@@ -314,9 +314,11 @@ export const useSliderImages = () => {
   return { sliderImages, loading };
 };
 
-export const saveSliderImage = async (url: string) => {
+export const saveSliderImage = async (url: string, title?: string, description?: string) => {
   await addDoc(collection(db, 'slider_images'), {
     url,
+    title: title || '',
+    description: description || '',
     createdAt: serverTimestamp()
   });
 };

@@ -158,6 +158,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /slider_images/{imageId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /users/{userId} {
       // Users can only read their own profile
       allow read: if isAuthenticated() && request.auth.uid == userId;

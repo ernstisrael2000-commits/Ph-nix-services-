@@ -239,6 +239,9 @@ export default function AdminDashboard() {
   const [isSliderImageDeleteDialogOpen, setIsSliderImageDeleteDialogOpen] = useState(false);
   const [sliderImageToDelete, setSliderImageToDelete] = useState<{id: string, url: string} | null>(null);
   const [isSliderUploading, setIsSliderUploading] = useState(false);
+  const [tempSliderImageUrl, setTempSliderImageUrl] = useState('');
+  const [sliderTitle, setSliderTitle] = useState('');
+  const [sliderDescription, setSliderDescription] = useState('');
 
   const { rankings: officialRankings, loading: officialRankingsLoading } = useMonthlyRankings();
 
@@ -622,7 +625,9 @@ export default function AdminDashboard() {
       const compressedBlob = await compressImage(file);
       const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
       const url = await uploadLogo(compressedFile, (p) => setUploadProgress(p));
-      await saveSliderImage(url);
+      await saveSliderImage(url, sliderTitle, sliderDescription);
+      setSliderTitle('');
+      setSliderDescription('');
       toast.success("Image slider ajoutée !");
     } catch (error) {
       console.error(error);
@@ -646,6 +651,26 @@ export default function AdminDashboard() {
     } finally {
       setIsDeleting(false);
       setSliderImageToDelete(null);
+    }
+  };
+
+  const handleSaveSliderUrl = async () => {
+    if (!tempSliderImageUrl.trim()) {
+      toast.error("Veuillez entrer une URL valide.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await saveSliderImage(tempSliderImageUrl.trim(), sliderTitle, sliderDescription);
+      setTempSliderImageUrl('');
+      setSliderTitle('');
+      setSliderDescription('');
+      toast.success("Image ajoutée via lien !");
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de l'ajout de l'image.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1264,26 +1289,67 @@ export default function AdminDashboard() {
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <div>
                 <CardTitle>Images du Slider Hero</CardTitle>
-                <CardDescription>Gérez les images qui défilent sur la page d'accueil.</CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handleSliderImageUpload}
-                  className="hidden" 
-                  id="slider-upload"
-                  disabled={isSliderUploading}
-                />
-                <Button asChild disabled={isSliderUploading} className="bg-blue-600 hover:bg-blue-700">
-                  <label htmlFor="slider-upload" className="cursor-pointer flex items-center gap-2">
-                    {isSliderUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    Ajouter une image
-                  </label>
-                </Button>
+                <CardDescription>Gérez les images qui défilent sur la page d'accueil (titre et description personnalisés par image).</CardDescription>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-6">
+              <div className="bg-gray-50 p-4 rounded-xl border space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Titre du slide</Label>
+                    <Input 
+                      placeholder="Ex: Neopay Services" 
+                      value={sliderTitle}
+                      onChange={(e) => setSliderTitle(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Description du slide</Label>
+                    <Input 
+                      placeholder="Ex: Accès rapide et sécurisé..." 
+                      value={sliderDescription}
+                      onChange={(e) => setSliderDescription(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-4 pt-2 border-t mt-4">
+                  <div className="flex items-center gap-2 flex-grow w-full sm:w-auto">
+                    <Input 
+                      placeholder="URL de l'image (ex: https://...)" 
+                      value={tempSliderImageUrl}
+                      onChange={(e) => setTempSliderImageUrl(e.target.value)}
+                      className="flex-grow h-10"
+                    />
+                    <Button 
+                      onClick={handleSaveSliderUrl} 
+                      disabled={isSaving || !tempSliderImageUrl.trim()}
+                      className="bg-emerald-600 hover:bg-emerald-700 h-10 whitespace-nowrap"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Lien
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    <span className="text-sm text-gray-400 font-medium hidden sm:inline">OU</span>
+                    <Input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleSliderImageUpload}
+                      className="hidden" 
+                      id="slider-upload"
+                      disabled={isSliderUploading}
+                    />
+                    <Button asChild disabled={isSliderUploading} className="bg-blue-600 hover:bg-blue-700 h-10 w-full sm:w-auto">
+                      <label htmlFor="slider-upload" className="cursor-pointer flex items-center justify-center gap-2">
+                        {isSliderUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                        Télécharger
+                      </label>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
               {isSliderUploading && (
                 <div className="mb-6 space-y-2">
                   <div className="flex justify-between text-xs text-gray-500">
@@ -1312,19 +1378,25 @@ export default function AdminDashboard() {
                         alt="Slider" 
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
-                        <Button 
-                          variant="destructive" 
-                          size="sm" 
-                          className="rounded-full px-4"
-                          onClick={() => {
-                            setSliderImageToDelete(image);
-                            setIsSliderImageDeleteDialogOpen(true);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Supprimer
-                        </Button>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-4 opacity-100 transition-opacity">
+                         <div className="mb-2">
+                           <p className="text-white font-bold text-sm truncate">{image.title || 'Pas de titre'}</p>
+                           <p className="text-white/70 text-xs truncate">{image.description || 'Pas de description'}</p>
+                         </div>
+                         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button 
+                            variant="destructive" 
+                            size="sm" 
+                            className="rounded-lg px-3 h-8 text-xs flex-grow"
+                            onClick={() => {
+                              setSliderImageToDelete(image);
+                              setIsSliderImageDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-1" />
+                            Supprimer
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}

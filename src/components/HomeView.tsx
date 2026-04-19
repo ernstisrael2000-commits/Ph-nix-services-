@@ -54,8 +54,8 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
   const [currentSlide, setCurrentSlide] = useState(0);
 
   const imagesToDisplay = sliderImages.length > 0 
-    ? sliderImages.map(img => img.url)
-    : SLIDER_IMAGES;
+    ? sliderImages.map(img => ({ url: img.url, title: img.title || 'Neopay', description: img.description || '' }))
+    : SLIDER_IMAGES.map(url => ({ url, title: 'Neopay', description: 'Digital Services & Gift Cards' }));
 
   useEffect(() => {
     const handleScroll = () => {
@@ -135,7 +135,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
             >
               <div 
                 className="absolute inset-0 bg-cover bg-center transition-transform duration-[5000ms] ease-linear scale-100 group-hover:scale-105"
-                style={{ backgroundImage: `url(${imagesToDisplay[currentSlide] || ''})` }}
+                style={{ backgroundImage: `url(${imagesToDisplay[currentSlide]?.url || ''})` }}
               />
               {/* Overlay Gradients */}
               <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
@@ -153,22 +153,13 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
           >
             <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-white">
               <span className="bg-gradient-to-r from-blue-500 to-red-500 bg-clip-text text-transparent">
-                Neopay
+                {imagesToDisplay[currentSlide]?.title || 'Neopay'}
               </span>
             </h1>
             <h2 className="text-lg md:text-2xl font-bold text-white/90">
-              Services Digitaux & Recharges
+              {imagesToDisplay[currentSlide]?.description || 'Services Digitaux & Recharges'}
             </h2>
           </motion.div>
-
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="text-sm md:text-base text-gray-300 leading-relaxed max-w-lg line-clamp-2"
-          >
-            Accédez à vos services préférés, paiements sécurisés et livraisons instantanées.
-          </motion.p>
 
           <motion.div
             initial={{ opacity: 0, y: 10 }}
