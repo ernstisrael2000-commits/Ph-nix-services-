@@ -180,6 +180,7 @@
     overflow: hidden !important;
     margin: 0 !important;
     border: none !important;
+    padding: 0 !important;
   }
 
   .mobile-product-card-wrapper {
@@ -202,8 +203,8 @@
   .product-image {
     width: 100% !important;
     height: 100% !important;
-    object-fit: contain !important; /* Contain for card topups looks cleaner to see the full card */
-    padding: 8px !important; /* Small padding for cards */
+    object-fit: cover !important;
+    padding: 0 !important;
     transition: transform 0.3s ease !important;
   }
 
@@ -281,6 +282,9 @@
 
 /* DESKTOP RECTANGULAR CARDS */
 @media (min-width: 769px) {
+  .product-card {
+    padding: 0 !important;
+  }
   .product-image-container {
     aspect-ratio: 16 / 10;
     overflow: hidden;
@@ -292,8 +296,8 @@
   .product-image {
     width: 100%;
     height: 100%;
-    object-fit: contain;
-    padding: 12px;
+    object-fit: cover;
+    padding: 0;
     transition: transform 0.3s ease;
   }
   .product-card:hover .product-image {

@@ -93,6 +93,8 @@ export default function AdminShippingManager() {
     });
   };
 
+  const ADMIN_EMAILS = ['ernstisrael2000@gmail.com', 'ernstisrael508@gmail.com'];
+
   if (loading) return <div className="p-8 text-center text-gray-500">Chargement des configurations...</div>;
 
   return (
@@ -101,9 +103,9 @@ export default function AdminShippingManager() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Gestion du Shipping</h1>
           <p className="text-gray-500">Configurez les options Achat en ligne et Drop shipping.</p>
-          {user && user.email !== 'ernstisrael2000@gmail.com' && (
+          {user && !ADMIN_EMAILS.includes(user.email || '') && (
             <p className="text-red-500 text-sm mt-2 font-medium">
-              Note: Connecté en tant que {user.email}. Seul ernstisrael2000@gmail.com peut modifier ces réglages.
+              Note: Connecté en tant que {user.email}. Seuls les administrateurs autorisés peuvent modifier ces réglages.
             </p>
           )}
         </div>

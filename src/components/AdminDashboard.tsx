@@ -233,6 +233,7 @@ export default function AdminDashboard() {
 
   const [notifFilter, setNotifFilter] = useState<'all' | 'registration' | 'withdrawal'>('all');
   const [notifSearch, setNotifSearch] = useState('');
+  const [affiliateSearch, setAffiliateSearch] = useState('');
 
   const { rankings: officialRankings, loading: officialRankingsLoading } = useMonthlyRankings();
 
@@ -292,6 +293,18 @@ export default function AdminDashboard() {
       p.currentLocation.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [parcels, searchTerm]);
+
+  const filteredAffiliates = React.useMemo(() => {
+    if (!affiliateSearch.trim()) return affiliates;
+    const searchTerms = affiliateSearch.toLowerCase().trim().split(/\s+/);
+    return affiliates.filter(a => {
+      const fullName = (a.name || '').toLowerCase();
+      const code = (a.code || '').toLowerCase();
+      const username = (a.username || '').toLowerCase();
+      const combined = `${fullName} ${code} ${username}`;
+      return searchTerms.every(term => combined.includes(term));
+    });
+  }, [affiliates, affiliateSearch]);
 
   const handleOpenDialog = (parcel?: Parcel) => {
     if (parcel) {
@@ -1202,7 +1215,7 @@ export default function AdminDashboard() {
         </TabsContent>
 
         <TabsContent value="affiliates" className="space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md py-4 border-b -mx-6 px-6 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-sm">
             <h2 className="text-xl font-bold">Gestion des Affiliés</h2>
             <Button onClick={() => {
               setEditingAffiliate(null);
@@ -1215,7 +1228,7 @@ export default function AdminDashboard() {
                 referredClients: 0
               });
               setIsAffiliateDialogOpen(true);
-            }} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2">
+            }} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2 shadow-md">
               <PlusCircle className="h-4 w-4" />
               Nouvel Affilié
             </Button>
@@ -1262,8 +1275,24 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
               <Card className="shadow-sm border-gray-200">
-                <CardHeader className="border-b bg-gray-50/50">
-                  <CardTitle className="text-lg font-semibold">Liste des Affiliés</CardTitle>
+                <CardHeader className="border-b bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-lg font-semibold">Liste des Affiliés</CardTitle>
+                    {affiliateSearch && (
+                      <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-200">
+                        {filteredAffiliates.length} trouvé{filteredAffiliates.length > 1 ? 's' : ''}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input 
+                      placeholder="Nom, prénom, code ou username..." 
+                      className="pl-10 h-9 text-sm"
+                      value={affiliateSearch}
+                      onChange={(e) => setAffiliateSearch(e.target.value)}
+                    />
+                  </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   {affiliatesLoading ? (
@@ -1272,7 +1301,7 @@ export default function AdminDashboard() {
                       <p>Chargement des affiliés...</p>
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-gray-50/50">
@@ -1286,8 +1315,12 @@ export default function AdminDashboard() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {affiliates.map((a) => (
-                            <TableRow key={a.id} className="hover:bg-gray-50/50 transition-colors">
+                          {filteredAffiliates.map((a) => (
+                            <TableRow key={a.id} className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => {
+                              setEditingAffiliate(a);
+                              setAffiliateFormData(a);
+                              setIsAffiliateDialogOpen(true);
+                            }}>
                               <TableCell className="font-medium">{a.name}</TableCell>
                               <TableCell className="font-mono text-xs">{a.code}</TableCell>
                               <TableCell>
@@ -1323,7 +1356,7 @@ export default function AdminDashboard() {
                               </TableCell>
                               <TableCell>{a.referredClients}</TableCell>
                               <TableCell className="text-right">
-                                <div className="flex justify-end gap-2">
+                                <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                                   <Button variant="ghost" size="sm" onClick={() => {
                                     setEditingAffiliate(a);
                                     setAffiliateFormData(a);
@@ -1344,10 +1377,10 @@ export default function AdminDashboard() {
                               </TableCell>
                             </TableRow>
                           ))}
-                          {affiliates.length === 0 && (
+                          {filteredAffiliates.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={5} className="h-32 text-center text-gray-400">
-                                Aucun affilié trouvé.
+                              <TableCell colSpan={7} className="h-32 text-center text-gray-400">
+                                {affiliateSearch ? "Aucun affilié ne correspond à votre recherche." : "Aucun affilié trouvé."}
                               </TableCell>
                             </TableRow>
                           )}
@@ -1856,14 +1889,17 @@ export default function AdminDashboard() {
 
       {/* Affiliate Edit/Add Dialog */}
       <Dialog open={isAffiliateDialogOpen} onOpenChange={setIsAffiliateDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>{editingAffiliate ? 'Modifier l\'affilié' : 'Nouvel affilié'}</DialogTitle>
-            <DialogDescription>
-              Gérez les identifiants et les informations de l'affilié.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col p-0 overflow-hidden">
+          <div className="p-6 pb-2">
+            <DialogHeader>
+              <DialogTitle>{editingAffiliate ? 'Modifier l\'affilié' : 'Nouvel affilié'}</DialogTitle>
+              <DialogDescription>
+                Gérez les identifiants et les informations de l'affilié.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          <div className="flex-1 overflow-y-auto px-6 py-2 custom-scrollbar">
+            <div className="grid gap-4 py-4 text-sm">
             <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
               <Label className="sm:text-right">Nom Complet</Label>
               <Input 
@@ -1995,14 +2031,27 @@ export default function AdminDashboard() {
                 className="sm:col-span-3" 
               />
             </div>
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAffiliateDialogOpen(false)}>Annuler</Button>
-            <Button onClick={handleSaveAffiliate} disabled={isSaving} className="bg-blue-600">
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-              Enregistrer
-            </Button>
-          </DialogFooter>
+          <div className="p-4 sm:p-6 pt-3 border-t bg-white/80 backdrop-blur-md sticky bottom-0 z-20">
+            <DialogFooter className="sm:justify-end flex-row gap-2 mt-0">
+              <Button 
+                variant="outline" 
+                onClick={() => setIsAffiliateDialogOpen(false)}
+                className="flex-1 sm:flex-none"
+              >
+                Annuler
+              </Button>
+              <Button 
+                onClick={handleSaveAffiliate} 
+                disabled={isSaving} 
+                className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200"
+              >
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                Enregistrer les modifications
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

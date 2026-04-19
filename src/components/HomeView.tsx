@@ -89,9 +89,9 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12 space-y-20">
+    <div className="max-w-7xl mx-auto px-4 pt-4 pb-12 space-y-12">
       {/* Hero Section */}
-      <section className="text-center space-y-8 px-4 pt-10 pb-6 relative overflow-hidden">
+      <section className="text-center space-y-8 px-4 pt-4 pb-6 relative overflow-hidden">
         {/* Background glow effect */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-blue-100/30 blur-[120px] rounded-full -z-10" />
         
@@ -210,12 +210,12 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                 transition={{ delay: idx * 0.1 }}
                 className="mobile-product-card-wrapper"
               >
-                <Card className="product-card overflow-hidden border-0 bg-white h-full flex flex-col">
-                  <div className="product-image-container relative overflow-hidden bg-gray-50">
+                <Card className="product-card overflow-hidden border-0 bg-white h-full flex flex-col pt-0">
+                  <div className="aspect-[16/10] relative overflow-hidden bg-gray-50">
                     <img 
                       src={product.image} 
                       alt={product.name} 
-                      className="product-image"
+                      className="product-image w-full h-full object-cover"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/neopay/400/400';
                       }}
@@ -292,12 +292,12 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
           ) : games.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
               {games.map((game) => (
-                <Card key={game.id} className="overflow-hidden border-gray-100 hover:shadow-md transition-shadow">
-                  <div className="aspect-video relative bg-gray-50">
+                <Card key={game.id} className="overflow-hidden border-gray-100 hover:shadow-md transition-shadow pt-0">
+                  <div className="aspect-[16/10] relative bg-gray-50">
                     <img 
                       src={game.image} 
                       alt={game.name}
-                      className="w-full h-full object-contain"
+                      className="w-full h-full object-cover"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/game/400/400';
                       }}
@@ -376,12 +376,12 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
           ) : cards.length > 0 ? (
             <div className="product-grid grid grid-cols-2 sm:grid-cols-2 gap-2 py-4">
               {cards.map((card) => (
-                <Card key={card.id} className="product-card overflow-hidden border-gray-100 hover:shadow-md transition-shadow flex flex-col h-full">
-                  <div className="product-image-container relative bg-gray-50">
+                <Card key={card.id} className="product-card overflow-hidden border-gray-100 hover:shadow-md transition-shadow flex flex-col h-full pt-0">
+                  <div className="aspect-[16/10] relative bg-gray-50">
                     <img 
                       src={card.image} 
                       alt={card.name}
-                      className="product-image w-full h-full object-contain"
+                      className="product-image w-full h-full object-cover"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/card/400/400';
                       }}

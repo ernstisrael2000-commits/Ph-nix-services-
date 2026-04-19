@@ -4,6 +4,8 @@ import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { UserProfile } from '../types';
 
+const ADMIN_EMAILS = ['ernstisrael2000@gmail.com', 'ernstisrael508@gmail.com'];
+
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -19,10 +21,10 @@ export const useAuth = () => {
           setProfile(docSnap.data() as UserProfile);
         } else {
           // Check if it's the hardcoded admin
-          if (firebaseUser.email === 'ernstisrael2000@gmail.com') {
+          if (ADMIN_EMAILS.includes(firebaseUser.email || '')) {
             setProfile({
               uid: firebaseUser.uid,
-              email: firebaseUser.email,
+              email: firebaseUser.email || '',
               role: 'admin'
             });
           }
@@ -36,7 +38,7 @@ export const useAuth = () => {
     return () => unsubscribe();
   }, []);
 
-  const isAdmin = profile?.role === 'admin' || user?.email === 'ernstisrael2000@gmail.com';
+  const isAdmin = profile?.role === 'admin' || ADMIN_EMAILS.includes(user?.email || '');
 
   useEffect(() => {
     if (user) {
