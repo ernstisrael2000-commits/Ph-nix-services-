@@ -16,7 +16,54 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import { db, storage, auth } from '../lib/firebase';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Game, ShippingConfig, CardTopup } from '../types';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Game, ShippingConfig, CardTopup, NavButton } from '../types';
+
+// Navigation Buttons Services
+export const useNavButtons = () => {
+  const [buttons, setButtons] = useState<NavButton[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, 'nav_buttons'), orderBy('order', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as NavButton[];
+      setButtons(data);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching nav buttons:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return { buttons, loading };
+};
+
+export const saveNavButton = async (buttonData: Partial<NavButton>, id?: string) => {
+  const { id: _, createdAt: __, ...dataToSave } = buttonData;
+  if (id) {
+    const buttonRef = doc(db, 'nav_buttons', id);
+    await updateDoc(buttonRef, {
+      ...dataToSave,
+      updatedAt: serverTimestamp(),
+    });
+  } else {
+    await addDoc(collection(db, 'nav_buttons'), {
+      ...dataToSave,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+};
+
+export const deleteNavButton = async (id: string) => {
+  const buttonRef = doc(db, 'nav_buttons', id);
+  await deleteDoc(buttonRef);
+};
 
 // Card Topup Services
 export const useCardTopups = () => {

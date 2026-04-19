@@ -9,12 +9,14 @@ import {
   ArrowRight,
   CheckCircle2,
   Info,
-  ArrowUp
+  ArrowUp,
+  HelpCircle
 } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { Button } from './ui/button';
 import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { useProducts, useGames, useCardTopups, useSliderImages } from '../services/parcelService';
+import { useProducts, useGames, useCardTopups, useSliderImages, useNavButtons } from '../services/parcelService';
 import { AnimatePresence } from 'motion/react';
 import { 
   Dialog, 
@@ -29,6 +31,11 @@ import { Loader2, ShieldCheck, Zap, Star, Headphones } from 'lucide-react';
 
 const WHATSAPP_NUMBER = "+50944813185";
 
+const LucideIcon = ({ name, className, color }: { name: string, className?: string, color?: string }) => {
+  const Icon = (LucideIcons as any)[name] || HelpCircle;
+  return <Icon className={className} style={{ color }} />;
+};
+
 const SLIDER_IMAGES = [
   "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=2832&auto=format&fit=crop", // Fintech/Crypto abstract
   "https://images.unsplash.com/photo-1614850523296-62c09279446a?q=80&w=2070&auto=format&fit=crop", // Abstract gradients
@@ -40,6 +47,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
   const { games, loading: gamesLoading } = useGames();
   const { cards, loading: cardsLoading } = useCardTopups();
   const { sliderImages, loading: sliderLoading } = useSliderImages();
+  const { buttons, loading: buttonsLoading } = useNavButtons();
   const [isGamesDialogOpen, setIsGamesDialogOpen] = React.useState(false);
   const [isCardsDialogOpen, setIsCardsDialogOpen] = React.useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -83,6 +91,58 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
     window.open(url, '_blank');
   };
 
+  const resolveRedirection = (btn: any) => {
+    const target = btn.targetUrl?.trim();
+    const instruction = btn.redirectionInstruction?.toLowerCase() || '';
+
+    // If there's an explicit target, prioritize it
+    if (target) {
+      if (target.startsWith('#')) {
+        const el = document.getElementById(target.substring(1));
+        el?.scrollIntoView({ behavior: 'smooth' });
+        return;
+      }
+      if (['tracking', 'shipping', 'affiliate'].includes(target)) {
+        onViewChange(target);
+        return;
+      }
+      // Check for common names in instruction if target is not a URL
+      if (!target.includes('.') && !target.startsWith('/')) {
+        const el = document.getElementById(target);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth' });
+          return;
+        }
+      }
+      window.location.href = target;
+      return;
+    }
+
+    // Try to resolve based on instruction if target is empty
+    if (instruction) {
+      if (instruction.includes('jeu')) {
+        setIsGamesDialogOpen(true);
+        return;
+      }
+      if (instruction.includes('carte') || instruction.includes('recharge')) {
+        setIsCardsDialogOpen(true);
+        return;
+      }
+      if (instruction.includes('suivi') || instruction.includes('colis')) {
+        onViewChange('tracking');
+        return;
+      }
+      if (instruction.includes('shipping') || instruction.includes('envoi')) {
+        onViewChange('shipping');
+        return;
+      }
+      if (instruction.includes('service')) {
+        servicesRef.current?.scrollIntoView({ behavior: 'smooth' });
+        return;
+      }
+    }
+  };
+
   const services = [
     {
       title: "Suivi de colis",
@@ -119,7 +179,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 pt-4 pb-12 space-y-12">
+    <div className="max-w-7xl mx-auto px-4 pt-8 pb-12 space-y-8">
       {/* Premium Hero Slider Section */}
       <section className="relative h-[300px] md:h-[400px] w-full rounded-[20px] overflow-hidden bg-black shadow-2xl group border border-white/10">
         {/* Slider Track */}
@@ -205,6 +265,42 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
         </div>
       </section>
 
+      {/* Quick Navigation Category Bar */}
+      {!buttonsLoading && buttons.length > 0 ? (
+        <div className="w-full overflow-hidden pt-2">
+          <div className="flex items-center gap-3 md:gap-4 overflow-x-auto pb-2 px-1 custom-scrollbar scroll-smooth">
+            {buttons.map((btn) => (
+              <Button
+                key={btn.id}
+                variant="ghost"
+                className="flex-shrink-0 bg-white border border-gray-100 rounded-[16px] px-6 h-[54px] shadow-sm hover:bg-[#e8eeff] hover:-translate-y-0.5 transition-all group"
+                onClick={() => resolveRedirection(btn)}
+              >
+                <div className="flex items-center gap-2">
+                  <LucideIcon 
+                    name={btn.iconName} 
+                    className="h-5 w-5 transition-colors group-hover:text-[#1a56ff]" 
+                    color={btn.color || '#1a56ff'} 
+                  />
+                  <span 
+                    className="font-heading font-bold text-sm md:text-base transition-colors group-hover:text-[#1a56ff]"
+                    style={{ color: btn.color || '#1a56ff' }}
+                  >
+                    {btn.label}
+                  </span>
+                </div>
+              </Button>
+            ))}
+          </div>
+        </div>
+      ) : buttonsLoading ? (
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="h-[54px] w-32 bg-gray-100 animate-pulse rounded-[16px] flex-shrink-0" />
+          ))}
+        </div>
+      ) : null}
+
       {/* Services Section */}
       <section ref={servicesRef} id="services" className="space-y-10">
         <div className="text-center">
@@ -245,7 +341,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
       </section>
 
       {/* Dynamic Products Section */}
-      <section className="space-y-10">
+      <section id="products" className="space-y-10">
         <div className="text-center">
           <h2 className="text-3xl font-bold text-gray-900">Nos Produits / Services</h2>
           <div className="h-1 w-20 bg-blue-600 mx-auto mt-4 rounded-full" />
@@ -306,7 +402,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
       </section>
 
       {/* Payment Proof Section */}
-      <section className="bg-blue-600 rounded-[2rem] p-8 md:p-12 text-white shadow-2xl relative overflow-hidden">
+      <section id="payment" className="bg-blue-600 rounded-[2rem] p-8 md:p-12 text-white shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-blue-500 rounded-full opacity-50 blur-3xl" />
         <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-blue-700 rounded-full opacity-50 blur-3xl" />
         

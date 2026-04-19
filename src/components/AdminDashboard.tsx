@@ -27,8 +27,10 @@ import {
   ArrowUpDown,
   DollarSign,
   ArrowUp,
-  CreditCard
+  CreditCard,
+  HelpCircle
 } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
@@ -46,9 +48,9 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage } from '../services/parcelService';
+import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage, useNavButtons, saveNavButton, deleteNavButton } from '../services/parcelService';
 import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus, resetMonthlyStats, awardMonthlyPrizes, clearMonthlyWinners, useMonthlyRankings, recordPurchase } from '../services/affiliateService';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup } from '../types';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton } from '../types';
 import AdminShippingManager from './AdminShippingManager';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -102,6 +104,11 @@ const compressImage = (file: File): Promise<Blob> => {
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
+const LucideIcon = ({ name, className, color }: { name: string, className?: string, color?: string }) => {
+  const Icon = (LucideIcons as any)[name] || HelpCircle;
+  return <Icon className={className} style={{ color }} />;
+};
+
 export default function AdminDashboard() {
   const [showScrollTop, setShowScrollTop] = useState(false);
 
@@ -121,6 +128,7 @@ export default function AdminDashboard() {
   const { games, loading: gamesLoading } = useGames();
   const { cards, loading: cardsLoading } = useCardTopups();
   const { sliderImages, loading: sliderLoading } = useSliderImages();
+  const { buttons, loading: buttonsLoading } = useNavButtons();
   const { settings, loading: settingsLoading } = useSettings();
   const { affiliates, loading: affiliatesLoading } = useAllAffiliates();
   const { withdrawals: allWithdrawals, loading: allWithdrawalsLoading } = useAllWithdrawals();
@@ -131,6 +139,19 @@ export default function AdminDashboard() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [parcelToDelete, setParcelToDelete] = useState<Parcel | null>(null);
   const [editingParcel, setEditingParcel] = useState<Parcel | null>(null);
+
+  const [isNavButtonDialogOpen, setIsNavButtonDialogOpen] = useState(false);
+  const [editingNavButton, setEditingNavButton] = useState<NavButton | null>(null);
+  const [isNavButtonDeleteDialogOpen, setIsNavButtonDeleteDialogOpen] = useState(false);
+  const [navButtonToDelete, setNavButtonToDelete] = useState<NavButton | null>(null);
+  const [navButtonFormData, setNavButtonFormData] = useState<Partial<NavButton>>({
+    label: '',
+    iconName: 'Package',
+    targetUrl: '',
+    redirectionInstruction: '',
+    color: '#1a56ff',
+    order: 0
+  });
   
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -778,6 +799,58 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleOpenNavButtonDialog = (button?: NavButton) => {
+    if (button) {
+      setEditingNavButton(button);
+      setNavButtonFormData(button);
+    } else {
+      setEditingNavButton(null);
+      setNavButtonFormData({
+        label: '',
+        iconName: 'Package',
+        targetUrl: '',
+        redirectionInstruction: '',
+        color: '#1a56ff',
+        order: (buttons.length || 0) + 1
+      });
+    }
+    setIsNavButtonDialogOpen(true);
+  };
+
+  const handleSaveNavButton = async () => {
+    if (!navButtonFormData.label || !navButtonFormData.targetUrl) {
+      toast.error("Le libellé et l'URL sont requis.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await saveNavButton(navButtonFormData, editingNavButton?.id);
+      toast.success(editingNavButton ? "Bouton mis à jour !" : "Bouton ajouté !");
+      setIsNavButtonDialogOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de l'enregistrement.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleConfirmDeleteNavButton = async () => {
+    if (!navButtonToDelete?.id) return;
+    setIsDeleting(true);
+    try {
+      await deleteNavButton(navButtonToDelete.id);
+      toast.success("Bouton supprimé.");
+      setIsNavButtonDeleteDialogOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la suppression.");
+    } finally {
+      setIsDeleting(false);
+      setNavButtonToDelete(null);
+    }
+  };
+
   const handleWithdrawalAction = async (request: WithdrawalRequest, status: 'approved' | 'rejected') => {
     let reason = '';
     if (status === 'rejected') {
@@ -932,6 +1005,10 @@ export default function AdminDashboard() {
             <TabsTrigger value="shipping" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
               <Truck className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               Shipping
+            </TabsTrigger>
+            <TabsTrigger value="nav-buttons" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
+              <LayoutGrid className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              Boutons Nav
             </TabsTrigger>
           </TabsList>
         </div>
@@ -2162,6 +2239,76 @@ export default function AdminDashboard() {
         <TabsContent value="shipping">
           <AdminShippingManager />
         </TabsContent>
+
+        <TabsContent value="nav-buttons" className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <h2 className="text-xl font-bold">Boutons de Navigation Rapide</h2>
+            <Button onClick={() => handleOpenNavButtonDialog()} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2">
+              <Plus className="h-4 w-4" />
+              Nouveau Bouton
+            </Button>
+          </div>
+
+          <Card className="shadow-sm border-gray-200">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[80px]">Ordre</TableHead>
+                  <TableHead>Libellé</TableHead>
+                  <TableHead>Icône</TableHead>
+                  <TableHead>Cible / URL</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {buttonsLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8">
+                       <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
+                    </TableCell>
+                  </TableRow>
+                ) : buttons.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                      Aucun bouton de navigation configuré.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  buttons.map((btn) => (
+                    <TableRow key={btn.id}>
+                      <TableCell className="font-mono">{btn.order}</TableCell>
+                      <TableCell className="font-bold">{btn.label}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-gray-50">
+                            <LucideIcon name={btn.iconName} className="h-5 w-5" color={btn.color} />
+                          </div>
+                          <span className="text-xs text-gray-400 font-mono">{btn.iconName}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate text-gray-500">
+                        {btn.targetUrl}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="sm" onClick={() => handleOpenNavButtonDialog(btn)}>
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => {
+                            setNavButtonToDelete(btn);
+                            setIsNavButtonDeleteDialogOpen(true);
+                          }} className="text-red-500 hover:bg-red-50">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Record Sale Dialog */}
@@ -2202,6 +2349,145 @@ export default function AdminDashboard() {
             <Button onClick={handleRecordSale} disabled={isRecordingSale} className="bg-emerald-600 hover:bg-emerald-700 text-white">
               {isRecordingSale ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
               Confirmer la vente
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Nav Button Edit/Add Dialog */}
+      <Dialog open={isNavButtonDialogOpen} onOpenChange={setIsNavButtonDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>{editingNavButton ? 'Modifier le bouton' : 'Ajouter un bouton'}</DialogTitle>
+            <DialogDescription>
+              Configurez le libellé, l'icône et l'action du bouton.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="nav-label" className="text-right">Libellé</Label>
+              <Input 
+                id="nav-label" 
+                value={navButtonFormData.label} 
+                onChange={(e) => setNavButtonFormData({...navButtonFormData, label: e.target.value})}
+                className="col-span-3"
+                placeholder="Ex: Jeux"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-start gap-4">
+              <Label htmlFor="nav-instruction" className="text-right pt-2 text-xs">Instruction dynamique</Label>
+              <div className="col-span-3 space-y-2">
+                <Textarea 
+                  id="nav-instruction" 
+                  value={navButtonFormData.redirectionInstruction} 
+                  onChange={(e) => setNavButtonFormData({...navButtonFormData, redirectionInstruction: e.target.value})}
+                  className="min-h-[60px] text-xs"
+                  placeholder="Ex: Rediriger vers la page des jeux à jour ou Aller à la section Jeux"
+                />
+                <p className="text-[10px] text-gray-500 leading-tight">
+                  Une phrase décrivant l'action (optionnel).
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="nav-targetUrl" className="text-right">Cible (URL/#)</Label>
+              <div className="col-span-3 space-y-2">
+                <Input 
+                  id="nav-targetUrl" 
+                  value={navButtonFormData.targetUrl} 
+                  onChange={(e) => setNavButtonFormData({...navButtonFormData, targetUrl: e.target.value})}
+                  placeholder="Ex: #services ou /billing"
+                />
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { label: 'Ancre Services', value: '#services' },
+                    { label: 'Ancre Produits', value: '#products' },
+                    { label: 'Ancre Paiement', value: '#payment' },
+                    { label: 'Page Suivi', value: 'tracking' },
+                    { label: 'Page Shipping', value: 'shipping' },
+                    { label: 'Page Affiliation', value: 'affiliate' }
+                  ].map((s) => (
+                    <button
+                      key={s.value}
+                      type="button"
+                      onClick={() => setNavButtonFormData({...navButtonFormData, targetUrl: s.value})}
+                      className="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-md border border-blue-100 hover:bg-blue-100 transition-colors"
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="nav-iconName" className="text-right">Icône Lucide</Label>
+              <Input 
+                id="nav-iconName" 
+                value={navButtonFormData.iconName} 
+                onChange={(e) => setNavButtonFormData({...navButtonFormData, iconName: e.target.value})}
+                className="col-span-3"
+                placeholder="Ex: Gamepad2, Package, Star..."
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="nav-color" className="text-right">Couleur</Label>
+              <Input 
+                id="nav-color" 
+                type="color"
+                value={navButtonFormData.color} 
+                onChange={(e) => setNavButtonFormData({...navButtonFormData, color: e.target.value})}
+                className="col-span-3 h-10 p-1"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="nav-order" className="text-right">Ordre</Label>
+              <Input 
+                id="nav-order" 
+                type="number"
+                value={navButtonFormData.order} 
+                onChange={(e) => setNavButtonFormData({...navButtonFormData, order: parseInt(e.target.value) || 0})}
+                className="col-span-3"
+              />
+            </div>
+            <div className="flex justify-center p-4 border rounded-xl bg-gray-50 bg-opacity-50">
+               <div className="flex flex-col items-center gap-2">
+                 <p className="text-[10px] uppercase font-bold text-gray-400">Aperçu</p>
+                 <div
+                    className="bg-white border rounded-[16px] px-6 h-[52px] shadow-sm flex items-center justify-center pointer-events-none"
+                  >
+                    <LucideIcon name={navButtonFormData.iconName || 'HelpCircle'} className="mr-2 h-5 w-5" color={navButtonFormData.color} />
+                    <span className="font-heading font-bold" style={{ color: navButtonFormData.color }}>{navButtonFormData.label || 'Aperçu'}</span>
+                  </div>
+               </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsNavButtonDialogOpen(false)}>Annuler</Button>
+            <Button onClick={handleSaveNavButton} className="bg-blue-600 text-white">
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Nav Button Delete Dialog */}
+      <Dialog open={isNavButtonDeleteDialogOpen} onOpenChange={setIsNavButtonDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <AlertCircle className="h-5 w-5" />
+              Supprimer le bouton
+            </DialogTitle>
+            <DialogDescription>
+              Voulez-vous vraiment supprimer le bouton <span className="font-bold">"{navButtonToDelete?.label}"</span> ?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsNavButtonDeleteDialogOpen(false)}>Annuler</Button>
+            <Button variant="destructive" onClick={handleConfirmDeleteNavButton} disabled={isDeleting}>
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Supprimer
             </Button>
           </DialogFooter>
         </DialogContent>

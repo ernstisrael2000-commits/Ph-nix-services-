@@ -133,3 +133,15 @@ export interface AffiliateRequest {
   createdAt: any;
   updatedAt: any;
 }
+
+export interface NavButton {
+  id?: string;
+  label: string;
+  iconName: string;
+  targetUrl: string;
+  redirectionInstruction?: string;
+  color: string;
+  order: number;
+  createdAt: any;
+  updatedAt?: any;
+}

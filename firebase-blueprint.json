@@ -263,6 +263,22 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["url", "createdAt"]
+    },
+    "nav_button": {
+      "title": "Navigation Button",
+      "description": "Represents a quick navigation button on the home page.",
+      "type": "object",
+      "properties": {
+        "label": { "type": "string" },
+        "iconName": { "type": "string" },
+        "targetUrl": { "type": "string" },
+        "redirectionInstruction": { "type": "string", "description": "Phrase dynamique pour la redirection." },
+        "color": { "type": "string" },
+        "order": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["label", "targetUrl", "iconName", "order"]
     }
   },
   "firestore": {
@@ -313,6 +329,10 @@
     "/slider_images/{imageId}": {
       "schema": "slider_image",
       "description": "Collection of hero slider images."
+    },
+    "/nav_buttons/{buttonId}": {
+      "schema": "nav_button",
+      "description": "Collection of quick navigation buttons."
     }
   }
 }
