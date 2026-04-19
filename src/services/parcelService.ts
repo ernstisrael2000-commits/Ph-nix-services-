@@ -323,6 +323,14 @@ export const saveSliderImage = async (url: string, title?: string, description?:
   });
 };
 
+export const updateSliderImage = async (id: string, updates: { url?: string, title?: string, description?: string }) => {
+  const imageRef = doc(db, 'slider_images', id);
+  await updateDoc(imageRef, {
+    ...updates,
+    updatedAt: serverTimestamp()
+  });
+};
+
 export const deleteSliderImage = async (id: string) => {
   const imageRef = doc(db, 'slider_images', id);
   await deleteDoc(imageRef);

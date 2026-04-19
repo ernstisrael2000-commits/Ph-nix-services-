@@ -70,7 +70,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
     if (imagesToDisplay.length <= 1) return;
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % imagesToDisplay.length);
-    }, 3000);
+    }, 8000); // 8 seconds total per slide: 4s solo image + 4s with text fade/visibility
     return () => clearInterval(timer);
   }, [imagesToDisplay.length]);
 
@@ -133,49 +133,62 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
               transition={{ duration: 0.8 }}
               className="absolute inset-0 w-full h-full will-change-transform"
             >
-              <div 
-                className="absolute inset-0 bg-cover bg-center transition-transform duration-[5000ms] ease-linear scale-100 group-hover:scale-105"
-                style={{ backgroundImage: `url(${imagesToDisplay[currentSlide]?.url || ''})` }}
-              />
-              {/* Overlay Gradients */}
-              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
-              <div className="absolute inset-0 bg-black/20" />
+                <div 
+                  className="absolute inset-0 bg-cover bg-center transition-transform duration-[8000ms] ease-linear scale-100 group-hover:scale-105"
+                  style={{ backgroundImage: `url(${imagesToDisplay[currentSlide]?.url || ''})` }}
+                />
+              {/* Overlay Gradients - Enhanced for top/bottom text readability */}
+              <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90" />
+              <div className="absolute inset-0 bg-black/10" />
+
+              {/* Content Overlay - Distributed Layout */}
+              <div className="relative z-10 h-full flex flex-col justify-between items-center py-12 md:py-20 px-6 text-center w-full max-w-7xl mx-auto">
+                {/* Top Section: Stylish Centered Title */}
+                <motion.div
+                  initial={{ opacity: 0, y: -40, filter: "blur(10px)" }}
+                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                  transition={{ duration: 1.5, ease: "easeOut", delay: 2 }}
+                  className="w-full"
+                >
+                  <h1 className="text-4xl md:text-6xl font-black tracking-tight text-white drop-shadow-[0_8px_8px_rgba(0,0,0,0.6)] uppercase italic leading-[1]">
+                    <span className="bg-gradient-to-br from-blue-400 via-white to-red-400 bg-clip-text text-transparent">
+                      {imagesToDisplay[currentSlide]?.title || 'Neopay'}
+                    </span>
+                  </h1>
+                </motion.div>
+
+                {/* Bottom Section: Description & Action */}
+                <div className="w-full flex flex-col items-center space-y-6 md:space-y-8">
+                  <motion.div
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 1.5, ease: "easeOut", delay: 2.2 }}
+                    className="max-w-2xl"
+                  >
+                    <h2 className="text-base md:text-2xl font-medium text-white/95 leading-tight drop-shadow-md">
+                      {imagesToDisplay[currentSlide]?.description || 'Services Digitaux & Recharges'}
+                    </h2>
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 1.5, delay: 2.4 }}
+                    className="pb-4"
+                  >
+                    <Button 
+                      size="lg"
+                      onClick={scrollToServices}
+                      className="bg-white text-black hover:bg-white/90 hover:scale-105 active:scale-95 transition-all rounded-full h-12 md:h-14 px-8 md:px-10 text-sm md:text-base font-bold shadow-2xl group"
+                    >
+                      Explorer nos services
+                      <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                    </Button>
+                  </motion.div>
+                </div>
+              </div>
             </motion.div>
           </AnimatePresence>
-        </div>
-
-        {/* Content Overlay */}
-        <div className="relative z-10 h-full flex flex-col justify-center px-6 md:px-12 space-y-4 max-w-3xl">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-1"
-          >
-            <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-white">
-              <span className="bg-gradient-to-r from-blue-500 to-red-500 bg-clip-text text-transparent">
-                {imagesToDisplay[currentSlide]?.title || 'Neopay'}
-              </span>
-            </h1>
-            <h2 className="text-lg md:text-2xl font-bold text-white/90">
-              {imagesToDisplay[currentSlide]?.description || 'Services Digitaux & Recharges'}
-            </h2>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="pt-2"
-          >
-            <Button 
-              size="sm"
-              onClick={scrollToServices}
-              className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg h-10 px-6 text-sm font-bold shadow-lg shadow-blue-600/20 group"
-            >
-              Explorer
-              <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-            </Button>
-          </motion.div>
         </div>
 
         {/* Slider Navigation Dots */}

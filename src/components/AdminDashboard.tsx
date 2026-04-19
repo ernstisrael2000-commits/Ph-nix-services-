@@ -43,9 +43,10 @@ import {
   DialogDescription
 } from './ui/dialog';
 import { Label } from './ui/label';
+import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage } from '../services/parcelService';
+import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage } from '../services/parcelService';
 import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus, resetMonthlyStats, awardMonthlyPrizes, clearMonthlyWinners, useMonthlyRankings, recordPurchase } from '../services/affiliateService';
 import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup } from '../types';
 import AdminShippingManager from './AdminShippingManager';
@@ -238,6 +239,8 @@ export default function AdminDashboard() {
 
   const [isSliderImageDeleteDialogOpen, setIsSliderImageDeleteDialogOpen] = useState(false);
   const [sliderImageToDelete, setSliderImageToDelete] = useState<{id: string, url: string} | null>(null);
+  const [isSliderImageEditDialogOpen, setIsSliderImageEditDialogOpen] = useState(false);
+  const [editingSliderImage, setEditingSliderImage] = useState<{ id: string, url: string, title?: string, description?: string } | null>(null);
   const [isSliderUploading, setIsSliderUploading] = useState(false);
   const [tempSliderImageUrl, setTempSliderImageUrl] = useState('');
   const [sliderTitle, setSliderTitle] = useState('');
@@ -671,6 +674,26 @@ export default function AdminDashboard() {
       toast.error("Erreur lors de l'ajout de l'image.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleUpdateSliderImage = async () => {
+    if (!editingSliderImage?.id) return;
+    setIsSaving(true);
+    try {
+      await updateSliderImage(editingSliderImage.id, {
+        url: editingSliderImage.url,
+        title: editingSliderImage.title,
+        description: editingSliderImage.description
+      });
+      toast.success("Image slider mise à jour !");
+      setIsSliderImageEditDialogOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la mise à jour.");
+    } finally {
+      setIsSaving(false);
+      setEditingSliderImage(null);
     }
   };
 
@@ -1385,6 +1408,18 @@ export default function AdminDashboard() {
                          </div>
                          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            className="rounded-lg px-3 h-8 text-xs flex-grow bg-white/20 hover:bg-white/40 text-white border-none"
+                            onClick={() => {
+                              setEditingSliderImage({...image});
+                              setIsSliderImageEditDialogOpen(true);
+                            }}
+                          >
+                            <Edit className="h-3.5 w-3.5 mr-1" />
+                            Modifier
+                          </Button>
+                          <Button 
                             variant="destructive" 
                             size="sm" 
                             className="rounded-lg px-3 h-8 text-xs flex-grow"
@@ -1433,6 +1468,66 @@ export default function AdminDashboard() {
                 >
                   {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
                   Supprimer l'image
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Slider Edit Dialog */}
+          <Dialog open={isSliderImageEditDialogOpen} onOpenChange={setIsSliderImageEditDialogOpen}>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Modifier le Slide</DialogTitle>
+                <DialogDescription>
+                  Mettez à jour le titre, la description ou l'URL de cette image du slider.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="grid gap-6 py-4">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>URL de l'image (Lien direct)</Label>
+                    <Input 
+                      value={editingSliderImage?.url || ''}
+                      onChange={(e) => setEditingSliderImage(prev => prev ? {...prev, url: e.target.value} : null)}
+                      placeholder="https://..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Titre du slide</Label>
+                    <Input 
+                      value={editingSliderImage?.title || ''}
+                      onChange={(e) => setEditingSliderImage(prev => prev ? {...prev, title: e.target.value} : null)}
+                      placeholder="Ex: Neopay Services"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Description du slide</Label>
+                    <Textarea 
+                      value={editingSliderImage?.description || ''}
+                      onChange={(e) => setEditingSliderImage(prev => prev ? {...prev, description: e.target.value} : null)}
+                      placeholder="Ex: Accès rapide et sécurisé..."
+                      className="min-h-[100px]"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-lg overflow-hidden border bg-gray-50 aspect-video relative">
+                  {editingSliderImage?.url ? (
+                    <img src={editingSliderImage.url} className="w-full h-full object-cover" alt="Preview" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400">
+                      Aperçu de l'image
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsSliderImageEditDialogOpen(false)}>Annuler</Button>
+                <Button onClick={handleUpdateSliderImage} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Enregistrer les modifications
                 </Button>
               </DialogFooter>
             </DialogContent>
