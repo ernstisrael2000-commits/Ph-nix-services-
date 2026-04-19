@@ -45,7 +45,7 @@ import {
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup } from '../services/parcelService';
+import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage } from '../services/parcelService';
 import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus, resetMonthlyStats, awardMonthlyPrizes, clearMonthlyWinners, useMonthlyRankings, recordPurchase } from '../services/affiliateService';
 import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup } from '../types';
 import AdminShippingManager from './AdminShippingManager';
@@ -119,6 +119,7 @@ export default function AdminDashboard() {
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
   const { cards, loading: cardsLoading } = useCardTopups();
+  const { sliderImages, loading: sliderLoading } = useSliderImages();
   const { settings, loading: settingsLoading } = useSettings();
   const { affiliates, loading: affiliatesLoading } = useAllAffiliates();
   const { withdrawals: allWithdrawals, loading: allWithdrawalsLoading } = useAllWithdrawals();
@@ -234,6 +235,10 @@ export default function AdminDashboard() {
   const [notifFilter, setNotifFilter] = useState<'all' | 'registration' | 'withdrawal'>('all');
   const [notifSearch, setNotifSearch] = useState('');
   const [affiliateSearch, setAffiliateSearch] = useState('');
+
+  const [isSliderImageDeleteDialogOpen, setIsSliderImageDeleteDialogOpen] = useState(false);
+  const [sliderImageToDelete, setSliderImageToDelete] = useState<{id: string, url: string} | null>(null);
+  const [isSliderUploading, setIsSliderUploading] = useState(false);
 
   const { rankings: officialRankings, loading: officialRankingsLoading } = useMonthlyRankings();
 
@@ -608,6 +613,42 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleSliderImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsSliderUploading(true);
+    setUploadProgress(0);
+    try {
+      const compressedBlob = await compressImage(file);
+      const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+      const url = await uploadLogo(compressedFile, (p) => setUploadProgress(p));
+      await saveSliderImage(url);
+      toast.success("Image slider ajoutée !");
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors du téléchargement de l'image.");
+    } finally {
+      setIsSliderUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleConfirmDeleteSliderImage = async () => {
+    if (!sliderImageToDelete?.id) return;
+    setIsDeleting(true);
+    try {
+      await deleteSliderImage(sliderImageToDelete.id);
+      toast.success("Image supprimée.");
+      setIsSliderImageDeleteDialogOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la suppression.");
+    } finally {
+      setIsDeleting(false);
+      setSliderImageToDelete(null);
+    }
+  };
+
   const handleProductImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -813,6 +854,10 @@ export default function AdminDashboard() {
             <TabsTrigger value="cards" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
               <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               Recharge Cartes
+            </TabsTrigger>
+            <TabsTrigger value="slider" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
+              <ImageIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              Slider
             </TabsTrigger>
             <TabsTrigger value="affiliates" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap relative">
               <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
@@ -1212,6 +1257,114 @@ export default function AdminDashboard() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="slider" className="space-y-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <div>
+                <CardTitle>Images du Slider Hero</CardTitle>
+                <CardDescription>Gérez les images qui défilent sur la page d'accueil.</CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handleSliderImageUpload}
+                  className="hidden" 
+                  id="slider-upload"
+                  disabled={isSliderUploading}
+                />
+                <Button asChild disabled={isSliderUploading} className="bg-blue-600 hover:bg-blue-700">
+                  <label htmlFor="slider-upload" className="cursor-pointer flex items-center gap-2">
+                    {isSliderUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    Ajouter une image
+                  </label>
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isSliderUploading && (
+                <div className="mb-6 space-y-2">
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>Téléchargement en cours...</span>
+                    <span>{Math.round(uploadProgress)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                    <div 
+                      className="bg-blue-600 h-full transition-all duration-300" 
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {sliderLoading ? (
+                <div className="flex justify-center py-20">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                </div>
+              ) : sliderImages.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {sliderImages.map((image) => (
+                    <div key={image.id} className="relative group rounded-xl overflow-hidden border bg-gray-50 aspect-video shadow-sm hover:shadow-md transition-all">
+                      <img 
+                        src={image.url} 
+                        alt="Slider" 
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
+                        <Button 
+                          variant="destructive" 
+                          size="sm" 
+                          className="rounded-full px-4"
+                          onClick={() => {
+                            setSliderImageToDelete(image);
+                            setIsSliderImageDeleteDialogOpen(true);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Supprimer
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-20 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+                  <ImageIcon className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">Aucune image personnalisée. Les images par défaut sont affichées.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Slider Delete Confirmation Dialog */}
+          <Dialog open={isSliderImageDeleteDialogOpen} onOpenChange={setIsSliderImageDeleteDialogOpen}>
+            <DialogContent className="sm:max-w-[400px]">
+              <DialogHeader>
+                <DialogTitle>Confirmer la suppression</DialogTitle>
+                <DialogDescription>
+                  Êtes-vous sûr de vouloir supprimer cette image du slider ? Cette action est irréversible.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex justify-center py-4">
+                <div className="h-32 w-full rounded-lg overflow-hidden border">
+                  <img src={sliderImageToDelete?.url} className="w-full h-full object-cover" alt="To delete" />
+                </div>
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button variant="outline" onClick={() => setIsSliderImageDeleteDialogOpen(false)}>Annuler</Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={handleConfirmDeleteSliderImage}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                  Supprimer l'image
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="affiliates" className="space-y-6">

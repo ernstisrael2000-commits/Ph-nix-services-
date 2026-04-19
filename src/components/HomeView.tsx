@@ -12,9 +12,10 @@ import {
   ArrowUp
 } from 'lucide-react';
 import { Button } from './ui/button';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { useProducts, useGames, useCardTopups } from '../services/parcelService';
+import { useProducts, useGames, useCardTopups, useSliderImages } from '../services/parcelService';
+import { AnimatePresence } from 'motion/react';
 import { 
   Dialog, 
   DialogContent, 
@@ -24,17 +25,37 @@ import {
   DialogFooter
 } from './ui/dialog';
 import { Badge } from './ui/badge';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ShieldCheck, Zap, Star, Headphones } from 'lucide-react';
 
 const WHATSAPP_NUMBER = "+50944813185";
+
+const SLIDER_IMAGES = [
+  "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=2832&auto=format&fit=crop", // Fintech/Crypto abstract
+  "https://images.unsplash.com/photo-1614850523296-62c09279446a?q=80&w=2070&auto=format&fit=crop", // Abstract gradients
+  "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2070&auto=format&fit=crop", // Tech/Security
+];
 
 export default function HomeView({ onTrackingClick, onViewChange }: { onTrackingClick: () => void, onViewChange: (view: any) => void }) {
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
   const { cards, loading: cardsLoading } = useCardTopups();
+  const { sliderImages, loading: sliderLoading } = useSliderImages();
   const [isGamesDialogOpen, setIsGamesDialogOpen] = React.useState(false);
   const [isCardsDialogOpen, setIsCardsDialogOpen] = React.useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  
+  const servicesRef = useRef<HTMLElement>(null);
+
+  const scrollToServices = () => {
+    servicesRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+  
+  // Slider State
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  const imagesToDisplay = sliderImages.length > 0 
+    ? sliderImages.map(img => img.url)
+    : SLIDER_IMAGES;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -43,6 +64,15 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Auto-play slider
+  useEffect(() => {
+    if (imagesToDisplay.length <= 1) return;
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % imagesToDisplay.length);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [imagesToDisplay.length]);
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -90,68 +120,89 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
 
   return (
     <div className="max-w-7xl mx-auto px-4 pt-4 pb-12 space-y-12">
-      {/* Hero Section */}
-      <section className="text-center space-y-8 px-4 pt-4 pb-6 relative overflow-hidden">
-        {/* Background glow effect */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-blue-100/30 blur-[120px] rounded-full -z-10" />
-        
-        <div className="space-y-4 max-w-4xl mx-auto">
+      {/* Premium Hero Slider Section */}
+      <section className="relative h-[300px] md:h-[400px] w-full rounded-[20px] overflow-hidden bg-black shadow-2xl group border border-white/10">
+        {/* Slider Track */}
+        <div className="absolute inset-0 w-full h-full">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentSlide}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.8 }}
+              className="absolute inset-0 w-full h-full will-change-transform"
+            >
+              <div 
+                className="absolute inset-0 bg-cover bg-center transition-transform duration-[5000ms] ease-linear scale-100 group-hover:scale-105"
+                style={{ backgroundImage: `url(${imagesToDisplay[currentSlide] || ''})` }}
+              />
+              {/* Overlay Gradients */}
+              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
+              <div className="absolute inset-0 bg-black/20" />
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* Content Overlay */}
+        <div className="relative z-10 h-full flex flex-col justify-center px-6 md:px-12 space-y-4 max-w-3xl">
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold tracking-wider uppercase mb-2"
+            className="space-y-1"
           >
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-            </span>
-            Solution de paiement moderne
+            <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-white">
+              <span className="bg-gradient-to-r from-blue-500 to-red-500 bg-clip-text text-transparent">
+                Neopay
+              </span>
+            </h1>
+            <h2 className="text-lg md:text-2xl font-bold text-white/90">
+              Services Digitaux & Recharges
+            </h2>
           </motion.div>
 
-          <motion.h1 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 1 }}
-            className="text-5xl sm:text-6xl md:text-7xl font-black text-gray-900 tracking-tight leading-[1.1]"
-          >
-            <motion.span
-              initial={{ x: -20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.2, duration: 0.8, ease: "easeOut" }}
-              className="inline-block"
-            >
-              Bienvenue sur
-            </motion.span>{" "}
-            <motion.span
-              initial={{ x: 20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.4, duration: 0.8, ease: "easeOut" }}
-              className="relative inline-block text-blue-600"
-            >
-              Neopay
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: "100%" }}
-                transition={{ delay: 1, duration: 0.8 }}
-                className="absolute -bottom-2 left-0 h-1.5 bg-blue-600/20 rounded-full"
-              />
-            </motion.span>
-          </motion.h1>
-
           <motion.p
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6, duration: 0.8 }}
-            className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed"
+            transition={{ delay: 0.2 }}
+            className="text-sm md:text-base text-gray-300 leading-relaxed max-w-lg line-clamp-2"
           >
-            Votre plateforme complète de services digitaux, logistique et bien plus encore.
+            Accédez à vos services préférés, paiements sécurisés et livraisons instantanées.
           </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="pt-2"
+          >
+            <Button 
+              size="sm"
+              onClick={scrollToServices}
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg h-10 px-6 text-sm font-bold shadow-lg shadow-blue-600/20 group"
+            >
+              Explorer
+              <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+            </Button>
+          </motion.div>
+        </div>
+
+        {/* Slider Navigation Dots */}
+        <div className="absolute bottom-4 right-6 z-20 flex gap-2">
+          {imagesToDisplay.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrentSlide(i)}
+              className={`h-1.5 transition-all duration-300 rounded-full ${
+                currentSlide === i ? 'bg-blue-500 w-8' : 'bg-white/30 w-3 hover:bg-white/50'
+              }`}
+            />
+          ))}
         </div>
       </section>
 
       {/* Services Section */}
-      <section className="space-y-10">
+      <section ref={servicesRef} id="services" className="space-y-10">
         <div className="text-center">
           <h2 className="text-3xl font-bold text-gray-900">Nos Services</h2>
           <div className="h-1 w-20 bg-blue-600 mx-auto mt-4 rounded-full" />

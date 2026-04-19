@@ -289,6 +289,43 @@ export const uploadLogo = async (
   }
 };
 
+// Slider Images Services
+export const useSliderImages = () => {
+  const [sliderImages, setSliderImages] = useState<{ id: string, url: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, 'slider_images'), orderBy('createdAt', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as { id: string, url: string }[];
+      setSliderImages(data);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching slider images:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return { sliderImages, loading };
+};
+
+export const saveSliderImage = async (url: string) => {
+  await addDoc(collection(db, 'slider_images'), {
+    url,
+    createdAt: serverTimestamp()
+  });
+};
+
+export const deleteSliderImage = async (id: string) => {
+  const imageRef = doc(db, 'slider_images', id);
+  await deleteDoc(imageRef);
+};
+
 // Shipping Services
 export const useShippingConfigs = () => {
   const [configs, setConfigs] = useState<ShippingConfig[]>([]);
