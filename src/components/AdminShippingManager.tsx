@@ -113,10 +113,10 @@ export default function AdminShippingManager() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* ONLINE PURCHASE */}
-        <Card className="shadow-sm border-blue-100">
-          <CardHeader className="bg-blue-50/50">
+        <Card className="shadow-sm border-primary/20">
+          <CardHeader className="bg-accent-light/50">
             <CardTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-blue-600" />
+              <MapPin className="h-5 w-5 text-primary" />
               Achat en ligne
             </CardTitle>
             <CardDescription>Gérez les adresses, sites et vidéos pour les achats en ligne.</CardDescription>
@@ -150,7 +150,7 @@ export default function AdminShippingManager() {
                     </Button>
                   </div>
                   {editOnline.addresses?.map(addr => (
-                    <div key={addr.id} className="space-y-2 p-3 bg-blue-50/30 rounded-lg border border-blue-100">
+                    <div key={addr.id} className="space-y-2 p-3 bg-accent-light/30 rounded-lg border border-primary/20">
                       <div className="flex gap-2">
                         <Input 
                           value={addr.city || ''} 
@@ -226,10 +226,10 @@ export default function AdminShippingManager() {
         </Card>
 
         {/* DROP SHIPPING */}
-        <Card className="shadow-sm border-amber-100">
-          <CardHeader className="bg-amber-50/50">
+        <Card className="shadow-sm border-primary/20">
+          <CardHeader className="bg-accent-light/50">
             <CardTitle className="flex items-center gap-2">
-              <Video className="h-5 w-5 text-amber-600" />
+              <Video className="h-5 w-5 text-primary" />
               Drop Shipping
             </CardTitle>
             <CardDescription>Gérez les informations spécifiques au dropshipping.</CardDescription>
@@ -263,7 +263,7 @@ export default function AdminShippingManager() {
                     </Button>
                   </div>
                   {editDrop.addresses?.map(addr => (
-                    <div key={addr.id} className="space-y-2 p-3 bg-amber-50/30 rounded-lg border border-amber-100">
+                    <div key={addr.id} className="space-y-2 p-3 bg-accent-light/30 rounded-lg border border-primary/20">
                       <div className="flex gap-2">
                         <Input 
                           value={addr.city || ''} 

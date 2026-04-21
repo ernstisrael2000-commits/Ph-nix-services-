@@ -28,7 +28,7 @@ export default function ShippingView() {
   if (loading) {
     return (
       <div className="flex justify-center py-20">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
       </div>
     );
   }
@@ -45,40 +45,40 @@ export default function ShippingView() {
             className="space-y-12"
           >
             <div className="text-center space-y-4">
-              <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">Nos Solutions Shipping</h1>
-              <p className="text-gray-500 max-w-xl mx-auto">Choisissez le service qui correspond le mieux à vos besoins logistiques.</p>
+              <h1 className="text-4xl font-extrabold text-dark tracking-tight">Nos Solutions Shipping</h1>
+              <p className="text-subtext max-w-xl mx-auto">Choisissez le service qui correspond le mieux à vos besoins logistiques.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <Card className="group border-2 border-transparent hover:border-blue-500 transition-all cursor-pointer shadow-md overflow-hidden" onClick={() => setActiveTab('online_purchase')}>
-                <div className="aspect-video bg-blue-50 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
-                  <MapPin className="h-20 w-20 text-blue-600 group-hover:scale-110 transition-transform" />
+              <Card className="group border-2 border-transparent hover:border-primary transition-all cursor-pointer shadow-md overflow-hidden" onClick={() => setActiveTab('online_purchase')}>
+                <div className="aspect-video bg-accent-light flex items-center justify-center group-hover:bg-accent-light/80 transition-colors">
+                  <MapPin className="h-20 w-20 text-primary group-hover:scale-110 transition-transform" />
                 </div>
                 <CardHeader>
-                  <CardTitle className="text-2xl">Achat en ligne</CardTitle>
-                  <CardDescription>
+                  <CardTitle className="text-2xl text-dark">Achat en ligne</CardTitle>
+                  <CardDescription className="text-subtext">
                     Recevez vos achats effectués sur Amazon, eBay et autres sites internationaux vers Haiti.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button className="w-full bg-blue-600 text-white group-hover:bg-blue-700">
+                  <Button className="w-full bg-primary text-white group-hover:bg-[#D98A1E]">
                     Découvrir l'achat en ligne
                   </Button>
                 </CardContent>
               </Card>
 
-              <Card className="group border-2 border-transparent hover:border-amber-500 transition-all cursor-pointer shadow-md overflow-hidden" onClick={() => setActiveTab('dropshipping')}>
-                <div className="aspect-video bg-amber-50 flex items-center justify-center group-hover:bg-amber-100 transition-colors">
-                  <Truck className="h-20 w-20 text-amber-600 group-hover:scale-110 transition-transform" />
+              <Card className="group border-2 border-transparent hover:border-primary transition-all cursor-pointer shadow-md overflow-hidden" onClick={() => setActiveTab('dropshipping')}>
+                <div className="aspect-video bg-accent-light flex items-center justify-center group-hover:bg-accent-light/80 transition-colors">
+                  <Truck className="h-20 w-20 text-primary group-hover:scale-110 transition-transform" />
                 </div>
                 <CardHeader>
-                  <CardTitle className="text-2xl">Drop Shipping</CardTitle>
-                  <CardDescription>
+                  <CardTitle className="text-2xl text-dark">Drop Shipping</CardTitle>
+                  <CardDescription className="text-subtext">
                     Solutions logistiques complètes pour votre business en ligne.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button className="w-full bg-amber-600 text-white group-hover:bg-amber-700">
+                  <Button className="w-full bg-primary text-white group-hover:bg-[#D98A1E]">
                     Découvrir le drop shipping
                   </Button>
                 </CardContent>
@@ -96,10 +96,10 @@ export default function ShippingView() {
             className="space-y-8"
           >
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={() => setActiveTab('selection')} className="rounded-full">
+              <Button variant="ghost" size="icon" onClick={() => setActiveTab('selection')} className="rounded-full hover:bg-accent-light">
                 <ChevronLeft className="h-6 w-6" />
               </Button>
-              <h2 className="text-3xl font-bold text-gray-900">
+              <h2 className="text-3xl font-bold text-dark">
                 {activeTab === 'online_purchase' ? 'Achat en ligne' : 'Drop Shipping'}
               </h2>
             </div>
@@ -110,39 +110,37 @@ export default function ShippingView() {
                 {/* Addresses Section */}
                 <section className="space-y-6">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-2xl font-bold flex items-center gap-2">
-                      <MapPin className={`h-6 w-6 ${activeTab === 'online_purchase' ? 'text-blue-600' : 'text-amber-600'}`} />
+                    <h3 className="text-2xl font-bold flex items-center gap-2 text-dark">
+                      <MapPin className="h-6 w-6 text-primary" />
                       Adresses de réception
                     </h3>
-                    <Badge variant="outline" className="px-3 py-1 font-mono">
+                    <Badge variant="outline" className="px-3 py-1 font-mono border-accent-light text-primary">
                       {getConfig(activeTab)?.addresses?.length || 0} Adresses
                     </Badge>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {getConfig(activeTab)?.addresses?.map((addr, idx) => (
-                      <Card key={addr.id} className={`relative overflow-hidden border-l-4 transition-all hover:shadow-lg ${
-                        activeTab === 'online_purchase' ? 'border-l-blue-600 bg-blue-50/20' : 'border-l-amber-600 bg-amber-50/20'
-                      }`}>
+                      <Card key={addr.id} className="relative overflow-hidden border-l-4 border-l-primary bg-accent-light/20 transition-all hover:shadow-lg">
                         <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                          <span className="text-6xl font-black italic">{idx + 1}</span>
+                          <span className="text-6xl font-black italic text-primary">{idx + 1}</span>
                         </div>
                         <CardHeader className="pb-2">
                           <CardTitle className="text-lg font-bold flex items-center gap-2">
-                            <Badge className={activeTab === 'online_purchase' ? 'bg-blue-600' : 'bg-amber-600'}>
+                            <Badge className="bg-primary hover:bg-[#D98A1E]">
                               {addr.city || 'Adresse'}
                             </Badge>
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
                           <div className="bg-white/80 backdrop-blur-sm p-4 rounded-xl border border-white/50 shadow-inner group">
-                            <p className="font-mono text-sm text-gray-800 leading-relaxed break-words">
+                            <p className="font-mono text-sm text-dark leading-relaxed break-words">
                               {addr.text}
                             </p>
                             <Button 
                               variant="ghost" 
                               size="sm" 
-                              className="w-full mt-4 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider h-8 hover:bg-white border-t border-dashed mt-4 pt-4 rounded-none"
+                              className="w-full mt-4 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider h-8 hover:bg-white text-primary border-t border-dashed mt-4 pt-4 rounded-none"
                               onClick={() => {
                                 navigator.clipboard.writeText(addr.text);
                                 toast.success('Adresse copiée !');
@@ -155,9 +153,9 @@ export default function ShippingView() {
                       </Card>
                     ))}
                     {!getConfig(activeTab)?.addresses?.length && (
-                      <div className="col-span-full py-12 text-center bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
-                        <MapPin className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                        <p className="text-gray-400 font-medium">Aucune adresse configurée pour le moment.</p>
+                      <div className="col-span-full py-12 text-center bg-muted rounded-3xl border-2 border-dashed border-muted-foreground/20">
+                        <MapPin className="h-12 w-12 text-subtext/30 mx-auto mb-3" />
+                        <p className="text-subtext font-medium">Aucune adresse configurée pour le moment.</p>
                       </div>
                     )}
                   </div>
@@ -225,19 +223,19 @@ export default function ShippingView() {
                 )}
 
                 {/* WhatsApp Section */}
-                <section className="bg-blue-600 rounded-3xl p-6 text-white shadow-xl space-y-4">
+                <section className="bg-primary rounded-3xl p-6 text-white shadow-xl space-y-4">
                   <div className="h-12 w-12 bg-white/20 rounded-2xl flex items-center justify-center">
                     <MessageCircle className="h-6 w-6 text-white" />
                   </div>
                   <div>
                     <h4 className="text-lg font-bold">Besoin d'assistance ?</h4>
-                    <p className="text-blue-100 text-sm opacity-90">
+                    <p className="text-accent-light text-sm opacity-90">
                       Nos conseillers sont disponibles sur WhatsApp pour vous guider pas à pas.
                     </p>
                   </div>
                   <Button 
                     onClick={() => openWhatsApp(getConfig(activeTab)?.whatsappNumber, getConfig(activeTab)?.whatsappMessage)}
-                    className="w-full bg-white text-blue-600 hover:bg-blue-50 font-bold h-12 shadow-md flex items-center justify-center gap-2"
+                    className="w-full bg-white text-primary hover:bg-accent-light font-bold h-12 shadow-md flex items-center justify-center gap-2"
                   >
                     Contacter via WhatsApp
                   </Button>

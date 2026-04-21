@@ -82,57 +82,57 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
                 }}
               />
             ) : (
-              <div className="bg-blue-600 p-2 rounded-lg group-hover:bg-blue-700 transition-colors">
+              <div className="bg-primary p-2 rounded-lg group-hover:bg-[#D98A1E] transition-colors">
                 <Package className="h-6 w-6 text-white" />
               </div>
             )}
-            <span className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 hidden xs:block">Neopay</span>
+            <span className="text-xl sm:text-2xl font-bold tracking-tight text-dark hidden xs:block">Neopay</span>
           </div>
 
           <div className="flex items-center gap-1 sm:gap-4">
             <Button 
               variant={currentView === 'home' ? 'secondary' : 'ghost'} 
               onClick={() => onViewChange('home')} 
-              className={`hidden md:flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 group transition-all duration-300 rounded-xl ${currentView === 'home' ? 'bg-blue-50/80 shadow-sm' : 'hover:bg-blue-50/50'}`}
+              className={`hidden md:flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 group transition-all duration-300 rounded-xl ${currentView === 'home' ? 'bg-accent-light/80 shadow-sm' : 'hover:bg-accent-light/50'}`}
             >
-              <Home className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'home' ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`} />
-              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'home' ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`}>Accueil</span>
+              <Home className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'home' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`} />
+              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'home' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`}>Accueil</span>
             </Button>
             <Button 
               variant={currentView === 'tracking' ? 'secondary' : 'ghost'} 
               onClick={() => onViewChange('tracking')} 
-              className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 px-2 sm:px-4 group transition-all duration-300 rounded-xl ${currentView === 'tracking' ? 'bg-blue-50/80 shadow-sm' : 'hover:bg-blue-50/50'}`}
+              className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 px-2 sm:px-4 group transition-all duration-300 rounded-xl ${currentView === 'tracking' ? 'bg-accent-light/80 shadow-sm' : 'hover:bg-accent-light/50'}`}
             >
-              <Search className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'tracking' ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`} />
-              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'tracking' ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`}>Suivi</span>
+              <Search className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'tracking' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`} />
+              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'tracking' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`}>Suivi</span>
             </Button>
 
             <Button 
               variant={currentView === 'shipping' ? 'secondary' : 'ghost'} 
               onClick={() => onViewChange('shipping')} 
-              className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 px-2 sm:px-4 group transition-all duration-300 rounded-xl ${currentView === 'shipping' ? 'bg-blue-50/80 shadow-sm' : 'hover:bg-blue-50/50'}`}
+              className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 px-2 sm:px-4 group transition-all duration-300 rounded-xl ${currentView === 'shipping' ? 'bg-accent-light/80 shadow-sm' : 'hover:bg-accent-light/50'}`}
             >
-              <Truck className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'shipping' ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`} />
-              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'shipping' ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`}>Shipping</span>
+              <Truck className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'shipping' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`} />
+              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'shipping' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`}>Shipping</span>
             </Button>
 
             <Button 
               variant={currentView === 'affiliate' ? 'secondary' : 'ghost'} 
               onClick={() => onViewChange('affiliate')} 
-              className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 px-2 sm:px-4 group transition-all duration-300 rounded-xl ${currentView === 'affiliate' ? 'bg-blue-50/80 shadow-sm' : 'hover:bg-blue-50/50'}`}
+              className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 px-2 sm:px-4 group transition-all duration-300 rounded-xl ${currentView === 'affiliate' ? 'bg-accent-light/80 shadow-sm' : 'hover:bg-accent-light/50'}`}
             >
-              <Users className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'affiliate' ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`} />
-              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'affiliate' ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`}>Affiliés</span>
+              <Users className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'affiliate' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`} />
+              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'affiliate' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`}>Affiliés</span>
             </Button>
             
             {isAdmin && (
               <Button 
                 variant={currentView === 'admin' ? 'secondary' : 'outline'} 
                 onClick={() => onViewChange('admin')} 
-                className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 border-blue-100 px-2 sm:px-4 relative group transition-all duration-300 rounded-xl ${currentView === 'admin' ? 'bg-blue-100 shadow-sm' : 'hover:bg-blue-50 hover:shadow-md'}`}
+                className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 border-accent-light px-2 sm:px-4 relative group transition-all duration-300 rounded-xl ${currentView === 'admin' ? 'bg-accent-light shadow-sm' : 'hover:bg-accent-light hover:shadow-md'}`}
               >
-                <ShieldCheck className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'admin' ? 'text-blue-700' : 'text-blue-400 group-hover:text-blue-700'}`} />
-                <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'admin' ? 'text-blue-700' : 'text-blue-400 group-hover:text-blue-700'}`}>Admin</span>
+                <ShieldCheck className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'admin' ? 'text-[#D98A1E]' : 'text-primary/70 group-hover:text-[#D98A1E]'}`} />
+                <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'admin' ? 'text-[#D98A1E]' : 'text-primary/70 group-hover:text-[#D98A1E]'}`}>Admin</span>
                 {pendingCount > 0 && (
                   <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[9px] font-bold px-1 py-0.5 rounded-full border border-white">
                     {pendingCount}
@@ -144,8 +144,8 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
             {user ? (
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="flex flex-col items-end hidden sm:flex">
-                  <span className="text-xs font-bold text-gray-900 truncate max-w-[120px]">{user.displayName}</span>
-                  <span className="text-[10px] text-gray-500 truncate max-w-[120px]">{user.email}</span>
+                  <span className="text-xs font-bold text-dark truncate max-w-[120px]">{user.displayName}</span>
+                  <span className="text-[10px] text-subtext truncate max-w-[120px]">{user.email}</span>
                 </div>
                 <img 
                   src={user.photoURL || ''} 
@@ -155,7 +155,7 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
                     (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}`;
                   }}
                 />
-                <Button variant="ghost" size="sm" onClick={handleLogout} className="text-gray-500 hover:text-red-600">
+                <Button variant="ghost" size="sm" onClick={handleLogout} className="text-subtext hover:text-red-600">
                   <LogOut className="h-4 w-4" />
                 </Button>
               </div>
@@ -164,7 +164,7 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  className="hidden sm:flex text-gray-400 hover:text-blue-600"
+                  className="hidden sm:flex text-subtext/60 hover:text-primary"
                   onClick={() => window.open(window.location.href, '_blank')}
                   title="Ouvrir dans un nouvel onglet"
                 >
@@ -173,7 +173,7 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
                 <Button 
                   onClick={handleLogin} 
                   disabled={isLoggingIn}
-                  className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
+                  className="bg-primary hover:bg-[#D98A1E] text-white flex items-center gap-2"
                 >
                   {isLoggingIn ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -196,17 +196,17 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
             <div className="bg-red-50 w-16 h-16 rounded-full flex items-center justify-center mb-6 border border-red-100 mx-auto">
               <ShieldCheck className="h-8 w-8 text-red-500" />
             </div>
-            <DialogTitle className="text-2xl font-black text-center text-gray-900">
+            <DialogTitle className="text-2xl font-black text-center text-dark">
               Blocage de Sécurité Chrome
             </DialogTitle>
             <DialogDescription className="pt-4 space-y-4 text-center">
-              <p className="text-gray-600 text-sm leading-relaxed">
+              <p className="text-subtext text-sm leading-relaxed">
                 Google Chrome bloque la connexion car Neopay est actuellement affiché dans un cadre sécurisé.
               </p>
               
-              <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-left space-y-2">
-                <p className="text-xs font-bold text-blue-800">Comment fixer cela :</p>
-                <ol className="text-[11px] text-blue-700 list-decimal pl-4 space-y-1">
+              <div className="bg-accent-light p-4 rounded-2xl border border-accent-light/50 text-left space-y-2">
+                <p className="text-xs font-bold text-primary">Comment fixer cela :</p>
+                <ol className="text-[11px] text-primary list-decimal pl-4 space-y-1">
                   <li>Cliquez sur le bouton bleu ci-dessous.</li>
                   <li>Une nouvelle fenêtre s'ouvrira avec Neopay.</li>
                   <li>Connectez-vous à nouveau dans cette fenêtre.</li>
@@ -214,7 +214,7 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
               </div>
 
               {lastError && (
-                <p className="text-[10px] text-gray-400 font-mono bg-gray-50 p-2 rounded border truncate">
+                <p className="text-[10px] text-subtext/60 font-mono bg-muted p-2 rounded border truncate">
                   Détail: {lastError}
                 </p>
               )}
@@ -222,7 +222,7 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
           </DialogHeader>
           <DialogFooter className="mt-6">
             <Button 
-              className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-100 border-0"
+              className="w-full h-12 rounded-xl bg-primary hover:bg-[#D98A1E] text-white font-bold flex items-center justify-center gap-2 shadow-lg shadow-accent-light/50 border-0"
               onClick={() => {
                 window.open(window.location.href, '_blank');
                 setShowLoginErrorDialog(false);

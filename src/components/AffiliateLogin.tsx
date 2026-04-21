@@ -107,11 +107,11 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
     <div className="max-w-md mx-auto mt-20 px-4">
       <Card className="shadow-xl border-0">
         <CardHeader className="text-center space-y-2">
-          <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-2">
-            <Lock className="h-8 w-8 text-blue-600" />
+          <div className="bg-accent-light w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-2">
+            <Lock className="h-8 w-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl font-bold">Espace Affilié</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-2xl font-bold text-dark">Espace Affilié</CardTitle>
+          <CardDescription className="text-subtext">
             Connectez-vous pour accéder à votre tableau de bord.
           </CardDescription>
         </CardHeader>
@@ -140,22 +140,22 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
             </div>
             <Button 
               type="submit" 
-              className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-lg font-semibold"
+              className="w-full h-12 bg-primary hover:bg-[#D98A1E] text-lg font-semibold border-0"
               disabled={loading}
             >
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Se connecter"}
             </Button>
           </form>
-          <p className="mt-6 text-center text-sm text-gray-500">
+          <p className="mt-6 text-center text-sm text-subtext">
             Identifiants fournis par l'administrateur Neopay.
           </p>
 
           <div className="mt-8 pt-6 border-t text-center">
-            <p className="text-gray-600 mb-4">Vous n'avez pas de compte ?</p>
+            <p className="text-subtext mb-4">Vous n'avez pas de compte ?</p>
             <Dialog open={isRegisterOpen} onOpenChange={setIsRegisterOpen}>
               <DialogTrigger 
                 render={
-                  <Button variant="outline" className="w-full border-blue-200 text-blue-600 hover:bg-blue-50">
+                  <Button variant="outline" className="w-full border-accent-light text-primary hover:bg-accent-light">
                     <UserPlus className="h-4 w-4 mr-2" />
                     S'inscrire comme affilié
                   </Button>
@@ -213,7 +213,7 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
                     />
                   </div>
                   <DialogFooter className="pt-4">
-                    <Button type="submit" className="w-full bg-blue-600" disabled={registerLoading}>
+                    <Button type="submit" className="w-full bg-primary hover:bg-[#D98A1E] border-0" disabled={registerLoading}>
                       {registerLoading ? (
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
                       ) : (

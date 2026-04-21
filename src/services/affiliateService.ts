@@ -18,39 +18,8 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
+import { handleFirestoreError } from '../lib/firebase-errors';
 import { Affiliate, WithdrawalRequest, AffiliateRequest, AffiliateNotification } from '../types';
-
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
 
 export const loginAffiliate = async (username: string, password: string): Promise<Affiliate | null> => {
   const q = query(
@@ -79,6 +48,9 @@ export const useAffiliateData = (affiliateId: string | null) => {
         setAffiliate({ id: docSnap.id, ...docSnap.data() } as Affiliate);
       }
       setLoading(false);
+    }, (error) => {
+      setLoading(false);
+      try { handleFirestoreError(error, 'get', `affiliates/${affiliateId}`, auth); } catch (e) {}
     });
 
     return () => unsubscribe();
@@ -105,6 +77,9 @@ export const useTopAffiliates = () => {
       })) as Affiliate[];
       setTopAffiliates(data);
       setLoading(false);
+    }, (error) => {
+      setLoading(false);
+      try { handleFirestoreError(error, 'list', 'affiliates', auth); } catch (e) {}
     });
 
     return () => unsubscribe();
@@ -129,17 +104,21 @@ export const submitWithdrawal = async (
     throw new Error("Le numéro de compte est obligatoire.");
   }
 
-  await addDoc(collection(db, 'withdrawals'), {
-    affiliateId: affiliate.id,
-    affiliateName: affiliate.name,
-    affiliateCode: affiliate.code,
-    amount,
-    method,
-    accountNumber,
-    status: 'pending',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  });
+  try {
+    await addDoc(collection(db, 'withdrawals'), {
+      affiliateId: affiliate.id,
+      affiliateName: affiliate.name,
+      affiliateCode: affiliate.code,
+      amount,
+      method,
+      accountNumber,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    handleFirestoreError(error, 'create', 'withdrawals', auth);
+  }
 };
 
 export const useAffiliateWithdrawals = (affiliateId: string | null) => {
@@ -165,6 +144,9 @@ export const useAffiliateWithdrawals = (affiliateId: string | null) => {
       })) as WithdrawalRequest[];
       setWithdrawals(data);
       setLoading(false);
+    }, (error) => {
+      setLoading(false);
+      try { handleFirestoreError(error, 'list', 'withdrawals', auth); } catch (e) {}
     });
 
     return () => unsubscribe();
@@ -187,6 +169,9 @@ export const useAllAffiliates = () => {
       })) as Affiliate[];
       setAffiliates(data);
       setLoading(false);
+    }, (error) => {
+      setLoading(false);
+      try { handleFirestoreError(error, 'list', 'affiliates', auth); } catch (e) {}
     });
 
     return () => unsubscribe();
@@ -208,6 +193,9 @@ export const useAllWithdrawals = () => {
       })) as WithdrawalRequest[];
       setWithdrawals(data);
       setLoading(false);
+    }, (error) => {
+      setLoading(false);
+      try { handleFirestoreError(error, 'list', 'withdrawals', auth); } catch (e) {}
     });
 
     return () => unsubscribe();
@@ -245,7 +233,7 @@ export const saveAffiliate = async (affiliateData: Partial<Affiliate>, id?: stri
       });
     }
   } catch (error) {
-    handleFirestoreError(error, id ? OperationType.UPDATE : OperationType.CREATE, 'affiliates');
+    handleFirestoreError(error, id ? 'update' : 'create', 'affiliates', auth);
   }
 };
 
@@ -257,30 +245,34 @@ export const updateWithdrawalStatus = async (
   status: 'approved' | 'rejected', 
   reason?: string
 ) => {
-  const requestRef = doc(db, 'withdrawals', requestId);
-  const requestSnap = await getDoc(requestRef);
-  
-  if (!requestSnap.exists()) return;
-  const requestData = requestSnap.data() as WithdrawalRequest;
-
-  if (status === 'approved') {
-    // Deduct from affiliate balance
-    const affiliateRef = doc(db, 'affiliates', requestData.affiliateId);
-    const affiliateSnap = await getDoc(affiliateRef);
+  try {
+    const requestRef = doc(db, 'withdrawals', requestId);
+    const requestSnap = await getDoc(requestRef);
     
-    if (affiliateSnap.exists()) {
-      const affiliateData = affiliateSnap.data() as Affiliate;
-      await updateDoc(affiliateRef, {
-        balance: (affiliateData.balance || 0) - requestData.amount
-      });
-    }
-  }
+    if (!requestSnap.exists()) return;
+    const requestData = requestSnap.data() as WithdrawalRequest;
 
-  await updateDoc(requestRef, {
-    status,
-    rejectionReason: reason || '',
-    updatedAt: serverTimestamp()
-  });
+    if (status === 'approved') {
+      // Deduct from affiliate balance
+      const affiliateRef = doc(db, 'affiliates', requestData.affiliateId);
+      const affiliateSnap = await getDoc(affiliateRef);
+      
+      if (affiliateSnap.exists()) {
+        const affiliateData = affiliateSnap.data() as Affiliate;
+        await updateDoc(affiliateRef, {
+          balance: (affiliateData.balance || 0) - requestData.amount
+        });
+      }
+    }
+
+    await updateDoc(requestRef, {
+      status,
+      rejectionReason: reason || '',
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    handleFirestoreError(error, 'update', 'withdrawals', auth);
+  }
 };
 
 /**
@@ -290,7 +282,7 @@ export const deleteAffiliate = async (id: string) => {
   try {
     await deleteDoc(doc(db, 'affiliates', id));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, 'affiliates');
+    handleFirestoreError(error, 'delete', 'affiliates', auth);
   }
 };
 
@@ -304,7 +296,7 @@ export const submitAffiliateRequest = async (requestData: Partial<AffiliateReque
       updatedAt: serverTimestamp()
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, 'affiliate_requests');
+    handleFirestoreError(error, 'create', 'affiliate_requests', auth);
   }
 };
 
@@ -321,6 +313,9 @@ export const useAllAffiliateRequests = () => {
       })) as AffiliateRequest[];
       setRequests(data);
       setLoading(false);
+    }, (error) => {
+      setLoading(false);
+      try { handleFirestoreError(error, 'list', 'affiliate_requests', auth); } catch (e) {}
     });
 
     return () => unsubscribe();
@@ -337,7 +332,7 @@ export const updateAffiliateRequestStatus = async (requestId: string, status: 'a
       updatedAt: serverTimestamp()
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, 'affiliate_requests');
+    handleFirestoreError(error, 'update', 'affiliate_requests', auth);
   }
 };
 
@@ -487,7 +482,7 @@ export const clearMonthlyWinners = async () => {
       updatedAt: serverTimestamp()
     }, { merge: true });
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, 'affiliates');
+    handleFirestoreError(error, 'update', 'affiliates', auth);
   }
 };
 
@@ -561,7 +556,7 @@ export const awardMonthlyPrizes = async () => {
     await Promise.all(promises);
     return awardedWinners;
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, 'affiliates');
+    handleFirestoreError(error, 'update', 'affiliates', auth);
     throw error;
   }
 };
@@ -580,7 +575,7 @@ export const resetMonthlyStats = async () => {
     );
     await Promise.all(promises);
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, 'affiliates');
+    handleFirestoreError(error, 'update', 'affiliates', auth);
   }
 };
 
@@ -670,6 +665,6 @@ export const recordPurchase = async (affiliateId: string, type: 'purchase' | 'su
       }
     }
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, 'affiliates');
+    handleFirestoreError(error, 'update', 'affiliates', auth);
   }
 };

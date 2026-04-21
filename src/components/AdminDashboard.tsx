@@ -48,14 +48,18 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Checkbox } from './ui/checkbox';
 import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage, useNavButtons, saveNavButton, deleteNavButton } from '../services/parcelService';
 import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus, resetMonthlyStats, awardMonthlyPrizes, clearMonthlyWinners, useMonthlyRankings, recordPurchase } from '../services/affiliateService';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton } from '../types';
+import { useAdminAccounts, useAdminLogs, saveAdminAccount, deleteAdminAccount } from '../services/adminService';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton, AdminAccount } from '../types';
 import AdminShippingManager from './AdminShippingManager';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { Timestamp } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
+import { LogOut, Shield, ShieldAlert as ShieldAlertIcon, History } from 'lucide-react';
 
 // Helper for image compression
 const compressImage = (file: File): Promise<Blob> => {
@@ -109,7 +113,12 @@ const LucideIcon = ({ name, className, color }: { name: string, className?: stri
   return <Icon className={className} style={{ color }} />;
 };
 
-export default function AdminDashboard() {
+interface AdminDashboardProps {
+  admin: AdminAccount;
+  onLogout: () => void;
+}
+
+export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps) {
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
@@ -133,6 +142,24 @@ export default function AdminDashboard() {
   const { affiliates, loading: affiliatesLoading } = useAllAffiliates();
   const { withdrawals: allWithdrawals, loading: allWithdrawalsLoading } = useAllWithdrawals();
   const { requests: affiliateRequests, loading: affiliateRequestsLoading } = useAllAffiliateRequests();
+  const { admins, loading: adminsLoading } = useAdminAccounts();
+  const { logs, loading: logsLoading } = useAdminLogs(100);
+  
+  const [isAdminDialogOpen, setIsAdminDialogOpen] = useState(false);
+  const [isAffiliateDialogOpen, setIsAffiliateDialogOpen] = useState(false);
+  const [editingAdmin, setEditingAdmin] = useState<AdminAccount | null>(null);
+  const [isAdminDeleteDialogOpen, setIsAdminDeleteDialogOpen] = useState(false);
+  const [adminToDelete, setAdminToDelete] = useState<AdminAccount | null>(null);
+  const [adminFormData, setAdminFormData] = useState<Partial<AdminAccount>>({
+    fullName: '',
+    password: '',
+    photoUrl: '',
+    loginCode: '',
+    isSuperAdmin: false,
+    permissions: []
+  });
+
+  const [isLogsDialogOpen, setIsLogsDialogOpen] = useState(false);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -149,7 +176,7 @@ export default function AdminDashboard() {
     iconName: 'Package',
     targetUrl: '',
     redirectionInstruction: '',
-    color: '#1a56ff',
+    color: '#F5A623',
     order: 0
   });
   
@@ -187,7 +214,88 @@ export default function AdminDashboard() {
   const [isAwarding, setIsAwarding] = useState(false);
   const [isClearingWinners, setIsClearingWinners] = useState(false);
 
-  const [isAffiliateDialogOpen, setIsAffiliateDialogOpen] = useState(false);
+  // Helper to ensure the admin creation dialog is always usable
+  const handleOpenAdminDialog = (adminAccount?: AdminAccount) => {
+    if (adminAccount) {
+      setEditingAdmin(adminAccount);
+      setAdminFormData({ ...adminAccount });
+    } else {
+      setEditingAdmin(null);
+      setAdminFormData({
+        fullName: '',
+        password: '',
+        photoUrl: '',
+        loginCode: '',
+        isSuperAdmin: false,
+        permissions: []
+      });
+    }
+    setIsAdminDialogOpen(true);
+  };
+
+  const handleSaveAdminAccount = async () => {
+    if (!adminFormData.fullName || !adminFormData.password) {
+      toast.error("Le nom et le mot de passe sont requis.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await saveAdminAccount(adminFormData, editingAdmin?.id);
+      toast.success(editingAdmin ? "Compte administrateur mis à jour !" : "Compte administrateur créé !");
+      setIsAdminDialogOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de l'enregistrement.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleConfirmDeleteAdmin = async () => {
+    if (!adminToDelete?.id) return;
+    if (adminToDelete.isSuperAdmin) {
+      toast.error("Impossible de supprimer le super administrateur.");
+      return;
+    }
+    setIsDeleting(true);
+    try {
+      await deleteAdminAccount(adminToDelete.id);
+      toast.success("Compte administrateur supprimé.");
+      setIsAdminDeleteDialogOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors de la suppression.");
+    } finally {
+      setIsDeleting(false);
+      setAdminToDelete(null);
+    }
+  };
+
+  const hasPermission = (permission: string) => {
+    if (admin.isSuperAdmin || admin.permissions.includes('all')) return true;
+    return admin.permissions.includes(permission);
+  };
+
+  const menuItems = [
+    { value: 'parcels', label: 'Colis', icon: Package, permission: 'parcels' },
+    { value: 'products', label: 'Produits / Services', icon: LayoutGrid, permission: 'products' },
+    { value: 'games', label: 'Top-up Jeux', icon: Gamepad2, permission: 'games' },
+    { value: 'cards', label: 'Recharge Cartes', icon: CreditCard, permission: 'cards' },
+    { value: 'slider', label: 'Slider', icon: ImageIcon, permission: 'slider' },
+    { value: 'affiliates', label: 'Affiliés', icon: Users, permission: 'affiliates' },
+    { value: 'notifications', label: 'Notifications', icon: Bell, permission: 'notifications' },
+    { value: 'shipping', label: 'Shipping', icon: Truck, permission: 'shipping' },
+    { value: 'nav-buttons', label: 'Boutons Nav', icon: LayoutGrid, permission: 'nav-buttons' },
+    { value: 'settings', label: 'Paramètres', icon: SettingsIcon, permission: 'settings' },
+    { value: 'admins', label: 'Gérer Admins', icon: Shield, permission: 'super_admin_only' },
+  ];
+
+  const visibleMenuItems = menuItems.filter(item => {
+    if (item.permission === 'super_admin_only') return admin.isSuperAdmin;
+    return hasPermission(item.permission);
+  });
+
+  const [activeTab, setActiveTab] = useState(visibleMenuItems[0]?.value || 'parcels');
   const [isAffiliateDeleteConfirmOpen, setIsAffiliateDeleteConfirmOpen] = useState(false);
   const [affiliateToDelete, setAffiliateToDelete] = useState<Affiliate | null>(null);
 
@@ -810,7 +918,7 @@ export default function AdminDashboard() {
         iconName: 'Package',
         targetUrl: '',
         redirectionInstruction: '',
-        color: '#1a56ff',
+        color: '#F5A623',
         order: (buttons.length || 0) + 1
       });
     }
@@ -943,120 +1051,109 @@ export default function AdminDashboard() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'Livré': return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-      case 'Arrivé': return <Package className="h-4 w-4 text-blue-500" />;
-      case 'En transit': return <Truck className="h-4 w-4 text-amber-500" />;
+      case 'Livré': return <CheckCircle2 className="h-4 w-4 text-primary" />;
+      case 'Arrivé': return <Package className="h-4 w-4 text-primary" />;
+      case 'En transit': return <Truck className="h-4 w-4 text-primary" />;
       default: return <Clock className="h-4 w-4 text-gray-400" />;
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 sm:py-8">
-      <div className="mb-8 text-center sm:text-left">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Administration Neopay</h1>
-        <p className="text-sm sm:text-base text-gray-500">Gérez les colis, les produits et les paramètres du site.</p>
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+        <div>
+          <h1 className="text-3xl font-black text-dark tracking-tight flex items-center gap-3">
+            <span className="bg-primary text-white p-2 rounded-2xl rotate-3 shadow-lg shadow-accent-light/50">
+              <Shield className="h-6 w-6" />
+            </span>
+            Administration
+          </h1>
+          <p className="text-subtext text-sm mt-1 font-medium">
+            Connecté : <span className="text-primary font-bold">{admin.fullName}</span> {admin.isSuperAdmin && <span className="bg-accent-light text-primary text-[10px] uppercase px-2 py-0.5 rounded-full ml-2 font-bold tracking-wider">Super Admin</span>}
+          </p>
+        </div>
+        <div className="flex gap-2 w-full sm:w-auto">
+          {admin.isSuperAdmin && (
+            <Button 
+              variant="outline" 
+              onClick={() => setIsLogsDialogOpen(true)}
+              className="flex-1 sm:flex-none h-11 rounded-2xl border-gray-100 bg-gray-50/50 hover:bg-white hover:border-accent-light hover:text-primary font-bold"
+            >
+              <History className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Logs</span>
+            </Button>
+          )}
+          <Button 
+            variant="ghost" 
+            onClick={onLogout}
+            className="flex-1 sm:flex-none h-11 rounded-2xl text-red-500 hover:bg-red-50 font-bold"
+          >
+            <LogOut className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Déconnexion</span>
+          </Button>
+        </div>
       </div>
 
-      <Tabs defaultValue="parcels" className="space-y-6">
-        <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v)} className="space-y-6">
+        <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
           <TabsList className="bg-white border p-1 rounded-xl h-auto flex flex-nowrap sm:flex-wrap gap-1 sm:gap-2 min-w-max sm:min-w-0">
-            <TabsTrigger value="parcels" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
-              <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              Colis
-            </TabsTrigger>
-            <TabsTrigger value="products" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
-              <LayoutGrid className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              Produits / Services
-            </TabsTrigger>
-            <TabsTrigger value="games" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
-              <Gamepad2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              Top-up Jeux
-            </TabsTrigger>
-            <TabsTrigger value="cards" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
-              <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              Recharge Cartes
-            </TabsTrigger>
-            <TabsTrigger value="slider" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
-              <ImageIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              Slider
-            </TabsTrigger>
-            <TabsTrigger value="affiliates" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap relative">
-              <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              Affiliés
-              {totalPending > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white">
-                  {totalPending}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="notifications" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap relative">
-              <Bell className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              Notifications
-              {totalPending > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white">
-                  {totalPending}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
-              <SettingsIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              Paramètres
-            </TabsTrigger>
-            <TabsTrigger value="shipping" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
-              <Truck className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              Shipping
-            </TabsTrigger>
-            <TabsTrigger value="nav-buttons" className="rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap">
-              <LayoutGrid className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              Boutons Nav
-            </TabsTrigger>
+            {visibleMenuItems.map((item) => (
+              <TabsTrigger 
+                key={item.value}
+                value={item.value} 
+                className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap transition-all"
+              >
+                <item.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                {item.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
         </div>
 
         <TabsContent value="parcels" className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <h2 className="text-xl font-bold">Gestion des Colis</h2>
-            <Button onClick={() => handleOpenDialog()} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2">
+            <h2 className="text-xl font-bold text-dark">Gestion des Colis</h2>
+            <Button onClick={() => handleOpenDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 border-0">
               <Plus className="h-4 w-4" />
               Nouveau Colis
             </Button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="bg-blue-50 border-blue-100">
+            <Card className="bg-accent-light/30 border-accent-light">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-blue-600 uppercase">Total Colis</p>
-                    <p className="text-3xl font-bold text-blue-900">{parcels.length}</p>
+                    <p className="text-sm font-medium text-primary uppercase">Total Colis</p>
+                    <p className="text-3xl font-bold text-dark">{parcels.length}</p>
                   </div>
-                  <Package className="h-8 w-8 text-blue-300" />
+                  <Package className="h-8 w-8 text-primary/30" />
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-amber-50 border-amber-100">
+            <Card className="bg-accent-light/30 border-primary/20">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-amber-600 uppercase">En Transit</p>
-                    <p className="text-3xl font-bold text-amber-900">
+                    <p className="text-sm font-medium text-primary uppercase">En Transit</p>
+                    <p className="text-3xl font-bold text-dark">
                       {parcels.filter(p => p.status === 'En transit' || p.status === 'En route').length}
                     </p>
                   </div>
-                  <Truck className="h-8 w-8 text-amber-300" />
+                  <Truck className="h-8 w-8 text-primary/40" />
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-green-50 border-green-100">
+            <Card className="bg-accent-light/30 border-primary/20">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-green-600 uppercase">Livrés</p>
-                    <p className="text-3xl font-bold text-green-900">
+                    <p className="text-sm font-medium text-primary uppercase">Livrés</p>
+                    <p className="text-3xl font-bold text-dark">
                       {parcels.filter(p => p.status === 'Livré').length}
                     </p>
                   </div>
-                  <CheckCircle2 className="h-8 w-8 text-green-300" />
+                  <CheckCircle2 className="h-8 w-8 text-primary/40" />
                 </div>
               </CardContent>
             </Card>
@@ -1097,11 +1194,11 @@ export default function AdminDashboard() {
                     <TableBody>
                       {filteredParcels.map((parcel) => (
                         <TableRow key={parcel.id} className="hover:bg-gray-50/50 transition-colors">
-                          <TableCell className="font-mono font-medium text-blue-600">
+                          <TableCell className="font-mono font-medium text-primary">
                             {parcel.trackingNumber}
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 text-dark">
                               {getStatusIcon(parcel.status)}
                               <span className="text-sm font-medium">{parcel.status}</span>
                             </div>
@@ -1146,8 +1243,8 @@ export default function AdminDashboard() {
 
         <TabsContent value="products" className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <h2 className="text-xl font-bold">Gestion des Produits / Services</h2>
-            <Button onClick={() => handleOpenProductDialog()} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2">
+            <h2 className="text-xl font-bold text-dark">Gestion des Produits / Services</h2>
+            <Button onClick={() => handleOpenProductDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 border-0">
               <Plus className="h-4 w-4" />
               Nouveau Produit
             </Button>
@@ -1186,7 +1283,7 @@ export default function AdminDashboard() {
                           </TableCell>
                           <TableCell className="font-semibold">{product.name}</TableCell>
                           <TableCell>
-                            <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50">
+                            <Badge variant="outline" className="text-primary border-accent-light bg-accent-light/50">
                               {product.price}
                             </Badge>
                           </TableCell>
@@ -1226,8 +1323,8 @@ export default function AdminDashboard() {
 
         <TabsContent value="games" className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <h2 className="text-xl font-bold">Gestion des Jeux (Top-up)</h2>
-            <Button onClick={() => handleOpenGameDialog()} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2">
+            <h2 className="text-xl font-bold text-dark">Gestion des Jeux (Top-up)</h2>
+            <Button onClick={() => handleOpenGameDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 border-0">
               <Plus className="h-4 w-4" />
               Nouveau Jeu
             </Button>
@@ -1266,7 +1363,7 @@ export default function AdminDashboard() {
                           </TableCell>
                           <TableCell className="font-semibold">{game.name}</TableCell>
                           <TableCell>
-                            <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">
+                            <Badge variant="outline" className="text-primary border-primary/20 bg-accent-light/50">
                               {game.priceRange}
                             </Badge>
                           </TableCell>
@@ -1306,8 +1403,8 @@ export default function AdminDashboard() {
 
         <TabsContent value="cards" className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <h2 className="text-xl font-bold">Gestion des Cartes (Recharge)</h2>
-            <Button onClick={() => handleOpenCardDialog()} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2">
+            <h2 className="text-xl font-bold text-dark">Gestion des Cartes (Recharge)</h2>
+            <Button onClick={() => handleOpenCardDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 border-0">
               <Plus className="h-4 w-4" />
               Nouvelle Carte
             </Button>
@@ -1346,7 +1443,7 @@ export default function AdminDashboard() {
                           </TableCell>
                           <TableCell className="font-semibold">{card.name}</TableCell>
                           <TableCell>
-                            <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50">
+                            <Badge variant="outline" className="text-primary border-accent-light bg-accent-light/50">
                               {card.price}
                             </Badge>
                           </TableCell>
@@ -1424,7 +1521,7 @@ export default function AdminDashboard() {
                     <Button 
                       onClick={handleSaveSliderUrl} 
                       disabled={isSaving || !tempSliderImageUrl.trim()}
-                      className="bg-emerald-600 hover:bg-emerald-700 h-10 whitespace-nowrap"
+                      className="bg-primary hover:bg-[#D98A1E] h-10 whitespace-nowrap border-0"
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Lien
@@ -1440,7 +1537,7 @@ export default function AdminDashboard() {
                       id="slider-upload"
                       disabled={isSliderUploading}
                     />
-                    <Button asChild disabled={isSliderUploading} className="bg-blue-600 hover:bg-blue-700 h-10 w-full sm:w-auto">
+                    <Button asChild disabled={isSliderUploading} className="bg-primary hover:bg-[#D98A1E] h-10 w-full sm:w-auto border-0">
                       <label htmlFor="slider-upload" className="cursor-pointer flex items-center justify-center gap-2">
                         {isSliderUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                         Télécharger
@@ -1456,9 +1553,9 @@ export default function AdminDashboard() {
                     <span>Téléchargement en cours...</span>
                     <span>{Math.round(uploadProgress)}%</span>
                   </div>
-                  <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                  <div className="w-full bg-accent-light/30 rounded-full h-1.5 overflow-hidden">
                     <div 
-                      className="bg-blue-600 h-full transition-all duration-300" 
+                      className="bg-primary h-full transition-all duration-300" 
                       style={{ width: `${uploadProgress}%` }}
                     />
                   </div>
@@ -1467,7 +1564,7 @@ export default function AdminDashboard() {
 
               {sliderLoading ? (
                 <div className="flex justify-center py-20">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
               ) : sliderImages.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1602,7 +1699,7 @@ export default function AdminDashboard() {
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsSliderImageEditDialogOpen(false)}>Annuler</Button>
-                <Button onClick={handleUpdateSliderImage} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
+                <Button onClick={handleUpdateSliderImage} disabled={isSaving} className="bg-primary hover:bg-[#D98A1E] border-0">
                   {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                   Enregistrer les modifications
                 </Button>
@@ -1613,7 +1710,7 @@ export default function AdminDashboard() {
 
         <TabsContent value="affiliates" className="space-y-6">
           <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md py-4 border-b -mx-6 px-6 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-sm">
-            <h2 className="text-xl font-bold">Gestion des Affiliés</h2>
+            <h2 className="text-xl font-bold text-dark">Gestion des Affiliés</h2>
             <Button onClick={() => {
               setEditingAffiliate(null);
               setAffiliateFormData({ 
@@ -1625,45 +1722,45 @@ export default function AdminDashboard() {
                 referredClients: 0
               });
               setIsAffiliateDialogOpen(true);
-            }} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2 shadow-md">
+            }} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 shadow-md border-0">
               <PlusCircle className="h-4 w-4" />
               Nouvel Affilié
             </Button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <Card className="bg-blue-50 border-blue-100">
+            <Card className="bg-accent-light/30 border-accent-light">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-blue-600 uppercase">Total Affiliés</p>
-                    <p className="text-3xl font-bold text-blue-900">{affiliates.length}</p>
+                    <p className="text-sm font-medium text-primary uppercase">Total Affiliés</p>
+                    <p className="text-3xl font-bold text-dark">{affiliates.length}</p>
                   </div>
-                  <Users className="h-8 w-8 text-blue-300" />
+                  <Users className="h-8 w-8 text-primary/30" />
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-green-50 border-green-100">
+            <Card className="bg-accent-light/30 border-primary/20">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-green-600 uppercase">Total à Payer</p>
-                    <p className="text-3xl font-bold text-green-900">{totalAffiliateBalance} Goud</p>
+                    <p className="text-sm font-medium text-primary uppercase">Total à Payer</p>
+                    <p className="text-3xl font-bold text-dark">{totalAffiliateBalance} Goud</p>
                   </div>
-                  <Wallet className="h-8 w-8 text-green-300" />
+                  <Wallet className="h-8 w-8 text-primary/40" />
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-amber-50 border-amber-100">
+            <Card className="bg-accent-light/30 border-primary/20">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-amber-600 uppercase">Points Totaux</p>
-                    <p className="text-3xl font-bold text-amber-900">
+                    <p className="text-sm font-medium text-primary uppercase">Points Totaux</p>
+                    <p className="text-3xl font-bold text-dark">
                       {affiliates.reduce((sum, a) => sum + (a.points || 0), 0)}
                     </p>
                   </div>
-                  <Trophy className="h-8 w-8 text-amber-300" />
+                  <Trophy className="h-8 w-8 text-primary/40" />
                 </div>
               </CardContent>
             </Card>
@@ -1676,7 +1773,7 @@ export default function AdminDashboard() {
                   <div className="flex items-center gap-2">
                     <CardTitle className="text-lg font-semibold">Liste des Affiliés</CardTitle>
                     {affiliateSearch && (
-                      <Badge variant="secondary" className="bg-blue-100 text-blue-700 border-blue-200">
+                      <Badge variant="secondary" className="bg-accent-light text-primary border-primary/20">
                         {filteredAffiliates.length} trouvé{filteredAffiliates.length > 1 ? 's' : ''}
                       </Badge>
                     )}
@@ -1725,15 +1822,15 @@ export default function AdminDashboard() {
                                   {a.level || 'Bronze'}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="font-bold text-blue-600">{a.balance} Goud</TableCell>
+                              <TableCell className="font-bold text-primary">{a.balance} Goud</TableCell>
                               <TableCell>
                                 <div className="flex flex-col gap-1">
-                                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 w-fit">
+                                  <Badge variant="outline" className="bg-accent-light text-primary border-primary/20 w-fit">
                                     {a.points || 0} pts
                                   </Badge>
                                   {a.isMonthlyWinner && (
                                     <Badge 
-                                      className="bg-green-100 text-green-700 border-green-200 text-[9px] w-fit cursor-pointer hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+                                      className="bg-accent-light text-primary border-primary/20 text-[9px] w-fit cursor-pointer hover:bg-red-50 hover:text-red-600 hover:border-red-200"
                                       onClick={() => handleToggleWinnerStatus(a)}
                                       title="Cliquez pour retirer du classement"
                                     >
@@ -1742,7 +1839,7 @@ export default function AdminDashboard() {
                                   )}
                                   {!a.isMonthlyWinner && (a.points || 0) > 0 && (
                                     <Badge 
-                                      className="bg-gray-100 text-gray-600 border-gray-200 text-[9px] w-fit cursor-pointer hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"
+                                      className="bg-gray-100 text-gray-600 border-gray-200 text-[9px] w-fit cursor-pointer hover:bg-accent-light hover:text-primary hover:border-primary/20"
                                       onClick={() => handleToggleWinnerStatus(a)}
                                       title="Cliquez pour ajouter au classement"
                                     >
@@ -1761,7 +1858,7 @@ export default function AdminDashboard() {
                                   }}>
                                     <Edit className="h-4 w-4" />
                                   </Button>
-                                  <Button variant="ghost" size="sm" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => {
+                                  <Button variant="ghost" size="sm" className="text-primary hover:text-[#D98A1E] hover:bg-accent-light/50" onClick={() => {
                                     setSelectedAffiliateForSale(a);
                                     setIsRecordSaleDialogOpen(true);
                                   }}>
@@ -1790,10 +1887,10 @@ export default function AdminDashboard() {
             </div>
 
             <div className="space-y-6">
-              <Card className="shadow-sm border-amber-200 bg-amber-50/20">
-                <CardHeader className="border-b border-amber-100 bg-amber-50/50">
+              <Card className="shadow-sm border-primary/20 bg-accent-light/20">
+                <CardHeader className="border-b border-primary/10 bg-accent-light/50">
                   <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                    <Trophy className="h-5 w-5 text-amber-500" />
+                    <Trophy className="h-5 w-5 text-primary" />
                     File d'attente des Prix
                   </CardTitle>
                 </CardHeader>
@@ -1804,12 +1901,12 @@ export default function AdminDashboard() {
                   {winnersQueue.length > 0 ? (
                     <div className="space-y-3">
                       {winnersQueue.map((w, idx) => (
-                        <div key={w.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-white border border-amber-100 shadow-sm gap-2">
+                        <div key={w.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-white border border-primary/10 shadow-sm gap-2">
                           <div className="flex items-center gap-3">
                             <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
-                              idx === 0 ? 'bg-amber-500 text-white' : 
+                              idx === 0 ? 'bg-primary text-white' : 
                               idx === 1 ? 'bg-gray-400 text-white' : 
-                              'bg-orange-500 text-white'
+                              'bg-primary/80 text-white'
                             }`}>
                               {idx + 1}
                             </div>
@@ -1824,7 +1921,7 @@ export default function AdminDashboard() {
                         </div>
                       ))}
                       <Button 
-                        className="w-full bg-amber-500 hover:bg-amber-600 text-white mt-2"
+                        className="w-full bg-primary hover:bg-[#D98A1E] text-white mt-2"
                         onClick={handleAwardPrizes}
                         disabled={isAwarding}
                       >
@@ -1840,46 +1937,46 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="shadow-sm border-blue-200 bg-blue-50/30">
-                <CardHeader className="border-b border-blue-100 bg-blue-50/50">
+              <Card className="shadow-sm border-primary/20 bg-accent-light/30">
+                <CardHeader className="border-b border-accent-light bg-accent-light/30">
                   <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                    <Trophy className="h-5 w-5 text-blue-600" />
+                    <Trophy className="h-5 w-5 text-primary" />
                     Classement Officiel Actuel
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 space-y-4">
-                  <p className="text-[10px] text-gray-500 italic mb-2">
+                  <p className="text-[10px] text-subtext italic mb-2">
                     Voici ce que les affiliés voient actuellement comme classement officiel.
                   </p>
                   {officialRankingsLoading ? (
                     <div className="flex justify-center py-4">
-                      <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
                     </div>
                   ) : officialRankings.length > 0 ? (
                     <div className="space-y-3">
                       {officialRankings.map((w, idx) => (
-                        <div key={w.id} className="flex items-center justify-between p-3 rounded-lg bg-white border border-blue-100 shadow-sm">
+                        <div key={w.id} className="flex items-center justify-between p-3 rounded-lg bg-white border border-accent-light shadow-sm">
                           <div className="flex items-center gap-3">
                             <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                              idx === 0 ? 'bg-amber-500 text-white' : 
+                              idx === 0 ? 'bg-primary text-white' : 
                               idx === 1 ? 'bg-gray-400 text-white' : 
-                              'bg-orange-500 text-white'
+                              'bg-primary text-white'
                             }`}>
                               {idx + 1}
                             </div>
                             <div>
-                              <p className="text-sm font-bold">{w.name}</p>
-                              <p className="text-[10px] text-gray-500">{w.points} points</p>
+                              <p className="text-sm font-bold text-dark">{w.name}</p>
+                              <p className="text-[10px] text-subtext">{w.points} points</p>
                             </div>
                           </div>
-                          <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
+                          <Badge variant="outline" className="text-[10px] bg-accent-light text-primary border-primary/20">
                             Officiel
                           </Badge>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-6 text-gray-400 border border-dashed border-blue-200 rounded-lg bg-white/50">
+                    <div className="text-center py-6 text-subtext border border-dashed border-accent-light rounded-lg bg-white/50">
                       <p className="text-xs italic">Aucun classement officiel publié.</p>
                     </div>
                   )}
@@ -1902,7 +1999,7 @@ export default function AdminDashboard() {
                   </Button>
                   <Button 
                     variant="outline" 
-                    className="w-full border-amber-200 text-amber-700 hover:bg-amber-50"
+                    className="w-full border-primary/20 text-primary hover:bg-accent-light/50"
                     onClick={async () => {
                       await resetMonthlyStats();
                       toast.success("Statistiques mensuelles réinitialisées !");
@@ -1927,18 +2024,18 @@ export default function AdminDashboard() {
                 <CardContent className="p-4 space-y-4">
                   {affiliateRequestsLoading ? (
                     <div className="flex justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
                     </div>
                   ) : affiliateRequests.filter(r => r.status === 'pending').length > 0 ? (
                     affiliateRequests.filter(r => r.status === 'pending').map((r) => (
-                      <div key={r.id} className="p-4 rounded-xl border bg-blue-50/30 border-blue-100 space-y-3">
+                      <div key={r.id} className="p-4 rounded-xl border bg-accent-light/30 border-accent-light space-y-3">
                         <div className="flex flex-col xs:flex-row justify-between items-start gap-2">
                           <div className="min-w-0">
-                            <p className="font-bold text-blue-900 truncate">{r.name}</p>
-                            <p className="text-xs text-gray-500 truncate">{r.email}</p>
-                            <p className="text-xs text-gray-500">{r.phone}</p>
+                            <p className="font-bold text-dark truncate">{r.name}</p>
+                            <p className="text-xs text-subtext truncate">{r.email}</p>
+                            <p className="text-xs text-subtext">{r.phone}</p>
                           </div>
-                          <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 shrink-0">Nouveau</Badge>
+                          <Badge variant="outline" className="bg-accent-light text-primary border-primary/20 shrink-0">Nouveau</Badge>
                         </div>
                         {r.message && (
                           <p className="text-xs text-gray-600 bg-white p-2 rounded border italic">
@@ -1948,7 +2045,7 @@ export default function AdminDashboard() {
                         <div className="flex gap-2">
                           <Button 
                             size="sm" 
-                            className="flex-1 bg-blue-600 hover:bg-blue-700 h-8"
+                            className="flex-1 bg-primary hover:bg-[#D98A1E] h-8 border-0"
                             onClick={() => handleAffiliateRequestAction(r, 'approved')}
                           >
                             Approuver
@@ -1982,7 +2079,7 @@ export default function AdminDashboard() {
                 <CardContent className="p-4 space-y-4">
                   {allWithdrawalsLoading ? (
                     <div className="flex justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
                     </div>
                   ) : allWithdrawals.filter(w => w.status === 'pending').length > 0 ? (
                     allWithdrawals.filter(w => w.status === 'pending').map((w) => (
@@ -1991,14 +2088,14 @@ export default function AdminDashboard() {
                           <div className="min-w-0">
                             <p className="font-bold truncate">{w.affiliateName}</p>
                             <p className="text-xs text-gray-500">Code: {w.affiliateCode}</p>
-                            <div className="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-100">
-                              <p className="text-[10px] uppercase font-bold text-blue-400">Compte de Paiement</p>
-                              <p className="text-sm font-bold text-blue-700 break-all">
+                            <div className="mt-2 p-2 bg-accent-light rounded-lg border border-primary/20">
+                              <p className="text-[10px] uppercase font-bold text-primary/70">Compte de Paiement</p>
+                              <p className="text-sm font-bold text-dark break-all">
                                 {w.method}: {w.accountNumber}
                               </p>
                             </div>
                           </div>
-                          <Badge className="bg-blue-100 text-blue-700 shrink-0">{w.amount} Goud</Badge>
+                          <Badge className="bg-accent-light text-primary shrink-0 border-primary/20">{w.amount} Goud</Badge>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-gray-500">
                           <Wallet className="h-3 w-3" />
@@ -2007,7 +2104,7 @@ export default function AdminDashboard() {
                         <div className="flex gap-2">
                           <Button 
                             size="sm" 
-                            className="flex-1 bg-green-600 hover:bg-green-700 h-8"
+                            className="flex-1 bg-primary hover:bg-[#D98A1E] h-8 border-0"
                             onClick={() => handleWithdrawalAction(w, 'approved')}
                           >
                             Approuver
@@ -2036,8 +2133,8 @@ export default function AdminDashboard() {
 
         <TabsContent value="notifications" className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <h2 className="text-xl font-bold flex items-center gap-2">
-              <Bell className="h-5 w-5 text-blue-600" />
+            <h2 className="text-xl font-bold flex items-center gap-2 text-dark">
+              <Bell className="h-5 w-5 text-primary" />
               Centre de Notifications
             </h2>
             <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -2075,15 +2172,15 @@ export default function AdminDashboard() {
                     <div key={req.id} className="p-4 hover:bg-gray-50 transition-colors flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                       <div className="flex items-start gap-4 min-w-0">
                         <div className={`p-2 rounded-lg shrink-0 ${
-                          req.type === 'registration' ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-600'
+                          req.type === 'registration' ? 'bg-accent-light text-primary' : 'bg-accent-light/50 text-dark'
                         }`}>
                           {req.type === 'registration' ? <Users className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <p className="font-bold text-gray-900 truncate">{req.name}</p>
+                            <p className="font-bold text-dark truncate">{req.name}</p>
                             <Badge variant="outline" className={
-                              req.type === 'registration' ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-amber-50 text-amber-600 border-amber-200'
+                              req.type === 'registration' ? 'bg-accent-light text-primary border-primary/20' : 'bg-muted text-subtext border-muted'
                             }>
                               {req.type === 'registration' ? 'Inscription' : 'Retrait'}
                             </Badge>
@@ -2094,7 +2191,7 @@ export default function AdminDashboard() {
                               {req.createdAt?.toDate ? format(req.createdAt.toDate(), 'PPp', { locale: fr }) : 'Date inconnue'}
                             </span>
                             {req.type === 'withdrawal' && (
-                              <span className="font-bold text-blue-600">{(req as any).amount} Goud</span>
+                              <span className="font-bold text-primary">{(req as any).amount} Goud</span>
                             )}
                             {req.type === 'registration' && (
                               <span>{(req as any).email}</span>
@@ -2105,7 +2202,7 @@ export default function AdminDashboard() {
                       <div className="flex items-center gap-2 w-full sm:w-auto">
                         <Button 
                           size="sm" 
-                          className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700"
+                          className="flex-1 sm:flex-none bg-primary hover:bg-[#D98A1E] border-0"
                           onClick={() => {
                             if (req.type === 'registration') {
                               handleAffiliateRequestAction(req as any, 'approved');
@@ -2184,9 +2281,9 @@ export default function AdminDashboard() {
                       </label>
                     </Button>
                     {uploading && (
-                      <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                      <div className="w-full bg-accent-light/30 rounded-full h-1.5 overflow-hidden">
                         <div 
-                          className="bg-blue-600 h-full transition-all duration-300" 
+                          className="bg-primary h-full transition-all duration-300" 
                           style={{ width: `${uploadProgress}%` }}
                         />
                       </div>
@@ -2211,7 +2308,7 @@ export default function AdminDashboard() {
                           toast.success("Lien du logo appliqué !");
                         }
                       }}
-                      className="bg-blue-600 w-full sm:w-auto"
+                      className="bg-primary hover:bg-[#D98A1E] w-full sm:w-auto border-0"
                     >
                       Ajouter
                     </Button>
@@ -2242,8 +2339,8 @@ export default function AdminDashboard() {
 
         <TabsContent value="nav-buttons" className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <h2 className="text-xl font-bold">Boutons de Navigation Rapide</h2>
-            <Button onClick={() => handleOpenNavButtonDialog()} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center gap-2">
+            <h2 className="text-xl font-bold text-dark">Boutons de Navigation Rapide</h2>
+            <Button onClick={() => handleOpenNavButtonDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 border-0">
               <Plus className="h-4 w-4" />
               Nouveau Bouton
             </Button>
@@ -2264,7 +2361,7 @@ export default function AdminDashboard() {
                 {buttonsLoading ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-8">
-                       <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
+                       <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
                     </TableCell>
                   </TableRow>
                 ) : buttons.length === 0 ? (
@@ -2309,6 +2406,96 @@ export default function AdminDashboard() {
             </Table>
           </Card>
         </TabsContent>
+
+        <TabsContent value="admins" className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <h2 className="text-xl font-bold text-dark">Gestion des Administrateurs</h2>
+            <Button onClick={() => handleOpenAdminDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 rounded-2xl h-11 px-6 font-bold shadow-lg shadow-accent-light/50 border-0">
+              <Plus className="h-4 w-4" />
+              Nouvel Admin
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {admins.map((acc) => (
+              <Card key={acc.id} className="border-0 shadow-sm rounded-3xl overflow-hidden hover:shadow-md transition-shadow bg-white">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                      {acc.photoUrl ? (
+                         <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-accent-light shadow-sm shrink-0 ring-2 ring-white">
+                          <img 
+                            src={acc.photoUrl} 
+                            alt={acc.fullName} 
+                            className="h-full w-full object-cover" 
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(acc.fullName)}&background=random`;
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className={`p-3 rounded-2xl ${acc.isSuperAdmin ? 'bg-accent-light text-primary' : 'bg-gray-50 text-gray-400'}`}>
+                          {acc.isSuperAdmin ? <Shield className="h-6 w-6" /> : <ShieldAlertIcon className="h-6 w-6" />}
+                        </div>
+                      )}
+                      <div>
+                        <h3 className="font-bold text-dark group-hover:text-primary transition-colors">{acc.fullName}</h3>
+                        <p className="text-[10px] text-subtext uppercase font-bold tracking-widest leading-none mt-1">
+                          {acc.isSuperAdmin ? "Super Admin" : "Administrateur"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenAdminDialog(acc)} className="rounded-xl hover:bg-accent-light hover:text-primary">
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      {!acc.isSuperAdmin && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => {
+                            setAdminToDelete(acc);
+                            setIsAdminDeleteDialogOpen(true);
+                          }} 
+                          className="rounded-xl hover:bg-red-50 hover:text-red-600"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-1">
+                      {acc.permissions.length === 0 ? (
+                        <span className="text-[10px] text-gray-400 italic">Aucune permission</span>
+                      ) : acc.permissions.includes('all') ? (
+                        <span className="bg-accent-light text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">Accès Total</span>
+                      ) : (
+                        acc.permissions.map(p => (
+                          <span key={p} className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                            {menuItems.find(m => m.permission === p)?.label || p}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                    
+                    <div className="pt-3 border-t flex justify-between items-center">
+                       <div className="flex items-center gap-2">
+                         <div className={`w-2 h-2 rounded-full ${acc.failedAttempts > 0 ? 'bg-primary' : 'bg-primary'}`} />
+                         <span className="text-[10px] text-gray-500 font-medium">
+                           {acc.failedAttempts > 0 ? `${acc.failedAttempts} échecs` : 'Sain'}
+                         </span>
+                       </div>
+                       <p className="text-[10px] text-gray-400">MAJ {acc.updatedAt ? format(acc.updatedAt instanceof Timestamp ? acc.updatedAt.toDate() : new Date(acc.updatedAt), 'dd/MM/yy', { locale: fr }) : '-'}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* Record Sale Dialog */}
@@ -2316,7 +2503,7 @@ export default function AdminDashboard() {
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-emerald-600" />
+              <DollarSign className="h-5 w-5 text-primary" />
               Enregistrer une vente
             </DialogTitle>
             <DialogDescription>
@@ -2337,8 +2524,8 @@ export default function AdminDashboard() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-              <p className="text-xs text-blue-700">
+            <div className="bg-accent-light/50 p-3 rounded-lg border border-accent-light">
+              <p className="text-xs text-primary">
                 L'affilié recevra la commission directe et les points correspondants. 
                 Si l'affilié a un parrain, celui-ci recevra 0.5 Goud de commission indirecte.
               </p>
@@ -2346,7 +2533,7 @@ export default function AdminDashboard() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsRecordSaleDialogOpen(false)}>Annuler</Button>
-            <Button onClick={handleRecordSale} disabled={isRecordingSale} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Button onClick={handleRecordSale} disabled={isRecordingSale} className="bg-primary hover:bg-[#D98A1E] text-white">
               {isRecordingSale ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
               Confirmer la vente
             </Button>
@@ -2411,7 +2598,7 @@ export default function AdminDashboard() {
                       key={s.value}
                       type="button"
                       onClick={() => setNavButtonFormData({...navButtonFormData, targetUrl: s.value})}
-                      className="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-md border border-blue-100 hover:bg-blue-100 transition-colors"
+                      className="text-[10px] px-2 py-1 bg-accent-light text-primary rounded-md border border-accent-light hover:bg-accent-light/50 transition-colors"
                     >
                       {s.label}
                     </button>
@@ -2463,7 +2650,7 @@ export default function AdminDashboard() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsNavButtonDialogOpen(false)}>Annuler</Button>
-            <Button onClick={handleSaveNavButton} className="bg-blue-600 text-white">
+            <Button onClick={handleSaveNavButton} className="bg-primary hover:bg-[#D98A1E] text-white border-0">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Enregistrer
             </Button>
@@ -2589,7 +2776,7 @@ export default function AdminDashboard() {
                 type="number"
                 value={affiliateFormData.points || 0} 
                 onChange={(e) => setAffiliateFormData({...affiliateFormData, points: Number(e.target.value)})}
-                className="sm:col-span-3 border-amber-200 focus:ring-amber-500" 
+                className="sm:col-span-3 border-primary/20 focus:ring-primary" 
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
@@ -2651,7 +2838,7 @@ export default function AdminDashboard() {
               <Button 
                 onClick={handleSaveAffiliate} 
                 disabled={isSaving} 
-                className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200"
+                className="flex-1 sm:flex-none bg-primary hover:bg-[#D98A1E] text-white shadow-lg shadow-accent-light/50 border-0"
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
                 Enregistrer les modifications
@@ -2792,7 +2979,7 @@ export default function AdminDashboard() {
                         toast.success("Lien d'image appliqué !");
                       }
                     }}
-                    className="bg-blue-600 w-full sm:w-auto"
+                    className="bg-primary hover:bg-[#D98A1E] w-full sm:w-auto border-0"
                   >
                     Ajouter
                   </Button>
@@ -2837,9 +3024,9 @@ export default function AdminDashboard() {
                     </Button>
                   </div>
                   {uploading && (
-                    <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                    <div className="w-full bg-accent-light/30 rounded-full h-1.5 overflow-hidden">
                       <div 
-                        className="bg-blue-600 h-full transition-all duration-300" 
+                        className="bg-primary h-full transition-all duration-300" 
                         style={{ width: `${uploadProgress}%` }}
                       />
                     </div>
@@ -2872,7 +3059,7 @@ export default function AdminDashboard() {
               <Button 
                 onClick={handleSaveProduct} 
                 disabled={isSaving} 
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-9 rounded-xl shadow-lg shadow-blue-100 border-0 px-6 min-w-[100px]"
+                className="bg-primary hover:bg-[#D98A1E] text-white font-bold h-9 rounded-xl shadow-lg shadow-accent-light/50 border-0 px-6 min-w-[100px]"
               >
                 {isSaving ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : null}
                 Enregistrer
@@ -2944,7 +3131,7 @@ export default function AdminDashboard() {
                         toast.success("Lien d'image appliqué !");
                       }
                     }}
-                    className="bg-blue-600 w-full sm:w-auto"
+                    className="bg-primary hover:bg-[#D98A1E] w-full sm:w-auto border-0"
                   >
                     Ajouter
                   </Button>
@@ -2989,9 +3176,9 @@ export default function AdminDashboard() {
                     </Button>
                   </div>
                   {uploading && (
-                    <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                    <div className="w-full bg-accent-light/30 rounded-full h-1.5 overflow-hidden">
                       <div 
-                        className="bg-blue-600 h-full transition-all duration-300" 
+                        className="bg-primary h-full transition-all duration-300" 
                         style={{ width: `${uploadProgress}%` }}
                       />
                     </div>
@@ -3003,17 +3190,17 @@ export default function AdminDashboard() {
             <div className="space-y-4 pt-4 border-t relative">
               <div className="flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-sm z-10 py-2 -mx-2 px-2 rounded-lg mb-2">
                 <Label className="text-sm font-bold flex items-center gap-2">
-                  <Gamepad2 className="h-4 w-4 text-purple-600" />
+                  <Gamepad2 className="h-4 w-4 text-primary" />
                   Catalogue de prix
                 </Label>
-                <Button variant="ghost" size="sm" onClick={addCatalogItem} className="h-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-bold">
+                <Button variant="ghost" size="sm" onClick={addCatalogItem} className="h-8 text-primary hover:text-dark hover:bg-accent-light font-bold">
                   <Plus className="h-4 w-4 mr-1" /> Ajouter un pack
                 </Button>
               </div>
               
               <div className="space-y-3">
                 {gameFormData.catalog?.map((item, idx) => (
-                  <div key={item.id} className="p-4 rounded-xl border bg-gray-50 space-y-3 relative group transition-all hover:border-purple-200">
+                  <div key={item.id} className="p-4 rounded-xl border bg-gray-50 space-y-3 relative group transition-all hover:border-primary/20">
                     <div className="flex justify-between items-center bg-white px-3 py-1 rounded-full border text-[10px] font-bold text-gray-400 w-fit shadow-sm">
                       PACK {idx + 1}
                     </div>
@@ -3096,7 +3283,7 @@ export default function AdminDashboard() {
               <Button 
                 onClick={handleSaveGame} 
                 disabled={isSaving} 
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-9 rounded-xl shadow-lg shadow-blue-100 border-0 px-6 min-w-[100px]"
+                className="bg-primary hover:bg-[#D98A1E] text-white font-bold h-9 rounded-xl shadow-lg shadow-accent-light/50 border-0 px-6 min-w-[100px]"
               >
                 {isSaving ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : null}
                 Enregistrer
@@ -3133,7 +3320,7 @@ export default function AdminDashboard() {
         <DialogContent className="sm:max-w-[600px] h-[90vh] flex flex-col p-0 overflow-hidden">
           <DialogHeader className="p-6 pb-2">
             <DialogTitle className="text-2xl flex items-center gap-2">
-              <CreditCard className="h-6 w-6 text-blue-600" />
+              <CreditCard className="h-6 w-6 text-primary" />
               {editingCard ? 'Modifier la carte' : 'Ajouter une carte'}
             </DialogTitle>
             <DialogDescription>
@@ -3254,9 +3441,9 @@ export default function AdminDashboard() {
                         </label>
                       </Button>
                       {uploading && (
-                        <div className="mt-2 w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                        <div className="mt-2 w-full bg-accent-light/30 rounded-full h-1.5 overflow-hidden">
                           <div 
-                            className="bg-blue-600 h-full transition-all duration-300" 
+                            className="bg-primary h-full transition-all duration-300" 
                             style={{ width: `${uploadProgress}%` }}
                           />
                         </div>
@@ -3286,7 +3473,7 @@ export default function AdminDashboard() {
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" onClick={() => setIsCardDialogOpen(false)} className="h-10 px-6">Annuler</Button>
-              <Button onClick={handleSaveCard} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 h-10 px-8 text-white font-bold shadow-md shadow-blue-200 active:scale-95 transition-all">
+              <Button onClick={handleSaveCard} disabled={isSaving} className="bg-primary hover:bg-[#D98A1E] h-10 px-8 text-white font-bold shadow-md shadow-accent-light/50 active:scale-95 transition-all border-0">
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Enregistrer
               </Button>
@@ -3409,7 +3596,7 @@ export default function AdminDashboard() {
                       toast.success("Lien de preuve appliqué !");
                     }
                   }}
-                  className="bg-blue-600 w-full sm:w-auto"
+                  className="bg-primary hover:bg-[#D98A1E] w-full sm:w-auto border-0"
                 >
                   Ajouter
                 </Button>
@@ -3454,9 +3641,9 @@ export default function AdminDashboard() {
                     </Button>
                   </div>
                   {uploading && (
-                    <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                    <div className="w-full bg-accent-light/30 rounded-full h-1.5 overflow-hidden">
                       <div 
-                        className="bg-blue-600 h-full transition-all duration-300" 
+                        className="bg-primary h-full transition-all duration-300" 
                         style={{ width: `${uploadProgress}%` }}
                       />
                     </div>
@@ -3467,9 +3654,188 @@ export default function AdminDashboard() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Annuler</Button>
-            <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={handleSave} disabled={isSaving} className="bg-primary hover:bg-[#D98A1E] border-0">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Enregistrer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Editor Dialog */}
+      <Dialog open={isAdminDialogOpen} onOpenChange={setIsAdminDialogOpen}>
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col rounded-3xl p-0 overflow-hidden border-0 shadow-2xl">
+          <DialogHeader className="p-8 bg-primary text-white rounded-b-[2rem] shrink-0">
+            <DialogTitle className="text-2xl font-black flex items-center gap-3">
+              <Shield className="h-6 w-6" />
+              {editingAdmin ? 'Modifier Admin' : 'Créer un Admin'}
+            </DialogTitle>
+            <DialogDescription className="text-accent-light opacity-90">
+              Gérez les accès et les permissions de cet administrateur.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="p-8 space-y-6 overflow-y-auto flex-grow">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Nom Complet</Label>
+                <Input 
+                  value={adminFormData.fullName} 
+                  onChange={(e) => setAdminFormData({...adminFormData, fullName: e.target.value})}
+                  placeholder="Ex: John Doe"
+                  className="rounded-2xl h-11 bg-gray-50/50 border-gray-100"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Mot de Passe</Label>
+                <Input 
+                  value={adminFormData.password} 
+                  onChange={(e) => setAdminFormData({...adminFormData, password: e.target.value})}
+                  placeholder="Mot de passe"
+                  className="rounded-2xl h-11 bg-gray-50/50 border-gray-100"
+                  type="text" 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Lien de la Photo de Profil</Label>
+                <Input 
+                  value={adminFormData.photoUrl} 
+                  onChange={(e) => setAdminFormData({...adminFormData, photoUrl: e.target.value})}
+                  placeholder="Ex: https://images.com/profile.jpg"
+                  className="rounded-2xl h-11 bg-gray-50/50 border-gray-100"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Code de Connexion (Super Admin)</Label>
+                <Input 
+                  value={adminFormData.loginCode} 
+                  onChange={(e) => setAdminFormData({...adminFormData, loginCode: e.target.value})}
+                  placeholder="Ex: 123456"
+                  className="rounded-2xl h-11 bg-gray-50/50 border-gray-100 font-mono"
+                />
+                <p className="text-[10px] text-gray-400 px-1">Seulement requis si coché comme Super Admin.</p>
+              </div>
+              
+              <div className="flex items-center space-x-2 pt-2">
+                <Checkbox 
+                  id="is-super" 
+                  checked={adminFormData.isSuperAdmin} 
+                  onCheckedChange={(checked) => setAdminFormData({...adminFormData, isSuperAdmin: !!checked})}
+                />
+                <Label htmlFor="is-super" className="text-sm font-bold text-gray-700">Définir comme Super Administrateur</Label>
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-4 border-t">
+              <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Permissions</Label>
+              <div className="grid grid-cols-2 gap-3">
+                {menuItems.filter(m => m.permission !== 'super_admin_only').map(item => (
+                  <div key={item.permission} className="flex items-center space-x-2 p-2 rounded-xl border border-gray-50 hover:bg-gray-50 transition-colors">
+                    <Checkbox 
+                      id={`p-${item.permission}`}
+                      checked={adminFormData.permissions?.includes(item.permission) || adminFormData.permissions?.includes('all')}
+                      onCheckedChange={(checked) => {
+                        const current = adminFormData.permissions || [];
+                        if (checked) {
+                          setAdminFormData({...adminFormData, permissions: [...current, item.permission]});
+                        } else {
+                          setAdminFormData({...adminFormData, permissions: current.filter(p => p !== item.permission && p !== 'all')});
+                        }
+                      }}
+                    />
+                    <Label htmlFor={`p-${item.permission}`} className="text-xs font-medium cursor-pointer truncate">
+                      {item.label}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="p-8 border-t bg-gray-50/50 flex flex-col sm:flex-row gap-3 shrink-0">
+            {editingAdmin && !editingAdmin.isSuperAdmin && (
+              <Button 
+                variant="ghost" 
+                onClick={() => {
+                  setAdminToDelete(editingAdmin);
+                  setIsAdminDeleteDialogOpen(true);
+                  setIsAdminDialogOpen(false);
+                }}
+                className="text-red-500 hover:bg-red-50 h-12 rounded-2xl font-bold order-2 sm:order-1"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Supprimer
+              </Button>
+            )}
+            <div className="flex gap-2 ml-auto w-full sm:w-auto order-1 sm:order-2">
+              <Button variant="outline" onClick={() => setIsAdminDialogOpen(false)} className="flex-1 sm:flex-none h-12 rounded-2xl border-gray-100 font-bold bg-white">Annuler</Button>
+              <Button onClick={handleSaveAdminAccount} disabled={isSaving} className="flex-1 sm:flex-none h-12 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-bold px-8 shadow-xl shadow-accent-light/50 border-0">
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Enregistrer l'Admin
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Login Logs Dialog */}
+      <Dialog open={isLogsDialogOpen} onOpenChange={setIsLogsDialogOpen}>
+        <DialogContent className="sm:max-w-[600px] max-h-[80vh] flex flex-col p-0 rounded-3xl border-0 shadow-2xl overflow-hidden">
+          <DialogHeader className="p-8 bg-dark text-white">
+            <DialogTitle className="text-2xl font-black flex items-center gap-3 text-white">
+              <History className="h-6 w-6 text-primary" />
+              Logs de Connexion
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Historique des tentatives de connexion réussies et échouées.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto px-8 py-4">
+            <div className="space-y-2">
+              {logs.map((log) => (
+                <div key={log.id} className="flex items-center justify-between p-3 rounded-2xl border bg-white hover:border-gray-200 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-xl ${log.success ? 'bg-accent-light/50 text-primary' : 'bg-red-50 text-red-600'}`}>
+                      {log.success ? <Shield className="h-4 w-4" /> : < ShieldAlertIcon className="h-4 w-4" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-gray-900">{log.adminName}</p>
+                      <p className="text-[10px] text-gray-400">
+                        {log.timestamp ? format(log.timestamp instanceof Timestamp ? log.timestamp.toDate() : new Date(log.timestamp), 'dd MMMM yyyy HH:mm', { locale: fr }) : '-'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${log.success ? 'bg-accent-light text-primary border border-primary/20' : 'bg-red-100 text-red-700 border border-red-200'}`}>
+                    {log.success ? 'Réussi' : 'Échec'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter className="p-6 border-t bg-gray-50/50">
+            <Button variant="outline" onClick={() => setIsLogsDialogOpen(false)} className="w-full sm:w-auto h-11 rounded-2xl border-gray-100 font-bold px-8">Fermer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Delete Confirmation Dialog */}
+      <Dialog open={isAdminDeleteDialogOpen} onOpenChange={setIsAdminDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px] rounded-3xl p-8 border-0 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3 text-red-600 text-2xl font-black">
+              <ShieldAlertIcon className="h-6 w-6" />
+              Supprimer Admin
+            </DialogTitle>
+            <DialogDescription className="text-gray-500 pt-2">
+              Êtes-vous sûr de vouloir supprimer l'administrateur <span className="font-bold text-gray-900 leading-none">{adminToDelete?.fullName}</span> ? Cette action retirera tous ses accès immédiatement.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-3 mt-6 sm:justify-end">
+            <Button variant="ghost" onClick={() => setIsAdminDeleteDialogOpen(false)} className="rounded-2xl h-12 font-bold px-6">Annuler</Button>
+            <Button variant="destructive" onClick={handleConfirmDeleteAdmin} disabled={isDeleting} className="bg-red-600 hover:bg-red-700 rounded-2xl h-12 font-bold px-8 shadow-lg shadow-red-100">
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Supprimer l'accès
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3483,9 +3849,9 @@ export default function AdminDashboard() {
       >
         <Button 
           onClick={scrollToTop}
-          className="pointer-events-auto h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl flex items-center justify-center p-0"
+          className="pointer-events-auto h-14 w-14 rounded-3xl bg-primary hover:bg-[#D98A1E] text-white shadow-2xl flex items-center justify-center p-0 border-0 active:scale-90 transition-transform"
         >
-          <ArrowUp className="h-6 w-6" />
+          <ArrowUp className="h-7 w-7" />
         </Button>
       </motion.div>
     </div>

@@ -147,10 +147,10 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
     {
       title: "Suivi de colis",
       description: "Suivez l'état de vos colis Neopay en temps réel.",
-      icon: <Package className="h-8 w-8 text-blue-600" />,
+      icon: <Package className="h-8 w-8 text-primary" />,
       action: onTrackingClick,
       buttonText: "Suivre un colis",
-      color: "bg-blue-50 border-blue-100"
+      color: "bg-accent-light border-accent-light/50"
     },
     {
       title: "Recharge carte",
@@ -171,10 +171,10 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
     {
       title: "Shipping",
       description: "Service global d'envoi et de réception de colis.",
-      icon: <Truck className="h-8 w-8 text-amber-600" />,
+      icon: <Truck className="h-8 w-8 text-primary" />,
       action: () => onViewChange('shipping'),
       buttonText: "Accéder au service",
-      color: "bg-amber-50 border-amber-100"
+      color: "bg-accent-light border-accent-light/50"
     }
   ];
 
@@ -211,7 +211,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                   className="w-full"
                 >
                   <h1 className="text-4xl md:text-6xl font-black tracking-tight text-white drop-shadow-[0_8px_8px_rgba(0,0,0,0.6)] uppercase italic leading-[1]">
-                    <span className="bg-gradient-to-br from-blue-400 via-white to-red-400 bg-clip-text text-transparent">
+                    <span className="bg-gradient-to-br from-primary/60 via-white to-primary bg-clip-text text-transparent">
                       {imagesToDisplay[currentSlide]?.title || 'Neopay'}
                     </span>
                   </h1>
@@ -254,13 +254,13 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
         {/* Slider Navigation Dots */}
         <div className="absolute bottom-4 right-6 z-20 flex gap-2">
           {imagesToDisplay.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setCurrentSlide(i)}
-              className={`h-1.5 transition-all duration-300 rounded-full ${
-                currentSlide === i ? 'bg-blue-500 w-8' : 'bg-white/30 w-3 hover:bg-white/50'
-              }`}
-            />
+              <button
+                key={i}
+                onClick={() => setCurrentSlide(i)}
+                className={`h-1.5 transition-all duration-300 rounded-full ${
+                  currentSlide === i ? 'bg-primary w-8' : 'bg-white/30 w-3 hover:bg-white/50'
+                }`}
+              />
           ))}
         </div>
       </section>
@@ -273,18 +273,18 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
               <Button
                 key={btn.id}
                 variant="ghost"
-                className="flex-shrink-0 bg-white border border-gray-100 rounded-[16px] px-6 h-[54px] shadow-sm hover:bg-[#e8eeff] hover:-translate-y-0.5 transition-all group"
+                className="flex-shrink-0 bg-white border border-gray-100 rounded-[16px] px-6 h-[54px] shadow-sm hover:bg-accent-light/50 hover:-translate-y-0.5 transition-all group"
                 onClick={() => resolveRedirection(btn)}
               >
                 <div className="flex items-center gap-2">
                   <LucideIcon 
                     name={btn.iconName} 
-                    className="h-5 w-5 transition-colors group-hover:text-[#1a56ff]" 
-                    color={btn.color || '#1a56ff'} 
+                    className="h-5 w-5 transition-colors group-hover:text-primary" 
+                    color={btn.color || '#F5A623'} 
                   />
                   <span 
-                    className="font-heading font-bold text-sm md:text-base transition-colors group-hover:text-[#1a56ff]"
-                    style={{ color: btn.color || '#1a56ff' }}
+                    className="font-heading font-bold text-sm md:text-base transition-colors group-hover:text-primary"
+                    style={{ color: btn.color || '#F5A623' }}
                   >
                     {btn.label}
                   </span>
@@ -304,8 +304,8 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
       {/* Services Section */}
       <section ref={servicesRef} id="services" className="space-y-10">
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900">Nos Services</h2>
-          <div className="h-1 w-20 bg-blue-600 mx-auto mt-4 rounded-full" />
+          <h2 className="text-3xl font-bold text-dark">Nos Services</h2>
+          <div className="h-1 w-20 bg-primary mx-auto mt-4 rounded-full" />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {services.map((service, idx) => (
@@ -343,13 +343,13 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
       {/* Dynamic Products Section */}
       <section id="products" className="space-y-10">
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900">Nos Produits / Services</h2>
-          <div className="h-1 w-20 bg-blue-600 mx-auto mt-4 rounded-full" />
+          <h2 className="text-3xl font-bold text-dark">Nos Produits / Services</h2>
+          <div className="h-1 w-20 bg-primary mx-auto mt-4 rounded-full" />
         </div>
         
         {productsLoading ? (
           <div className="flex justify-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
           </div>
         ) : products.length > 0 ? (
           <div className="product-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -402,20 +402,20 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
       </section>
 
       {/* Payment Proof Section */}
-      <section id="payment" className="bg-blue-600 rounded-[2rem] p-8 md:p-12 text-white shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-blue-500 rounded-full opacity-50 blur-3xl" />
-        <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-blue-700 rounded-full opacity-50 blur-3xl" />
+      <section id="payment" className="bg-primary rounded-[2rem] p-8 md:p-12 text-white shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-[#D98A1E] rounded-full opacity-50 blur-3xl" />
+        <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-[#D98A1E] rounded-full opacity-50 blur-3xl" />
         
         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="space-y-4 text-center md:text-left">
             <h2 className="text-3xl font-bold">Paiement et preuve</h2>
-            <p className="text-blue-100 text-lg max-w-xl">
+            <p className="text-accent-light text-lg max-w-xl">
               Après avoir effectué votre paiement, veuillez envoyer une capture d'écran via WhatsApp pour validation.
             </p>
           </div>
           <Button 
             onClick={() => openWhatsApp("Bonjour, j'ai effectué mon paiement pour un service Neopay. Voici la preuve.")}
-            className="bg-white text-blue-600 hover:bg-blue-50 px-8 h-14 text-lg font-bold rounded-2xl shadow-lg flex items-center gap-3 active:scale-95 transition-all"
+            className="bg-white text-primary hover:bg-accent-light px-8 h-14 text-lg font-bold rounded-2xl shadow-lg flex items-center gap-3 active:scale-95 transition-all"
           >
             <CheckCircle2 className="h-6 w-6" />
             J'ai effectué mon paiement
@@ -574,7 +574,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
       >
         <Button 
           onClick={scrollToTop}
-          className="pointer-events-auto h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl flex items-center justify-center p-0"
+          className="pointer-events-auto h-12 w-12 rounded-full bg-primary hover:bg-[#D98A1E] text-white shadow-xl flex items-center justify-center p-0"
         >
           <ArrowUp className="h-6 w-6" />
         </Button>

@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import { db, storage, auth } from '../lib/firebase';
+import { handleFirestoreError } from '../lib/firebase-errors';
 import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Game, ShippingConfig, CardTopup, NavButton } from '../types';
 
 // Navigation Buttons Services
@@ -35,6 +36,11 @@ export const useNavButtons = () => {
     }, (error) => {
       console.error("Error fetching nav buttons:", error);
       setLoading(false);
+      try {
+        handleFirestoreError(error, 'list', 'nav_buttons', auth);
+      } catch (e) {
+        // Log handled
+      }
     });
 
     return () => unsubscribe();
@@ -44,25 +50,33 @@ export const useNavButtons = () => {
 };
 
 export const saveNavButton = async (buttonData: Partial<NavButton>, id?: string) => {
-  const { id: _, createdAt: __, ...dataToSave } = buttonData;
-  if (id) {
-    const buttonRef = doc(db, 'nav_buttons', id);
-    await updateDoc(buttonRef, {
-      ...dataToSave,
-      updatedAt: serverTimestamp(),
-    });
-  } else {
-    await addDoc(collection(db, 'nav_buttons'), {
-      ...dataToSave,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+  try {
+    const { id: _, createdAt: __, ...dataToSave } = buttonData;
+    if (id) {
+      const buttonRef = doc(db, 'nav_buttons', id);
+      await updateDoc(buttonRef, {
+        ...dataToSave,
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await addDoc(collection(db, 'nav_buttons'), {
+        ...dataToSave,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  } catch (error) {
+    handleFirestoreError(error, id ? 'update' : 'create', 'nav_buttons', auth);
   }
 };
 
 export const deleteNavButton = async (id: string) => {
-  const buttonRef = doc(db, 'nav_buttons', id);
-  await deleteDoc(buttonRef);
+  try {
+    const buttonRef = doc(db, 'nav_buttons', id);
+    await deleteDoc(buttonRef);
+  } catch (error) {
+    handleFirestoreError(error, 'delete', 'nav_buttons', auth);
+  }
 };
 
 // Card Topup Services
@@ -82,6 +96,7 @@ export const useCardTopups = () => {
     }, (error) => {
       console.error("Error fetching card topups:", error);
       setLoading(false);
+      try { handleFirestoreError(error, 'list', 'card_topups', auth); } catch (e) {}
     });
 
     return () => unsubscribe();
@@ -91,24 +106,32 @@ export const useCardTopups = () => {
 };
 
 export const saveCardTopup = async (cardData: Partial<CardTopup>, id?: string) => {
-  if (id) {
-    const cardRef = doc(db, 'card_topups', id);
-    await updateDoc(cardRef, {
-      ...cardData,
-      updatedAt: serverTimestamp()
-    });
-  } else {
-    await addDoc(collection(db, 'card_topups'), {
-      ...cardData,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
+  try {
+    if (id) {
+      const cardRef = doc(db, 'card_topups', id);
+      await updateDoc(cardRef, {
+        ...cardData,
+        updatedAt: serverTimestamp()
+      });
+    } else {
+      await addDoc(collection(db, 'card_topups'), {
+        ...cardData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    }
+  } catch (error) {
+    handleFirestoreError(error, id ? 'update' : 'create', 'card_topups', auth);
   }
 };
 
 export const deleteCardTopup = async (id: string) => {
-  const cardRef = doc(db, 'card_topups', id);
-  await deleteDoc(cardRef);
+  try {
+    const cardRef = doc(db, 'card_topups', id);
+    await deleteDoc(cardRef);
+  } catch (error) {
+    handleFirestoreError(error, 'delete', 'card_topups', auth);
+  }
 };
 
 // Helper for resumable uploads with progress
@@ -156,6 +179,7 @@ export const useParcels = () => {
     }, (error) => {
       console.error("Error fetching parcels:", error);
       setLoading(false);
+      try { handleFirestoreError(error, 'list', 'parcels', auth); } catch (e) {}
     });
 
     return () => unsubscribe();
@@ -173,24 +197,32 @@ export const searchParcel = async (trackingNumber: string): Promise<Parcel | nul
 };
 
 export const saveParcel = async (parcelData: Partial<Parcel>, id?: string) => {
-  if (id) {
-    const parcelRef = doc(db, 'parcels', id);
-    await updateDoc(parcelRef, {
-      ...parcelData,
-      updatedAt: serverTimestamp()
-    });
-  } else {
-    await addDoc(collection(db, 'parcels'), {
-      ...parcelData,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
+  try {
+    if (id) {
+      const parcelRef = doc(db, 'parcels', id);
+      await updateDoc(parcelRef, {
+        ...parcelData,
+        updatedAt: serverTimestamp()
+      });
+    } else {
+      await addDoc(collection(db, 'parcels'), {
+        ...parcelData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    }
+  } catch (error) {
+    handleFirestoreError(error, id ? 'update' : 'create', 'parcels', auth);
   }
 };
 
 export const deleteParcel = async (id: string) => {
-  const parcelRef = doc(db, 'parcels', id);
-  await deleteDoc(parcelRef);
+  try {
+    const parcelRef = doc(db, 'parcels', id);
+    await deleteDoc(parcelRef);
+  } catch (error) {
+    handleFirestoreError(error, 'delete', 'parcels', auth);
+  }
 };
 
 export const uploadProof = async (
@@ -224,6 +256,7 @@ export const useProducts = () => {
     }, (error) => {
       console.error("Error fetching products:", error);
       setLoading(false);
+      try { handleFirestoreError(error, 'list', 'products', auth); } catch (e) {}
     });
 
     return () => unsubscribe();
@@ -233,22 +266,30 @@ export const useProducts = () => {
 };
 
 export const saveProduct = async (productData: Partial<Product>, id?: string) => {
-  if (id) {
-    const productRef = doc(db, 'products', id);
-    await updateDoc(productRef, {
-      ...productData,
-    });
-  } else {
-    await addDoc(collection(db, 'products'), {
-      ...productData,
-      createdAt: serverTimestamp(),
-    });
+  try {
+    if (id) {
+      const productRef = doc(db, 'products', id);
+      await updateDoc(productRef, {
+        ...productData,
+      });
+    } else {
+      await addDoc(collection(db, 'products'), {
+        ...productData,
+        createdAt: serverTimestamp(),
+      });
+    }
+  } catch (error) {
+    handleFirestoreError(error, id ? 'update' : 'create', 'products', auth);
   }
 };
 
 export const deleteProduct = async (id: string) => {
-  const productRef = doc(db, 'products', id);
-  await deleteDoc(productRef);
+  try {
+    const productRef = doc(db, 'products', id);
+    await deleteDoc(productRef);
+  } catch (error) {
+    handleFirestoreError(error, 'delete', 'products', auth);
+  }
 };
 
 // Game Services
@@ -268,6 +309,7 @@ export const useGames = () => {
     }, (error) => {
       console.error("Error fetching games:", error);
       setLoading(false);
+      try { handleFirestoreError(error, 'list', 'games', auth); } catch (e) {}
     });
 
     return () => unsubscribe();
@@ -277,25 +319,33 @@ export const useGames = () => {
 };
 
 export const saveGame = async (gameData: Partial<Game>, id?: string) => {
-  const { id: _, createdAt: __, updatedAt: ___, ...dataToSave } = gameData;
-  if (id) {
-    const gameRef = doc(db, 'games', id);
-    await updateDoc(gameRef, {
-      ...dataToSave,
-      updatedAt: serverTimestamp(),
-    });
-  } else {
-    await addDoc(collection(db, 'games'), {
-      ...dataToSave,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+  try {
+    const { id: _, createdAt: __, updatedAt: ___, ...dataToSave } = gameData;
+    if (id) {
+      const gameRef = doc(db, 'games', id);
+      await updateDoc(gameRef, {
+        ...dataToSave,
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await addDoc(collection(db, 'games'), {
+        ...dataToSave,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  } catch (error) {
+    handleFirestoreError(error, id ? 'update' : 'create', 'games', auth);
   }
 };
 
 export const deleteGame = async (id: string) => {
-  const gameRef = doc(db, 'games', id);
-  await deleteDoc(gameRef);
+  try {
+    const gameRef = doc(db, 'games', id);
+    await deleteDoc(gameRef);
+  } catch (error) {
+    handleFirestoreError(error, 'delete', 'games', auth);
+  }
 };
 
 // Settings Services
@@ -310,6 +360,9 @@ export const useSettings = () => {
         setSettings(docSnap.data() as AppSettings);
       }
       setLoading(false);
+    }, (error) => {
+      setLoading(false);
+      try { handleFirestoreError(error, 'get', 'settings/global', auth); } catch (e) {}
     });
 
     return () => unsubscribe();
@@ -319,8 +372,12 @@ export const useSettings = () => {
 };
 
 export const updateSettings = async (settingsData: AppSettings) => {
-  const docRef = doc(db, 'settings', 'global');
-  await setDoc(docRef, settingsData, { merge: true });
+  try {
+    const docRef = doc(db, 'settings', 'global');
+    await setDoc(docRef, settingsData, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, 'update', 'settings/global', auth);
+  }
 };
 
 export const uploadLogo = async (
@@ -353,6 +410,7 @@ export const useSliderImages = () => {
     }, (error) => {
       console.error("Error fetching slider images:", error);
       setLoading(false);
+      try { handleFirestoreError(error, 'list', 'slider_images', auth); } catch (e) {}
     });
 
     return () => unsubscribe();
@@ -362,25 +420,37 @@ export const useSliderImages = () => {
 };
 
 export const saveSliderImage = async (url: string, title?: string, description?: string) => {
-  await addDoc(collection(db, 'slider_images'), {
-    url,
-    title: title || '',
-    description: description || '',
-    createdAt: serverTimestamp()
-  });
+  try {
+    await addDoc(collection(db, 'slider_images'), {
+      url,
+      title: title || '',
+      description: description || '',
+      createdAt: serverTimestamp()
+    });
+  } catch (error) {
+    handleFirestoreError(error, 'create', 'slider_images', auth);
+  }
 };
 
 export const updateSliderImage = async (id: string, updates: { url?: string, title?: string, description?: string }) => {
-  const imageRef = doc(db, 'slider_images', id);
-  await updateDoc(imageRef, {
-    ...updates,
-    updatedAt: serverTimestamp()
-  });
+  try {
+    const imageRef = doc(db, 'slider_images', id);
+    await updateDoc(imageRef, {
+      ...updates,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    handleFirestoreError(error, 'update', 'slider_images', auth);
+  }
 };
 
 export const deleteSliderImage = async (id: string) => {
-  const imageRef = doc(db, 'slider_images', id);
-  await deleteDoc(imageRef);
+  try {
+    const imageRef = doc(db, 'slider_images', id);
+    await deleteDoc(imageRef);
+  } catch (error) {
+    handleFirestoreError(error, 'delete', 'slider_images', auth);
+  }
 };
 
 // Shipping Services
@@ -400,6 +470,7 @@ export const useShippingConfigs = () => {
     }, (error) => {
       console.error("Error fetching shipping configs:", error);
       setLoading(false);
+      try { handleFirestoreError(error, 'list', 'shipping_configs', auth); } catch (e) {}
     });
 
     return () => unsubscribe();
@@ -409,24 +480,32 @@ export const useShippingConfigs = () => {
 };
 
 export const saveShippingConfig = async (configData: Partial<ShippingConfig>) => {
-  const { id: _id, type, ...dataWithoutId } = configData as any;
-  
-  if (!type) {
-    throw new Error("L'option de type est requise pour la configuration.");
+  try {
+    const { id: _id, type, ...dataWithoutId } = configData as any;
+    
+    if (!type) {
+      throw new Error("L'option de type est requise pour la configuration.");
+    }
+
+    const payload = {
+      ...dataWithoutId,
+      type,
+      updatedAt: serverTimestamp()
+    };
+
+    // On utilise le 'type' comme ID du document pour garantir l'unicité
+    const configRef = doc(db, 'shipping_configs', type);
+    await setDoc(configRef, payload, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, 'update', 'shipping_configs', auth);
   }
-
-  const payload = {
-    ...dataWithoutId,
-    type,
-    updatedAt: serverTimestamp()
-  };
-
-  // On utilise le 'type' comme ID du document pour garantir l'unicité
-  const configRef = doc(db, 'shipping_configs', type);
-  await setDoc(configRef, payload, { merge: true });
 };
 
 export const deleteShippingConfig = async (id: string) => {
-  const configRef = doc(db, 'shipping_configs', id);
-  await deleteDoc(configRef);
+  try {
+    const configRef = doc(db, 'shipping_configs', id);
+    await deleteDoc(configRef);
+  } catch (error) {
+    handleFirestoreError(error, 'delete', 'shipping_configs', auth);
+  }
 };

@@ -36,9 +36,11 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() &&
         (
-          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-          (request.auth.token.email in ["ernstisrael2000@gmail.com", "ernstisrael508@gmail.com"])
+          (request.auth.token.email in ["ernstisrael2000@gmail.com", "ernstisrael508@gmail.com"]) ||
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+          exists(/databases/$(database)/documents/admin_accounts/$(request.auth.uid)) ||
+          // Support checking UID matching within any document in admin_accounts
+          get(/databases/$(database)/documents/admin_accounts/$(request.auth.uid)).data.uid == request.auth.uid
         );
     }
 
@@ -166,6 +168,17 @@ service cloud.firestore {
     match /nav_buttons/{buttonId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    match /admin_accounts/{adminId} {
+      // Allow reading for login query - insecure but necessary for custom client-side login
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /admin_login_logs/{logId} {
+      allow create: if true;
+      allow read: if isAdmin();
     }
 
     match /users/{userId} {

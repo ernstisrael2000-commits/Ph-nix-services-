@@ -279,6 +279,40 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["label", "targetUrl", "iconName", "order"]
+    },
+    "admin_account": {
+      "title": "Admin Account",
+      "description": "Represents an administrator with custom login credentials and permissions.",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "uid": { "type": "string", "description": "Firebase Auth UID for security rules." },
+        "password": { "type": "string" },
+        "photoUrl": { "type": "string", "description": "URL of the admin's profile picture." },
+        "loginCode": { "type": "string" },
+        "isSuperAdmin": { "type": "boolean" },
+        "permissions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "failedAttempts": { "type": "number" },
+        "lockUntil": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fullName", "password", "permissions"]
+    },
+    "admin_login_log": {
+      "title": "Admin Login Log",
+      "description": "Represents a login attempt to the admin panel.",
+      "type": "object",
+      "properties": {
+        "adminName": { "type": "string" },
+        "success": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "userAgent": { "type": "string" }
+      },
+      "required": ["adminName", "success", "timestamp"]
     }
   },
   "firestore": {
@@ -333,6 +367,14 @@
     "/nav_buttons/{buttonId}": {
       "schema": "nav_button",
       "description": "Collection of quick navigation buttons."
+    },
+    "/admin_accounts/{adminId}": {
+      "schema": "admin_account",
+      "description": "Collection of custom admin accounts."
+    },
+    "/admin_login_logs/{logId}": {
+      "schema": "admin_login_log",
+      "description": "Collection of admin login attempt logs."
     }
   }
 }

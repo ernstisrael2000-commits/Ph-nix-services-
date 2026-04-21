@@ -42,9 +42,9 @@ export default function TrackingView() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Livré': return 'bg-green-100 text-green-700 border-green-200';
-      case 'Arrivé': return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'Arrivé': return 'bg-accent-light text-primary border-accent-light/50';
       case 'En transit': return 'bg-amber-100 text-amber-700 border-amber-200';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
+      default: return 'bg-muted text-subtext border-muted-foreground/20';
     }
   };
 
@@ -81,7 +81,7 @@ export default function TrackingView() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.2 }}
-              className="text-base sm:text-xl text-blue-50 font-medium drop-shadow-md"
+              className="text-base sm:text-xl text-accent-light font-medium drop-shadow-md"
             >
               Entrez votre numéro de suivi Neopay pour voir l'état actuel de votre livraison.
             </motion.p>
@@ -91,18 +91,18 @@ export default function TrackingView() {
             <CardContent className="pt-8 pb-8 px-6 sm:px-10">
               <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-gray-400" />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-subtext" />
                   <Input
                     placeholder="Enter your tracking number"
                     value={trackingNumber}
                     onChange={(e) => setTrackingNumber(e.target.value)}
-                    className="pl-12 h-14 text-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500 rounded-2xl bg-white shadow-xl transition-all focus:shadow-2xl"
+                    className="pl-12 h-14 text-lg border-muted focus:ring-primary focus:border-primary rounded-2xl bg-white shadow-xl transition-all focus:shadow-2xl"
                   />
                 </div>
                 <Button 
                   type="submit" 
                   disabled={loading}
-                  className="h-14 px-10 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg rounded-2xl transition-all hover:shadow-xl hover:shadow-blue-500/20 active:scale-95 shadow-lg shadow-blue-500/30 border-0"
+                  className="h-14 px-10 bg-primary hover:bg-[#D98A1E] text-white font-bold text-lg rounded-2xl transition-all hover:shadow-xl hover:shadow-primary/20 active:scale-95 shadow-lg shadow-primary/30 border-0"
                 >
                   {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : 'Rechercher'}
                 </Button>
@@ -133,11 +133,11 @@ export default function TrackingView() {
               className="space-y-6"
             >
               <Card className="overflow-hidden border-0 shadow-xl rounded-2xl bg-white">
-                <CardHeader className="bg-gray-50/80 border-b px-6 py-6">
+                <CardHeader className="bg-muted/30 border-b px-6 py-6">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div>
-                      <CardTitle className="text-2xl font-bold text-gray-900">Détails de l'expédition</CardTitle>
-                      <CardDescription className="font-mono text-blue-600 font-bold mt-1 text-lg">#{parcel.trackingNumber}</CardDescription>
+                      <CardTitle className="text-2xl font-bold text-dark">Détails de l'expédition</CardTitle>
+                      <CardDescription className="font-mono text-primary font-bold mt-1 text-lg">#{parcel.trackingNumber}</CardDescription>
                     </div>
                     <Badge className={`px-4 py-1.5 text-sm font-bold rounded-full border shadow-sm ${getStatusColor(parcel.status)}`}>
                       {parcel.status}
@@ -148,12 +148,12 @@ export default function TrackingView() {
                   <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x border-b">
                     <div className="p-8 space-y-8">
                       <div className="flex items-start gap-5">
-                        <div className="bg-blue-100 p-3 rounded-2xl shadow-sm">
-                          <MapPin className="h-6 w-6 text-blue-600" />
+                        <div className="bg-accent-light p-3 rounded-2xl shadow-sm">
+                          <MapPin className="h-6 w-6 text-primary" />
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Localisation actuelle</p>
-                          <p className="text-xl font-bold text-gray-900">{parcel.currentLocation}</p>
+                          <p className="text-xs font-bold text-subtext uppercase tracking-widest mb-1">Localisation actuelle</p>
+                          <p className="text-xl font-bold text-dark">{parcel.currentLocation}</p>
                         </div>
                       </div>
 
@@ -162,8 +162,8 @@ export default function TrackingView() {
                           <Calendar className="h-6 w-6 text-purple-600" />
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Date estimée d'arrivée</p>
-                          <p className="text-xl font-bold text-gray-900">
+                          <p className="text-xs font-bold text-subtext uppercase tracking-widest mb-1">Date estimée d'arrivée</p>
+                          <p className="text-xl font-bold text-dark">
                             {parcel.estimatedArrival ? format(new Date(parcel.estimatedArrival), 'PPP', { locale: fr }) : 'Non spécifiée'}
                           </p>
                         </div>
@@ -174,7 +174,7 @@ export default function TrackingView() {
                           <CreditCard className="h-6 w-6 text-emerald-600" />
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Statut du paiement</p>
+                          <p className="text-xs font-bold text-subtext uppercase tracking-widest mb-1">Statut du paiement</p>
                           <Badge variant={parcel.paymentStatus === 'Payé' ? 'default' : 'destructive'} className="mt-1 font-bold px-3 py-1">
                             {parcel.paymentStatus}
                           </Badge>
@@ -182,8 +182,8 @@ export default function TrackingView() {
                       </div>
                     </div>
 
-                    <div className="p-8 bg-gray-50/40">
-                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                    <div className="p-8 bg-muted/20">
+                      <p className="text-xs font-bold text-subtext uppercase tracking-widest mb-6 flex items-center gap-2">
                         <ImageIcon className="h-4 w-4" />
                         Preuve de livraison
                       </p>
@@ -195,17 +195,17 @@ export default function TrackingView() {
                             className="max-w-full max-h-full object-contain transition-transform duration-500 group-hover:scale-110"
                             referrerPolicy="no-referrer"
                           />
-                          <div className="absolute inset-0 bg-blue-600/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                          <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                             <Button variant="secondary" className="font-bold shadow-lg" onClick={() => window.open(parcel.proofOfDelivery, '_blank')}>
                               Agrandir l'image
                             </Button>
                           </div>
                         </div>
                       ) : (
-                        <div className="aspect-video rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 bg-white shadow-inner">
+                        <div className="aspect-video rounded-2xl border-2 border-dashed border-muted flex flex-col items-center justify-center text-subtext/40 bg-white shadow-inner">
                           {parcel.status === 'Livré' ? (
                             <>
-                              <Loader2 className="h-10 w-10 mb-3 animate-spin text-blue-400 opacity-50" />
+                              <Loader2 className="h-10 w-10 mb-3 animate-spin text-primary/40 opacity-50" />
                               <p className="text-sm font-medium">Image en cours de traitement...</p>
                             </>
                           ) : (

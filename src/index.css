@@ -5,6 +5,10 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-heading: "DM Sans", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-subtext: #6b7280;
+  --color-primary: #F5A623;
+  --color-dark: #1a1f3c;
+  --color-accent-light: #FFF3CD;
 }
 
 @utility custom-scrollbar {
@@ -15,11 +19,11 @@
     background: transparent;
   }
   &::-webkit-scrollbar-thumb {
-    background: #e2e8f0;
+    background: #FFF3CD;
     border-radius: 10px;
   }
   &::-webkit-scrollbar-thumb:hover {
-    background: #cbd5e1;
+    background: #F5A623;
   }
 }
 
@@ -73,72 +77,72 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
+    --background: #ffffff;
+    --foreground: #1a1f3c;
+    --card: #ffffff;
+    --card-foreground: #1a1f3c;
+    --popover: #ffffff;
+    --popover-foreground: #1a1f3c;
+    --primary: #F5A623;
+    --primary-foreground: #ffffff;
+    --secondary: #FFF3CD;
+    --secondary-foreground: #F5A623;
+    --muted: #f3f4f6;
+    --muted-foreground: #6b7280;
+    --accent: #FFF3CD;
+    --accent-foreground: #F5A623;
+    --destructive: #ef4444;
+    --border: #e5e7eb;
+    --input: #e5e7eb;
+    --ring: #F5A623;
+    --chart-1: #F5A623;
+    --chart-2: #1a1f3c;
+    --chart-3: #6b7280;
+    --chart-4: #FFF3CD;
+    --chart-5: #e5e7eb;
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --sidebar: #ffffff;
+    --sidebar-foreground: #1a1f3c;
+    --sidebar-primary: #F5A623;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #FFF3CD;
+    --sidebar-accent-foreground: #1a1f3c;
+    --sidebar-border: #e5e7eb;
+    --sidebar-ring: #F5A623;
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --background: #1a1f3c;
+    --foreground: #ffffff;
+    --card: #1e2448;
+    --card-foreground: #ffffff;
+    --popover: #1e2448;
+    --popover-foreground: #ffffff;
+    --primary: #F5A623;
+    --primary-foreground: #ffffff;
+    --secondary: #2d345a;
+    --secondary-foreground: #ffffff;
+    --muted: #2d345a;
+    --muted-foreground: #6b7280;
+    --accent: #2d345a;
+    --accent-foreground: #ffffff;
+    --destructive: #ef4444;
+    --border: #e5e7eb1a;
+    --input: #e5e7eb26;
+    --ring: #F5A623;
+    --chart-1: #F5A623;
+    --chart-2: #6b7280;
+    --chart-3: #ffffff;
+    --chart-4: #FFF3CD;
+    --chart-5: #2d345a;
+    --sidebar: #1a1f3c;
+    --sidebar-foreground: #ffffff;
+    --sidebar-primary: #F5A623;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #2d345a;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #e5e7eb1a;
+    --sidebar-ring: #F5A623;
 }
 
 @layer base {
@@ -149,10 +153,10 @@
     @apply bg-background text-foreground leading-relaxed antialiased;
     }
   p {
-    @apply text-gray-600;
+    @apply text-subtext;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply tracking-tight text-gray-900;
+    @apply tracking-tight text-foreground;
   }
   .card, [class*="Card"] {
     @apply shadow-sm border-gray-100 transition-all duration-300;
@@ -244,7 +248,7 @@
   .product-name {
     font-weight: bold !important;
     font-size: 13px !important;
-    color: #111111 !important;
+    color: #1a1f3c !important;
     margin: 0 !important;
     display: -webkit-box !important;
     -webkit-line-clamp: 2 !important;
@@ -256,7 +260,7 @@
   /* SOUS-TITRE */
   .product-subtitle {
     font-size: 11px !important;
-    color: #888888 !important;
+    color: #6b7280 !important;
     margin-top: 2px !important;
     white-space: nowrap !important;
     overflow: hidden !important;
@@ -274,14 +278,14 @@
   }
 
   .product-price {
-    color: #1565C0 !important;
+    color: #F5A623 !important;
     font-size: 13px !important;
     font-weight: 600 !important;
   }
 
   /* BOUTON ACHETER */
   .product-buy-button {
-    background-color: #1565C0 !important;
+    background-color: #F5A623 !important;
     color: white !important;
     font-size: 12px !important;
     border-radius: 8px !important;
@@ -294,7 +298,7 @@
   }
 
   .product-buy-button:hover {
-    background-color: #0d47a1 !important;
+    background-color: #D98A1E !important;
   }
 }
 
@@ -330,10 +334,10 @@
   .product-name {
     font-weight: 700;
     font-size: 1.125rem;
-    color: #111111;
+    color: #1a1f3c;
   }
   .product-price {
-    color: #1565C0;
+    color: #F5A623;
     font-weight: 700;
     font-size: 1.25rem;
   }

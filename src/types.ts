@@ -145,3 +145,27 @@ export interface NavButton {
   createdAt: any;
   updatedAt?: any;
 }
+
+export interface AdminAccount {
+  id?: string;
+  uid?: string;
+  fullName: string;
+  password: string;
+  photoUrl?: string;
+  loginCode?: string; // Only for super admin
+  isSuperAdmin: boolean;
+  permissions: string[];
+  failedAttempts: number;
+  lockUntil?: any;
+  createdAt: any;
+  updatedAt: any;
+}
+
+export interface AdminLog {
+  id?: string;
+  adminName: string;
+  success: boolean;
+  timestamp: any;
+  ip?: string;
+  userAgent?: string;
+}
