@@ -67,7 +67,8 @@ service cloud.firestore {
 
     function isValidProduct(data) {
       return data.keys().hasAll(['name', 'image', 'description']) && 
-             data.name is string && data.name.size() > 0;
+             data.name is string && data.name.size() > 0 &&
+             (!('stock' in data) || data.stock is number);
     }
 
     function isValidGame(data) {
@@ -79,7 +80,8 @@ service cloud.firestore {
     function isValidCard(data) {
       return data.keys().hasAll(['name', 'image', 'description', 'price']) &&
              data.name is string && data.name.size() > 0 &&
-             data.price is string && data.price.size() > 0;
+             data.price is string && data.price.size() > 0 &&
+             (!('stock' in data) || data.stock is number);
     }
 
     function isValidWithdrawal(data) {
@@ -187,6 +189,12 @@ service cloud.firestore {
       
       // Only admins can manage users (or the system bootstraps the first admin)
       allow write: if isAdmin();
+    }
+
+    match /sales/{saleId} {
+      allow read: if isAdmin();
+      allow create: if true; // Sales can be recorded via batch/client
+      allow delete: if isAdmin();
     }
   }
 }

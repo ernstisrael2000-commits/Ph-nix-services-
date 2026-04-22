@@ -613,6 +613,17 @@ export const recordPurchase = async (affiliateId: string, type: 'purchase' | 'su
       monthlySales: increment(1),
       updatedAt: serverTimestamp()
     });
+
+    // 1b. Record in Sales collection for analytics
+    const saleRef = doc(collection(db, 'sales'));
+    batch.set(saleRef, {
+      affiliateId,
+      affiliateName: affiliateData.name,
+      itemType: type === 'purchase' ? 'product' : type === 'subscription' ? 'game' : 'card',
+      itemName: type === 'subscription' ? 'Abonnement' : type === 'virtual_card' ? 'Carte Virtuelle' : 'Produit Rapide',
+      price: type === 'purchase' ? 0 : type === 'subscription' ? 100 : 500, // Approximate for logging if real price not passed
+      createdAt: serverTimestamp()
+    });
     
     // 2. Update Parent Affiliate (Indirect Revenue)
     if (affiliateData.parentAffiliateId) {

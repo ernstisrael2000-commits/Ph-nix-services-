@@ -28,7 +28,11 @@ import {
   DollarSign,
   ArrowUp,
   CreditCard,
-  HelpCircle
+  HelpCircle,
+  Zap,
+  Star,
+  TrendingUp,
+  LayoutDashboard
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Button } from './ui/button';
@@ -52,8 +56,27 @@ import { Checkbox } from './ui/checkbox';
 import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage, useNavButtons, saveNavButton, deleteNavButton } from '../services/parcelService';
 import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus, resetMonthlyStats, awardMonthlyPrizes, clearMonthlyWinners, useMonthlyRankings, recordPurchase } from '../services/affiliateService';
 import { useAdminAccounts, useAdminLogs, saveAdminAccount, deleteAdminAccount } from '../services/adminService';
+import { useAnalytics } from '../services/analyticsService';
 import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton, AdminAccount } from '../types';
 import AdminShippingManager from './AdminShippingManager';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  AreaChart, 
+  Area, 
+  PieChart, 
+  Pie, 
+  Cell,
+  LineChart,
+  Line
+} from 'recharts';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
@@ -113,6 +136,312 @@ const LucideIcon = ({ name, className, color }: { name: string, className?: stri
   return <Icon className={className} style={{ color }} />;
 };
 
+const generatePDFReport = (stats: any) => {
+  const doc = new jsPDF() as any;
+  const now = new Date();
+  const dateStr = format(now, 'dd/MM/yyyy HH:mm');
+  const primaryColor: [number, number, number] = [245, 166, 35]; // #F5A623
+  const navyColor: [number, number, number] = [26, 31, 60]; // #1a1f3c
+  const greyColor: [number, number, number] = [107, 114, 128]; // #6b7280
+
+  // 1. Header with styling
+  doc.setFillColor(...navyColor);
+  doc.rect(0, 0, 210, 40, 'F');
+  
+  doc.setFontSize(24);
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.text('NEOPAY', 14, 20);
+  
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'normal');
+  doc.text('RAPPORT D\'INTELLIGENCE ET PERFORMANCE', 14, 30);
+  
+  doc.setFontSize(10);
+  doc.text(`Période : ${format(now, 'MMMM yyyy', { locale: fr }).toUpperCase()}`, 160, 20);
+  doc.text(`Généré le : ${dateStr}`, 160, 30);
+
+  // 2. Financial Highlights Section
+  doc.setTextColor(...navyColor);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('1. PERFORMANCE FINANCIÈRE', 14, 55);
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(...primaryColor);
+  doc.line(14, 58, 60, 58);
+
+  autoTable(doc, {
+    startY: 65,
+    head: [['Indicateur', 'Montant (HTG)', 'Description']],
+    body: [
+      ['Revenu Brut (Estimé)', `${(stats?.totalRevenue || 0).toLocaleString()} HTG`, 'Total des ventes enregistrées'],
+      ['Profit Net (Estimé)', `${(stats?.totalProfit || 0).toLocaleString()} HTG`, 'Marge nette estimée (40%)'],
+      ['Budget Admins (Provision)', `${(stats?.adminBudget || 0).toLocaleString()} HTG`, 'Total alloué aux salaires administrateurs'],
+      ['Retraits Affiliés', `${(stats?.totalWithdrawals || 0).toLocaleString()} HTG`, 'Commissions payées/en attente']
+    ],
+    theme: 'grid',
+    headStyles: { fillColor: navyColor, textColor: [255, 255, 255], fontStyle: 'bold' },
+    styles: { fontSize: 10, cellPadding: 5 },
+    columnStyles: { 
+      1: { fontStyle: 'bold', halign: 'right', textColor: primaryColor }
+    }
+  });
+
+  // 3. Operations & Statistics Section
+  const financialY = (doc as any).lastAutoTable.finalY || 100;
+  doc.setFontSize(18);
+  doc.setTextColor(...navyColor);
+  doc.text('2. OPÉRATIONS ET STATISTIQUES', 14, financialY + 15);
+  doc.line(14, financialY + 18, 60, financialY + 18);
+
+  autoTable(doc, {
+    startY: financialY + 25,
+    head: [['Catégorie', 'Volume / Quantité']],
+    body: [
+      ['Total des Colis gérés', stats?.totalParcels || 0],
+      ['Total des Affiliés actifs', stats?.totalAffiliates || 0],
+      ['Colis livrés avec succès', stats?.totalParcels - (stats?.stuckParcels?.length || 0)],
+      ['Produits en rupture/stock faible', stats?.lowStockItems?.length || 0]
+    ],
+    theme: 'striped',
+    headStyles: { fillColor: primaryColor, textColor: [255, 255, 255] },
+    styles: { fontSize: 10 }
+  });
+
+  // 4. Detailed analysis Section
+  const operationsY = (doc as any).lastAutoTable.finalY || 180;
+  
+  // Create two columns for Top Products and Market Analysis
+  doc.setFontSize(16);
+  doc.text('3. ANALYSE DÉTAILLÉE', 14, operationsY + 15);
+  
+  autoTable(doc, {
+    startY: operationsY + 20,
+    head: [['Produits les plus vendus', 'Volume']],
+    body: (stats?.topProducts || []).map((p: any) => [p.name || 'Inconnu', p.value || 0]),
+    margin: { right: 107 },
+    headStyles: { fillColor: [40, 40, 40] }
+  });
+
+  autoTable(doc, {
+    startY: operationsY + 20,
+    head: [['Alertes Critiques', 'Gravité']],
+    body: [
+      ...(stats?.stuckParcels || []).slice(0, 3).map((p: any) => [`Colis bloqué : ${p.trackingNumber}`, 'ÉLEVÉ']),
+      ...(stats?.lowStockItems || []).slice(0, 3).map((i: any) => [`Stock faible : ${i.name}`, 'MOYEN']),
+      ...(stats?.suspiciousWithdrawals || []).slice(0, 3).map((w: any) => [`Retrait suspect : ${w.affiliateName}`, 'CRITIQUE'])
+    ].slice(0, 5),
+    margin: { left: 107 },
+    headStyles: { fillColor: [239, 68, 68] },
+    columnStyles: { 1: { fontStyle: 'bold', halign: 'center' } }
+  });
+
+  // 5. Footer
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(...greyColor);
+    doc.text('Neopay - Report Generated Automatically - Highly Confidential', 14, 285);
+    doc.text(`Page ${i} of ${totalPages}`, 190, 285);
+  }
+
+  doc.save(`RAPPORT_NEOPAY_INTELLIGENCE_${format(now, 'yyyy_MM_dd')}.pdf`);
+  toast.success("Rapport professionnel généré avec succès !");
+};
+
+const AnalyticsDashboard = ({ stats, loading }: { stats: any, loading: boolean }) => {
+  if (loading || !stats) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="text-gray-500 font-medium">Analyse des données en cours...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8 pb-10">
+      {/* Header with Export */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-primary/10 shadow-sm">
+        <div>
+          <h2 className="text-2xl font-black text-dark">Intelligence & Analytics</h2>
+          <p className="text-gray-500 text-sm">Vue d'ensemble de la performance et alertes intelligentes.</p>
+        </div>
+        <Button 
+          onClick={() => generatePDFReport(stats)}
+          className="bg-primary hover:bg-[#D98A1E] text-white shadow-lg shadow-accent-light/50 border-0 rounded-xl"
+        >
+          <Upload className="h-4 w-4 mr-2" />
+          Générer Rapport PDF
+        </Button>
+      </div>
+
+      {/* Summary Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[
+          { label: 'Revenu Global', value: `${(stats.totalRevenue || 0).toLocaleString()} G`, icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: 'Profit Net Estimé', value: `${(stats.totalProfit || 0).toLocaleString()} G`, icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' },
+          { label: 'Budget Admins (Paye)', value: `${(stats.adminBudget || 0).toLocaleString()} G`, icon: Wallet, color: 'text-purple-600', bg: 'bg-purple-50' },
+          { label: 'Colis Totaux', value: stats.totalParcels, icon: Package, color: 'text-primary', bg: 'bg-accent-light/50' },
+          { label: 'Retraits Affiliés', value: stats.totalWithdrawals, icon: History, color: 'text-orange-600', bg: 'bg-orange-50' },
+          { label: 'Affiliés Actifs', value: stats.totalAffiliates, icon: Users, color: 'text-dark', bg: 'bg-gray-50' }
+        ].map((item, i) => (
+          <Card key={i} className="border-0 shadow-sm bg-white overflow-hidden group">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{item.label}</p>
+                  <p className="text-2xl font-black text-dark">{item.value}</p>
+                </div>
+                <div className={`${item.bg} ${item.color} p-3 rounded-2xl group-hover:scale-110 transition-transform`}>
+                  <item.icon className="h-6 w-6" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Revenue Area Chart */}
+        <Card className="border-0 shadow-md bg-white p-6 rounded-2xl">
+          <CardHeader className="px-0 pt-0 pb-6">
+            <CardTitle className="text-lg font-bold flex items-center gap-2">
+              <Zap className="h-5 w-5 text-primary" />
+              Revenus Journaliers (7 derniers jours)
+            </CardTitle>
+          </CardHeader>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={stats.dailyRevenue}>
+                <defs>
+                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F5A623" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#F5A623" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  cursor={{ stroke: '#F5A623', strokeWidth: 2 }}
+                />
+                <Area type="monotone" dataKey="value" stroke="#F5A623" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        {/* Peak Hours Peak Hours */}
+        <Card className="border-0 shadow-md bg-white p-6 rounded-2xl">
+          <CardHeader className="px-0 pt-0 pb-6">
+            <CardTitle className="text-lg font-bold flex items-center gap-2">
+              <Clock className="h-5 w-5 text-dark" />
+              Heures de Pointe (Commandes)
+            </CardTitle>
+          </CardHeader>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={stats.peakHours}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9ca3af' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                />
+                <Bar dataKey="value" fill="#1a1f3c" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        {/* Top Products Pie Chart */}
+        <Card className="border-0 shadow-md bg-white p-6 rounded-2xl">
+          <CardHeader className="px-0 pt-0 pb-6">
+            <CardTitle className="text-lg font-bold flex items-center gap-2">
+              <Star className="h-5 w-5 text-primary" />
+              Produits les plus vendus
+            </CardTitle>
+          </CardHeader>
+          <div className="h-[300px] w-full flex items-center jutify-center">
+            {stats.topProducts.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={stats.topProducts}
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {[0, 1, 2, 3, 4].map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#F5A623' : '#1a1f3c'} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+                <div className="text-center w-full text-gray-400">Aucune vente enregistrée.</div>
+            )}
+          </div>
+        </Card>
+
+        {/* Alerts & Critical Notifications */}
+        <Card className="border-0 shadow-md bg-white p-6 rounded-2xl overflow-hidden">
+          <CardHeader className="px-0 pt-0 pb-6 border-b mb-6">
+            <CardTitle className="text-lg font-bold flex items-center gap-2 text-red-600">
+              <AlertCircle className="h-5 w-5" />
+              Alertes & Anomalies
+            </CardTitle>
+          </CardHeader>
+          <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+            {stats.stuckParcels.length === 0 && stats.suspiciousWithdrawals.length === 0 && stats.lowStockItems.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-10 opacity-50">
+                <CheckCircle2 className="h-10 w-10 text-emerald-500 mb-2" />
+                <p className="text-sm font-medium text-gray-500">Tout est sous contrôle !</p>
+              </div>
+            )}
+            
+            {stats.stuckParcels.map((parcel: any) => (
+              <div key={parcel.id} className="flex items-start gap-4 p-4 rounded-xl bg-red-50 border border-red-100 animate-pulse">
+                <Clock className="h-5 w-5 text-red-600 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-bold text-red-900 leading-none mb-1">Colis bloqué detecté</p>
+                  <p className="text-xs text-red-700">Le colis <span className="font-bold">#{parcel.trackingNumber}</span> n'a pas bougé depuis plus de 5 jours.</p>
+                </div>
+              </div>
+            ))}
+
+            {stats.suspiciousWithdrawals.map((w: any) => (
+              <div key={w.id} className="flex items-start gap-4 p-4 rounded-xl bg-orange-50 border border-orange-100">
+                <ShieldAlertIcon className="h-5 w-5 text-orange-600 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-bold text-orange-900 leading-none mb-1">Activité de retrait suspecte</p>
+                  <p className="text-xs text-orange-700">L'affilié <span className="font-bold">{w.affiliateName}</span> a fait plus de 3 demandes de retrait aujourd'hui.</p>
+                </div>
+              </div>
+            ))}
+
+            {stats.lowStockItems.map((item: any, i: number) => (
+              <div key={i} className="flex items-start gap-4 p-4 rounded-xl bg-blue-50 border border-blue-100">
+                <Package className="h-5 w-5 text-blue-600 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-bold text-blue-900 leading-none mb-1">Alerte Stock Faible !</p>
+                  <p className="text-xs text-blue-700">Rupture proche pour <span className="font-bold">{item.name}</span>. Il ne reste que {item.stock} unités.</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
 interface AdminDashboardProps {
   admin: AdminAccount;
   onLogout: () => void;
@@ -132,6 +461,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+  const { stats, loading: analyticsLoading } = useAnalytics();
   const { parcels, loading: parcelsLoading } = useParcels();
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
@@ -207,6 +537,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     image: '',
     description: '',
     price: '',
+    stock: 0,
     whatsappMessage: ''
   });
   const [tempCardImageUrl, setTempCardImageUrl] = useState('');
@@ -277,6 +608,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   };
 
   const menuItems = [
+    { value: 'analytics', label: 'Intelligence', icon: TrendingUp, permission: 'analytics' },
     { value: 'parcels', label: 'Colis', icon: Package, permission: 'parcels' },
     { value: 'products', label: 'Produits / Services', icon: LayoutGrid, permission: 'products' },
     { value: 'games', label: 'Top-up Jeux', icon: Gamepad2, permission: 'games' },
@@ -357,6 +689,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     image: '',
     description: '',
     price: '',
+    stock: 0,
     whatsappMessage: ''
   });
 
@@ -475,6 +808,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
         image: '',
         description: '',
         price: '',
+        stock: 0,
         whatsappMessage: ''
       });
     }
@@ -506,6 +840,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
         image: '',
         description: '',
         price: '',
+        stock: 0,
         whatsappMessage: ''
       });
     }
@@ -1109,6 +1444,10 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
             ))}
           </TabsList>
         </div>
+
+        <TabsContent value="analytics" className="space-y-6">
+          <AnalyticsDashboard stats={stats} loading={analyticsLoading} />
+        </TabsContent>
 
         <TabsContent value="parcels" className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -2963,6 +3302,16 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label className="sm:text-right text-sm">Stock</Label>
+                <Input 
+                  type="number"
+                  value={productFormData.stock || 0} 
+                  onChange={(e) => setProductFormData({...productFormData, stock: Number(e.target.value)})}
+                  className="sm:col-span-3" 
+                  placeholder="Quantité en stock"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
                 <Label className="sm:text-right text-sm">Image (Lien)</Label>
                 <div className="sm:col-span-3 flex flex-col sm:flex-row gap-2">
                   <Input 
@@ -3367,6 +3716,17 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                   value={cardFormData.whatsappMessage} 
                   onChange={(e) => setCardFormData({...cardFormData, whatsappMessage: e.target.value})}
                   placeholder="Message automatique quand l'utilisateur clique..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="card-stock">Stock disponible</Label>
+                <Input 
+                  id="card-stock" 
+                  type="number"
+                  value={cardFormData.stock || 0} 
+                  onChange={(e) => setCardFormData({...cardFormData, stock: Number(e.target.value)})}
+                  placeholder="Quantité en stock"
                 />
               </div>
 

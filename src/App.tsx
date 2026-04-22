@@ -174,7 +174,7 @@ export default function App() {
             <div className="flex justify-center gap-6 mt-6 text-sm text-subtext/60">
               <a href="#" className="hover:text-subtext transition-colors">Confidentialité</a>
               <a href="#" className="hover:text-subtext transition-colors">Conditions d'utilisation</a>
-              <a href="#" className="hover:text-subtext transition-colors">Support</a>
+              <a href="mailto:neopayservices509@gmail.com" className="hover:text-subtext transition-colors">Support</a>
             </div>
           </div>
         </footer>

@@ -25,6 +25,7 @@ export interface Product {
   image: string;
   description: string;
   price: string;
+  stock?: number;
   whatsappMessage?: string;
   createdAt: any;
 }
@@ -35,6 +36,7 @@ export interface CardTopup {
   image: string;
   description: string;
   price: string;
+  stock?: number;
   whatsappMessage?: string;
   createdAt: any;
   updatedAt?: any;
@@ -168,4 +170,15 @@ export interface AdminLog {
   timestamp: any;
   ip?: string;
   userAgent?: string;
+}
+
+export interface Sale {
+  id?: string;
+  itemId: string;
+  itemName: string;
+  itemType: 'product' | 'game' | 'card';
+  price: number;
+  affiliateId?: string;
+  affiliateName?: string;
+  createdAt: any;
 }

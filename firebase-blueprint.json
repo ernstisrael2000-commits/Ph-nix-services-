@@ -70,6 +70,7 @@
         "image": { "type": "string" },
         "description": { "type": "string" },
         "price": { "type": "string" },
+        "stock": { "type": "number", "description": "Current stock quantity for the item." },
         "whatsappMessage": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
@@ -202,6 +203,7 @@
         "image": { "type": "string" },
         "description": { "type": "string" },
         "price": { "type": "string" },
+        "stock": { "type": "number", "description": "Current stock level for the card." },
         "whatsappMessage": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
@@ -313,6 +315,20 @@
         "userAgent": { "type": "string" }
       },
       "required": ["adminName", "success", "timestamp"]
+    },
+    "sale": {
+      "title": "Sale",
+      "description": "Represents a recorded sale for analytics.",
+      "type": "object",
+      "properties": {
+        "affiliateId": { "type": "string" },
+        "affiliateName": { "type": "string" },
+        "itemType": { "type": "string", "enum": ["product", "game", "card"] },
+        "itemName": { "type": "string" },
+        "price": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["itemName", "itemType", "price", "createdAt"]
     }
   },
   "firestore": {
@@ -375,6 +391,10 @@
     "/admin_login_logs/{logId}": {
       "schema": "admin_login_log",
       "description": "Collection of admin login attempt logs."
+    },
+    "/sales/{saleId}": {
+      "schema": "sale",
+      "description": "Collection of recorded sales for analytics."
     }
   }
 }

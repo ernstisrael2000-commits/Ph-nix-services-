@@ -78,7 +78,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
     if (imagesToDisplay.length <= 1) return;
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % imagesToDisplay.length);
-    }, 8000); // 8 seconds total per slide: 4s solo image + 4s with text fade/visibility
+    }, 6000); 
     return () => clearInterval(timer);
   }, [imagesToDisplay.length]);
 
@@ -181,7 +181,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
   return (
     <div className="max-w-7xl mx-auto px-4 pt-8 pb-12 space-y-8">
       {/* Premium Hero Slider Section */}
-      <section className="relative h-[300px] md:h-[400px] w-full rounded-[20px] overflow-hidden bg-black shadow-2xl group border border-white/10">
+      <section className="relative h-[220px] md:h-[300px] w-full rounded-[40px] overflow-hidden bg-black shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] group border border-white/10">
         {/* Slider Track */}
         <div className="absolute inset-0 w-full h-full">
           <AnimatePresence mode="wait">
@@ -190,11 +190,11 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.8 }}
+              transition={{ duration: 0.5 }}
               className="absolute inset-0 w-full h-full will-change-transform"
             >
                 <div 
-                  className="absolute inset-0 bg-cover bg-center transition-transform duration-[8000ms] ease-linear scale-100 group-hover:scale-105"
+                  className="absolute inset-0 bg-cover bg-center transition-transform duration-[6000ms] ease-linear scale-100 group-hover:scale-105"
                   style={{ backgroundImage: `url(${imagesToDisplay[currentSlide]?.url || ''})` }}
                 />
               {/* Overlay Gradients - Enhanced for top/bottom text readability */}
@@ -202,15 +202,15 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
               <div className="absolute inset-0 bg-black/10" />
 
               {/* Content Overlay - Distributed Layout */}
-              <div className="relative z-10 h-full flex flex-col justify-between items-center py-12 md:py-20 px-6 text-center w-full max-w-7xl mx-auto">
+              <div className="relative z-10 h-full flex flex-col justify-between items-center py-8 md:py-10 px-6 text-center w-full max-w-7xl mx-auto">
                 {/* Top Section: Stylish Centered Title */}
                 <motion.div
-                  initial={{ opacity: 0, y: -40, filter: "blur(10px)" }}
+                  initial={{ opacity: 0, y: -20, filter: "blur(5px)" }}
                   animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                  transition={{ duration: 1.5, ease: "easeOut", delay: 2 }}
+                  transition={{ duration: 0.6, ease: "easeOut", delay: 0.2 }}
                   className="w-full"
                 >
-                  <h1 className="text-4xl md:text-6xl font-black tracking-tight text-white drop-shadow-[0_8px_8px_rgba(0,0,0,0.6)] uppercase italic leading-[1]">
+                  <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white drop-shadow-[0_8px_8px_rgba(0,0,0,0.6)] uppercase italic leading-[1]">
                     <span className="bg-gradient-to-br from-primary/60 via-white to-primary bg-clip-text text-transparent">
                       {imagesToDisplay[currentSlide]?.title || 'Neopay'}
                     </span>
@@ -220,12 +220,12 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                 {/* Bottom Section: Description & Action */}
                 <div className="w-full flex flex-col items-center space-y-6 md:space-y-8">
                   <motion.div
-                    initial={{ opacity: 0, y: 30 }}
+                    initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 1.5, ease: "easeOut", delay: 2.2 }}
+                    transition={{ duration: 0.6, ease: "easeOut", delay: 0.3 }}
                     className="max-w-2xl"
                   >
-                    <h2 className="text-base md:text-2xl font-medium text-white/95 leading-tight drop-shadow-md">
+                    <h2 className="text-sm md:text-xl font-medium text-white/95 leading-tight drop-shadow-md">
                       {imagesToDisplay[currentSlide]?.description || 'Services Digitaux & Recharges'}
                     </h2>
                   </motion.div>
@@ -233,13 +233,13 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                   <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 1.5, delay: 2.4 }}
+                    transition={{ duration: 0.6, delay: 0.4 }}
                     className="pb-4"
                   >
                     <Button 
                       size="lg"
                       onClick={scrollToServices}
-                      className="bg-white text-black hover:bg-white/90 hover:scale-105 active:scale-95 transition-all rounded-full h-12 md:h-14 px-8 md:px-10 text-sm md:text-base font-bold shadow-2xl group"
+                      className="bg-white text-black hover:bg-white/90 hover:scale-105 active:scale-95 transition-all rounded-full h-10 md:h-12 px-6 md:px-8 text-xs md:text-sm font-bold shadow-2xl group"
                     >
                       Explorer nos services
                       <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
