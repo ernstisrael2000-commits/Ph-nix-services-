@@ -19,6 +19,7 @@ export interface DashboardStats {
   totalParcels: number;
   totalWithdrawals: number;
   totalAffiliates: number;
+  totalAffiliateBalances: number;
   dailyRevenue: { name: string; value: number }[];
   monthlyRevenue: { name: string; value: number }[];
   topProducts: { name: string; value: number }[];
@@ -138,7 +139,10 @@ export const useAnalytics = () => {
                   w.status === 'pending'
                 );
 
-                // 6. Low Stock items
+                // 6. Total Affiliate Balances (Total à payer)
+                const totalAffiliateBalances = affiliates.reduce((sum, a) => sum + (a.balance || 0), 0);
+
+                // 7. Low Stock items
                 const lowStockItems = [
                   ...products.filter(p => p.stock !== undefined && p.stock <= 5).map(p => ({ name: p.name, stock: p.stock, type: 'Produit' })),
                   ...cards.filter(c => c.stock !== undefined && c.stock <= 5).map(c => ({ name: c.name, stock: c.stock, type: 'Carte' }))
@@ -151,6 +155,7 @@ export const useAnalytics = () => {
                   totalParcels: parcels.length,
                   totalWithdrawals: withdrawals.length,
                   totalAffiliates: affiliates.length,
+                  totalAffiliateBalances,
                   dailyRevenue,
                   monthlyRevenue,
                   topProducts,

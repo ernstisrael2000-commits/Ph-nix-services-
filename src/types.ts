@@ -61,6 +61,7 @@ export interface Affiliate {
   directRevenue: number;
   indirectRevenue: number;
   totalEarnings: number;
+  info?: any; // Stores registration data
   createdAt: any;
   updatedAt: any;
 }
@@ -92,6 +93,9 @@ export interface AffiliateNotification {
 export interface AppSettings {
   logoUrl?: string;
   whatsappAdminNumber?: string;
+  lockAffiliateEdits?: boolean;
+  lockAffiliateEditsCode?: string;
+  withdrawalsEnabled?: boolean;
   officialWinners?: {
     id: string;
     name: string;

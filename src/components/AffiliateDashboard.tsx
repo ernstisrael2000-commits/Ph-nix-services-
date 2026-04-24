@@ -4,6 +4,7 @@ import {
   useTopAffiliates, 
   submitWithdrawal, 
   useAffiliateWithdrawals,
+  deleteWithdrawalHistory,
   useMonthlyRankings,
   useAllAffiliates,
   getAffiliateLevelInfo,
@@ -78,6 +79,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [isClearHistoryConfirmOpen, setIsClearHistoryConfirmOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -159,6 +161,19 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       
     } catch (error: any) {
       toast.error(error.message || "Erreur lors de la demande.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClearWithdrawalHistory = async () => {
+    setIsSubmitting(true);
+    try {
+      await deleteWithdrawalHistory(affiliateId);
+      toast.success("Historique des retraits supprimé !");
+      setIsClearHistoryConfirmOpen(false);
+    } catch (error) {
+      toast.error("Erreur lors de la suppression de l'historique.");
     } finally {
       setIsSubmitting(false);
     }
@@ -318,10 +333,10 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
               <DialogTrigger render={
                 <Button 
                   className="w-full mt-4 bg-white text-blue-600 hover:bg-blue-50 font-bold rounded-xl shadow-sm"
-                  disabled={affiliate.balance < 20}
+                  disabled={affiliate.balance < 20 || settings?.withdrawalsEnabled === false}
                 >
                   <ArrowUpRight className="h-4 w-4 mr-2" />
-                  Retirer mes gains
+                  {settings?.withdrawalsEnabled === false ? "Retraits désactivés" : "Retirer mes gains"}
                 </Button>
               } />
               <DialogContent className="rounded-2xl">
@@ -536,13 +551,43 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
         {/* Withdrawal History */}
         <Card className="border-0 shadow-xl bg-white">
-          <CardHeader className="bg-gray-50/50 border-b">
+      <CardHeader className="bg-gray-50/50 border-b">
+        <div className="flex justify-between items-center">
+          <div>
             <CardTitle className="flex items-center gap-2 text-lg">
               <History className="h-5 w-5 text-blue-600" />
               Historique des Retraits
             </CardTitle>
             <CardDescription>Vos transactions récentes.</CardDescription>
-          </CardHeader>
+          </div>
+          {withdrawals.length > 0 && (
+            <Dialog open={isClearHistoryConfirmOpen} onOpenChange={setIsClearHistoryConfirmOpen}>
+              <DialogTrigger render={
+                <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50 hover:text-red-600 h-8 rounded-lg text-[10px] font-black uppercase">
+                  Effacer l'historique
+                </Button>
+              } />
+              <DialogContent className="max-w-sm rounded-[1.5rem]">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5 text-red-500" />
+                    Confirmation
+                  </DialogTitle>
+                  <DialogDescription>
+                    Êtes-vous sûr de vouloir supprimer TOUT votre historique de retrait ? Cette action est irréversible.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter className="gap-2 sm:gap-0 mt-4">
+                  <Button variant="outline" onClick={() => setIsClearHistoryConfirmOpen(false)} className="rounded-xl">Annuler</Button>
+                  <Button variant="destructive" onClick={handleClearWithdrawalHistory} disabled={isSubmitting} className="rounded-xl bg-red-600">
+                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Oui, supprimer"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
+      </CardHeader>
           <CardContent className="p-0">
             {withdrawalsLoading ? (
               <div className="flex justify-center py-12">

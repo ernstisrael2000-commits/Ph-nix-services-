@@ -155,6 +155,27 @@ export const useAffiliateWithdrawals = (affiliateId: string | null) => {
   return { withdrawals, loading };
 };
 
+export const deleteWithdrawalHistory = async (affiliateId: string) => {
+  try {
+    const q = query(
+      collection(db, 'withdrawals'),
+      where('affiliateId', '==', affiliateId)
+    );
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) return;
+
+    const batch = writeBatch(db);
+    snapshot.docs.forEach((docSnap) => {
+      batch.delete(doc(db, 'withdrawals', docSnap.id));
+    });
+    
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, 'delete', 'withdrawals', auth);
+  }
+};
+
 // Admin Services
 export const useAllAffiliates = () => {
   const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
@@ -327,10 +348,53 @@ export const useAllAffiliateRequests = () => {
 export const updateAffiliateRequestStatus = async (requestId: string, status: 'approved' | 'rejected') => {
   try {
     const requestRef = doc(db, 'affiliate_requests', requestId);
+    const requestSnap = await getDoc(requestRef);
+    
+    if (!requestSnap.exists()) return;
+    const requestData = requestSnap.data() as AffiliateRequest;
+
     await updateDoc(requestRef, {
       status,
       updatedAt: serverTimestamp()
     });
+
+    if (status === 'approved') {
+      // Check if affiliate already exists (by email or username)
+      const q = query(collection(db, 'affiliates'), where('username', '==', requestData.name.toLowerCase().replace(/\s/g, '')));
+      const snap = await getDocs(q);
+      
+      if (snap.empty) {
+        // Create new affiliate account with data from request
+        const username = requestData.name.toLowerCase().replace(/\s/g, '') + Math.floor(1000 + Math.random() * 9000);
+        const password = Math.random().toString(36).slice(-8); // Random temporary password
+        const code = 'AFF' + Math.floor(100000 + Math.random() * 900000);
+
+        await addDoc(collection(db, 'affiliates'), {
+          name: requestData.name,
+          username,
+          password,
+          code,
+          balance: 0,
+          referredClients: 0,
+          monthlyReferredClients: 0,
+          monthlySales: 0,
+          points: 0,
+          level: 'Bronze',
+          directRevenue: 0,
+          indirectRevenue: 0,
+          totalEarnings: 0,
+          info: {
+            phone: requestData.phone,
+            email: requestData.email,
+            message: requestData.message || '',
+            requestId: requestId,
+            approvedAt: new Date().toISOString()
+          },
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      }
+    }
   } catch (error) {
     handleFirestoreError(error, 'update', 'affiliate_requests', auth);
   }
@@ -579,7 +643,11 @@ export const resetMonthlyStats = async () => {
   }
 };
 
-export const recordPurchase = async (affiliateId: string, type: 'purchase' | 'subscription' | 'virtual_card') => {
+export const recordPurchase = async (
+  affiliateId: string, 
+  type: 'purchase' | 'subscription' | 'virtual_card',
+  itemName?: string
+) => {
   try {
     const affiliateRef = doc(db, 'affiliates', affiliateId);
     const affiliateSnap = await getDoc(affiliateRef);
@@ -590,17 +658,32 @@ export const recordPurchase = async (affiliateId: string, type: 'purchase' | 'su
     
     // Commission rates
     let directCommission = 2.5; // Default for general purchase
+    let indirectCommission = 0.5; 
     let pointsEarned = 1;
     
+    const isSpecialSub = itemName && (
+      itemName.toLowerCase().includes('netflix') || 
+      itemName.toLowerCase().includes('prime') || 
+      itemName.toLowerCase().includes('paramount') || 
+      itemName.toLowerCase().includes('disney') || 
+      itemName.toLowerCase().includes('hbo') || 
+      itemName.toLowerCase().includes('iptv')
+    );
+
     if (type === 'subscription') {
-      directCommission = 100;
-      pointsEarned = 10;
+      if (isSpecialSub) {
+        directCommission = 75;
+        indirectCommission = 25;
+        pointsEarned = 7;
+      } else {
+        directCommission = 100;
+        pointsEarned = 10;
+        indirectCommission = 0.5;
+      }
     } else if (type === 'virtual_card') {
       directCommission = 500;
       pointsEarned = 50;
     }
-    
-    const indirectCommission = 0.5;
     
     const batch = writeBatch(db);
     

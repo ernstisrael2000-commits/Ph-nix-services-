@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
+  Smartphone,
   Plus, 
   Search, 
   Edit2, 
@@ -79,7 +80,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
 import { LogOut, Shield, ShieldAlert as ShieldAlertIcon, History } from 'lucide-react';
@@ -281,8 +282,8 @@ const AnalyticsDashboard = ({ stats, loading }: { stats: any, loading: boolean }
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {[
           { label: 'Revenu Global', value: `${(stats.totalRevenue || 0).toLocaleString()} G`, icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: 'Total à Payer', value: `${(stats.totalAffiliateBalances || 0).toLocaleString()} G`, icon: Wallet, color: 'text-red-600', bg: 'bg-red-50' },
           { label: 'Profit Net Estimé', value: `${(stats.totalProfit || 0).toLocaleString()} G`, icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'Budget Admins (Paye)', value: `${(stats.adminBudget || 0).toLocaleString()} G`, icon: Wallet, color: 'text-purple-600', bg: 'bg-purple-50' },
           { label: 'Colis Totaux', value: stats.totalParcels, icon: Package, color: 'text-primary', bg: 'bg-accent-light/50' },
           { label: 'Retraits Affiliés', value: stats.totalWithdrawals, icon: History, color: 'text-orange-600', bg: 'bg-orange-50' },
           { label: 'Affiliés Actifs', value: stats.totalAffiliates, icon: Users, color: 'text-dark', bg: 'bg-gray-50' }
@@ -435,6 +436,14 @@ const AnalyticsDashboard = ({ stats, loading }: { stats: any, loading: boolean }
                 </div>
               </div>
             ))}
+
+            <div className="flex items-start gap-4 p-4 rounded-xl bg-indigo-50 border border-indigo-100 shadow-inner">
+              <Wallet className="h-5 w-5 text-indigo-600 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-bold text-indigo-900 leading-none mb-1">Total à Payer (Dettes Affiliés)</p>
+                <p className="text-xs text-indigo-700">La somme totale due aux affiliés est de <span className="font-bold">{(stats.totalAffiliateBalances || 0).toLocaleString()} G</span>.</p>
+              </div>
+            </div>
           </div>
         </Card>
       </div>
@@ -545,6 +554,21 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const [isAwarding, setIsAwarding] = useState(false);
   const [isClearingWinners, setIsClearingWinners] = useState(false);
 
+  const [isWithdrawalRejectionDialogOpen, setIsWithdrawalRejectionDialogOpen] = useState(false);
+  const [withdrawalToReject, setWithdrawalToReject] = useState<WithdrawalRequest | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+
+  const [affiliateViewMode, setAffiliateViewMode] = useState<'table' | 'grid'>('grid');
+
+  // New states for the latest requests
+  const [isQuickCreditDialogOpen, setIsQuickCreditDialogOpen] = useState(false);
+  const [quickCreditAmount, setQuickCreditAmount] = useState<number>(0);
+  const [selectedAffiliateForCredit, setSelectedAffiliateForCredit] = useState<Affiliate | null>(null);
+  const [isLockingEdits, setIsLockingEdits] = useState(false);
+  const [lockCodeInput, setLockCodeInput] = useState('');
+  const [isUnlockDialogOpen, setIsUnlockDialogOpen] = useState(false);
+  const [isWithdrawalToggleConfirmOpen, setIsWithdrawalToggleConfirmOpen] = useState(false);
+
   // Helper to ensure the admin creation dialog is always usable
   const handleOpenAdminDialog = (adminAccount?: AdminAccount) => {
     if (adminAccount) {
@@ -634,15 +658,17 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const [isRecordSaleDialogOpen, setIsRecordSaleDialogOpen] = useState(false);
   const [selectedAffiliateForSale, setSelectedAffiliateForSale] = useState<Affiliate | null>(null);
   const [saleType, setSaleType] = useState<'purchase' | 'subscription' | 'virtual_card'>('purchase');
+  const [saleItemName, setSaleItemName] = useState('');
   const [isRecordingSale, setIsRecordingSale] = useState(false);
 
   const handleRecordSale = async () => {
     if (!selectedAffiliateForSale?.id) return;
     setIsRecordingSale(true);
     try {
-      await recordPurchase(selectedAffiliateForSale.id, saleType);
+      await recordPurchase(selectedAffiliateForSale.id, saleType, saleItemName);
       toast.success("Vente enregistrée avec succès !");
       setIsRecordSaleDialogOpen(false);
+      setSaleItemName('');
     } catch (error) {
       toast.error("Erreur lors de l'enregistrement de la vente.");
     } finally {
@@ -1295,26 +1321,99 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   };
 
   const handleWithdrawalAction = async (request: WithdrawalRequest, status: 'approved' | 'rejected') => {
-    let reason = '';
     if (status === 'rejected') {
-      reason = window.prompt("Raison du rejet :") || '';
-      if (!reason) return;
+      setWithdrawalToReject(request);
+      setRejectionReason('');
+      setIsWithdrawalRejectionDialogOpen(true);
+      return;
     }
 
     try {
-      await updateWithdrawalStatus(request.id!, status, reason);
-      toast.success(`Demande ${status === 'approved' ? 'approuvée' : 'rejetée'} !`);
+      await updateWithdrawalStatus(request.id!, status);
+      toast.success(`Demande approuvée !`);
       
-      if (status === 'approved') {
-        const message = `Bonjour ${request.affiliateName},\n\nVotre demande de retrait de ${request.amount} Goud a été validée avec succès. Vous recevrez le paiement sur votre compte ${request.method} dans les plus brefs délais.\n\nMerci pour votre patience et votre engagement avec Neopay Affilié.\n\nCordialement,\nL'équipe Neopay`;
-        
-        toast.success("Demande approuvée ! Message de confirmation prêt.");
-        console.log("Message pour l'affilié:", message);
-      }
+      const message = `Bonjour ${request.affiliateName},\n\nVotre demande de retrait de ${request.amount} Goud a été validée avec succès. Vous recevrez le paiement sur votre compte ${request.method} dans les plus brefs délais.\n\nMerci pour votre patience et votre engagement avec Neopay Affilié.\n\nCordialement,\nL'équipe Neopay`;
+      
+      toast.success("Message de confirmation prêt.");
+      console.log("Message pour l'affilié:", message);
       
     } catch (error) {
       console.error(error);
       toast.error("Erreur lors de la mise à jour du statut.");
+    }
+  };
+
+  const handleConfirmRejectionBase = async () => {
+    if (!withdrawalToReject?.id || !rejectionReason.trim()) return;
+    setIsSaving(true);
+    try {
+      await updateWithdrawalStatus(withdrawalToReject.id, 'rejected', rejectionReason);
+      toast.success("Demande rejetée.");
+      setIsWithdrawalRejectionDialogOpen(false);
+      setWithdrawalToReject(null);
+      setRejectionReason('');
+    } catch (error) {
+      console.error(error);
+      toast.error("Erreur lors du rejet.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleToggleWithdrawals = async () => {
+    if (!settings) return;
+    try {
+      await updateSettings({ withdrawalsEnabled: !settings.withdrawalsEnabled });
+      toast.success(settings.withdrawalsEnabled ? "Demandes de retrait désactivées." : "Demandes de retrait réactivées.");
+      setIsWithdrawalToggleConfirmOpen(false);
+    } catch (error) {
+      toast.error("Erreur lors de la mise à jour des paramètres.");
+    }
+  };
+
+  const handleToggleLockEdits = async () => {
+    if (!settings) return;
+    
+    // If we are currently LOCKED, we need a code to UNLOCK
+    if (settings.lockAffiliateEdits) {
+      if (lockCodeInput !== (settings.lockAffiliateEditsCode || '0000')) {
+        toast.error("Code de déverrouillage incorrect.");
+        return;
+      }
+    }
+
+    try {
+      await updateSettings({ lockAffiliateEdits: !settings.lockAffiliateEdits });
+      toast.success(settings.lockAffiliateEdits ? "Modifications déverrouillées." : "Modifications verrouillées.");
+      setIsUnlockDialogOpen(false);
+      setLockCodeInput('');
+    } catch (error) {
+      toast.error("Erreur lors de la mise à jour des paramètres.");
+    }
+  };
+
+  const handleQuickCredit = async () => {
+    if (!selectedAffiliateForCredit || quickCreditAmount === 0) return;
+    setIsSaving(true);
+    try {
+      const newBalance = (selectedAffiliateForCredit.balance || 0) + quickCreditAmount;
+      const newEarnings = (selectedAffiliateForCredit.totalEarnings || 0) + (quickCreditAmount > 0 ? quickCreditAmount : 0);
+      
+      await saveAffiliate({
+        ...selectedAffiliateForCredit,
+        balance: newBalance,
+        totalEarnings: newEarnings,
+        updatedAt: serverTimestamp()
+      }, selectedAffiliateForCredit.id);
+      
+      toast.success(`Le compte de ${selectedAffiliateForCredit.name} a été crédité de ${quickCreditAmount} G.`);
+      setIsQuickCreditDialogOpen(false);
+      setQuickCreditAmount(0);
+      setSelectedAffiliateForCredit(null);
+    } catch (error) {
+      toast.error("Erreur lors du crédit du compte.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -2110,18 +2209,27 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
               <Card className="shadow-sm border-gray-200">
                 <CardHeader className="border-b bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-4 py-3">
                   <div className="flex items-center gap-2">
-                    <CardTitle className="text-lg font-semibold">Liste des Affiliés</CardTitle>
-                    {affiliateSearch && (
-                      <Badge variant="secondary" className="bg-accent-light text-primary border-primary/20">
-                        {filteredAffiliates.length} trouvé{filteredAffiliates.length > 1 ? 's' : ''}
-                      </Badge>
-                    )}
+                    <CardTitle className="text-lg font-semibold">Répertoire des Affiliés</CardTitle>
+                    <div className="flex bg-gray-100 p-1 rounded-lg ml-2">
+                      <button 
+                        onClick={() => setAffiliateViewMode('table')}
+                        className={`p-1.5 rounded-md transition-all ${affiliateViewMode === 'table' ? 'bg-white shadow-sm text-primary' : 'text-gray-400 hover:text-gray-600'}`}
+                      >
+                        <LucideIcons.Table className="h-4 w-4" />
+                      </button>
+                      <button 
+                        onClick={() => setAffiliateViewMode('grid')}
+                        className={`p-1.5 rounded-md transition-all ${affiliateViewMode === 'grid' ? 'bg-white shadow-sm text-primary' : 'text-gray-400 hover:text-gray-600'}`}
+                      >
+                        <LayoutGrid className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   <div className="relative w-full sm:w-72">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input 
-                      placeholder="Nom, prénom, code ou username..." 
-                      className="pl-10 h-9 text-sm"
+                      placeholder="Chercher un affilié..." 
+                      className="pl-10 h-10 rounded-xl border-gray-200 focus:ring-primary shadow-sm"
                       value={affiliateSearch}
                       onChange={(e) => setAffiliateSearch(e.target.value)}
                     />
@@ -2133,92 +2241,196 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                       <Loader2 className="h-8 w-8 animate-spin mb-2" />
                       <p>Chargement des affiliés...</p>
                     </div>
-                  ) : (
+                  ) : affiliateViewMode === 'table' ? (
                     <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-gray-50/50">
-                            <TableHead>Nom</TableHead>
-                            <TableHead>Code</TableHead>
-                            <TableHead>Niveau</TableHead>
+                            <TableHead>Identité</TableHead>
+                            <TableHead>Code / Niveau</TableHead>
+                            <TableHead>Performance</TableHead>
                             <TableHead>Solde</TableHead>
-                            <TableHead>Points</TableHead>
-                            <TableHead>Référés</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {filteredAffiliates.map((a) => (
-                            <TableRow key={a.id} className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => {
+                            <TableRow key={a.id} className="hover:bg-gray-50/50 transition-colors cursor-pointer group" onClick={() => {
                               setEditingAffiliate(a);
                               setAffiliateFormData(a);
                               setIsAffiliateDialogOpen(true);
                             }}>
-                              <TableCell className="font-medium">{a.name}</TableCell>
-                              <TableCell className="font-mono text-xs">{a.code}</TableCell>
                               <TableCell>
-                                <Badge variant="outline" className="font-bold uppercase text-[10px]">
-                                  {a.level || 'Bronze'}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="font-bold text-primary">{a.balance} Goud</TableCell>
-                              <TableCell>
-                                <div className="flex flex-col gap-1">
-                                  <Badge variant="outline" className="bg-accent-light text-primary border-primary/20 w-fit">
-                                    {a.points || 0} pts
-                                  </Badge>
-                                  {a.isMonthlyWinner && (
-                                    <Badge 
-                                      className="bg-accent-light text-primary border-primary/20 text-[9px] w-fit cursor-pointer hover:bg-red-50 hover:text-red-600 hover:border-red-200"
-                                      onClick={() => handleToggleWinnerStatus(a)}
-                                      title="Cliquez pour retirer du classement"
-                                    >
-                                      Gagnant Approuvé
-                                    </Badge>
-                                  )}
-                                  {!a.isMonthlyWinner && (a.points || 0) > 0 && (
-                                    <Badge 
-                                      className="bg-gray-100 text-gray-600 border-gray-200 text-[9px] w-fit cursor-pointer hover:bg-accent-light hover:text-primary hover:border-primary/20"
-                                      onClick={() => handleToggleWinnerStatus(a)}
-                                      title="Cliquez pour ajouter au classement"
-                                    >
-                                      Candidat
-                                    </Badge>
-                                  )}
+                                <div className="flex items-center gap-3">
+                                  <div className="h-10 w-10 rounded-xl bg-accent-light text-primary flex items-center justify-center font-black">
+                                    {a.name.charAt(0)}
+                                  </div>
+                                  <div>
+                                    <p className="font-bold text-dark">{a.name}</p>
+                                    <p className="text-[10px] text-gray-400 font-mono">@{a.username}</p>
+                                  </div>
                                 </div>
                               </TableCell>
-                              <TableCell>{a.referredClients}</TableCell>
+                              <TableCell>
+                                <div className="flex flex-col gap-1">
+                                  <span className="font-mono text-xs text-primary font-bold">{a.code}</span>
+                                  <Badge variant="outline" className={`text-[9px] w-fit font-black ${
+                                    a.level === 'Elite' ? 'border-orange-200 text-orange-600 bg-orange-50' :
+                                    a.level === 'VIP' ? 'border-purple-200 text-purple-600 bg-purple-50' :
+                                    'border-gray-200 text-gray-500 bg-gray-50'
+                                  }`}>
+                                    {a.level || 'Bronze'}
+                                  </Badge>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <Trophy className="h-3 w-3 text-primary" />
+                                    <span className="text-xs font-bold text-dark">{a.points || 0} pts</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Users className="h-3 w-3 text-gray-400" />
+                                    <span className="text-[10px] text-gray-500">{a.referredClients} référés</span>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <p className="font-black text-emerald-600">{a.balance} G</p>
+                                <p className="text-[9px] text-gray-400 uppercase font-bold tracking-tight">Solde dispo</p>
+                              </TableCell>
                               <TableCell className="text-right">
-                                <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                                  <Button variant="ghost" size="sm" onClick={() => {
+                                <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent-light hover:text-primary" onClick={() => {
                                     setEditingAffiliate(a);
                                     setAffiliateFormData(a);
                                     setIsAffiliateDialogOpen(true);
                                   }}>
-                                    <Edit className="h-4 w-4" />
+                                    <Edit2 className="h-4 w-4" />
                                   </Button>
-                                  <Button variant="ghost" size="sm" className="text-primary hover:text-[#D98A1E] hover:bg-accent-light/50" onClick={() => {
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-primary hover:bg-accent-light" onClick={() => {
                                     setSelectedAffiliateForSale(a);
                                     setIsRecordSaleDialogOpen(true);
                                   }}>
                                     <DollarSign className="h-4 w-4" />
                                   </Button>
-                                  <Button variant="ghost" size="sm" onClick={() => handleOpenAffiliateDeleteDialog(a)}>
-                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-red-500 hover:bg-red-50" onClick={() => handleOpenAffiliateDeleteDialog(a)}>
+                                    <Trash2 className="h-4 w-4" />
                                   </Button>
                                 </div>
                               </TableCell>
                             </TableRow>
                           ))}
-                          {filteredAffiliates.length === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={7} className="h-32 text-center text-gray-400">
-                                {affiliateSearch ? "Aucun affilié ne correspond à votre recherche." : "Aucun affilié trouvé."}
-                              </TableCell>
-                            </TableRow>
-                          )}
                         </TableBody>
                       </Table>
+                    </div>
+                  ) : (
+                    <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[600px] overflow-y-auto custom-scrollbar">
+                      {filteredAffiliates.map((a) => (
+                        <motion.div
+                          key={a.id}
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          whileHover={{ y: -4 }}
+                          className="group relative"
+                        >
+                          <Card 
+                            className="border-0 shadow-sm rounded-3xl overflow-hidden cursor-pointer bg-white border border-gray-100 hover:shadow-xl hover:border-primary/20 transition-all duration-300"
+                            onClick={() => {
+                              setEditingAffiliate(a);
+                              setAffiliateFormData(a);
+                              setIsAffiliateDialogOpen(true);
+                            }}
+                          >
+                            <CardContent className="p-5">
+                              <div className="flex items-start justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-primary/10 to-accent-light flex items-center justify-center text-primary font-black text-xl shadow-inner group-hover:scale-110 transition-transform">
+                                    {a.name.charAt(0)}
+                                  </div>
+                                  <div>
+                                    <h4 className="font-black text-dark group-hover:text-primary transition-colors truncate max-w-[150px]">{a.name}</h4>
+                                    <p className="text-[10px] text-primary font-black tracking-widest uppercase">{a.level || 'Bronze'}</p>
+                                    <p className="text-[10px] text-gray-400 font-mono mt-0.5">{a.code}</p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-lg font-black text-emerald-600 leading-tight">{a.balance} G</p>
+                                  <p className="text-[9px] text-gray-400 uppercase font-black">Disponible</p>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-2 py-3 border-y border-gray-50 mb-3">
+                                <div className="text-center">
+                                  <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Points</p>
+                                  <p className="text-xs font-black text-dark">{a.points || 0}</p>
+                                </div>
+                                <div className="text-center border-x">
+                                  <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Ventes</p>
+                                  <p className="text-xs font-black text-dark">{a.monthlySales || 0}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Référés</p>
+                                  <p className="text-xs font-black text-dark">{a.referredClients || 0}</p>
+                                </div>
+                              </div>
+
+                              <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="h-9 w-9 p-0 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                                  onClick={() => {
+                                    setSelectedAffiliateForCredit(a);
+                                    setIsQuickCreditDialogOpen(true);
+                                  }}
+                                  title="Ajout rapide d'argent"
+                                >
+                                  <PlusCircle className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="flex-1 rounded-xl h-9 bg-gray-50 hover:bg-accent-light hover:text-primary text-[10px] font-black uppercase"
+                                  onClick={() => {
+                                    setEditingAffiliate(a);
+                                    setAffiliateFormData(a);
+                                    setIsAffiliateDialogOpen(true);
+                                  }}
+                                >
+                                  <Edit2 className="h-3 w-3 mr-2" /> Détailler
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="rounded-xl h-9 w-9 p-0 bg-primary/5 text-primary hover:bg-primary/10"
+                                  onClick={() => {
+                                    setSelectedAffiliateForSale(a);
+                                    setIsRecordSaleDialogOpen(true);
+                                  }}
+                                >
+                                  <DollarSign className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="rounded-xl h-9 w-9 p-0 bg-red-50 text-red-500 hover:bg-red-100"
+                                  onClick={() => handleOpenAffiliateDeleteDialog(a)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                  {filteredAffiliates.length === 0 && !affiliatesLoading && (
+                    <div className="text-center py-20 text-gray-400">
+                      <Users className="h-16 w-16 mx-auto mb-4 opacity-10" />
+                      <p className="text-lg font-medium">Aucun affilié trouvé</p>
+                      <p className="text-sm">Essayez une autre recherche ou créez un nouvel affilié.</p>
                     </div>
                   )}
                 </CardContent>
@@ -2530,10 +2742,24 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                               {req.createdAt?.toDate ? format(req.createdAt.toDate(), 'PPp', { locale: fr }) : 'Date inconnue'}
                             </span>
                             {req.type === 'withdrawal' && (
-                              <span className="font-bold text-primary">{(req as any).amount} Goud</span>
+                              <div className="flex flex-col gap-1 mt-1">
+                                <span className="font-black text-emerald-600">{(req as any).amount} Goud</span>
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-accent-light/30 rounded-lg w-fit border border-accent-light/50">
+                                  <Smartphone className="h-3 w-3 text-primary" />
+                                  <span className="font-black text-primary text-[10px] uppercase">{(req as any).method}: {(req as any).accountNumber}</span>
+                                </div>
+                              </div>
                             )}
                             {req.type === 'registration' && (
-                              <span>{(req as any).email}</span>
+                              <div className="flex flex-col gap-1 mt-1">
+                                <span className="text-gray-600">{(req as any).email}</span>
+                                {(req as any).phone && (
+                                  <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
+                                    <Smartphone className="h-3 w-3" />
+                                    {(req as any).phone}
+                                  </span>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>
@@ -2654,6 +2880,57 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                   </div>
                 </div>
 
+                <div className="space-y-4 pt-4 border-t">
+                  <h3 className="text-sm font-bold text-dark">Sécurité & Retraits</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Card className={`border shadow-sm transition-colors ${settings?.withdrawalsEnabled ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30'}`}>
+                      <CardContent className="p-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-bold text-dark">Demandes de Retrait</p>
+                          <p className="text-xs text-gray-500">{settings?.withdrawalsEnabled ? 'Activées' : 'Désactivées temporairement'}</p>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant={settings?.withdrawalsEnabled ? "destructive" : "default"}
+                          className={settings?.withdrawalsEnabled ? "bg-red-600" : "bg-emerald-600 hover:bg-emerald-700 border-0"}
+                          onClick={() => setIsWithdrawalToggleConfirmOpen(true)}
+                        >
+                          {settings?.withdrawalsEnabled ? 'Désactiver' : 'Activer'}
+                        </Button>
+                      </CardContent>
+                    </Card>
+
+                    <Card className={`border shadow-sm transition-colors ${settings?.lockAffiliateEdits ? 'border-red-200 bg-red-50/30' : 'border-emerald-200 bg-emerald-50/30'}`}>
+                      <CardContent className="p-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-bold text-dark">Verrouillage des Infos</p>
+                          <p className="text-xs text-gray-500">{settings?.lockAffiliateEdits ? 'Modifications verrouillées' : 'Modifications libres'}</p>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant={settings?.lockAffiliateEdits ? "default" : "destructive"}
+                          className={settings?.lockAffiliateEdits ? "bg-emerald-600 hover:bg-emerald-700 border-0" : "bg-red-600"}
+                          onClick={() => settings?.lockAffiliateEdits ? setIsUnlockDialogOpen(true) : handleToggleLockEdits()}
+                        >
+                          {settings?.lockAffiliateEdits ? 'Déverrouiller' : 'Verrouiller'}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-4 border-t">
+                  <Label>Code de déverrouillage (pour modifications verrouillées)</Label>
+                  <div className="flex gap-2">
+                    <Input 
+                      placeholder="Ex: 1234" 
+                      value={settings?.lockAffiliateEditsCode || ''} 
+                      onChange={(e) => updateSettings({ lockAffiliateEditsCode: e.target.value })}
+                      className="font-mono"
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-2 pt-4 border-t">
                   <Label>Numéro WhatsApp Admin (pour notifications)</Label>
                   <div className="flex gap-2">
@@ -2757,81 +3034,105 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {admins.map((acc) => (
-              <Card key={acc.id} className="border-0 shadow-sm rounded-3xl overflow-hidden hover:shadow-md transition-shadow bg-white">
-                <CardContent className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-3">
-                      {acc.photoUrl ? (
-                         <div className="h-12 w-12 rounded-full overflow-hidden border-2 border-accent-light shadow-sm shrink-0 ring-2 ring-white">
-                          <img 
-                            src={acc.photoUrl} 
-                            alt={acc.fullName} 
-                            className="h-full w-full object-cover" 
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(acc.fullName)}&background=random`;
-                            }}
-                          />
+              <motion.div
+                key={acc.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Card className="border-0 shadow-sm rounded-[2rem] overflow-hidden hover:shadow-xl transition-all duration-300 bg-white group border border-primary/5 hover:border-primary/20">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between items-start mb-6">
+                      <div className="flex items-center gap-4">
+                        <div className="relative">
+                          {acc.photoUrl ? (
+                             <div className="h-16 w-16 rounded-2xl overflow-hidden border-2 border-accent-light shadow-md shrink-0 ring-4 ring-white transition-transform group-hover:scale-105">
+                              <img 
+                                src={acc.photoUrl} 
+                                alt={acc.fullName} 
+                                className="h-full w-full object-cover" 
+                                referrerPolicy="no-referrer"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(acc.fullName)}&background=random`;
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <div className={`h-16 w-16 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-105 shadow-md ${acc.isSuperAdmin ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>
+                              {acc.isSuperAdmin ? <Shield className="h-8 w-8" /> : <ShieldAlertIcon className="h-8 w-8" />}
+                            </div>
+                          )}
+                          {acc.isSuperAdmin && (
+                            <div className="absolute -top-2 -right-2 bg-yellow-400 text-white p-1 rounded-full shadow-sm border-2 border-white">
+                              <Star className="h-3 w-3 fill-current" />
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <div className={`p-3 rounded-2xl ${acc.isSuperAdmin ? 'bg-accent-light text-primary' : 'bg-gray-50 text-gray-400'}`}>
-                          {acc.isSuperAdmin ? <Shield className="h-6 w-6" /> : <ShieldAlertIcon className="h-6 w-6" />}
+                        <div>
+                          <h3 className="font-black text-dark group-hover:text-primary transition-colors text-lg leading-tight">{acc.fullName}</h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="secondary" className={`text-[10px] uppercase font-black px-2 py-0 border-0 ${acc.isSuperAdmin ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-500'}`}>
+                              {acc.isSuperAdmin ? "Super Admin" : "Moderator"}
+                            </Badge>
+                          </div>
                         </div>
-                      )}
-                      <div>
-                        <h3 className="font-bold text-dark group-hover:text-primary transition-colors">{acc.fullName}</h3>
-                        <p className="text-[10px] text-subtext uppercase font-bold tracking-widest leading-none mt-1">
-                          {acc.isSuperAdmin ? "Super Admin" : "Administrateur"}
-                        </p>
                       </div>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenAdminDialog(acc)} className="rounded-xl hover:bg-accent-light hover:text-primary">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      {!acc.isSuperAdmin && (
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          onClick={() => {
-                            setAdminToDelete(acc);
-                            setIsAdminDeleteDialogOpen(true);
-                          }} 
-                          className="rounded-xl hover:bg-red-50 hover:text-red-600"
+                          onClick={() => handleOpenAdminDialog(acc)} 
+                          className="rounded-full h-8 w-8 hover:bg-accent-light hover:text-primary"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Edit2 className="h-4 w-4" />
                         </Button>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap gap-1">
-                      {acc.permissions.length === 0 ? (
-                        <span className="text-[10px] text-gray-400 italic">Aucune permission</span>
-                      ) : acc.permissions.includes('all') ? (
-                        <span className="bg-accent-light text-primary text-[10px] font-bold px-2 py-0.5 rounded-full">Accès Total</span>
-                      ) : (
-                        acc.permissions.map(p => (
-                          <span key={p} className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                            {menuItems.find(m => m.permission === p)?.label || p}
-                          </span>
-                        ))
-                      )}
+                        {!acc.isSuperAdmin && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => {
+                              setAdminToDelete(acc);
+                              setIsAdminDeleteDialogOpen(true);
+                            }} 
+                            className="rounded-full h-8 w-8 hover:bg-red-50 hover:text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     
-                    <div className="pt-3 border-t flex justify-between items-center">
-                       <div className="flex items-center gap-2">
-                         <div className={`w-2 h-2 rounded-full ${acc.failedAttempts > 0 ? 'bg-primary' : 'bg-primary'}`} />
-                         <span className="text-[10px] text-gray-500 font-medium">
-                           {acc.failedAttempts > 0 ? `${acc.failedAttempts} échecs` : 'Sain'}
-                         </span>
-                       </div>
-                       <p className="text-[10px] text-gray-400">MAJ {acc.updatedAt ? format(acc.updatedAt instanceof Timestamp ? acc.updatedAt.toDate() : new Date(acc.updatedAt), 'dd/MM/yy', { locale: fr }) : '-'}</p>
+                    <div className="space-y-4">
+                      <div className="bg-gray-50/50 p-3 rounded-2xl border border-gray-100">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Permissions</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {acc.permissions.length === 0 ? (
+                            <span className="text-[10px] text-gray-400 italic">Aucune permission spécifique</span>
+                          ) : acc.permissions.includes('all') ? (
+                            <Badge className="bg-emerald-500/10 text-emerald-600 border-0 text-[10px] font-black">TOUT ACCÈS</Badge>
+                          ) : (
+                            acc.permissions.map(p => (
+                              <Badge key={p} variant="outline" className="bg-white text-gray-600 border-gray-200 text-[9px] font-bold">
+                                {menuItems.find(m => m.permission === p)?.label || p}
+                              </Badge>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-between items-center text-[10px]">
+                         <div className="flex items-center gap-2">
+                           <div className={`w-2 h-2 rounded-full ${acc.failedAttempts > 0 ? 'bg-red-500' : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse'}`} />
+                           <span className="text-gray-500 font-bold uppercase tracking-wider">
+                             Status: {acc.failedAttempts > 0 ? `${acc.failedAttempts} échecs` : 'Sain'}
+                           </span>
+                         </div>
+                         <p className="text-gray-400 font-medium">MAJ {acc.updatedAt ? format(acc.updatedAt instanceof Timestamp ? acc.updatedAt.toDate() : new Date(acc.updatedAt), 'dd/MM/yyyy', { locale: fr }) : '-'}</p>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </motion.div>
             ))}
           </div>
         </TabsContent>
@@ -2858,15 +3159,31 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="purchase">Achat Général (2.5 Goud)</SelectItem>
-                  <SelectItem value="subscription">Abonnement Netflix/Prime (100 Goud)</SelectItem>
+                  <SelectItem value="subscription">Abonnement (Prix variable)</SelectItem>
                   <SelectItem value="virtual_card">Carte Virtuelle MasterCard (500 Goud)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            
+            {saleType === 'subscription' && (
+              <div className="space-y-2">
+                <Label>Nom de l'abonnement (Netflix, Prime...)</Label>
+                <Input 
+                  placeholder="Ex: Netflix Premium" 
+                  value={saleItemName}
+                  onChange={(e) => setSaleItemName(e.target.value)}
+                  className="rounded-xl"
+                />
+                <p className="text-[10px] text-blue-600 font-bold">
+                  Note: Netflix / Prime = 75 Goud direct + 25 Goud indirect.
+                </p>
+              </div>
+            )}
+
             <div className="bg-accent-light/50 p-3 rounded-lg border border-accent-light">
-              <p className="text-xs text-primary">
-                L'affilié recevra la commission directe et les points correspondants. 
-                Si l'affilié a un parrain, celui-ci recevra 0.5 Goud de commission indirecte.
+              <p className="text-xs text-primary font-medium">
+                L'affilié recevra la commission directe. 
+                S'il a un parrain, celui-ci recevra la commission indirecte associée.
               </p>
             </div>
           </div>
@@ -2997,7 +3314,44 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
         </DialogContent>
       </Dialog>
 
-      {/* Nav Button Delete Dialog */}
+      {/* Withdrawal Rejection Reason Dialog */}
+      <Dialog open={isWithdrawalRejectionDialogOpen} onOpenChange={setIsWithdrawalRejectionDialogOpen}>
+        <DialogContent className="sm:max-w-[425px] rounded-[2rem]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600 font-black">
+              <ShieldAlertIcon className="h-5 w-5" />
+              Rejeter la demande
+            </DialogTitle>
+            <DialogDescription className="font-medium">
+              Veuillez indiquer la raison pour laquelle vous rejetez le retrait de <span className="font-black text-gray-900">{withdrawalToReject?.affiliateName}</span> ({withdrawalToReject?.amount} G).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="rejection-reason" className="text-xs font-bold uppercase text-gray-400 mb-2 block">Raison du rejet</Label>
+            <Textarea
+              id="rejection-reason"
+              placeholder="Ex: Numéro de compte invalide, Solde insuffisant, etc."
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              className="min-h-[120px] rounded-2xl border-gray-200 focus:ring-primary focus:border-primary"
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsWithdrawalRejectionDialogOpen(false)} className="rounded-xl font-bold">
+              Annuler
+            </Button>
+            <Button 
+              onClick={handleConfirmRejectionBase} 
+              disabled={isSaving || !rejectionReason.trim()}
+              variant="destructive"
+              className="rounded-xl font-bold"
+            >
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Confirmer le rejet
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={isNavButtonDeleteDialogOpen} onOpenChange={setIsNavButtonDeleteDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -3021,168 +3375,324 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
 
       {/* Affiliate Edit/Add Dialog */}
       <Dialog open={isAffiliateDialogOpen} onOpenChange={setIsAffiliateDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col p-0 overflow-hidden">
-          <div className="p-6 pb-2">
-            <DialogHeader>
-              <DialogTitle>{editingAffiliate ? 'Modifier l\'affilié' : 'Nouvel affilié'}</DialogTitle>
-              <DialogDescription>
-                Gérez les identifiants et les informations de l'affilié.
-              </DialogDescription>
-            </DialogHeader>
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-[2.5rem] border-0 shadow-2xl">
+          <div className="relative h-32 bg-gradient-to-r from-primary/20 via-accent-light to-primary/10 p-6 flex flex-col justify-end">
+             <div className="absolute top-4 right-6 flex gap-2">
+               {editingAffiliate && (
+                 <Badge className="bg-white/80 text-primary border-0 font-black shadow-sm">ID: {editingAffiliate.id?.slice(0, 8)}</Badge>
+               )}
+             </div>
+             <DialogHeader>
+                <DialogTitle className="text-3xl font-black text-dark flex items-center gap-3">
+                  <div className="p-2 rounded-2xl bg-white shadow-md">
+                    <Users className="h-6 w-6 text-primary" />
+                  </div>
+                  {editingAffiliate ? 'Profil Affilié' : 'Nouveau Compte Affilié'}
+                </DialogTitle>
+                <DialogDescription className="text-subtext font-medium text-xs ml-12">
+                  Configuration et ajustement des paramètres de l'affilié.
+                </DialogDescription>
+             </DialogHeader>
           </div>
-          <div className="flex-1 overflow-y-auto px-6 py-2 custom-scrollbar">
-            <div className="grid gap-4 py-4 text-sm">
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right">Nom Complet</Label>
-              <Input 
-                value={affiliateFormData.name} 
-                onChange={(e) => setAffiliateFormData({...affiliateFormData, name: e.target.value})}
-                className="sm:col-span-3" 
-              />
+          
+          <Tabs defaultValue="identity" className="flex-1 flex flex-col overflow-hidden">
+            <div className="bg-white px-6 border-b flex justify-between items-center h-12 shadow-sm z-10">
+              <TabsList className="bg-transparent h-full p-0 gap-6">
+                <TabsTrigger value="identity" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none font-bold text-xs uppercase tracking-widest text-gray-400 data-[state=active]:text-primary mb-[-1px]">Identité</TabsTrigger>
+                <TabsTrigger value="financial" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none font-bold text-xs uppercase tracking-widest text-gray-400 data-[state=active]:text-primary mb-[-1px]">Finances</TabsTrigger>
+                <TabsTrigger value="stats" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none font-bold text-xs uppercase tracking-widest text-gray-400 data-[state=active]:text-primary mb-[-1px]">Statistiques</TabsTrigger>
+                <TabsTrigger value="info" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none font-bold text-xs uppercase tracking-widest text-gray-400 data-[state=active]:text-primary mb-[-1px]">Infos Inscription</TabsTrigger>
+              </TabsList>
+              
+              <div className="flex items-center gap-2">
+                 {settings?.lockAffiliateEdits && (
+                   <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 font-black text-[10px] uppercase gap-1.5 px-3 py-1 animate-pulse">
+                     <ShieldAlertIcon className="h-3 w-3" />
+                     MODIFICATIONS VERROUILLÉES
+                   </Badge>
+                 )}
+                 <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-100 font-black text-[10px] uppercase">ACTIF</Badge>
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right">Username</Label>
-              <Input 
-                value={affiliateFormData.username} 
-                onChange={(e) => setAffiliateFormData({...affiliateFormData, username: e.target.value})}
-                className="sm:col-span-3" 
-              />
+
+            <div className={`flex-1 overflow-y-auto px-8 py-6 custom-scrollbar bg-gray-50/30 ${settings?.lockAffiliateEdits ? 'pointer-events-none grayscale-[0.5] opacity-80' : ''}`}>
+              <TabsContent value="identity" className="mt-0 space-y-6 animate-in fade-in slide-in-from-bottom-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Nom Complet</Label>
+                    <div className="relative group">
+                      <Users className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary group-focus-within:scale-110 transition-transform" />
+                      <Input 
+                        value={affiliateFormData.name} 
+                        onChange={(e) => setAffiliateFormData({...affiliateFormData, name: e.target.value})}
+                        className="pl-10 h-12 rounded-2xl border-gray-200 focus:ring-primary shadow-sm bg-white" 
+                        placeholder="Jean Dupont"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Code Affilié</Label>
+                    <div className="relative group">
+                      <Zap className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
+                      <Input 
+                        value={affiliateFormData.code} 
+                        onChange={(e) => setAffiliateFormData({...affiliateFormData, code: e.target.value})}
+                        className="pl-10 h-12 rounded-2xl border-gray-200 font-mono font-bold shadow-sm bg-white" 
+                        placeholder="AFF2024"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Username (Login)</Label>
+                    <div className="relative">
+                      <LucideIcons.AtSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input 
+                        value={affiliateFormData.username} 
+                        onChange={(e) => setAffiliateFormData({...affiliateFormData, username: e.target.value})}
+                        className="pl-10 h-12 rounded-2xl border-gray-200 shadow-sm bg-white" 
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Mot de Passe</Label>
+                    <div className="relative">
+                      <LucideIcons.Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input 
+                        value={affiliateFormData.password} 
+                        onChange={(e) => setAffiliateFormData({...affiliateFormData, password: e.target.value})}
+                        className="pl-10 h-12 rounded-2xl border-gray-200 shadow-sm bg-white" 
+                        placeholder="********"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Niveau du compte</Label>
+                    <Select 
+                      value={affiliateFormData.level} 
+                      onValueChange={(v: any) => setAffiliateFormData({...affiliateFormData, level: v})}
+                    >
+                      <SelectTrigger className="h-12 rounded-2xl border-gray-200 shadow-sm bg-white px-4 font-bold text-dark">
+                        <SelectValue placeholder="Niveau" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-2xl border-gray-100">
+                        <SelectItem value="Bronze" className="rounded-xl">🥉 Bronze</SelectItem>
+                        <SelectItem value="Silver" className="rounded-xl">🥈 Silver</SelectItem>
+                        <SelectItem value="Gold" className="rounded-xl">🥇 Gold</SelectItem>
+                        <SelectItem value="Elite" className="rounded-xl">💎 Elite</SelectItem>
+                        <SelectItem value="VIP" className="rounded-xl">👑 VIP</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">ID Parrain</Label>
+                    <Input 
+                      value={affiliateFormData.parentAffiliateId || ''} 
+                      onChange={(e) => setAffiliateFormData({...affiliateFormData, parentAffiliateId: e.target.value})}
+                      className="h-12 rounded-2xl border-gray-200 shadow-sm bg-white font-mono text-xs" 
+                      placeholder="Laissez vide si aucun"
+                    />
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="financial" className="mt-0 space-y-6 animate-in fade-in slide-in-from-bottom-2">
+                 <div className="bg-emerald-50/50 p-6 rounded-[2rem] border border-emerald-100 text-center mb-8 relative overflow-hidden group">
+                    <div className="absolute top-2 right-2 p-2 bg-white rounded-full shadow-sm text-emerald-500 scale-110 opacity-50 group-hover:opacity-100 transition-opacity">
+                      <TrendingUp className="h-4 w-4" />
+                    </div>
+                    <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest mb-1">Gains Totaux Cumulés</p>
+                    <p className="text-4xl font-black text-emerald-700">{(affiliateFormData.totalEarnings || 0).toLocaleString()} <span className="text-lg">G</span></p>
+                 </div>
+
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase text-gray-400 ml-1 flex items-center justify-between">
+                        Solde Disponible
+                        <span className="text-emerald-600 font-black">HTG</span>
+                      </Label>
+                      <div className="relative group">
+                        <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-500" />
+                        <Input 
+                          type="number"
+                          value={affiliateFormData.balance} 
+                          onChange={(e) => setAffiliateFormData({...affiliateFormData, balance: Number(e.target.value)})}
+                          className="pl-10 h-14 rounded-2xl border-gray-200 text-xl font-black text-dark focus:ring-emerald-500 shadow-md bg-white" 
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black uppercase text-gray-400 ml-1 flex items-center justify-between">
+                        Points du mois
+                        <Trophy className="h-3 w-3 text-primary" />
+                      </Label>
+                      <div className="relative">
+                        <Star className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-primary" />
+                        <Input 
+                          type="number"
+                          value={affiliateFormData.points || 0} 
+                          onChange={(e) => setAffiliateFormData({...affiliateFormData, points: Number(e.target.value)})}
+                          className="pl-10 h-14 rounded-2xl border-gray-200 text-xl font-black text-dark focus:ring-primary shadow-md bg-white" 
+                        />
+                      </div>
+                    </div>
+                 </div>
+
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t">
+                    <div className="space-y-1 bg-white p-4 rounded-2xl border shadow-sm">
+                      <Label className="text-[10px] font-black uppercase text-gray-500">Revenus Directs</Label>
+                      <Input 
+                        type="number"
+                        value={affiliateFormData.directRevenue || 0} 
+                        onChange={(e) => setAffiliateFormData({...affiliateFormData, directRevenue: Number(e.target.value)})}
+                        className="border-none shadow-none text-lg font-bold p-0 h-8 focus-visible:ring-0" 
+                      />
+                    </div>
+                    <div className="space-y-1 bg-white p-4 rounded-2xl border shadow-sm">
+                      <Label className="text-[10px] font-black uppercase text-gray-500">Revenus Indirects</Label>
+                      <Input 
+                        type="number"
+                        value={affiliateFormData.indirectRevenue || 0} 
+                        onChange={(e) => setAffiliateFormData({...affiliateFormData, indirectRevenue: Number(e.target.value)})}
+                        className="border-none shadow-none text-lg font-bold p-0 h-8 focus-visible:ring-0" 
+                      />
+                    </div>
+                 </div>
+              </TabsContent>
+
+              <TabsContent value="stats" className="mt-0 space-y-6 animate-in fade-in slide-in-from-right-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                   <div className="p-6 rounded-[2.5rem] bg-indigo-50/50 border border-indigo-100 flex flex-col items-center text-center group transition-all hover:bg-indigo-50">
+                      <div className="h-12 w-12 rounded-[1.25rem] bg-white shadow-md flex items-center justify-center text-indigo-500 mb-3 group-hover:rotate-12 transition-transform">
+                        <Users className="h-6 w-6" />
+                      </div>
+                      <p className="text-[10px] font-black uppercase text-indigo-400 tracking-widest mb-1">Affiliés Référés</p>
+                      <Input 
+                        type="number"
+                        value={affiliateFormData.referredClients} 
+                        onChange={(e) => setAffiliateFormData({...affiliateFormData, referredClients: Number(e.target.value)})}
+                        className="w-24 text-center border-none shadow-none text-2xl font-black bg-transparent focus-visible:ring-0 h-10 p-0" 
+                      />
+                      <p className="text-[9px] text-indigo-300 font-bold mt-1">TOTAL HISTORIQUE</p>
+                   </div>
+                   
+                   <div className="p-6 rounded-[2.5rem] bg-orange-50/50 border border-orange-100 flex flex-col items-center text-center group transition-all hover:bg-orange-50">
+                      <div className="h-12 w-12 rounded-[1.25rem] bg-white shadow-md flex items-center justify-center text-orange-500 mb-3 group-hover:rotate-12 transition-transform">
+                        <DollarSign className="h-6 w-6" />
+                      </div>
+                      <p className="text-[10px] font-black uppercase text-orange-400 tracking-widest mb-1">Ventes Mensuelles</p>
+                      <Input 
+                        type="number"
+                        value={affiliateFormData.monthlySales || 0} 
+                        onChange={(e) => setAffiliateFormData({...affiliateFormData, monthlySales: Number(e.target.value)})}
+                        className="w-24 text-center border-none shadow-none text-2xl font-black bg-transparent focus-visible:ring-0 h-10 p-0" 
+                      />
+                      <p className="text-[9px] text-orange-300 font-bold mt-1">OBJECTIF: 100 VENTES</p>
+                   </div>
+
+                   <div className="p-4 rounded-3xl bg-gray-100/50 border border-gray-200 sm:col-span-2">
+                      <Label className="text-[10px] font-black uppercase text-gray-400 mb-4 block text-center">Référés ce mois</Label>
+                      <div className="flex items-center justify-center gap-6">
+                         <Button 
+                           variant="outline" 
+                           size="icon" 
+                           className="rounded-xl h-10 w-10 shrink-0 border-gray-200"
+                           onClick={() => setAffiliateFormData({...affiliateFormData, monthlyReferredClients: Math.max(0, (affiliateFormData.monthlyReferredClients || 0) - 1)})}
+                         >
+                           <LucideIcons.Minus className="h-4 w-4" />
+                         </Button>
+                         <Input 
+                            type="number"
+                            value={affiliateFormData.monthlyReferredClients || 0} 
+                            onChange={(e) => setAffiliateFormData({...affiliateFormData, monthlyReferredClients: Number(e.target.value)})}
+                            className="w-32 text-center text-4xl font-black border-none shadow-none bg-transparent h-16 pt-2" 
+                          />
+                          <Button 
+                           variant="outline" 
+                           size="icon" 
+                           className="rounded-xl h-10 w-10 shrink-0 border-gray-200"
+                           onClick={() => setAffiliateFormData({...affiliateFormData, monthlyReferredClients: (affiliateFormData.monthlyReferredClients || 0) + 1})}
+                         >
+                           <LucideIcons.Plus className="h-4 w-4" />
+                         </Button>
+                      </div>
+                   </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="info" className="mt-0 space-y-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-black text-dark flex items-center gap-2">
+                    <History className="h-5 w-5 text-primary" />
+                    Informations récupérées
+                  </h3>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col gap-1">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Email d'inscription</p>
+                      <p className="font-bold text-dark">{affiliateFormData.info?.email || 'Non renseigné'}</p>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col gap-1">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Téléphone</p>
+                      <p className="font-bold text-dark">{affiliateFormData.info?.phone || 'Non renseigné'}</p>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col gap-1">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Message envoyé</p>
+                      <p className="text-sm text-gray-600 italic">"{affiliateFormData.info?.message || 'Aucun message'}"</p>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col gap-1">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date d'approbation</p>
+                      <p className="font-bold text-dark">
+                        {affiliateFormData.info?.approvedAt ? format(new Date(affiliateFormData.info.approvedAt), 'dd/MM/yyyy HH:mm', { locale: fr }) : 'Inconnue'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {settings?.lockAffiliateEdits && (
+                    <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-start gap-4">
+                      <ShieldAlertIcon className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-bold text-red-900">Modifications impossibles</p>
+                        <p className="text-[11px] text-red-700">Le verrouillage global des modifications est activé. Déverrouillez dans les paramètres pour modifier ces informations.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right">Password</Label>
-              <Input 
-                value={affiliateFormData.password} 
-                onChange={(e) => setAffiliateFormData({...affiliateFormData, password: e.target.value})}
-                className="sm:col-span-3" 
-              />
+          </Tabs>
+
+          <div className="p-8 bg-white border-t flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <div className="flex gap-2">
+              {editingAffiliate && (
+                <Button 
+                  variant="ghost" 
+                  onClick={() => {
+                    handleOpenAffiliateDeleteDialog(editingAffiliate);
+                    setIsAffiliateDialogOpen(false);
+                  }}
+                  className="text-red-500 hover:bg-red-50 rounded-2xl h-12 font-bold flex items-center gap-2 group"
+                >
+                  <Trash2 className="h-4 w-4 group-hover:shake" />
+                  <span className="hidden sm:inline">Supprimer l'affilié</span>
+                </Button>
+              )}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right">Code</Label>
-              <Input 
-                value={affiliateFormData.code} 
-                onChange={(e) => setAffiliateFormData({...affiliateFormData, code: e.target.value})}
-                className="sm:col-span-3" 
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right">Niveau</Label>
-              <Select 
-                value={affiliateFormData.level} 
-                onValueChange={(v: any) => setAffiliateFormData({...affiliateFormData, level: v})}
-              >
-                <SelectTrigger className="sm:col-span-3">
-                  <SelectValue placeholder="Choisir un niveau" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Bronze">Bronze</SelectItem>
-                  <SelectItem value="Silver">Silver</SelectItem>
-                  <SelectItem value="Gold">Gold</SelectItem>
-                  <SelectItem value="Elite">Elite</SelectItem>
-                  <SelectItem value="VIP">VIP</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right">Parrain (ID)</Label>
-              <Input 
-                value={affiliateFormData.parentAffiliateId || ''} 
-                onChange={(e) => setAffiliateFormData({...affiliateFormData, parentAffiliateId: e.target.value})}
-                className="sm:col-span-3" 
-                placeholder="ID de l'affilié parrain"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right">Solde (Goud)</Label>
-              <Input 
-                type="number"
-                value={affiliateFormData.balance} 
-                onChange={(e) => setAffiliateFormData({...affiliateFormData, balance: Number(e.target.value)})}
-                className="sm:col-span-3" 
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right">Clients Parrainés</Label>
-              <Input 
-                type="number"
-                value={affiliateFormData.referredClients} 
-                onChange={(e) => setAffiliateFormData({...affiliateFormData, referredClients: Number(e.target.value)})}
-                className="sm:col-span-3" 
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right text-xs">Points (Manuel)</Label>
-              <Input 
-                type="number"
-                value={affiliateFormData.points || 0} 
-                onChange={(e) => setAffiliateFormData({...affiliateFormData, points: Number(e.target.value)})}
-                className="sm:col-span-3 border-primary/20 focus:ring-primary" 
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right text-xs">Ventes Mois (G)</Label>
-              <Input 
-                type="number"
-                value={affiliateFormData.monthlySales || 0} 
-                onChange={(e) => setAffiliateFormData({...affiliateFormData, monthlySales: Number(e.target.value)})}
-                className="sm:col-span-3" 
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right text-xs">Réf. Mois</Label>
-              <Input 
-                type="number"
-                value={affiliateFormData.monthlyReferredClients || 0} 
-                onChange={(e) => setAffiliateFormData({...affiliateFormData, monthlyReferredClients: Number(e.target.value)})}
-                className="sm:col-span-3" 
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right text-xs">Rev. Direct</Label>
-              <Input 
-                type="number"
-                value={affiliateFormData.directRevenue || 0} 
-                onChange={(e) => setAffiliateFormData({...affiliateFormData, directRevenue: Number(e.target.value)})}
-                className="sm:col-span-3" 
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right text-xs">Rev. Indirect</Label>
-              <Input 
-                type="number"
-                value={affiliateFormData.indirectRevenue || 0} 
-                onChange={(e) => setAffiliateFormData({...affiliateFormData, indirectRevenue: Number(e.target.value)})}
-                className="sm:col-span-3" 
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
-              <Label className="sm:text-right text-xs">Total Gains</Label>
-              <Input 
-                type="number"
-                value={affiliateFormData.totalEarnings || 0} 
-                onChange={(e) => setAffiliateFormData({...affiliateFormData, totalEarnings: Number(e.target.value)})}
-                className="sm:col-span-3" 
-              />
-            </div>
-            </div>
-          </div>
-          <div className="p-4 sm:p-6 pt-3 border-t bg-white/80 backdrop-blur-md sticky bottom-0 z-20">
-            <DialogFooter className="sm:justify-end flex-row gap-2 mt-0">
+            <div className="flex gap-3 w-full sm:w-auto">
               <Button 
                 variant="outline" 
                 onClick={() => setIsAffiliateDialogOpen(false)}
-                className="flex-1 sm:flex-none"
+                className="flex-1 sm:flex-none rounded-2xl h-12 font-bold px-8 border-gray-200"
               >
-                Annuler
+                Fermer
               </Button>
               <Button 
                 onClick={handleSaveAffiliate} 
                 disabled={isSaving} 
-                className="flex-1 sm:flex-none bg-primary hover:bg-[#D98A1E] text-white shadow-lg shadow-accent-light/50 border-0"
+                className="flex-1 sm:flex-none bg-primary hover:bg-[#D98A1E] text-white rounded-2xl h-12 font-bold shadow-xl shadow-accent-light/50 border-0 px-10 transition-all active:scale-95"
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-                Enregistrer les modifications
+                {editingAffiliate ? 'Mettre à jour' : 'Créer le compte'}
               </Button>
-            </DialogFooter>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -4022,7 +4532,118 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
         </DialogContent>
       </Dialog>
 
-      {/* Admin Editor Dialog */}
+      {/* Quick Credit Dialog */}
+      <Dialog open={isQuickCreditDialogOpen} onOpenChange={setIsQuickCreditDialogOpen}>
+        <DialogContent className="sm:max-w-[400px] rounded-[2rem] border-0 shadow-2xl">
+          <DialogHeader className="p-6 bg-emerald-600 text-white rounded-t-[2rem]">
+            <DialogTitle className="flex items-center gap-2 text-2xl font-black">
+              <PlusCircle className="h-6 w-6" />
+              Ajout Rapide d'Argent
+            </DialogTitle>
+            <DialogDescription className="text-emerald-100 opacity-90">
+              Ajouter des Gouds au compte de {selectedAffiliateForCredit?.name}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-8 space-y-6">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Montant à ajouter (Goud)</Label>
+              <div className="relative">
+                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-600" />
+                <Input 
+                  type="number"
+                  value={quickCreditAmount}
+                  onChange={(e) => setQuickCreditAmount(Number(e.target.value))}
+                  placeholder="0.00"
+                  className="pl-12 h-14 rounded-2xl text-2xl font-black border-emerald-100 focus:ring-emerald-200"
+                />
+              </div>
+              <p className="text-[11px] text-gray-400 text-center">Solde actuel: <span className="font-bold text-dark">{selectedAffiliateForCredit?.balance} G</span></p>
+            </div>
+
+            <div className="flex gap-2 flex-wrap justify-center">
+              {[50, 100, 250, 500, 1000].map(amt => (
+                <Button 
+                  key={amt} 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setQuickCreditAmount(amt)}
+                  className="rounded-xl border-emerald-100 hover:bg-emerald-50 text-emerald-600 font-bold"
+                >
+                  +{amt}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <DialogFooter className="p-8 border-t bg-gray-50 rounded-b-[2rem] gap-2">
+            <Button variant="outline" onClick={() => setIsQuickCreditDialogOpen(false)} className="rounded-xl h-12 font-bold">Annuler</Button>
+            <Button 
+              onClick={handleQuickCredit} 
+              disabled={isSaving || quickCreditAmount <= 0}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-12 font-black px-8 shadow-lg shadow-emerald-200 border-0 flex-1"
+            >
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+              Confirmer l'ajout
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Unlock Edits Dialog */}
+      <Dialog open={isUnlockDialogOpen} onOpenChange={setIsUnlockDialogOpen}>
+        <DialogContent className="sm:max-w-[400px] rounded-[2rem]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-black text-2xl">
+              <Shield className="h-6 w-6 text-primary" />
+              Déverrouiller
+            </DialogTitle>
+            <DialogDescription>
+              Entrez le code de sécurité pour déverrouiller la modification des affiliés.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-6 space-y-4">
+            <Input 
+              type="password"
+              placeholder="Code de sécurité"
+              value={lockCodeInput}
+              onChange={(e) => setLockCodeInput(e.target.value)}
+              className="h-14 rounded-2xl text-center text-4xl font-black tracking-[1em]"
+              maxLength={4}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsUnlockDialogOpen(false)} className="rounded-xl h-11 font-bold">Annuler</Button>
+            <Button onClick={handleToggleLockEdits} className="bg-primary hover:bg-[#D98A1E] text-white rounded-xl h-11 font-bold flex-1 border-0">
+              Confirmer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Withdrawal Toggle Confirm Dialog */}
+      <Dialog open={isWithdrawalToggleConfirmOpen} onOpenChange={setIsWithdrawalToggleConfirmOpen}>
+        <DialogContent className="sm:max-w-[400px] rounded-[2rem]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-black text-2xl">
+              <AlertCircle className="h-6 w-6 text-red-500" />
+              {settings?.withdrawalsEnabled ? 'Désactiver les retraits ?' : 'Réactiver les retraits ?'}
+            </DialogTitle>
+            <DialogDescription>
+              {settings?.withdrawalsEnabled 
+                ? 'Cette action bloquera toutes les nouvelles demandes de retrait pour les affiliés.' 
+                : 'Cette action autorisera à nouveau les affiliés à faire des demandes de retrait.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6 flex flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setIsWithdrawalToggleConfirmOpen(false)} className="rounded-xl h-11 font-bold flex-1">Annuler</Button>
+            <Button 
+              onClick={handleToggleWithdrawals}
+              className={`rounded-xl h-11 font-bold flex-1 border-0 ${settings?.withdrawalsEnabled ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white`}
+            >
+              Confirmer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={isAdminDialogOpen} onOpenChange={setIsAdminDialogOpen}>
         <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col rounded-3xl p-0 overflow-hidden border-0 shadow-2xl">
           <DialogHeader className="p-8 bg-primary text-white rounded-b-[2rem] shrink-0">
