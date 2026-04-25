@@ -3,7 +3,6 @@ import { Button } from './ui/button';
 import { auth } from '@/lib/firebase';
 import { signInWithPopup, GoogleAuthProvider, signOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { useAuth } from '../hooks/useAuth';
-import { ADMIN_EMAILS } from '../constants';
 import { useSettings } from '../services/parcelService';
 import { usePendingCounts } from '../services/affiliateService';
 import { toast } from 'sonner';
@@ -34,29 +33,16 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
     try {
       // Ensure persistence is set
       await setPersistence(auth, browserLocalPersistence);
-      const result = await signInWithPopup(auth, provider);
-      const loggedUser = result.user;
-
-      // Check if user is admin      
-      if (!ADMIN_EMAILS.includes(loggedUser.email || '')) {
-        await signOut(auth);
-        toast.error("Accès refusé: Vous n'êtes pas administrateur.");
-        setIsLoggingIn(false);
-        return;
-      }
-
+      await signInWithPopup(auth, provider);
       toast.success("Connexion réussie !");
       setIsLoggingIn(false);
-      onViewChange('admin'); // Redirect to admin dashboard
     } catch (error: any) {
       console.error("Login failed:", error);
       setIsLoggingIn(false);
       setLastError(error.code || error.message);
 
       if (error.code === 'auth/popup-closed-by-user') {
-        toast.info("Connexion annulée par l'utilisateur.");
-      } else if (error.code === 'auth/popup-blocked') {
-        toast.error("Le popup de connexion a été bloqué par votre navigateur. Veuillez l'autoriser.");
+        toast.error("La fenêtre de connexion a été fermée.");
       } else if (error.code === 'auth/cancelled-popup-request') {
         // Just ignore this one silently or show a small toast, 
         // as it usually means a second click happened.

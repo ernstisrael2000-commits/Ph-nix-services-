@@ -8,7 +8,6 @@ import { Label } from './ui/label';
 import { Plus, Trash2, ExternalLink, Video, MapPin, MessageCircle, Save } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { toast } from 'sonner';
-import { ADMIN_EMAILS } from '../constants';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -93,6 +92,8 @@ export default function AdminShippingManager() {
       [field]: (current[field] as any[]).map(item => item.id === id ? { ...item, ...updates } : item)
     });
   };
+
+  const ADMIN_EMAILS = ['ernstisrael2000@gmail.com', 'ernstisrael508@gmail.com'];
 
   if (loading) return <div className="p-8 text-center text-gray-500">Chargement des configurations...</div>;
 

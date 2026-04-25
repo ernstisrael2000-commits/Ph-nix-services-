@@ -4,7 +4,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { UserProfile } from '../types';
 
-import { ADMIN_EMAILS } from '../constants';
+const ADMIN_EMAILS = ['ernstisrael2000@gmail.com', 'ernstisrael508@gmail.com'];
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
