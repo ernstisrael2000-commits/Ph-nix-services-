@@ -171,18 +171,23 @@ service cloud.firestore {
     }
 
     match /admin_accounts/{adminId} {
+      // Broad read for login query and dashboard listing
       allow read: if true;
-      allow update: if isAdmin() || (
-        isAuthenticated() && 
-        (resource.data.uid == null || resource.data.uid == "" || resource.data.uid == request.auth.uid) &&
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'failedAttempts', 'lockUntil', 'updatedAt']))
+      allow update: if isAuthenticated() && (
+        // Allow linking UID if it's undefined/empty or already matches
+        (!('uid' in resource.data) || resource.data.uid == null || resource.data.uid == "" || resource.data.uid == request.auth.uid) ||
+        // Always allow Super Admin to update anything
+        isAdmin()
+      ) && (
+        // Only allow updating tracking fields unless admin
+        isAdmin() || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'failedAttempts', 'lockUntil', 'updatedAt'])
       );
       allow create, delete: if isAdmin();
     }
 
     match /admin_uids/{uid} {
       allow read: if true;
-      allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == uid);
+      allow write: if (isAuthenticated() && request.auth.uid == uid) || isAdmin();
     }
 
     match /admin_login_logs/{logId} {

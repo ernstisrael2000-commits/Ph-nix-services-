@@ -217,13 +217,24 @@ export const checkAdminLogin = async (fullName: string, password: string, loginC
     await logAdminAttempt(fullName, true);
     
     return { success: true, admin: adminData };
-  } catch (error) {
-    console.error("Login Error:", error);
+  } catch (error: any) {
+    console.error("Login Error Details:", {
+      message: error.message,
+      code: error.code,
+      stack: error.stack,
+      auth: {
+        uid: auth.currentUser?.uid,
+        isAnonymous: auth.currentUser?.isAnonymous
+      }
+    });
+    
     try {
-      handleFirestoreError(error, 'list', ADMINS_COLLECTION, auth);
-    } catch (e) {
-      // Return standard error msg
-    }
-    return { success: false, error: "Une erreur est survenue lors de la connexion." };
+      // Don't throw the JSON error here, just log it and return a user-friendly message
+      if (error.code === 'permission-denied') {
+        return { success: false, error: "Permissions insuffisantes pour cette opération." };
+      }
+    } catch (e) { }
+    
+    return { success: false, error: "Une erreur est survenue lors de la connexion. (" + (error.code || 'unknown') + ")" };
   }
 };

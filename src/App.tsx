@@ -21,7 +21,7 @@ export default function App() {
   const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping'>('home');
   const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping')[]>(['home']);
   const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'admin' | null>(null);
-  const { loading } = useAuth();
+  const { user, loading, isAdmin: isGoogleAdmin } = useAuth();
   const { settings } = useSettings();
   const [showAnnouncement, setShowAnnouncement] = useState(true);
   
@@ -30,14 +30,34 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
+  // Automatically sync Google Admin with loggedAdmin
+  useEffect(() => {
+    if (isGoogleAdmin && user && !loggedAdmin) {
+      const gAdmin: AdminAccount = {
+        fullName: user.displayName || user.email?.split('@')[0] || 'Admin Google',
+        password: '', // Not used for Google login
+        permissions: ['all'],
+        isSuperAdmin: true, // Treat direct Google admins as super admins or adjust as needed
+        uid: user.uid,
+        failedAttempts: 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      setLoggedAdmin(gAdmin);
+    }
+  }, [isGoogleAdmin, user, loggedAdmin]);
+
   const handleAdminLogin = (admin: AdminAccount) => {
     setLoggedAdmin(admin);
     localStorage.setItem('neopay_admin', JSON.stringify(admin));
   };
 
-  const handleAdminLogout = () => {
+  const handleAdminLogout = async () => {
     setLoggedAdmin(null);
     localStorage.removeItem('neopay_admin');
+    const { signOut } = await import('firebase/auth');
+    const { auth } = await import('./lib/firebase');
+    await signOut(auth);
     setView('home');
   };
 
