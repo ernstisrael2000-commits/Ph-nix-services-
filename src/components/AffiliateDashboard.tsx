@@ -562,11 +562,13 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
           </div>
           {withdrawals.length > 0 && (
             <Dialog open={isClearHistoryConfirmOpen} onOpenChange={setIsClearHistoryConfirmOpen}>
-              <DialogTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50 hover:text-red-600 h-8 rounded-lg text-[10px] font-black uppercase">
-                  Effacer l'historique
-                </Button>
-              </DialogTrigger>
+              <DialogTrigger 
+                render={
+                  <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50 hover:text-red-600 h-8 rounded-lg text-[10px] font-black uppercase">
+                    Effacer l'historique
+                  </Button>
+                } 
+              />
               <DialogContent className="max-w-sm rounded-[1.5rem]">
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">

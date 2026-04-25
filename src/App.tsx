@@ -8,6 +8,7 @@ import ShippingView from './components/ShippingView';
 import AffiliateLogin from './components/AffiliateLogin';
 import AffiliateDashboard from './components/AffiliateDashboard';
 import { Toaster } from './components/ui/sonner';
+import AccessChoice from './components/AccessChoice';
 import { useAuth } from './hooks/useAuth';
 import { useSettings } from './services/parcelService';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -19,6 +20,7 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function App() {
   const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping'>('home');
   const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping')[]>(['home']);
+  const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'admin' | null>(null);
   const { loading } = useAuth();
   const { settings } = useSettings();
   const [showAnnouncement, setShowAnnouncement] = useState(true);
@@ -69,9 +71,11 @@ export default function App() {
     if (newView === view) return;
     setHistory(prev => [...prev, newView]);
     setView(newView);
+    setAccessChoice(null); // Reset when switching
   };
 
   const handleBack = () => {
+    setAccessChoice(null); // Clear selection on back
     if (history.length > 1) {
       const newHistory = [...history];
       newHistory.pop(); // remove current
@@ -234,8 +238,14 @@ export default function App() {
                 affiliateId={loggedAffiliate.id!} 
                 onLogout={handleAffiliateLogout} 
               />
-            ) : (
+            ) : loggedAdmin ? (
+              <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
+            ) : accessChoice === 'affiliate' ? (
               <AffiliateLogin onLogin={handleAffiliateLogin} />
+            ) : accessChoice === 'admin' ? (
+              <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => setAccessChoice(null)} />
+            ) : (
+              <AccessChoice onChoice={(choice) => setAccessChoice(choice)} />
             )
           )}
         </main>
