@@ -2425,7 +2425,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                                     setIsAffiliateDialogOpen(true);
                                   }}
                                 >
-                                  <Edit2 className="h-3 w-3 mr-2" /> Détailler
+                                  <Edit2 className="h-4 w-4 mr-2" /> Détails
                                 </Button>
                                 <Button 
                                   size="sm" 
@@ -3507,7 +3507,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
               </div>
             </div>
 
-            <div className={`flex-1 overflow-y-auto px-8 py-6 custom-scrollbar bg-gray-50/30 ${settings?.lockAffiliateEdits ? 'pointer-events-none grayscale-[0.5] opacity-80' : ''}`}>
+            <div className={`flex-1 overflow-y-auto px-8 py-6 custom-scrollbar bg-gray-50/30 ${settings?.lockAffiliateEdits ? 'grayscale-[0.5] opacity-80' : ''}`}>
               <TabsContent value="identity" className="mt-0 space-y-6 animate-in fade-in slide-in-from-bottom-2">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
@@ -3920,8 +3920,12 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
               </Button>
               <Button 
                 onClick={handleSaveAffiliate} 
-                disabled={isSaving} 
-                className="flex-1 sm:flex-none bg-primary hover:bg-[#D98A1E] text-white rounded-2xl h-12 font-bold shadow-xl shadow-accent-light/50 border-0 px-10 transition-all active:scale-95"
+                disabled={isSaving || settings?.lockAffiliateEdits} 
+                className={`flex-1 sm:flex-none rounded-2xl h-12 font-bold shadow-xl border-0 px-10 transition-all active:scale-95 ${
+                  settings?.lockAffiliateEdits 
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50' 
+                    : 'bg-primary hover:bg-[#D98A1E] text-white shadow-accent-light/50'
+                }`}
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
                 {editingAffiliate ? 'Mettre à jour' : 'Créer le compte'}
