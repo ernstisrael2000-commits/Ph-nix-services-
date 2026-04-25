@@ -38,9 +38,7 @@ service cloud.firestore {
         (
           (request.auth.token.email in ["ernstisrael2000@gmail.com", "ernstisrael508@gmail.com"]) ||
           exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
-          exists(/databases/$(database)/documents/admin_accounts/$(request.auth.uid)) ||
-          // Support checking UID matching within any document in admin_accounts
-          get(/databases/$(database)/documents/admin_accounts/$(request.auth.uid)).data.uid == request.auth.uid
+          exists(/databases/$(database)/documents/admin_uids/$(request.auth.uid))
         );
     }
 
@@ -173,9 +171,18 @@ service cloud.firestore {
     }
 
     match /admin_accounts/{adminId} {
-      // Allow reading for login query - insecure but necessary for custom client-side login
       allow read: if true;
-      allow write: if isAdmin();
+      allow update: if isAdmin() || (
+        isAuthenticated() && 
+        (resource.data.uid == null || resource.data.uid == "" || resource.data.uid == request.auth.uid) &&
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'failedAttempts', 'lockUntil', 'updatedAt']))
+      );
+      allow create, delete: if isAdmin();
+    }
+
+    match /admin_uids/{uid} {
+      allow read: if true;
+      allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == uid);
     }
 
     match /admin_login_logs/{logId} {

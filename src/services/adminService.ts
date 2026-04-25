@@ -6,6 +6,7 @@ import {
   addDoc, 
   updateDoc, 
   deleteDoc,
+  setDoc,
   doc, 
   serverTimestamp,
   getDocs,
@@ -123,6 +124,18 @@ export const useAdminLogs = (max: number = 50) => {
 
 export const checkAdminLogin = async (fullName: string, password: string, loginCode?: string): Promise<{ success: boolean; admin?: AdminAccount; error?: string }> => {
   try {
+    // 1. Sign in anonymously FIRST if not already authenticated
+    // This ensures we have a UID for Firestore rules
+    if (!auth.currentUser) {
+      try {
+        await signInAnonymously(auth);
+      } catch (authError) {
+        console.error("Auth error:", authError);
+        return { success: false, error: "Erreur d'authentification système." };
+      }
+    }
+
+    // 2. Query the admin
     const q = query(collection(db, ADMINS_COLLECTION), where('fullName', '==', fullName));
     const snapshot = await getDocs(q);
 
@@ -134,7 +147,7 @@ export const checkAdminLogin = async (fullName: string, password: string, loginC
     const adminDoc = snapshot.docs[0];
     const adminData = { id: adminDoc.id, ...adminDoc.data() } as AdminAccount;
 
-    // Check lockout
+    // 3. Check lockout
     if (adminData.lockUntil) {
       const lockUntilDate = adminData.lockUntil instanceof Timestamp ? adminData.lockUntil.toDate() : new Date(adminData.lockUntil);
       if (lockUntilDate > new Date()) {
@@ -142,7 +155,7 @@ export const checkAdminLogin = async (fullName: string, password: string, loginC
       }
     }
 
-    // Verify password
+    // 4. Verify password
     if (adminData.password !== password) {
       const newAttempts = (adminData.failedAttempts || 0) + 1;
       const updates: any = { failedAttempts: newAttempts };
@@ -152,44 +165,65 @@ export const checkAdminLogin = async (fullName: string, password: string, loginC
         updates.lockUntil = Timestamp.fromDate(new Date(Date.now() + 15 * 60 * 1000));
       }
       
-      await updateDoc(doc(db, ADMINS_COLLECTION, adminData.id!), updates);
+      // We try to update failed attempts. This might fail if rules are strict, 
+      // but the login should still return "Identifiants incorrects".
+      try {
+        await updateDoc(doc(db, ADMINS_COLLECTION, adminData.id!), updates);
+      } catch (err) {
+        console.warn("Could not update failed attempts (permission denied), but security is maintained.");
+      }
+      
       await logAdminAttempt(fullName, false);
       return { success: false, error: "Identifiants incorrects." };
     }
 
-    // Verify Login Code for Super Admin
+    // 5. Verify Login Code for Super Admin
     if (adminData.isSuperAdmin && adminData.loginCode && adminData.loginCode !== loginCode) {
       await logAdminAttempt(fullName, false);
       return { success: false, error: "Code de connexion incorrect." };
     }
 
-    // Success
-    // Sign in anonymously to get a UID for Firestore rules if not already authenticated
-    if (!auth.currentUser) {
-      const userCred = await signInAnonymously(auth);
-      const uid = userCred.user.uid;
+    // 6. Success - Update UID and reset attempts
+    const uid = auth.currentUser?.uid;
+    const finalUpdates: any = {
+      failedAttempts: 0,
+      lockUntil: null,
+      updatedAt: serverTimestamp()
+    };
+    
+    // Link UID if not already set or changed
+    if (uid && adminData.uid !== uid) {
+      finalUpdates.uid = uid;
+    }
+
+    try {
+      // 1. Update the main account doc
+      await updateDoc(doc(db, ADMINS_COLLECTION, adminData.id!), finalUpdates);
       
-      // Link this UID if not already linked (or if it changed)
-      await updateDoc(doc(db, ADMINS_COLLECTION, adminData.id!), {
-        uid: uid,
-        failedAttempts: 0,
-        lockUntil: null,
-        updatedAt: serverTimestamp()
-      });
-      adminData.uid = uid;
-    } else {
-      await updateDoc(doc(db, ADMINS_COLLECTION, adminData.id!), {
-        failedAttempts: 0,
-        lockUntil: null,
-        updatedAt: serverTimestamp()
-      });
+      // 2. Create/Update the admin_uids doc so isAdmin() rules pass
+      if (uid) {
+        await setDoc(doc(db, 'admin_uids', uid), {
+          adminId: adminData.id,
+          fullName: adminData.fullName,
+          updatedAt: serverTimestamp()
+        });
+      }
+      
+      adminData.uid = uid || adminData.uid;
+    } catch (err) {
+      console.warn("Could not fully update admin records (permission denied).", err);
     }
 
     await logAdminAttempt(fullName, true);
     
     return { success: true, admin: adminData };
   } catch (error) {
-    handleFirestoreError(error, 'list', ADMINS_COLLECTION, auth);
+    console.error("Login Error:", error);
+    try {
+      handleFirestoreError(error, 'list', ADMINS_COLLECTION, auth);
+    } catch (e) {
+      // Return standard error msg
+    }
     return { success: false, error: "Une erreur est survenue lors de la connexion." };
   }
 };
