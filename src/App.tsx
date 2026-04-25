@@ -119,47 +119,76 @@ export default function App() {
 
         <AnimatePresence>
           {settings?.showGlobalAnnouncement && settings?.globalAnnouncement && showAnnouncement && (
-            <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 pointer-events-none">
+            <div className="fixed inset-0 z-50 flex items-center justify-center px-4 p-6 pointer-events-none">
               <motion.div 
-                initial={{ opacity: 0, y: -20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="w-full max-w-lg bg-white/95 backdrop-blur-md rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-primary/20 pointer-events-auto overflow-hidden ring-1 ring-black/5"
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="w-full max-w-lg bg-white/98 backdrop-blur-xl rounded-[2.5rem] shadow-[0_30px_70px_rgba(0,0,0,0.35)] border border-primary/20 pointer-events-auto overflow-hidden ring-1 ring-black/10"
               >
-                <div className="relative p-6 sm:p-8">
-                  <div className="flex items-start gap-4">
-                    <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0 shadow-inner">
-                      <Bell className="h-6 w-6 text-primary animate-ring" />
-                    </div>
-                    <div className="flex-1 pt-1">
-                      <h3 className="text-lg font-black text-dark mb-1 flex items-center gap-2">
-                        Message Spécial Neopay
-                        <span className="flex h-2 w-2 rounded-full bg-primary animate-pulse" />
-                      </h3>
-                      <p className="text-gray-600 font-medium leading-relaxed">
-                        {settings.globalAnnouncement}
-                      </p>
+                <div className="relative">
+                  {/* Glass Header */}
+                  <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-primary/5">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
+                        <Bell className="h-5 w-5 text-white animate-ring" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-black text-dark tracking-tight leading-none">
+                          Annonce Spéciale
+                        </h3>
+                        <p className="text-[10px] uppercase font-black text-primary/60 tracking-widest mt-1">
+                          Neopay Intelligence
+                        </p>
+                      </div>
                     </div>
                     <button 
                       onClick={() => setShowAnnouncement(false)}
-                      className="h-8 w-8 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors shrink-0 -mt-1 -mr-1"
+                      className="h-9 w-9 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-all active:scale-95 text-gray-400 hover:text-dark border border-gray-100"
                     >
-                      <X className="h-5 w-5 text-gray-400" />
+                      <X className="h-5 w-5" />
                     </button>
                   </div>
+
+                  {/* Scrollable Content Area */}
+                  <div className="p-6 sm:p-8 max-h-[40vh] overflow-y-auto no-scrollbar scroll-smooth">
+                    <div className="space-y-4">
+                      <p className="text-gray-600 font-bold leading-relaxed whitespace-pre-wrap text-sm sm:text-base">
+                        {settings.globalAnnouncement}
+                      </p>
+                    </div>
+                  </div>
                   
-                  <div className="mt-6 flex justify-end">
+                  {/* Action Footer */}
+                  <div className="p-6 pt-0 flex justify-center">
                     <Button 
                       onClick={() => setShowAnnouncement(false)}
-                      className="h-10 px-8 rounded-xl bg-primary hover:bg-[#D98A1E] text-white font-bold text-sm shadow-lg shadow-accent-light/50 border-0"
+                      className="w-full h-12 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black text-sm shadow-xl shadow-accent-light/60 border-0 transition-all hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0 group"
                     >
-                      J'ai compris
+                      J'AI COMPRIS
+                      <motion.span 
+                        animate={{ x: [0, 5, 0] }}
+                        transition={{ repeat: Infinity, duration: 1.5 }}
+                        className="ml-2"
+                      >
+                        →
+                      </motion.span>
                     </Button>
                   </div>
                 </div>
-                {/* Decorative accent */}
-                <div className="h-1.5 w-full bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
+
+                {/* Bottom decorative bar */}
+                <div className="h-2 w-full bg-gradient-to-r from-transparent via-primary to-transparent opacity-30" />
               </motion.div>
+
+              {/* Backdrop Blur/Dim */}
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/40 backdrop-blur-[2px] -z-10"
+                onClick={() => setShowAnnouncement(false)}
+              />
             </div>
           )}
         </AnimatePresence>
@@ -195,7 +224,7 @@ export default function App() {
             loggedAdmin ? (
               <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
             ) : (
-              <AdminLogin onLogin={handleAdminLogin} />
+              <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => handleViewChange('home')} />
             )
           )}
 

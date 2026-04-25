@@ -560,6 +560,32 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
             </CardTitle>
             <CardDescription>Vos transactions récentes.</CardDescription>
           </div>
+          {withdrawals.length > 0 && (
+            <Dialog open={isClearHistoryConfirmOpen} onOpenChange={setIsClearHistoryConfirmOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50 hover:text-red-600 h-8 rounded-lg text-[10px] font-black uppercase">
+                  Effacer l'historique
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-sm rounded-[1.5rem]">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5 text-red-500" />
+                    Confirmation
+                  </DialogTitle>
+                  <DialogDescription>
+                    Êtes-vous sûr de vouloir supprimer TOUT votre historique de retrait ? Cette action est irréversible.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter className="gap-2 sm:gap-0 mt-4">
+                  <Button variant="outline" onClick={() => setIsClearHistoryConfirmOpen(false)} className="rounded-xl">Annuler</Button>
+                  <Button variant="destructive" onClick={handleClearWithdrawalHistory} disabled={isSubmitting} className="rounded-xl bg-red-600">
+                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Oui, supprimer"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </CardHeader>
           <CardContent className="p-0">
