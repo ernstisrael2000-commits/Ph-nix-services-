@@ -9,15 +9,19 @@ import AffiliateLogin from './components/AffiliateLogin';
 import AffiliateDashboard from './components/AffiliateDashboard';
 import { Toaster } from './components/ui/sonner';
 import { useAuth } from './hooks/useAuth';
+import { useSettings } from './services/parcelService';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Loader2, Package, ChevronLeft } from 'lucide-react';
+import { Loader2, Package, ChevronLeft, Bell, X } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Affiliate, AdminAccount } from './types';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
   const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping'>('home');
   const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping')[]>(['home']);
   const { loading } = useAuth();
+  const { settings } = useSettings();
+  const [showAnnouncement, setShowAnnouncement] = useState(true);
   
   const [loggedAdmin, setLoggedAdmin] = useState<AdminAccount | null>(() => {
     const saved = localStorage.getItem('neopay_admin');
@@ -112,6 +116,53 @@ export default function App() {
           currentView={view}
           onViewChange={handleViewChange}
         />
+
+        <AnimatePresence>
+          {settings?.showGlobalAnnouncement && settings?.globalAnnouncement && showAnnouncement && (
+            <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 pointer-events-none">
+              <motion.div 
+                initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-lg bg-white/95 backdrop-blur-md rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-primary/20 pointer-events-auto overflow-hidden ring-1 ring-black/5"
+              >
+                <div className="relative p-6 sm:p-8">
+                  <div className="flex items-start gap-4">
+                    <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0 shadow-inner">
+                      <Bell className="h-6 w-6 text-primary animate-ring" />
+                    </div>
+                    <div className="flex-1 pt-1">
+                      <h3 className="text-lg font-black text-dark mb-1 flex items-center gap-2">
+                        Message Spécial Neopay
+                        <span className="flex h-2 w-2 rounded-full bg-primary animate-pulse" />
+                      </h3>
+                      <p className="text-gray-600 font-medium leading-relaxed">
+                        {settings.globalAnnouncement}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setShowAnnouncement(false)}
+                      className="h-8 w-8 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors shrink-0 -mt-1 -mr-1"
+                    >
+                      <X className="h-5 w-5 text-gray-400" />
+                    </button>
+                  </div>
+                  
+                  <div className="mt-6 flex justify-end">
+                    <Button 
+                      onClick={() => setShowAnnouncement(false)}
+                      className="h-10 px-8 rounded-xl bg-primary hover:bg-[#D98A1E] text-white font-bold text-sm shadow-lg shadow-accent-light/50 border-0"
+                    >
+                      J'ai compris
+                    </Button>
+                  </div>
+                </div>
+                {/* Decorative accent */}
+                <div className="h-1.5 w-full bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
         
         <main className="animate-in fade-in duration-500 pt-20 flex-grow relative">
           {view !== 'home' && (

@@ -44,6 +44,13 @@ export interface CardTopup {
 
 export type AffiliateLevel = 'Bronze' | 'Silver' | 'Gold' | 'Elite' | 'VIP';
 
+export type SponsorType = 'direct' | 'indirect';
+
+export interface AdditionalSponsor {
+  id: string;
+  type: SponsorType;
+}
+
 export interface Affiliate {
   id?: string;
   username: string;
@@ -58,6 +65,8 @@ export interface Affiliate {
   code: string;
   level: AffiliateLevel;
   parentAffiliateId?: string;
+  grandparentAffiliateId?: string;
+  additionalSponsors?: AdditionalSponsor[];
   directRevenue: number;
   indirectRevenue: number;
   totalEarnings: number;
@@ -96,6 +105,8 @@ export interface AppSettings {
   lockAffiliateEdits?: boolean;
   lockAffiliateEditsCode?: string;
   withdrawalsEnabled?: boolean;
+  globalAnnouncement?: string;
+  showGlobalAnnouncement?: boolean;
   officialWinners?: {
     id: string;
     name: string;

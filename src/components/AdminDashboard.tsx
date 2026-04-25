@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuGroup,
+  DropdownMenuSeparator
+} from './ui/dropdown-menu';
+import { 
   Smartphone,
   Plus, 
   Search, 
@@ -32,6 +41,7 @@ import {
   HelpCircle,
   Zap,
   Star,
+  ChevronRight,
   TrendingUp,
   LayoutDashboard
 } from 'lucide-react';
@@ -550,6 +560,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     whatsappMessage: ''
   });
   const [tempCardImageUrl, setTempCardImageUrl] = useState('');
+  const [pendingSettings, setPendingSettings] = useState<Partial<AppSettings>>({});
 
   const [isAwarding, setIsAwarding] = useState(false);
   const [isClearingWinners, setIsClearingWinners] = useState(false);
@@ -568,6 +579,9 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const [lockCodeInput, setLockCodeInput] = useState('');
   const [isUnlockDialogOpen, setIsUnlockDialogOpen] = useState(false);
   const [isWithdrawalToggleConfirmOpen, setIsWithdrawalToggleConfirmOpen] = useState(false);
+  const [isSponsorSelectorOpen, setIsSponsorSelectorOpen] = useState(false);
+  const [selectingSponsorType, setSelectingSponsorType] = useState<'direct' | 'indirect' | 'extra'>('direct');
+  const [sponsorSearchQuery, setSponsorSearchQuery] = useState('');
 
   // Helper to ensure the admin creation dialog is always usable
   const handleOpenAdminDialog = (adminAccount?: AdminAccount) => {
@@ -688,7 +702,9 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     directRevenue: 0,
     indirectRevenue: 0,
     totalEarnings: 0,
-    parentAffiliateId: ''
+    parentAffiliateId: '',
+    grandparentAffiliateId: '',
+    additionalSponsors: []
   });
 
   const [isSaving, setIsSaving] = useState(false);
@@ -1436,7 +1452,10 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
           directRevenue: 0,
           indirectRevenue: 0,
           totalEarnings: 0,
-          points: 0
+          points: 0,
+          parentAffiliateId: '',
+          grandparentAffiliateId: '',
+          additionalSponsors: []
         });
         setIsAffiliateDialogOpen(true);
       }
@@ -2157,7 +2176,15 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                 password: '', 
                 code: '',
                 balance: 0,
-                referredClients: 0
+                referredClients: 0,
+                points: 0,
+                level: 'Bronze',
+                directRevenue: 0,
+                indirectRevenue: 0,
+                totalEarnings: 0,
+                parentAffiliateId: '',
+                grandparentAffiliateId: '',
+                additionalSponsors: []
               });
               setIsAffiliateDialogOpen(true);
             }} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 shadow-md border-0">
@@ -2881,6 +2908,48 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                 </div>
 
                 <div className="space-y-4 pt-4 border-t">
+                  <h3 className="text-sm font-bold text-dark flex items-center gap-2">
+                    <Bell className="h-4 w-4 text-primary" />
+                    Annonce Globale
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 rounded-2xl bg-indigo-50/30 border border-indigo-100">
+                      <div>
+                        <p className="text-sm font-bold text-dark">Message de bienvenue / Annonce</p>
+                        <p className="text-xs text-gray-500">Afficher un message à tous les visiteurs.</p>
+                      </div>
+                      <Checkbox 
+                        checked={pendingSettings?.showGlobalAnnouncement ?? settings?.showGlobalAnnouncement} 
+                        onCheckedChange={(checked) => setPendingSettings(prev => ({ ...prev, showGlobalAnnouncement: !!checked }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                       <Label className="text-xs font-bold text-gray-500">Contenu du message</Label>
+                       <Textarea 
+                          placeholder="Entrez le message à afficher sur tout le site..."
+                          value={pendingSettings?.globalAnnouncement ?? settings?.globalAnnouncement ?? ''}
+                          onChange={(e) => setPendingSettings(prev => ({ ...prev, globalAnnouncement: e.target.value }))}
+                          className="rounded-2xl border-gray-100 min-h-[80px]"
+                       />
+                       <p className="text-xs text-gray-400">Ce message apparaîtra en haut de chaque page.</p>
+                    </div>
+                    <Button 
+                      onClick={async () => {
+                        const dataToUpdate = {
+                          showGlobalAnnouncement: pendingSettings.showGlobalAnnouncement !== undefined ? pendingSettings.showGlobalAnnouncement : settings?.showGlobalAnnouncement,
+                          globalAnnouncement: pendingSettings.globalAnnouncement !== undefined ? pendingSettings.globalAnnouncement : settings?.globalAnnouncement
+                        };
+                        await updateSettings(dataToUpdate);
+                        toast.success("Annonce enregistrée !");
+                      }}
+                      className="w-full bg-primary hover:bg-[#D98A1E] text-white font-bold rounded-xl"
+                    >
+                      Enregistrer l'annonce
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t">
                   <h3 className="text-sm font-bold text-dark">Sécurité & Retraits</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Card className={`border shadow-sm transition-colors ${settings?.withdrawalsEnabled ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30'}`}>
@@ -2920,28 +2989,52 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                 </div>
 
                 <div className="space-y-2 pt-4 border-t">
-                  <Label>Code de déverrouillage (pour modifications verrouillées)</Label>
-                  <div className="flex gap-2">
+                  <Label className="text-xs font-bold text-gray-500 uppercase">Code de déverrouillage</Label>
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Input 
                       placeholder="Ex: 1234" 
-                      value={settings?.lockAffiliateEditsCode || ''} 
-                      onChange={(e) => updateSettings({ lockAffiliateEditsCode: e.target.value })}
-                      className="font-mono"
+                      value={pendingSettings?.lockAffiliateEditsCode ?? settings?.lockAffiliateEditsCode ?? ''} 
+                      onChange={(e) => setPendingSettings(prev => ({ ...prev, lockAffiliateEditsCode: e.target.value }))}
+                      className="font-mono text-xl font-bold tracking-widest text-primary"
                     />
+                    <Button 
+                      onClick={async () => {
+                        if (pendingSettings.lockAffiliateEditsCode !== undefined) {
+                          await updateSettings({ lockAffiliateEditsCode: pendingSettings.lockAffiliateEditsCode });
+                          toast.success("Code de verrouillage enregistré !");
+                        }
+                      }}
+                      className="bg-primary hover:bg-[#D98A1E] text-white font-bold rounded-xl"
+                    >
+                      Enregistrer le code
+                    </Button>
                   </div>
+                  <p className="text-[10px] text-gray-400 italic">Le code actuel est: <span className="font-bold text-primary">{settings?.lockAffiliateEditsCode || "Non défini"}</span></p>
                 </div>
 
                 <div className="space-y-2 pt-4 border-t">
-                  <Label>Numéro WhatsApp Admin (pour notifications)</Label>
-                  <div className="flex gap-2">
+                  <Label className="text-xs font-bold text-gray-500 uppercase">Numéro WhatsApp Admin</Label>
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Input 
                       placeholder="+509..." 
-                      value={settings?.whatsappAdminNumber || ''} 
-                      onChange={(e) => updateSettings({ whatsappAdminNumber: e.target.value })}
+                      value={pendingSettings?.whatsappAdminNumber ?? settings?.whatsappAdminNumber ?? ''} 
+                      onChange={(e) => setPendingSettings(prev => ({ ...prev, whatsappAdminNumber: e.target.value }))}
+                      className="rounded-xl"
                     />
+                    <Button 
+                      onClick={async () => {
+                        if (pendingSettings.whatsappAdminNumber !== undefined) {
+                          await updateSettings({ whatsappAdminNumber: pendingSettings.whatsappAdminNumber });
+                          toast.success("Numéro WhatsApp enregistré !");
+                        }
+                      }}
+                      className="bg-primary hover:bg-[#D98A1E] text-white font-bold rounded-xl"
+                    >
+                      Enregistrer le numéro
+                    </Button>
                   </div>
                   <p className="text-xs text-gray-500">
-                    Ce numéro recevra les demandes de retrait des affiliés.
+                    Ce numéro recevra les demandes de retrait des affiliés. Actuel: <span className="font-bold text-primary">{settings?.whatsappAdminNumber || 'Non configuré'}</span>
                   </p>
                 </div>
               </div>
@@ -3086,7 +3179,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                         >
                           <Edit2 className="h-4 w-4" />
                         </Button>
-                        {!acc.isSuperAdmin && (
+                        {(acc.id !== admin.id && admin.isSuperAdmin) && (
                           <Button 
                             variant="ghost" 
                             size="icon" 
@@ -3158,9 +3251,9 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                   <SelectValue placeholder="Sélectionner le type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="purchase">Achat Général (2.5 Goud)</SelectItem>
-                  <SelectItem value="subscription">Abonnement (Prix variable)</SelectItem>
-                  <SelectItem value="virtual_card">Carte Virtuelle MasterCard (500 Goud)</SelectItem>
+                  <SelectItem value="purchase">Top Up / Autres (2 Goud)</SelectItem>
+                  <SelectItem value="subscription">Streaming / Abonnement (75 Goud+)</SelectItem>
+                  <SelectItem value="virtual_card">Carte Virtuelle (350 Goud)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -3175,15 +3268,14 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                   className="rounded-xl"
                 />
                 <p className="text-[10px] text-blue-600 font-bold">
-                  Note: Netflix / Prime = 75 Goud direct + 25 Goud indirect.
+                  Note: Netflix / Prime = 75 Goud direct + 15 Goud (P1) + 10 Goud (P2).
                 </p>
               </div>
             )}
 
             <div className="bg-accent-light/50 p-3 rounded-lg border border-accent-light">
               <p className="text-xs text-primary font-medium">
-                L'affilié recevra la commission directe. 
-                S'il a un parrain, celui-ci recevra la commission indirecte associée.
+                Note: L'affilié reçoit le gain direct. Le parrain direct et le parrain indirect reçoivent leurs commissions respectives automatiquement.
               </p>
             </div>
           </div>
@@ -3396,15 +3488,15 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
           </div>
           
           <Tabs defaultValue="identity" className="flex-1 flex flex-col overflow-hidden">
-            <div className="bg-white px-6 border-b flex justify-between items-center h-12 shadow-sm z-10">
-              <TabsList className="bg-transparent h-full p-0 gap-6">
-                <TabsTrigger value="identity" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none font-bold text-xs uppercase tracking-widest text-gray-400 data-[state=active]:text-primary mb-[-1px]">Identité</TabsTrigger>
-                <TabsTrigger value="financial" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none font-bold text-xs uppercase tracking-widest text-gray-400 data-[state=active]:text-primary mb-[-1px]">Finances</TabsTrigger>
-                <TabsTrigger value="stats" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none font-bold text-xs uppercase tracking-widest text-gray-400 data-[state=active]:text-primary mb-[-1px]">Statistiques</TabsTrigger>
-                <TabsTrigger value="info" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none font-bold text-xs uppercase tracking-widest text-gray-400 data-[state=active]:text-primary mb-[-1px]">Infos Inscription</TabsTrigger>
+            <div className="bg-white px-6 border-b flex justify-between items-center h-12 shadow-sm z-10 overflow-x-auto no-scrollbar">
+              <TabsList className="bg-transparent h-full p-0 gap-4 sm:gap-6 flex-nowrap">
+                <TabsTrigger value="identity" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none font-bold text-[10px] sm:text-xs uppercase tracking-widest text-gray-400 data-[state=active]:text-primary mb-[-1px] whitespace-nowrap">Identité</TabsTrigger>
+                <TabsTrigger value="financial" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none font-bold text-[10px] sm:text-xs uppercase tracking-widest text-gray-400 data-[state=active]:text-primary mb-[-1px] whitespace-nowrap">Finances</TabsTrigger>
+                <TabsTrigger value="stats" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none font-bold text-[10px] sm:text-xs uppercase tracking-widest text-gray-400 data-[state=active]:text-primary mb-[-1px] whitespace-nowrap">Statistiques</TabsTrigger>
+                <TabsTrigger value="info" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none font-bold text-[10px] sm:text-xs uppercase tracking-widest text-gray-400 data-[state=active]:text-primary mb-[-1px] whitespace-nowrap">Informations Personnelles</TabsTrigger>
               </TabsList>
               
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 ml-4 shrink-0">
                  {settings?.lockAffiliateEdits && (
                    <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 font-black text-[10px] uppercase gap-1.5 px-3 py-1 animate-pulse">
                      <ShieldAlertIcon className="h-3 w-3" />
@@ -3483,14 +3575,156 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">ID Parrain</Label>
-                    <Input 
-                      value={affiliateFormData.parentAffiliateId || ''} 
-                      onChange={(e) => setAffiliateFormData({...affiliateFormData, parentAffiliateId: e.target.value})}
-                      className="h-12 rounded-2xl border-gray-200 shadow-sm bg-white font-mono text-xs" 
-                      placeholder="Laissez vide si aucun"
-                    />
+                  <div className="space-y-4 pt-2 border-t border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Parrains & Sponsors</Label>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger 
+                          className="inline-flex h-7 items-center justify-center rounded-lg text-[10px] font-black uppercase bg-primary/5 hover:bg-primary/10 border border-primary/20 text-primary px-3 transition-colors cursor-pointer outline-none"
+                        >
+                          <Plus className="h-3 w-3 mr-1" /> Nouveau Parrain
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="rounded-xl border-gray-100 shadow-xl">
+                          <DropdownMenuGroup>
+                            <DropdownMenuLabel className="text-[10px] font-black uppercase text-gray-400 px-3 py-2">Type de parrain</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                setSelectingSponsorType('direct');
+                                setSponsorSearchQuery('');
+                                setIsSponsorSelectorOpen(true);
+                              }}
+                              className="flex items-center gap-2 cursor-pointer p-3 rounded-lg hover:bg-primary/5 focus:bg-primary/5 group"
+                            >
+                              <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                                <Users className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-dark group-hover:text-primary">Parrain Direct</p>
+                                <p className="text-[10px] text-gray-400 font-medium">Commission de Niveau 1</p>
+                              </div>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => {
+                                setSelectingSponsorType('indirect');
+                                setSponsorSearchQuery('');
+                                setIsSponsorSelectorOpen(true);
+                              }}
+                              className="flex items-center gap-2 cursor-pointer p-3 rounded-lg hover:bg-primary/5 focus:bg-primary/5 group"
+                            >
+                              <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+                                <Users className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-dark group-hover:text-primary">Parrain Indirect</p>
+                                <p className="text-[10px] text-gray-400 font-medium">Commission de Niveau 2</p>
+                              </div>
+                            </DropdownMenuItem>
+                          </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {/* Primary Direct Sponsor */}
+                      {affiliateFormData.parentAffiliateId && (
+                        <div className="bg-emerald-50/30 border border-emerald-100/50 p-3 rounded-2xl flex items-center justify-between group">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold group-hover:bg-emerald-200 transition-colors shadow-sm">
+                              {affiliates.find(a => a.id === affiliateFormData.parentAffiliateId)?.name.charAt(0) || <Users className="h-5 w-5" />}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-black text-dark">{affiliates.find(a => a.id === affiliateFormData.parentAffiliateId)?.name || 'Inconnu'}</p>
+                                <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-100 text-[8px] font-black uppercase px-1.5 py-0">Principal Direct</Badge>
+                              </div>
+                              <p className="text-[10px] text-gray-400 font-mono tracking-tight">{affiliates.find(a => a.id === affiliateFormData.parentAffiliateId)?.code || affiliateFormData.parentAffiliateId}</p>
+                            </div>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => setAffiliateFormData({...affiliateFormData, parentAffiliateId: ''})}
+                            className="h-9 w-9 rounded-xl text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all hover:scale-110 active:scale-95"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* Primary Indirect Sponsor */}
+                      {affiliateFormData.grandparentAffiliateId && (
+                        <div className="bg-blue-50/30 border border-blue-100/50 p-3 rounded-2xl flex items-center justify-between group">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 font-bold group-hover:bg-blue-200 transition-colors shadow-sm">
+                              {affiliates.find(a => a.id === affiliateFormData.grandparentAffiliateId)?.name.charAt(0) || <Users className="h-5 w-5" />}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-black text-dark">{affiliates.find(a => a.id === affiliateFormData.grandparentAffiliateId)?.name || 'Inconnu'}</p>
+                                <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-100 text-[8px] font-black uppercase px-1.5 py-0">Principal Indirect</Badge>
+                              </div>
+                              <p className="text-[10px] text-gray-400 font-mono tracking-tight">{affiliates.find(a => a.id === affiliateFormData.grandparentAffiliateId)?.code || affiliateFormData.grandparentAffiliateId}</p>
+                            </div>
+                          </div>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => setAffiliateFormData({...affiliateFormData, grandparentAffiliateId: ''})}
+                            className="h-9 w-9 rounded-xl text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all hover:scale-110 active:scale-95"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* Additional Sponsors List */}
+                      {affiliateFormData.additionalSponsors && affiliateFormData.additionalSponsors.length > 0 && (
+                        <div className="grid grid-cols-1 gap-2 pt-1">
+                          {affiliateFormData.additionalSponsors.map(sponsor => {
+                            const affiliate = affiliates.find(a => a.id === sponsor.id);
+                            const isDirect = sponsor.type === 'direct';
+                            return (
+                              <div key={sponsor.id} className="flex items-center justify-between p-3 rounded-2xl bg-white border border-gray-100 shadow-sm group hover:border-primary/20 transition-all">
+                                <div className="flex items-center gap-3">
+                                  <div className={`h-9 w-9 rounded-xl flex items-center justify-center font-bold text-xs shadow-sm ${isDirect ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
+                                     {affiliate?.name.charAt(0) || '?'}
+                                  </div>
+                                  <div>
+                                     <div className="flex items-center gap-2">
+                                       <p className="text-xs font-bold text-dark leading-tight">{affiliate?.name || 'Inconnu'}</p>
+                                       <Badge variant="outline" className={`${isDirect ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-blue-50 text-blue-600 border-blue-100'} text-[7px] font-black uppercase px-1.5 py-0 opacity-70`}>Plus {isDirect ? 'Direct' : 'Indirect'}</Badge>
+                                     </div>
+                                     <p className="text-[9px] text-gray-400 font-mono">{affiliate?.code || sponsor.id}</p>
+                                  </div>
+                                </div>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  onClick={() => setAffiliateFormData({
+                                    ...affiliateFormData, 
+                                    additionalSponsors: affiliateFormData.additionalSponsors?.filter(s => s.id !== sponsor.id)
+                                  })}
+                                  className="h-8 w-8 rounded-xl text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all hover:scale-110 active:scale-95"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {!affiliateFormData.parentAffiliateId && !affiliateFormData.grandparentAffiliateId && (!affiliateFormData.additionalSponsors || affiliateFormData.additionalSponsors.length === 0) && (
+                        <div className="p-8 rounded-3xl border-2 border-dashed border-gray-100 text-center bg-gray-50/50">
+                           <div className="h-12 w-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-gray-300 mx-auto mb-3">
+                             <Users className="h-6 w-6" />
+                           </div>
+                           <p className="text-xs text-gray-500 font-medium">Aucun parrain défini pour cet affilié.</p>
+                           <p className="text-[10px] text-gray-400 mt-1">Cliquez sur Nouveau Parrain pour en ajouter un.</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </TabsContent>
@@ -3622,12 +3856,12 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
               <TabsContent value="info" className="mt-0 space-y-6">
                 <div className="space-y-4">
                   <h3 className="text-lg font-black text-dark flex items-center gap-2">
-                    <History className="h-5 w-5 text-primary" />
-                    Informations récupérées
+                    <LucideIcons.User className="h-5 w-5 text-primary" />
+                    Informations Personnelles
                   </h3>
                   <div className="grid grid-cols-1 gap-4">
                     <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col gap-1">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Email d'inscription</p>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</p>
                       <p className="font-bold text-dark">{affiliateFormData.info?.email || 'Non renseigné'}</p>
                     </div>
                     <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col gap-1">
@@ -3635,7 +3869,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                       <p className="font-bold text-dark">{affiliateFormData.info?.phone || 'Non renseigné'}</p>
                     </div>
                     <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col gap-1">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Message envoyé</p>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Message d'inscription</p>
                       <p className="text-sm text-gray-600 italic">"{affiliateFormData.info?.message || 'Aucun message'}"</p>
                     </div>
                     <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col gap-1">
@@ -4585,6 +4819,86 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
               Confirmer l'ajout
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sponsor Selector Dialog */}
+      <Dialog open={isSponsorSelectorOpen} onOpenChange={setIsSponsorSelectorOpen}>
+        <DialogContent className="sm:max-w-[500px] rounded-[2rem] p-0 overflow-hidden border-0 shadow-2xl h-[600px] flex flex-col">
+          <DialogHeader className="p-6 bg-primary text-white shrink-0">
+            <DialogTitle className="flex items-center gap-2 text-xl font-black">
+              <Search className="h-6 w-6" />
+              Sélectionner un {selectingSponsorType === 'direct' ? 'Parrain Direct' : selectingSponsorType === 'indirect' ? 'Parrain Indirect' : 'Parrain Additionnel'}
+            </DialogTitle>
+            <DialogDescription className="text-white/80">
+              Choisissez un affilié dans la liste ci-dessous.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-4 bg-gray-50 border-b shrink-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input 
+                placeholder="Rechercher par nom ou code..." 
+                value={sponsorSearchQuery}
+                onChange={(e) => setSponsorSearchQuery(e.target.value)}
+                className="pl-10 h-10 rounded-xl border-gray-200 focus:ring-primary shadow-sm bg-white"
+              />
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-white">
+            <div className="space-y-2">
+              {affiliates
+                .filter(a => 
+                  a.id !== (editingAffiliate?.id) && // Can't be your own sponsor
+                  (a.name.toLowerCase().includes(sponsorSearchQuery.toLowerCase()) || 
+                   a.code.toLowerCase().includes(sponsorSearchQuery.toLowerCase()))
+                )
+                .map(a => (
+                  <div 
+                    key={a.id}
+                    onClick={() => {
+                      if (selectingSponsorType === 'direct') {
+                        // If primary is empty, set it, otherwise add to additional
+                        if (!affiliateFormData.parentAffiliateId) {
+                          setAffiliateFormData({...affiliateFormData, parentAffiliateId: a.id});
+                        } else {
+                          const currentExtras = affiliateFormData.additionalSponsors || [];
+                          if (!currentExtras.find(s => s.id === a.id)) {
+                            setAffiliateFormData({...affiliateFormData, additionalSponsors: [...currentExtras, { id: a.id!, type: 'direct' }]});
+                          }
+                        }
+                      } else if (selectingSponsorType === 'indirect') {
+                        // If primary is empty, set it, otherwise add to additional
+                        if (!affiliateFormData.grandparentAffiliateId) {
+                          setAffiliateFormData({...affiliateFormData, grandparentAffiliateId: a.id});
+                        } else {
+                          const currentExtras = affiliateFormData.additionalSponsors || [];
+                          if (!currentExtras.find(s => s.id === a.id)) {
+                            setAffiliateFormData({...affiliateFormData, additionalSponsors: [...currentExtras, { id: a.id!, type: 'indirect' }]});
+                          }
+                        }
+                      }
+                      setIsSponsorSelectorOpen(false);
+                    }}
+                    className="p-3 rounded-2xl border border-gray-100 hover:border-primary/30 hover:bg-primary/5 cursor-pointer transition-all flex items-center justify-between group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-gray-100 flex items-center justify-center text-primary font-bold group-hover:bg-primary/10">
+                        {a.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-bold text-dark text-sm">{a.name}</p>
+                        <p className="text-[10px] text-gray-400 font-mono uppercase">{a.code}</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-primary transition-colors" />
+                  </div>
+                ))}
+            </div>
+          </div>
+          <div className="p-4 border-t bg-gray-50 flex justify-end shrink-0">
+            <Button variant="outline" onClick={() => setIsSponsorSelectorOpen(false)} className="rounded-xl font-bold">Fermer</Button>
+          </div>
         </DialogContent>
       </Dialog>
 

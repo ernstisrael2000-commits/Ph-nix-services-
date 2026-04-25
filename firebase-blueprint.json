@@ -113,6 +113,7 @@
         "code": { "type": "string" },
         "level": { "type": "string", "enum": ["Bronze", "Silver", "Gold", "Elite", "VIP"] },
         "parentAffiliateId": { "type": "string" },
+        "grandparentAffiliateId": { "type": "string" },
         "directRevenue": { "type": "number" },
         "indirectRevenue": { "type": "number" },
         "totalEarnings": { "type": "number" },

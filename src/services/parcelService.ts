@@ -371,10 +371,18 @@ export const useSettings = () => {
   return { settings, loading };
 };
 
-export const updateSettings = async (settingsData: AppSettings) => {
+export const updateSettings = async (settingsData: Partial<AppSettings>) => {
   try {
     const docRef = doc(db, 'settings', 'global');
-    await setDoc(docRef, settingsData, { merge: true });
+    // Supprimer les valeurs undefined pour éviter les erreurs Firestore
+    const cleanData = Object.entries(settingsData).reduce((acc: any, [key, value]) => {
+      if (value !== undefined) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+    
+    await setDoc(docRef, cleanData, { merge: true });
   } catch (error) {
     handleFirestoreError(error, 'update', 'settings/global', auth);
   }

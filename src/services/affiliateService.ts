@@ -656,33 +656,42 @@ export const recordPurchase = async (
     
     const affiliateData = affiliateSnap.data() as Affiliate;
     
-    // Commission rates
-    let directCommission = 2.5; // Default for general purchase
-    let indirectCommission = 0.5; 
+    // Commission mapping as requested by user
+    let directCommission = 2; // Default for 'purchase' (Top up / other)
+    let parentCommission = 0.5;
+    let grandparentCommission = 0.5;
     let pointsEarned = 1;
     
-    const isSpecialSub = itemName && (
+    const isStreamingSub = itemName && (
       itemName.toLowerCase().includes('netflix') || 
       itemName.toLowerCase().includes('prime') || 
       itemName.toLowerCase().includes('paramount') || 
       itemName.toLowerCase().includes('disney') || 
       itemName.toLowerCase().includes('hbo') || 
-      itemName.toLowerCase().includes('iptv')
+      itemName.toLowerCase().includes('iptv') ||
+      itemName.toLowerCase().includes('spotify') ||
+      itemName.toLowerCase().includes('video') ||
+      itemName.toLowerCase().includes('streaming')
     );
 
     if (type === 'subscription') {
-      if (isSpecialSub) {
+      if (isStreamingSub) {
         directCommission = 75;
-        indirectCommission = 25;
-        pointsEarned = 7;
+        parentCommission = 15;
+        grandparentCommission = 10;
+        pointsEarned = 5;
       } else {
-        directCommission = 100;
+        // Other subscriptions
+        directCommission = 75;
+        parentCommission = 15;
+        grandparentCommission = 10;
         pointsEarned = 10;
-        indirectCommission = 0.5;
       }
     } else if (type === 'virtual_card') {
-      directCommission = 500;
-      pointsEarned = 50;
+      directCommission = 350;
+      parentCommission = 40;
+      grandparentCommission = 10;
+      pointsEarned = 25;
     }
     
     const batch = writeBatch(db);
@@ -702,31 +711,85 @@ export const recordPurchase = async (
     batch.set(saleRef, {
       affiliateId,
       affiliateName: affiliateData.name,
-      itemType: type === 'purchase' ? 'product' : type === 'subscription' ? 'game' : 'card',
-      itemName: type === 'subscription' ? 'Abonnement' : type === 'virtual_card' ? 'Carte Virtuelle' : 'Produit Rapide',
-      price: type === 'purchase' ? 0 : type === 'subscription' ? 100 : 500, // Approximate for logging if real price not passed
+      type,
+      itemName: itemName || (type === 'virtual_card' ? 'Carte MasterCard' : 'Produit Rapide'),
+      commission: directCommission,
+      points: pointsEarned,
       createdAt: serverTimestamp()
     });
     
-    // 2. Update Parent Affiliate (Indirect Revenue)
+    // 2. Update Parent Affiliate (Direct Sponsor)
     if (affiliateData.parentAffiliateId) {
       const parentRef = doc(db, 'affiliates', affiliateData.parentAffiliateId);
       const parentSnap = await getDoc(parentRef);
       
       if (parentSnap.exists()) {
         batch.update(parentRef, {
-          balance: increment(indirectCommission),
-          indirectRevenue: increment(indirectCommission),
-          totalEarnings: increment(indirectCommission),
+          balance: increment(parentCommission),
+          indirectRevenue: increment(parentCommission),
+          totalEarnings: increment(parentCommission),
           updatedAt: serverTimestamp()
         });
         
-        // Create notification for parent
+        // Notification for parent (Level 1)
         const notifRef = doc(collection(db, 'notifications'));
         batch.set(notifRef, {
           affiliateId: affiliateData.parentAffiliateId,
-          title: "Revenu Indirect !",
-          message: `Vous avez reçu ${indirectCommission} Goud grâce à une vente de votre affilié ${affiliateData.name}.`,
+          title: "Commission Directe (Filleul)",
+          message: `Niveau 1: Vous avez reçu ${parentCommission} Goud suite à une vente de ${affiliateData.name}.`,
+          type: 'revenue',
+          read: false,
+          createdAt: serverTimestamp()
+        });
+      }
+    }
+
+    // 3. Update Grandparent Affiliate (Indirect Sponsor)
+    if (affiliateData.grandparentAffiliateId) {
+      const grandparentRef = doc(db, 'affiliates', affiliateData.grandparentAffiliateId);
+      const grandparentSnap = await getDoc(grandparentRef);
+      
+      if (grandparentSnap.exists()) {
+        batch.update(grandparentRef, {
+          balance: increment(grandparentCommission),
+          indirectRevenue: increment(grandparentCommission),
+          totalEarnings: increment(grandparentCommission),
+          updatedAt: serverTimestamp()
+        });
+        
+        // Notification for grandparent (Level 2)
+        const gNotifRef = doc(collection(db, 'notifications'));
+        batch.set(gNotifRef, {
+          affiliateId: affiliateData.grandparentAffiliateId,
+          title: "Commission Indirecte (Filleul N2)",
+          message: `Niveau 2: Vous avez reçu ${grandparentCommission} Goud via l'affilié ${affiliateData.name}.`,
+          type: 'revenue',
+          read: false,
+          createdAt: serverTimestamp()
+        });
+      }
+    }
+
+    // 4. Update Additional Sponsors (Flexible Direct/Indirect)
+    if (affiliateData.additionalSponsors && affiliateData.additionalSponsors.length > 0) {
+      for (const sponsorReq of affiliateData.additionalSponsors) {
+        const extraRef = doc(db, 'affiliates', sponsorReq.id);
+        const isDirectSponsor = sponsorReq.type === 'direct';
+        const commissionToPay = isDirectSponsor ? parentCommission : grandparentCommission;
+
+        batch.update(extraRef, {
+          balance: increment(commissionToPay),
+          indirectRevenue: increment(commissionToPay),
+          totalEarnings: increment(commissionToPay),
+          updatedAt: serverTimestamp()
+        });
+
+        // Notification for extra sponsor
+        const exNotifRef = doc(collection(db, 'notifications'));
+        batch.set(exNotifRef, {
+          affiliateId: sponsorReq.id,
+          title: isDirectSponsor ? "Commission Directe !" : "Commission Indirecte !",
+          message: `${isDirectSponsor ? 'Niveau 1' : 'Niveau Extra'}: Vous avez reçu ${commissionToPay} Goud grâce à ${affiliateData.name}.`,
           type: 'revenue',
           read: false,
           createdAt: serverTimestamp()
