@@ -1344,7 +1344,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
 
   const [tempGameImageUrl, setTempGameImageUrl] = useState('');
 
-  const [notifFilter, setNotifFilter] = useState<'all' | 'registration' | 'withdrawal'>('all');
+  const [notifFilter, setNotifFilter] = useState<'all' | 'registration' | 'withdrawal' | 'deposit'>('all');
   const [notifSearch, setNotifSearch] = useState('');
   const [affiliateSearch, setAffiliateSearch] = useState('');
 
@@ -1413,7 +1413,9 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     if (notifFilter === 'registration') {
       combined = combined.filter(r => r.type === 'registration');
     } else if (notifFilter === 'withdrawal') {
-      combined = combined.filter(r => r.type === 'withdrawal' || r.type === 'deposit_request');
+      combined = combined.filter(r => r.type === 'withdrawal');
+    } else if (notifFilter === 'deposit') {
+      combined = combined.filter(r => r.type === 'deposit_request');
     }
 
     if (notifSearch) {
@@ -1428,7 +1430,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
       const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
       return dateB - dateA;
     });
-  }, [pendingRegistrations, pendingWithdrawals, notifFilter, notifSearch]);
+  }, [pendingRegistrations, pendingWithdrawals, pendingDeposits, affiliates, notifFilter, notifSearch]);
 
   // Memoize filtered and sorted lists for performance
   const winnersQueue = React.useMemo(() => {
@@ -2163,8 +2165,13 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
         <div>
           <h1 className="text-3xl font-black text-dark tracking-tight flex items-center gap-3">
-            <span className="bg-primary text-white p-2 rounded-2xl rotate-3 shadow-lg shadow-accent-light/50">
+            <span className="bg-primary text-white p-2 rounded-2xl rotate-3 shadow-lg shadow-accent-light/50 relative">
               <Shield className="h-6 w-6" />
+              {totalPending > 0 && (
+                <span className="absolute -top-2 -right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-red-600 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10 rotate-[-3deg]">
+                  {totalPending}
+                </span>
+              )}
             </span>
             Administration
           </h1>
@@ -2266,17 +2273,17 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                               
                               {/* Sidebar Badges */}
                               {item.value === 'affiliates' && pendingRegistrations.length > 0 && (
-                                <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white border-2 border-white shadow-sm ring-1 ring-red-200">
+                                <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-indigo-600 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
                                   {pendingRegistrations.length}
                                 </span>
                               )}
                               {item.value === 'withdrawals' && pendingWithdrawals.length > 0 && (
-                                <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white border-2 border-white shadow-sm ring-1 ring-red-200">
+                                <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-red-600 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
                                   {pendingWithdrawals.length}
                                 </span>
                               )}
                               {item.value === 'wallet-tx' && pendingDeposits.length > 0 && (
-                                <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white border-2 border-white shadow-sm ring-1 ring-red-200">
+                                <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-emerald-600 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
                                   {pendingDeposits.length}
                                 </span>
                               )}
@@ -4199,6 +4206,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                   <SelectItem value="all">Toutes</SelectItem>
                   <SelectItem value="registration">Inscriptions</SelectItem>
                   <SelectItem value="withdrawal">Retraits</SelectItem>
+                  <SelectItem value="deposit">Dépôts</SelectItem>
                 </SelectContent>
               </Select>
             </div>

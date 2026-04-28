@@ -454,26 +454,34 @@ export const updateAffiliateRequestStatus = async (requestId: string, status: 'a
 };
 
 export const usePendingCounts = (enabled: boolean = false) => {
-  const [counts, setCounts] = useState({ registrations: 0, withdrawals: 0, total: 0 });
+  const [counts, setCounts] = useState({ registrations: 0, withdrawals: 0, deposits: 0, total: 0 });
 
   useEffect(() => {
     if (!enabled) {
-      setCounts({ registrations: 0, withdrawals: 0, total: 0 });
+      setCounts({ registrations: 0, withdrawals: 0, deposits: 0, total: 0 });
       return;
     }
 
     const qReg = query(collection(db, 'affiliate_requests'), where('status', '==', 'pending'));
     const qWith = query(collection(db, 'withdrawals'), where('status', '==', 'pending'));
+    const qDep = query(collection(db, 'wallet_transactions'), where('type', '==', 'deposit'), where('status', '==', 'pending'));
 
     const unsubReg = onSnapshot(qReg, (snapReg) => {
       const regCount = snapReg.size;
       const unsubWith = onSnapshot(qWith, (snapWith) => {
         const withCount = snapWith.size;
-        setCounts({
-          registrations: regCount,
-          withdrawals: withCount,
-          total: regCount + withCount
+        const unsubDep = onSnapshot(qDep, (snapDep) => {
+          const depCount = snapDep.size;
+          setCounts({
+            registrations: regCount,
+            withdrawals: withCount,
+            deposits: depCount,
+            total: regCount + withCount + depCount
+          });
+        }, (error) => {
+          console.error("Error fetching pending deposits:", error);
         });
+        return () => unsubDep();
       }, (error) => {
         console.error("Error fetching pending withdrawals:", error);
       });
