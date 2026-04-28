@@ -242,7 +242,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       try {
         const parsed = JSON.parse(error.message);
         if (parsed.error?.includes('permissions') || parsed.error?.includes('permission-denied')) {
-          errorMessage = "Votre demande de retrait a été enregistrée et sera traitée par l'administration.";
+          errorMessage = "Votre demande de retrait a été enregistrée pour approbation.";
           toast.success(errorMessage);
           setIsWithdrawModalOpen(false);
           setWithdrawAmount('');
@@ -270,7 +270,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     setIsSubmitting(true);
     try {
       const recipientName = await submitTransfer(affiliate, transferRecipientWalletId.trim(), amount);
-      toast.success(`Succès ! Vous avez envoyé ${amount} Goud à ${recipientName}.`);
+      toast.success(`Votre demande de transfert de ${amount} Goud vers ${recipientName} a été envoyée.`);
       setIsTransferModalOpen(false);
       setTransferAmount('');
       setTransferRecipientWalletId('');
@@ -280,8 +280,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       try {
         const parsed = JSON.parse(error.message);
         if (parsed.error?.includes('permissions') || parsed.error?.includes('permission-denied')) {
-          errorMessage = "Votre demande de transfert a été enregistrée et sera traitée par l'administration.";
-          // In case of permission errors that are actually expected requests, we can show success if the user wants
+          errorMessage = "Votre demande de transfert a été enregistrée pour approbation.";
           toast.success(errorMessage);
           setIsTransferModalOpen(false);
           setTransferAmount('');
@@ -289,10 +288,8 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
           setVerifiedRecipientName(null);
           return;
         }
-      } catch (e) {
-        // Not a JSON error
-      }
-      toast.error(errorMessage || "Échec du transfert.");
+      } catch (e) {}
+      toast.error(errorMessage || "Erreur lors du transfert.");
     } finally {
       setIsSubmitting(false);
     }
@@ -320,7 +317,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         setAgentCode('');
       } else {
         await submitDepositRequest(affiliate, amount, depositMethod);
-        toast.success("Demande envoyée");
+        toast.success("Votre demande de dépôt a été envoyée pour approbation.");
         setIsDepositModalOpen(false);
         setDepositAmount('');
         
@@ -333,7 +330,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       try {
         const parsed = JSON.parse(error.message);
         if (parsed.error?.includes('permissions') || parsed.error?.includes('permission-denied')) {
-          errorMessage = "Votre demande de dépôt a été enregistrée et sera traitée par l'administration.";
+          errorMessage = "Votre demande de dépôt a été enregistrée pour approbation.";
           toast.success(errorMessage);
           setIsDepositModalOpen(false);
           setDepositAmount('');

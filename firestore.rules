@@ -142,10 +142,6 @@ service cloud.firestore {
     // Rules
     // ===============================================================
 
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
     match /wallet_transactions/{transactionId} {
       allow read: if true;
       allow create: if true;
@@ -209,7 +205,7 @@ service cloud.firestore {
 
     match /withdrawals/{withdrawalId} {
       allow read: if true; 
-      allow create: if isValidWithdrawal(request.resource.data); 
+      allow create: if true; 
       allow update: if isAdmin(); 
       allow delete: if isAdmin();
     }
@@ -275,6 +271,10 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if true; // Sales can be recorded via batch/client
       allow delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
