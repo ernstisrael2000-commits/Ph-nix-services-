@@ -258,11 +258,13 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     setIsSubmitting(true);
     try {
       const recipientName = await submitTransfer(affiliate, transferRecipientWalletId.trim(), amount);
-      toast.success(`Succès ! Vous avez envoyé ${amount} Goud à ${recipientName}.`);
+      toast.success(`Vous avez envoyé ${amount} Goud à ${recipientName}`);
       setIsTransferModalOpen(false);
       setTransferAmount('');
       setTransferRecipientWalletId('');
     } catch (error: any) {
+      // Pour les affiliés, on évite les messages d'erreur système bruts
+      // Mais on doit quand même les informer si le solde est insuffisant ou le bénéficiaire inconnu
       toast.error(error.message || "Échec du transfert.");
     } finally {
       setIsSubmitting(false);
@@ -728,9 +730,9 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 </div>
                 <DialogFooter className="flex-col gap-3">
                   <Button onClick={handleTransfer} disabled={isSubmitting || !verifiedRecipientName} className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg shadow-blue-100">
-                    {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirmer le Transfert"}
+                    {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirmer le transfert"}
                   </Button>
-                  <p className="text-[9px] text-center text-gray-400 font-medium">L'argent sera déduit immédiatement après confirmation.</p>
+                  <p className="text-[9px] text-center text-gray-400 font-medium">Votre demande de transfert sera traitée par l'administration.</p>
                 </DialogFooter>
               </DialogContent>
             </Dialog>

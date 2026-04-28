@@ -1193,6 +1193,17 @@ export const approveTransfer = async (transaction: WalletTransaction) => {
 };
 
 /**
+ * Rejects a transfer request.
+ */
+export const rejectTransfer = async (transactionId: string) => {
+  const transactionRef = doc(db, 'wallet_transactions', transactionId);
+  await updateDoc(transactionRef, {
+    status: 'rejected',
+    updatedAt: serverTimestamp()
+  });
+};
+
+/**
  * Submits a deposit request.
  */
 export const submitDepositRequest = async (affiliate: Affiliate, amount: number, method: string) => {

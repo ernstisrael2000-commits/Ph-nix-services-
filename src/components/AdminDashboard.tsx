@@ -92,7 +92,8 @@ import {
   searchClientsByPhone,
   useAllWalletTransactions,
   updateWalletTransactionStatus,
-  approveTransfer
+  approveTransfer,
+  rejectTransfer
 } from '../services/affiliateService';
 import { useAdminAccounts, useAdminLogs, saveAdminAccount, deleteAdminAccount } from '../services/adminService';
 import { 
@@ -2067,6 +2068,19 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     }
   };
 
+  const handleRejectTransferAction = async (tx: WalletTransaction) => {
+    if (!tx.id) return;
+    setIsSaving(true);
+    try {
+      await rejectTransfer(tx.id);
+      toast.success("Transfert rejeté.");
+    } catch (error: any) {
+      toast.error(error.message || "Erreur lors du rejet.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleApproveAllTransfers = async () => {
     const pending = walletTransactions.filter(t => t.type === 'transfer' && t.status === 'pending');
     if (pending.length === 0) return;
@@ -2492,7 +2506,9 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                       <div className="flex items-center gap-4">
                          <div className="flex flex-col text-left">
                             <span className="text-[10px] font-black text-gray-400 uppercase">DE</span>
-                            <span className="font-black text-dark">{tx.affiliateId.slice(-6)}</span>
+                            <span className="font-black text-dark">
+                              {affiliates.find(a => a.id === tx.affiliateId)?.name || tx.affiliateId.slice(-6)}
+                            </span>
                          </div>
                          <ArrowRightLeft className="h-4 w-4 text-gray-300" />
                          <div className="flex flex-col text-left">
@@ -2508,14 +2524,25 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                       {tx.createdAt?.toDate ? format(tx.createdAt.toDate(), 'Pp', { locale: fr }) : '-'}
                     </TableCell>
                     <TableCell className="text-right px-8">
-                      <Button 
-                        size="sm"
-                        onClick={() => handleApproveTransferAction(tx)}
-                        disabled={isSaving}
-                        className="rounded-xl bg-primary hover:bg-primary-dark text-white font-black uppercase text-[10px] tracking-widest h-10 px-4 shadow-md shadow-primary/20 border-0"
-                      >
-                        {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Approuver"}
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button 
+                          size="sm"
+                          onClick={() => handleRejectTransferAction(tx)}
+                          disabled={isSaving}
+                          variant="ghost"
+                          className="rounded-xl text-red-500 hover:bg-red-50 font-black uppercase text-[10px] tracking-widest h-10 px-4 border-0"
+                        >
+                          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Rejeter"}
+                        </Button>
+                        <Button 
+                          size="sm"
+                          onClick={() => handleApproveTransferAction(tx)}
+                          disabled={isSaving}
+                          className="rounded-xl bg-primary hover:bg-primary-dark text-white font-black uppercase text-[10px] tracking-widest h-10 px-4 shadow-md shadow-primary/20 border-0"
+                        >
+                          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Approuver"}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
