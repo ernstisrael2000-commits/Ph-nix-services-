@@ -380,35 +380,35 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
             <div className="relative h-full flex flex-col justify-between">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Neopay Card</p>
+                  <p className="text-white/40 text-[9px] font-black uppercase tracking-[0.3em] mb-1 drop-shadow-sm">Neopay Privilege</p>
                   <div className="flex items-center gap-2">
-                    <div className="h-8 w-10 bg-yellow-400/20 rounded-md border border-yellow-400/30 flex items-center justify-center">
-                      <div className="w-6 h-px bg-yellow-400/50" />
+                    <div className="h-7 w-10 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-md shadow-inner flex items-center justify-center">
+                      <div className="w-6 h-[1px] bg-white/30" />
                     </div>
-                    <span className="text-xs font-bold text-white/40">Chip Asset</span>
+                    <span className="text-[10px] font-black text-white/30 tracking-tighter">SECURE ASSET</span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <Fingerprint className="h-10 w-10 text-white/20" />
+                  <Fingerprint className="h-12 w-12 text-white/10" />
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <p className="text-white/70 text-xs font-bold uppercase tracking-wider">Solde Disponible</p>
-                <div className="flex items-baseline gap-3">
-                  <h3 className="text-5xl font-black tracking-tight">{affiliate.balance.toLocaleString()}</h3>
-                  <span className="text-lg font-bold text-white/50 uppercase">Goud</span>
+              <div className="space-y-0 text-center sm:text-left">
+                <p className="text-white/60 text-[10px] font-black uppercase tracking-widest mb-1">Solde Disponible</p>
+                <div className="flex items-baseline justify-center sm:justify-start gap-2">
+                  <h3 className="text-5xl sm:text-6xl font-black tracking-tighter text-white drop-shadow-2xl">{affiliate.balance.toLocaleString()}</h3>
+                  <span className="text-lg font-black text-white/50 uppercase tracking-tighter">Goud</span>
                 </div>
               </div>
 
-              <div className="flex justify-between items-end">
-                <div>
-                  <p className="text-white/50 text-[9px] font-bold uppercase tracking-widest mb-1">Titulaire</p>
-                  <p className="text-lg font-black tracking-wide uppercase">{affiliate.name}</p>
+              <div className="flex flex-col sm:flex-row justify-between items-end gap-4 sm:gap-0">
+                <div className="w-full sm:w-auto text-center sm:text-left">
+                  <p className="text-white/40 text-[8px] font-black uppercase tracking-[0.2em] mb-1">Titulaire de Carte</p>
+                  <p className="text-xl font-black tracking-wide text-white uppercase drop-shadow-md">{affiliate.name}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-white/50 text-[9px] font-bold uppercase tracking-widest mb-1">Wallet ID</p>
-                  <p className="text-xl font-mono font-black tracking-[0.2em]">
+                <div className="w-full sm:w-auto text-center sm:text-right">
+                  <p className="text-white/40 text-[8px] font-black uppercase tracking-[0.2em] mb-1">Identifiant Unique</p>
+                  <p className="text-2xl font-mono font-black text-white tracking-[0.3em] drop-shadow-md">
                     {affiliate.walletId ? affiliate.walletId.match(/.{1,4}/g)?.join(' ') : '.... ....'}
                   </p>
                 </div>
