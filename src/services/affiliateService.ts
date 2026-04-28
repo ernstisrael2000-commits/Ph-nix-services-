@@ -1106,7 +1106,7 @@ export const findAffiliateByWalletId = async (walletId: string): Promise<Affilia
 };
 
 /**
- * Submits a transfer between affiliates.
+ * Submits a transfer request between affiliates (pending admin approval).
  */
 export const submitTransfer = async (sender: Affiliate, recipientWalletId: string, amount: number) => {
   if (amount > sender.balance) throw new Error("Solde insuffisant.");
@@ -1116,72 +1116,79 @@ export const submitTransfer = async (sender: Affiliate, recipientWalletId: strin
   if (!recipient) throw new Error("Destinataire introuvable.");
   if (recipient.id === sender.id) throw new Error("Vous ne pouvez pas vous envoyer d'argent à vous-même.");
 
-  const batch = writeBatch(db);
-
-  // Update Sender
-  const senderRef = doc(db, 'affiliates', sender.id!);
-  batch.update(senderRef, {
-    balance: increment(-amount),
-    updatedAt: serverTimestamp()
-  });
-
-  // Update Recipient
-  const recipientRef = doc(db, 'affiliates', recipient.id!);
-  batch.update(recipientRef, {
-    balance: increment(amount),
-    updatedAt: serverTimestamp()
-  });
-
-  // Create Sender Transaction
-  const senderTxRef = doc(collection(db, 'wallet_transactions'));
-  batch.set(senderTxRef, {
+  // Create a pending transfer transaction
+  await addDoc(collection(db, 'wallet_transactions'), {
     affiliateId: sender.id,
-    type: 'transfer_sent',
+    type: 'transfer',
     amount: amount,
-    status: 'completed',
-    description: `Transfert envoyé à ${recipient.name}`,
+    status: 'pending',
+    description: `Demande de transfert vers ${recipient.name} (${recipientWalletId})`,
     relatedAffiliateId: recipient.id,
     relatedAffiliateName: recipient.name,
+    recipientWalletId: recipientWalletId,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   });
 
-  // Create Recipient Transaction
-  const recipientTxRef = doc(collection(db, 'wallet_transactions'));
-  batch.set(recipientTxRef, {
-    affiliateId: recipient.id,
-    type: 'transfer_received',
-    amount: amount,
-    status: 'completed',
-    description: `Transfert reçu de ${sender.name}`,
-    relatedAffiliateId: sender.id,
-    relatedAffiliateName: sender.name,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  });
+  // Notify admin if needed (optional)
+};
 
-  // Notifications
-  const senderNotifRef = doc(collection(db, 'notifications'));
-  batch.set(senderNotifRef, {
-    affiliateId: sender.id,
-    title: "Transfert Réussi",
-    message: `Vous avez envoyé ${amount} Goud à ${recipient.name}.`,
-    type: 'system',
-    read: false,
-    createdAt: serverTimestamp()
-  });
+/**
+ * Approves a transfer request and updates balances.
+ */
+export const approveTransfer = async (transaction: WalletTransaction) => {
+  if (transaction.status !== 'pending' || transaction.type !== 'transfer') {
+    throw new Error("Cette transaction ne peut pas être approuvée.");
+  }
 
-  const recipientNotifRef = doc(collection(db, 'notifications'));
-  batch.set(recipientNotifRef, {
-    affiliateId: recipient.id,
-    title: "Argent Reçu",
-    message: `Vous avez reçu un transfert de ${amount} Goud de la part de ${sender.name}.`,
-    type: 'revenue',
-    read: false,
-    createdAt: serverTimestamp()
-  });
+  const senderRef = doc(db, 'affiliates', transaction.affiliateId);
+  const recipientRef = doc(db, 'affiliates', transaction.relatedAffiliateId!);
 
-  await batch.commit();
+  await runTransaction(db, async (transaction_db) => {
+    const senderSnap = await transaction_db.get(senderRef);
+    const recipientSnap = await transaction_db.get(recipientRef);
+
+    if (!senderSnap.exists() || !recipientSnap.exists()) {
+      throw new Error("Expéditeur ou destinataire introuvable.");
+    }
+
+    const senderData = senderSnap.data() as Affiliate;
+    if (senderData.balance < transaction.amount) {
+      throw new Error("Solde de l'expéditeur insuffisant pour approuver ce transfert.");
+    }
+
+    // Deduct from sender
+    transaction_db.update(senderRef, {
+      balance: increment(-transaction.amount),
+      updatedAt: serverTimestamp()
+    });
+
+    // Add to recipient
+    transaction_db.update(recipientRef, {
+      balance: increment(transaction.amount),
+      updatedAt: serverTimestamp()
+    });
+
+    // Mark original request as approved
+    transaction_db.update(doc(db, 'wallet_transactions', transaction.id!), {
+      status: 'approved',
+      updatedAt: serverTimestamp()
+    });
+
+    // Create a corresponding 'received' transaction for the recipient
+    const recipientTxRef = doc(collection(db, 'wallet_transactions'));
+    transaction_db.set(recipientTxRef, {
+      affiliateId: transaction.relatedAffiliateId,
+      type: 'transfer_received',
+      amount: transaction.amount,
+      status: 'completed',
+      description: `Transfert reçu de ${senderData.name}`,
+      relatedAffiliateId: transaction.affiliateId,
+      relatedAffiliateName: senderData.name,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  });
 };
 
 /**

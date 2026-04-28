@@ -7,6 +7,8 @@ import HomeView from './components/HomeView';
 import ShippingView from './components/ShippingView';
 import AffiliateLogin from './components/AffiliateLogin';
 import AffiliateDashboard from './components/AffiliateDashboard';
+import AgentLogin from './components/AgentLogin';
+import AgentDashboard from './components/AgentDashboard';
 import { Toaster } from './components/ui/sonner';
 import AccessChoice from './components/AccessChoice';
 import { useAuth } from './hooks/useAuth';
@@ -14,16 +16,16 @@ import { useSettings } from './services/parcelService';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loader2, Package, ChevronLeft, Bell, X, WifiOff } from 'lucide-react';
 import { Button } from './components/ui/button';
-import { Affiliate, AdminAccount } from './types';
+import { Affiliate, AdminAccount, Agent } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, getDocFromServer } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { toast } from 'sonner';
 
 export default function App() {
-  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping'>('home');
-  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping')[]>(['home']);
-  const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'admin' | null>(null);
+  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent'>('home');
+  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent')[]>(['home']);
+  const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'admin' | 'agent' | null>(null);
   const { loading } = useAuth();
   const { settings } = useSettings();
   const [showAnnouncement, setShowAnnouncement] = useState(true);
@@ -126,6 +128,21 @@ export default function App() {
   const handleAffiliateLogout = () => {
     setLoggedAffiliate(null);
     localStorage.removeItem('neopay_affiliate');
+  };
+
+  const [loggedAgent, setLoggedAgent] = useState<Agent | null>(() => {
+    const saved = localStorage.getItem('neopay_agent');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const handleAgentLogin = (agent: Agent) => {
+    setLoggedAgent(agent);
+    localStorage.setItem('neopay_agent', JSON.stringify(agent));
+  };
+
+  const handleAgentLogout = () => {
+    setLoggedAgent(null);
+    localStorage.removeItem('neopay_agent');
   };
 
   if (loading) {
@@ -264,14 +281,32 @@ export default function App() {
                 affiliateId={loggedAffiliate.id!} 
                 onLogout={handleAffiliateLogout} 
               />
+            ) : loggedAgent ? (
+              <AgentDashboard 
+                agentUid={loggedAgent.id!} 
+                onLogout={handleAgentLogout} 
+              />
             ) : loggedAdmin ? (
               <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
             ) : accessChoice === 'affiliate' ? (
               <AffiliateLogin onLogin={handleAffiliateLogin} />
+            ) : accessChoice === 'agent' ? (
+              <AgentLogin onLogin={handleAgentLogin} />
             ) : accessChoice === 'admin' ? (
               <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => setAccessChoice(null)} />
             ) : (
               <AccessChoice onChoice={(choice) => setAccessChoice(choice)} />
+            )
+          )}
+
+          {view === 'agent' && (
+            loggedAgent ? (
+              <AgentDashboard 
+                agentUid={loggedAgent.id!} 
+                onLogout={handleAgentLogout} 
+              />
+            ) : (
+              <AgentLogin onLogin={handleAgentLogin} />
             )
           )}
         </main>

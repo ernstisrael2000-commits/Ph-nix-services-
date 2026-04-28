@@ -39,12 +39,14 @@ import {
   DollarSign,
   ArrowUp,
   CreditCard,
+  UserCheck,
   HelpCircle,
   Zap,
   Star,
   ChevronRight,
   ChevronLeft,
   ArrowRight,
+  ArrowRightLeft,
   Network,
   TrendingUp,
   LayoutDashboard
@@ -89,9 +91,15 @@ import {
   deleteClient,
   searchClientsByPhone,
   useAllWalletTransactions,
-  updateWalletTransactionStatus
+  updateWalletTransactionStatus,
+  approveTransfer
 } from '../services/affiliateService';
 import { useAdminAccounts, useAdminLogs, saveAdminAccount, deleteAdminAccount } from '../services/adminService';
+import { 
+  useAllAgents,
+  createAgent,
+  updateAgentBalance
+} from '../services/agentService';
 import { useAnalytics } from '../services/analyticsService';
 import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton, AdminAccount, Client } from '../types';
 import AdminShippingManager from './AdminShippingManager';
@@ -1251,6 +1259,8 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     {
       title: "Gestion des Fonds",
       items: [
+        { value: 'agents', label: 'Gestion des Agents', icon: UserCheck, permission: 'affiliates' },
+        { value: 'transfers', label: 'Transferts', icon: ArrowRightLeft, permission: 'affiliates' },
         { value: 'withdrawals', label: 'Retraits', icon: ArrowUp, permission: 'affiliates' },
         { value: 'wallet-tx', label: 'Dépôts & Flux', icon: CreditCard, permission: 'affiliates' },
       ]
@@ -1377,6 +1387,22 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const [sliderDescription, setSliderDescription] = useState('');
 
   const { rankings: officialRankings, loading: officialRankingsLoading } = useMonthlyRankings();
+  const { agents: allAgents, loading: agentsLoading } = useAllAgents();
+
+  const [agentSearch, setAgentSearch] = useState('');
+  const [isAgentDialogOpen, setIsAgentDialogOpen] = useState(false);
+  const [agentName, setAgentName] = useState('');
+  const [agentPhone, setAgentPhone] = useState('');
+  const [isAgentBalanceDialogOpen, setIsAgentBalanceDialogOpen] = useState(false);
+  const [selectedAgentForBalance, setSelectedAgentForBalance] = useState<Agent | null>(null);
+  const [balanceAdjustment, setBalanceAdjustment] = useState('');
+
+  const filteredAgentsList = React.useMemo(() => {
+    return allAgents.filter(a => 
+      a.name.toLowerCase().includes(agentSearch.toLowerCase()) ||
+      a.agentCode.includes(agentSearch)
+    );
+  }, [allAgents, agentSearch]);
 
   const pendingRegistrations = React.useMemo(() => 
     affiliateRequests.filter(r => r.status === 'pending'), 
@@ -1393,7 +1419,12 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     [walletTransactions]
   );
   
-  const totalPending = pendingRegistrations.length + pendingWithdrawals.length + pendingDeposits.length;
+  const pendingTransfersCount = React.useMemo(() => 
+    walletTransactions.filter(t => t.type === 'transfer' && t.status === 'pending').length,
+    [walletTransactions]
+  );
+  
+  const totalPending = pendingRegistrations.length + pendingWithdrawals.length + pendingDeposits.length + pendingTransfersCount;
 
   const totalAffiliateBalance = React.useMemo(() => {
     return affiliates.reduce((sum, affiliate) => sum + (affiliate.balance || 0), 0);
@@ -1985,6 +2016,79 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     }
   };
 
+  const handleAddAgent = async () => {
+    if (!agentName || !agentPhone) {
+      toast.error("Veuillez remplir tous les champs.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const code = await createAgent(agentName, agentPhone);
+      toast.success(`Agent créé avec succès ! Code: ${code}`);
+      setIsAgentDialogOpen(false);
+      setAgentName('');
+      setAgentPhone('');
+    } catch (error) {
+      toast.error("Erreur lors de la création de l'agent.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdateAgentBalanceAction = async (type: 'add' | 'remove') => {
+    if (!selectedAgentForBalance?.id || !balanceAdjustment) return;
+    const amount = parseFloat(balanceAdjustment);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error("Montant invalide.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await updateAgentBalance(selectedAgentForBalance.id, type === 'add' ? amount : -amount);
+      toast.success("Solde agent mis à jour.");
+      setIsAgentBalanceDialogOpen(false);
+      setBalanceAdjustment('');
+    } catch (error) {
+      toast.error("Erreur lors de la mise à jour du solde.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleApproveTransferAction = async (tx: WalletTransaction) => {
+    setIsSaving(true);
+    try {
+      await approveTransfer(tx);
+      toast.success("Transfert approuvé !");
+    } catch (error: any) {
+      toast.error(error.message || "Erreur lors de l'approbation.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleApproveAllTransfers = async () => {
+    const pending = walletTransactions.filter(t => t.type === 'transfer' && t.status === 'pending');
+    if (pending.length === 0) return;
+
+    setIsSaving(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const tx of pending) {
+      try {
+        await approveTransfer(tx);
+        successCount++;
+      } catch (err) {
+        failCount++;
+      }
+    }
+
+    if (successCount > 0) toast.success(`${successCount} transferts approuvés.`);
+    if (failCount > 0) toast.error(`${failCount} transferts ont échoué (solde insuffisant ou erreur).`);
+    setIsSaving(false);
+  };
+
   const handleWithdrawalAction = async (request: WithdrawalRequest, status: 'approved' | 'rejected') => {
     if (status === 'rejected') {
       setWithdrawalToReject(request);
@@ -2151,6 +2255,288 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     }
   };
 
+  const renderAgents = () => (
+    <div className="space-y-6 animate-in fade-in duration-500 max-w-5xl mx-auto">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-black text-dark tracking-tight">Gestion des Agents</h2>
+          <p className="text-gray-500 text-sm">Gérez les agents de dépôt physique et leurs soldes.</p>
+        </div>
+        <Button 
+          onClick={() => setIsAgentDialogOpen(true)}
+          className="rounded-2xl bg-primary hover:bg-[#D98A1E] text-white shadow-lg shadow-primary/25 h-12 px-6 font-black uppercase tracking-widest text-[10px] border-0"
+        >
+          <PlusCircle className="h-5 w-5 mr-2" />
+          Nouvel Agent
+        </Button>
+      </div>
+
+      <Card className="rounded-[2.5rem] border-0 shadow-xl overflow-hidden bg-white">
+        <CardHeader className="border-b border-gray-100 p-8 pb-4">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <Input 
+              placeholder="Rechercher par nom ou code agent..." 
+              value={agentSearch}
+              onChange={(e) => setAgentSearch(e.target.value)}
+              className="pl-12 h-14 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20 text-lg font-medium"
+            />
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader className="bg-gray-50/50">
+              <TableRow className="border-0">
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 px-8 text-gray-500">ID / Agent</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-center text-gray-500">Téléphone</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-right text-gray-500">Solde Disponible</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-center text-gray-500">Statut</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-right px-8 text-gray-500">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredAgentsList.map((agent) => (
+                <TableRow key={agent.id} className="group border-gray-100 hover:bg-gray-50/50 transition-colors">
+                  <TableCell className="px-8 py-5">
+                    <div className="flex flex-col">
+                      <span className="font-black text-dark text-lg">{agent.name}</span>
+                      <span className="text-xs font-mono text-gray-400 tracking-tighter">CODE: {agent.agentCode}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center font-medium text-gray-600">
+                    {agent.phone}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className="text-xl font-black text-primary">{agent.balance.toLocaleString()} G</span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge className={`rounded-xl px-3 py-1 text-[10px] font-black uppercase ${
+                      agent.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {agent.status === 'active' ? 'Actif' : 'Inactif'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right px-8">
+                    <div className="flex justify-end gap-2">
+                      <Button 
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedAgentForBalance(agent);
+                          setIsAgentBalanceDialogOpen(true);
+                        }}
+                        className="rounded-xl border-2 border-gray-100 hover:border-primary hover:text-primary transition-all h-10 px-3"
+                      >
+                        <Wallet className="h-4 w-4 mr-2" />
+                        Ajuster Solde
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {filteredAgentsList.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-64 text-center">
+                    {agentsLoading ? (
+                      <Loader2 className="h-10 w-10 animate-spin mx-auto text-gray-200" />
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 opacity-30">
+                        <UserCheck className="h-20 w-20" />
+                        <span className="font-black uppercase tracking-widest text-sm">Aucun agent trouvé</span>
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Add Agent Dialog */}
+      <Dialog open={isAgentDialogOpen} onOpenChange={setIsAgentDialogOpen}>
+        <DialogContent className="rounded-[2.5rem] p-8 border-0 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black">Créer un Nouvel Agent</DialogTitle>
+            <DialogDescription>
+              Un code unique de 8 chiffres sera généré automatiquement. L'agent peut l'utiliser pour valider les dépôts physiques.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 pt-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-widest text-gray-500 ml-1">Nom de l'Agent</Label>
+              <Input 
+                value={agentName}
+                onChange={(e) => setAgentName(e.target.value)}
+                placeholder="Ex: Jean Agent"
+                className="h-14 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-widest text-gray-500 ml-1">Numéro de Téléphone</Label>
+              <Input 
+                value={agentPhone}
+                onChange={(e) => setAgentPhone(e.target.value)}
+                placeholder="+509 ..."
+                className="h-14 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-8 flex gap-3">
+            <Button variant="ghost" onClick={() => setIsAgentDialogOpen(false)} className="rounded-2xl h-12 flex-1">Annuler</Button>
+            <Button 
+              onClick={handleAddAgent}
+              disabled={isSaving}
+              className="rounded-2xl h-12 flex-1 bg-primary hover:bg-primary-dark text-white font-black uppercase tracking-widest text-[11px] border-0"
+            >
+              {isSaving ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : 'Créer Agent'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Balance Adjustment Dialog */}
+      <Dialog open={isAgentBalanceDialogOpen} onOpenChange={setIsAgentBalanceDialogOpen}>
+        <DialogContent className="rounded-[2.5rem] p-8 border-0 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black">Ajuster le Solde</DialogTitle>
+            <DialogDescription>
+              Agent: <span className="font-black text-dark">{selectedAgentForBalance?.name}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="pt-8 space-y-8">
+            <div className="text-center bg-gray-50 p-6 rounded-3xl border border-gray-100">
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Solde Actuel</span>
+              <span className="text-4xl font-black text-primary">{selectedAgentForBalance?.balance.toLocaleString()} G</span>
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-widest text-gray-500 ml-1">Montant de l'ajustement</Label>
+              <Input 
+                type="number"
+                value={balanceAdjustment}
+                onChange={(e) => setBalanceAdjustment(e.target.value)}
+                placeholder="0.00"
+                className="h-14 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20 text-center text-2xl font-black"
+              />
+            </div>
+
+            <div className="flex gap-4">
+              <Button 
+                onClick={() => handleUpdateAgentBalanceAction('add')}
+                disabled={isSaving}
+                className="flex-1 h-16 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-[11px] shadow-lg shadow-emerald-500/20 border-0"
+              >
+                Ajouter (+)
+              </Button>
+              <Button 
+                onClick={() => handleUpdateAgentBalanceAction('remove')}
+                disabled={isSaving}
+                variant="destructive"
+                className="flex-1 h-16 rounded-2xl font-black uppercase text-[11px] shadow-lg shadow-red-500/20 border-0"
+              >
+                Retirer (-)
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+
+  const renderTransfers = () => {
+    const pendingTransfers = walletTransactions.filter(t => t.type === 'transfer' && t.status === 'pending');
+    
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500 max-w-5xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-black text-dark tracking-tight">Approbation des Transferts</h2>
+            <p className="text-gray-500 text-sm">Validez les transferts entre affiliés.</p>
+          </div>
+          {pendingTransfers.length > 1 && (
+            <Button 
+              onClick={handleApproveAllTransfers}
+              disabled={isSaving}
+              className="rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 h-12 px-6 font-black uppercase tracking-widest text-[10px] border-0"
+            >
+              {isSaving ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <CheckCircle2 className="h-5 w-5 mr-2" />}
+              Approuver Tout ({pendingTransfers.length})
+            </Button>
+          )}
+        </div>
+
+        <Card className="rounded-[2.5rem] border-0 shadow-xl overflow-hidden bg-white">
+          <CardHeader className="border-b border-gray-100 p-8 pb-6 flex flex-row items-center justify-between">
+             <div className="flex items-center gap-2">
+                <Badge className="rounded-full h-8 w-8 flex items-center justify-center p-0 bg-primary/10 text-primary font-black">
+                   {pendingTransfers.length}
+                </Badge>
+                <span className="font-black uppercase tracking-widest text-[10px] text-gray-400">Demandes en attente</span>
+             </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader className="bg-gray-50/50">
+                <TableRow className="border-0">
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 px-8 text-gray-500">Expéditeur / Destinataire</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-right text-gray-500">Montant</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-center text-gray-500">Date</TableHead>
+                  <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-right px-8 text-gray-500">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingTransfers.map((tx) => (
+                  <TableRow key={tx.id} className="group border-gray-100 hover:bg-gray-50/50 transition-colors">
+                    <TableCell className="px-8 py-5">
+                      <div className="flex items-center gap-4">
+                         <div className="flex flex-col text-left">
+                            <span className="text-[10px] font-black text-gray-400 uppercase">DE</span>
+                            <span className="font-black text-dark">{tx.affiliateId.slice(-6)}</span>
+                         </div>
+                         <ArrowRightLeft className="h-4 w-4 text-gray-300" />
+                         <div className="flex flex-col text-left">
+                            <span className="text-[10px] font-black text-gray-400 uppercase">VERS</span>
+                            <span className="font-black text-dark">{tx.relatedAffiliateName || tx.recipientWalletId}</span>
+                         </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span className="text-xl font-black text-primary">{tx.amount.toLocaleString()} G</span>
+                    </TableCell>
+                    <TableCell className="text-center text-xs font-medium text-gray-500">
+                      {tx.createdAt?.toDate ? format(tx.createdAt.toDate(), 'Pp', { locale: fr }) : '-'}
+                    </TableCell>
+                    <TableCell className="text-right px-8">
+                      <Button 
+                        size="sm"
+                        onClick={() => handleApproveTransferAction(tx)}
+                        disabled={isSaving}
+                        className="rounded-xl bg-primary hover:bg-primary-dark text-white font-black uppercase text-[10px] tracking-widest h-10 px-4 shadow-md shadow-primary/20 border-0"
+                      >
+                        {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Approuver"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {pendingTransfers.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="h-64 text-center">
+                      <div className="flex flex-col items-center gap-2 opacity-30">
+                        <CheckCircle2 className="h-20 w-20 text-emerald-500" />
+                        <span className="font-black uppercase tracking-widest text-sm">Aucun transfert en attente</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'Livré': return <CheckCircle2 className="h-4 w-4 text-primary" />;
@@ -2285,6 +2671,11 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                               {item.value === 'wallet-tx' && pendingDeposits.length > 0 && (
                                 <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-emerald-600 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
                                   {pendingDeposits.length}
+                                </span>
+                              )}
+                              {item.value === 'transfers' && pendingTransfersCount > 0 && (
+                                <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-orange-500 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
+                                  {pendingTransfersCount}
                                 </span>
                               )}
                               {item.value === 'notifications' && totalPending > 0 && (
@@ -2913,6 +3304,14 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
               </DialogFooter>
             </DialogContent>
           </Dialog>
+        </TabsContent>
+
+        <TabsContent value="agents" className="space-y-6 pt-6 px-6 pb-20 custom-scrollbar overflow-y-auto h-full">
+          {renderAgents()}
+        </TabsContent>
+
+        <TabsContent value="transfers" className="space-y-6 pt-6 px-6 pb-20 custom-scrollbar overflow-y-auto h-full">
+          {renderTransfers()}
         </TabsContent>
 
         <TabsContent value="affiliates" className="space-y-0 h-full flex flex-col">

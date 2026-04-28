@@ -353,9 +353,11 @@
       "type": "object",
       "properties": {
         "affiliateId": { "type": "string" },
-        "type": { "type": "string", "enum": ["deposit", "withdrawal", "transfer_sent", "transfer_received"] },
+        "agentId": { "type": "string" },
+        "agentCode": { "type": "string" },
+        "type": { "type": "string", "enum": ["deposit", "withdrawal", "transfer_sent", "transfer_received", "agent_deposit"] },
         "amount": { "type": "number" },
-        "status": { "type": "string", "enum": ["pending", "completed", "rejected"] },
+        "status": { "type": "string", "enum": ["pending", "completed", "rejected", "pending_agent"] },
         "description": { "type": "string" },
         "relatedAffiliateId": { "type": "string" },
         "relatedAffiliateName": { "type": "string" },
@@ -366,6 +368,22 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["affiliateId", "type", "amount", "status", "createdAt"]
+    }
+    "agent": {
+      "title": "Agent",
+      "description": "Represents a physical deposit agent.",
+      "type": "object",
+      "properties": {
+        "agentCode": { "type": "string", "description": "8-digit unique code." },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "balance": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "walletId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["agentCode", "name", "phone", "balance", "status"]
     }
   },
   "firestore": {
@@ -440,6 +458,10 @@
     "/wallet_transactions/{transactionId}": {
       "schema": "wallet_transaction",
       "description": "Collection of unified wallet transactions."
+    },
+    "/agents/{agentId}": {
+      "schema": "agent",
+      "description": "Collection of physical deposit agents."
     }
   }
 }

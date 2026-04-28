@@ -16,7 +16,7 @@ export interface Parcel {
 export interface UserProfile {
   uid: string;
   email: string;
-  role: 'admin';
+  role: 'admin' | 'agent';
 }
 
 export interface Product {
@@ -91,12 +91,27 @@ export interface WithdrawalRequest {
   updatedAt: any;
 }
 
-export type TransactionType = 'deposit' | 'withdrawal' | 'transfer_sent' | 'transfer_received';
-export type TransactionStatus = 'pending' | 'completed' | 'approved' | 'rejected';
+export type TransactionType = 'deposit' | 'withdrawal' | 'transfer_sent' | 'transfer_received' | 'agent_deposit';
+export type TransactionStatus = 'pending' | 'completed' | 'approved' | 'rejected' | 'pending_agent';
+
+export interface Agent {
+  id?: string;
+  uid?: string; // Optional: if agents login via email
+  agentCode: string; // 8 digits
+  name: string;
+  phone: string;
+  balance: number;
+  status: 'active' | 'inactive';
+  walletId: string;
+  createdAt: any;
+  updatedAt: any;
+}
 
 export interface WalletTransaction {
   id?: string;
   affiliateId: string;
+  agentId?: string; // For agent deposits
+  agentCode?: string; // For agent deposits
   type: TransactionType;
   amount: number;
   status: TransactionStatus;

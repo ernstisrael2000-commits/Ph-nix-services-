@@ -42,6 +42,26 @@ service cloud.firestore {
         );
     }
 
+    function isAgent() {
+      return isAuthenticated() &&
+        (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "agent" ||
+          exists(/databases/$(database)/documents/agents/$(request.auth.uid))
+        );
+    }
+
+    function isValidAgent(data) {
+      return data.keys().hasAll(['agentCode', 'name', 'phone', 'balance', 'status']) &&
+             data.agentCode is string && data.agentCode.size() == 8 &&
+             data.name is string && data.name.size() > 0 &&
+             data.phone is string && data.phone.size() > 0 &&
+             data.balance is number &&
+             data.status in ['active', 'inactive'] &&
+             (!('walletId' in data) || data.walletId is string) &&
+             (!('createdAt' in data) || data.createdAt is timestamp) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
     function isValidAffiliate(data) {
       return data.keys().hasAll(['name', 'username', 'password', 'code', 'level']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
@@ -104,13 +124,17 @@ service cloud.firestore {
       return data.keys().hasAll(['affiliateId', 'type', 'amount', 'status', 'createdAt']) &&
              data.affiliateId is string &&
              data.amount is number &&
-             data.type in ['deposit', 'withdrawal', 'transfer_sent', 'transfer_received'] &&
-             data.status in ['pending', 'completed', 'approved', 'rejected'] &&
+             data.type in ['deposit', 'withdrawal', 'transfer_sent', 'transfer_received', 'agent_deposit', 'transfer'] &&
+             data.status in ['pending', 'completed', 'approved', 'rejected', 'pending_agent'] &&
+             (!('agentId' in data) || data.agentId is string) &&
+             (!('agentCode' in data) || data.agentCode is string) &&
              (!('relatedAffiliateId' in data) || data.relatedAffiliateId is string) &&
              (!('relatedAffiliateName' in data) || data.relatedAffiliateName is string) &&
              (!('recipientWalletId' in data) || data.recipientWalletId is string) &&
              (!('method' in data) || data.method is string) &&
              (!('accountNumber' in data) || data.accountNumber is string) &&
+             (!('description' in data) || data.description is string) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp) &&
              (!('rejectionReason' in data) || data.rejectionReason is string);
     }
 
@@ -125,7 +149,14 @@ service cloud.firestore {
     match /wallet_transactions/{transactionId} {
       allow read: if true;
       allow create: if isValidWalletTransaction(request.resource.data);
-      allow update: if isAdmin() && isValidWalletTransaction(request.resource.data);
+      allow update: if isAdmin() || isAgent() && isValidWalletTransaction(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /agents/{agentId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidAgent(request.resource.data);
+      allow update: if isAdmin() || (isAgent() && request.auth.uid == agentId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'updatedAt']));
       allow delete: if isAdmin();
     }
 

@@ -16,6 +16,7 @@ import {
   useWalletTransactions,
   findAffiliateByWalletId
 } from '../services/affiliateService';
+import { getAgentByCode, submitAgentDepositRequest } from '../services/agentService';
 import { Affiliate, WithdrawalRequest, AffiliateNotification, WalletTransaction, TransactionStatus } from '../types';
 import { Progress } from './ui/progress';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
@@ -99,6 +100,9 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
   const [depositMethod, setDepositMethod] = useState('MonCash');
+  const [agentCode, setAgentCode] = useState('');
+  const [verifiedAgentName, setVerifiedAgentName] = useState<string | null>(null);
+  const [isValidatingAgent, setIsValidatingAgent] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -125,6 +129,26 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     };
     validate();
   }, [transferRecipientWalletId]);
+
+  // Agent validation
+  useEffect(() => {
+    const validateAgent = async () => {
+      if (depositMethod === 'Agent' && agentCode.length === 8) {
+        setIsValidatingAgent(true);
+        try {
+          const agent = await getAgentByCode(agentCode);
+          setVerifiedAgentName(agent ? agent.name : null);
+        } catch (err) {
+          setVerifiedAgentName(null);
+        } finally {
+          setIsValidatingAgent(false);
+        }
+      } else {
+        setVerifiedAgentName(null);
+      }
+    };
+    validateAgent();
+  }, [agentCode, depositMethod]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -228,7 +252,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     setIsSubmitting(true);
     try {
       await submitTransfer(affiliate, transferRecipientWalletId, amount);
-      toast.success("Transfert réussi");
+      toast.success("Demande de transfert envoyée pour approbation.");
       setIsTransferModalOpen(false);
       setTransferAmount('');
       setTransferRecipientWalletId('');
@@ -246,16 +270,29 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       return;
     }
 
+    if (depositMethod === 'Agent' && !verifiedAgentName) {
+      toast.error("Agent non identifiable.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await submitDepositRequest(affiliate, amount, depositMethod);
-      toast.success("Demande envoyée");
-      setIsDepositModalOpen(false);
-      setDepositAmount('');
-      
-      const adminPhone = settings?.whatsappAdminNumber || "+50944813185";
-      const message = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Neopay.\n\nMontant: ${amount} Goud\nMéthode: ${depositMethod}\nID Wallet: ${affiliate.walletId}\nNom: ${affiliate.name}`;
-      window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`, '_blank');
+      if (depositMethod === 'Agent') {
+        await submitAgentDepositRequest(affiliateId, agentCode, amount);
+        toast.success("Demande envoyée à l'agent !");
+        setIsDepositModalOpen(false);
+        setDepositAmount('');
+        setAgentCode('');
+      } else {
+        await submitDepositRequest(affiliate, amount, depositMethod);
+        toast.success("Demande envoyée");
+        setIsDepositModalOpen(false);
+        setDepositAmount('');
+        
+        const adminPhone = settings?.whatsappAdminNumber || "+50944813185";
+        const message = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Neopay.\n\nMontant: ${amount} Goud\nMéthode: ${depositMethod}\nID Wallet: ${affiliate.walletId}\nNom: ${affiliate.name}`;
+        window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`, '_blank');
+      }
     } catch (error: any) {
       toast.error(error.message || "Échec de l'envoi.");
     } finally {
@@ -479,10 +516,47 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                       <SelectContent className="rounded-2xl border-0 shadow-xl">
                         <SelectItem value="MonCash" className="font-bold">MonCash (Digicel)</SelectItem>
                         <SelectItem value="NatCash" className="font-bold">NatCash (Natcom)</SelectItem>
+                        <SelectItem value="Agent" className="font-bold">Dépôt via Agent (Physique)</SelectItem>
                         <SelectItem value="Physical" className="font-bold">Bureau / Proxy</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
+                  
+                  {depositMethod === 'Agent' && (
+                    <div className="space-y-3 animate-in slide-in-from-top-2">
+                       <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">ID Agent (8 chiffres)</Label>
+                       <div className="relative">
+                          <Input 
+                            maxLength={8}
+                            placeholder="Entrez le code agent"
+                            value={agentCode}
+                            onChange={(e) => setAgentCode(e.target.value)}
+                            className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-black text-xl tracking-[0.2em] pl-12"
+                          />
+                          <Users className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-primary" />
+                          {isValidatingAgent && (
+                             <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                               <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                             </div>
+                          )}
+                       </div>
+                       {verifiedAgentName && (
+                         <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl flex items-center gap-3">
+                           <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                           <div className="flex flex-col">
+                             <span className="text-[10px] uppercase font-black text-emerald-600">Agent Identifié</span>
+                             <span className="text-sm font-bold text-emerald-900">{verifiedAgentName}</span>
+                           </div>
+                         </div>
+                       )}
+                       {!verifiedAgentName && agentCode.length === 8 && !isValidatingAgent && (
+                         <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3">
+                           <AlertCircle className="h-5 w-5 text-red-500" />
+                           <span className="text-xs font-bold text-red-700">Agent non valide ou introuvable.</span>
+                         </div>
+                       )}
+                    </div>
+                  )}
                   <div className="space-y-3">
                     <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Montant Souhaité (Goud)</Label>
                     <div className="relative">
@@ -881,17 +955,17 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                         <div className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 ${
                           t.type === 'deposit' ? 'bg-emerald-50 text-emerald-600' :
                           t.type === 'withdrawal' ? 'bg-indigo-50 text-indigo-600' :
-                          t.type === 'transfer_sent' ? 'bg-blue-50 text-blue-600' :
+                          (t.type === 'transfer' || t.type === 'transfer_sent') ? 'bg-blue-50 text-blue-600' :
                           'bg-amber-50 text-amber-600'
                         }`}>
                           {t.type === 'deposit' && <PlusCircle className="h-6 w-6" />}
                           {t.type === 'withdrawal' && <MinusCircle className="h-6 w-6" />}
-                          {t.type === 'transfer_sent' && <Send className="h-6 w-6" />}
+                          {(t.type === 'transfer' || t.type === 'transfer_sent') && <Send className="h-6 w-6" />}
                           {t.type === 'transfer_received' && <Download className="h-6 w-6" />}
                         </div>
                         <div>
                           <p className="font-black text-lg text-dark leading-none">
-                            {t.type === 'transfer_sent' || t.type === 'withdrawal' ? '-' : '+'}
+                            {t.type === 'transfer' || t.type === 'transfer_sent' || t.type === 'withdrawal' ? '-' : '+'}
                             {t.amount.toLocaleString()} G
                           </p>
                           <p className="text-xs font-bold text-gray-500 mt-1">{t.description}</p>
