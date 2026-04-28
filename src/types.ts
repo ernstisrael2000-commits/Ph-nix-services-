@@ -91,7 +91,7 @@ export interface WithdrawalRequest {
   updatedAt: any;
 }
 
-export type TransactionType = 'deposit' | 'withdrawal' | 'transfer_sent' | 'transfer_received' | 'agent_deposit';
+export type TransactionType = 'deposit' | 'withdrawal' | 'transfer_sent' | 'transfer_received' | 'agent_deposit' | 'transfer';
 export type TransactionStatus = 'pending' | 'completed' | 'approved' | 'rejected' | 'pending_agent';
 
 export interface Agent {

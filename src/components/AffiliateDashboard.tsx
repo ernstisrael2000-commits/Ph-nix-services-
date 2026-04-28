@@ -118,11 +118,17 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   // Recipient validation
   useEffect(() => {
     const validate = async () => {
-      if (transferRecipientWalletId.length === 8) {
+      const trimmedId = transferRecipientWalletId.trim();
+      if (trimmedId.length === 8) {
         setIsValidatingRecipient(true);
-        const recipient = await findAffiliateByWalletId(transferRecipientWalletId);
-        setVerifiedRecipientName(recipient ? recipient.name : null);
-        setIsValidatingRecipient(false);
+        try {
+          const recipient = await findAffiliateByWalletId(trimmedId);
+          setVerifiedRecipientName(recipient ? recipient.name : null);
+        } catch (err) {
+          setVerifiedRecipientName(null);
+        } finally {
+          setIsValidatingRecipient(false);
+        }
       } else {
         setVerifiedRecipientName(null);
       }
@@ -251,8 +257,8 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
     setIsSubmitting(true);
     try {
-      await submitTransfer(affiliate, transferRecipientWalletId, amount);
-      toast.success("Demande de transfert envoyée pour approbation.");
+      const recipientName = await submitTransfer(affiliate, transferRecipientWalletId.trim(), amount);
+      toast.success(`Succès ! Vous avez envoyé ${amount} Goud à ${recipientName}.`);
       setIsTransferModalOpen(false);
       setTransferAmount('');
       setTransferRecipientWalletId('');

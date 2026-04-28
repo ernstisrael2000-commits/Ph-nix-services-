@@ -15,7 +15,8 @@ import {
   onSnapshot,
   setDoc,
   increment,
-  writeBatch
+  writeBatch,
+  runTransaction
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { handleFirestoreError } from '../lib/firebase-errors';
@@ -1108,7 +1109,7 @@ export const findAffiliateByWalletId = async (walletId: string): Promise<Affilia
 /**
  * Submits a transfer request between affiliates (pending admin approval).
  */
-export const submitTransfer = async (sender: Affiliate, recipientWalletId: string, amount: number) => {
+export const submitTransfer = async (sender: Affiliate, recipientWalletId: string, amount: number): Promise<string> => {
   if (amount > sender.balance) throw new Error("Solde insuffisant.");
   if (amount <= 0) throw new Error("Montant invalide.");
 
@@ -1130,7 +1131,7 @@ export const submitTransfer = async (sender: Affiliate, recipientWalletId: strin
     updatedAt: serverTimestamp()
   });
 
-  // Notify admin if needed (optional)
+  return recipient.name;
 };
 
 /**
