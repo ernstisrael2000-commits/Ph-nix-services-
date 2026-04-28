@@ -70,6 +70,8 @@ export interface Affiliate {
   directRevenue: number;
   indirectRevenue: number;
   totalEarnings: number;
+  totalWithdrawn?: number;
+  walletId?: string;
   info?: any; // Stores registration data
   createdAt: any;
   updatedAt: any;
@@ -84,6 +86,26 @@ export interface WithdrawalRequest {
   method: 'MonCash' | 'NatCash' | 'Physical';
   accountNumber: string;
   status: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
+  createdAt: any;
+  updatedAt: any;
+}
+
+export type TransactionType = 'deposit' | 'withdrawal' | 'transfer_sent' | 'transfer_received';
+export type TransactionStatus = 'pending' | 'completed' | 'approved' | 'rejected';
+
+export interface WalletTransaction {
+  id?: string;
+  affiliateId: string;
+  type: TransactionType;
+  amount: number;
+  status: TransactionStatus;
+  description?: string;
+  relatedAffiliateId?: string; // recipientId or senderId
+  relatedAffiliateName?: string;
+  recipientWalletId?: string; // For transfers
+  method?: string;
+  accountNumber?: string;
   rejectionReason?: string;
   createdAt: any;
   updatedAt: any;
@@ -147,6 +169,16 @@ export interface AffiliateRequest {
   phone: string;
   message?: string;
   status: 'pending' | 'approved' | 'rejected';
+  createdAt: any;
+  updatedAt: any;
+}
+
+export interface Client {
+  id?: string;
+  name: string;
+  phone: string;
+  directSponsorId?: string;
+  indirectSponsorId?: string;
   createdAt: any;
   updatedAt: any;
 }

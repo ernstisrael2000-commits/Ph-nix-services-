@@ -20,6 +20,7 @@ import {
   Truck, 
   Clock, 
   AlertCircle,
+  AlertTriangle,
   Loader2,
   Upload,
   Trash,
@@ -42,6 +43,9 @@ import {
   Zap,
   Star,
   ChevronRight,
+  ChevronLeft,
+  ArrowRight,
+  Network,
   TrendingUp,
   LayoutDashboard
 } from 'lucide-react';
@@ -65,10 +69,31 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Checkbox } from './ui/checkbox';
 import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage, useNavButtons, saveNavButton, deleteNavButton } from '../services/parcelService';
-import { useAllAffiliates, useAllWithdrawals, saveAffiliate, updateWithdrawalStatus, deleteAffiliate, useAllAffiliateRequests, updateAffiliateRequestStatus, resetMonthlyStats, awardMonthlyPrizes, clearMonthlyWinners, useMonthlyRankings, recordPurchase } from '../services/affiliateService';
+import { 
+  useAllAffiliates, 
+  useAllWithdrawals, 
+  saveAffiliate, 
+  updateWithdrawalStatus, 
+  deleteAffiliate, 
+  useAllAffiliateRequests, 
+  updateAffiliateRequestStatus, 
+  resetMonthlyStats, 
+  awardMonthlyPrizes, 
+  clearMonthlyWinners, 
+  useMonthlyRankings, 
+  recordPurchase, 
+  searchAffiliatesByName, 
+  getAffiliateReferrals,
+  useAllClients,
+  saveClient,
+  deleteClient,
+  searchClientsByPhone,
+  useAllWalletTransactions,
+  updateWalletTransactionStatus
+} from '../services/affiliateService';
 import { useAdminAccounts, useAdminLogs, saveAdminAccount, deleteAdminAccount } from '../services/adminService';
 import { useAnalytics } from '../services/analyticsService';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton, AdminAccount } from '../types';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton, AdminAccount, Client } from '../types';
 import AdminShippingManager from './AdminShippingManager';
 import { 
   BarChart, 
@@ -92,7 +117,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Timestamp, serverTimestamp } from 'firebase/firestore';
 import { toast } from 'sonner';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { LogOut, Shield, ShieldAlert as ShieldAlertIcon, History } from 'lucide-react';
 
 // Helper for image compression
@@ -466,6 +491,408 @@ interface AdminDashboardProps {
   onLogout: () => void;
 }
 
+const IntelligenceSearch = React.memo(({ onSearch, isSearching }: { onSearch: (query: string) => void, isSearching: boolean }) => {
+  const [localInput, setLocalInput] = useState('');
+  
+  return (
+    <div className="space-y-6">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="p-10 bg-white rounded-[3rem] border border-gray-100 shadow-xl overflow-hidden relative"
+      >
+        <div className="absolute top-0 right-0 h-40 w-40 bg-primary/5 rounded-bl-full -mr-10 -mt-10"></div>
+        <div className="relative z-10">
+           <div className="flex items-center gap-4 mb-6">
+             <div className="p-3 rounded-2xl bg-navy text-primary shadow-lg shadow-navy/20">
+               <LucideIcons.Search className="h-6 w-6" />
+             </div>
+             <div>
+               <h3 className="text-3xl font-black text-dark tracking-tight">Analyseur de Réseau</h3>
+               <p className="text-gray-400 font-medium">Visualisez la généalogie complète et la performance d'un affilié.</p>
+             </div>
+           </div>
+
+           <div className="relative flex flex-col sm:flex-row gap-4">
+             <div className="relative flex-1">
+               <LucideIcons.Search className="absolute left-5 top-1/2 -translate-y-1/2 h-6 w-6 text-gray-400" />
+               <Input 
+                 placeholder="Nom, identifiant ou code de l'affilié..." 
+                 className="pl-14 h-16 rounded-2xl border-gray-200 focus:ring-primary shadow-inner bg-gray-50/50 text-xl font-bold placeholder:text-gray-300"
+                 value={localInput}
+                 onChange={(e) => setLocalInput(e.target.value)}
+                 onKeyPress={(e) => e.key === 'Enter' && onSearch(localInput)}
+               />
+             </div>
+             <Button 
+               onClick={() => onSearch(localInput)}
+               disabled={isSearching || !localInput.trim()}
+               className="h-16 px-12 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black text-lg shadow-xl shadow-primary/30 border-0 transition-all active:scale-95 flex items-center justify-center gap-3"
+             >
+               {isSearching ? <LucideIcons.Loader2 className="h-6 w-6 animate-spin" /> : <LucideIcons.Network className="h-6 w-6" />}
+               Déployer l'Analyse
+             </Button>
+           </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+});
+
+const ClientsTableBody = React.memo(({ 
+  clients, 
+  searchQuery, 
+  affiliates, 
+  onEdit, 
+  onDelete 
+}: { 
+  clients: any[], 
+  searchQuery: string, 
+  affiliates: any[], 
+  onEdit: (c: any) => void, 
+  onDelete: (c: any) => void 
+}) => {
+  const filtered = React.useMemo(() => {
+    return clients.filter(c => 
+      c.phone.includes(searchQuery) || 
+      c.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [clients, searchQuery]);
+
+  return (
+    <>
+      {filtered.map((client) => (
+        <TableRow key={client.id} className="hover:bg-gray-50/50 border-gray-50 group">
+          <TableCell>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-accent-light text-primary flex items-center justify-center font-black">
+                {client.name.charAt(0)}
+              </div>
+              <span className="font-bold text-dark">{client.name}</span>
+            </div>
+          </TableCell>
+          <TableCell className="font-bold text-primary">{client.phone}</TableCell>
+          <TableCell>
+            {client.directSponsorId ? (
+               <div className="flex items-center gap-2">
+                 <div className="h-6 w-6 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] font-black">
+                   {affiliates.find(a => a.id === client.directSponsorId)?.name.charAt(0)}
+                 </div>
+                 <span className="text-sm font-medium">{affiliates.find(a => a.id === client.directSponsorId)?.name || 'Inconnu'}</span>
+               </div>
+            ) : (
+              <span className="text-xs text-gray-300 italic">Aucun</span>
+            )}
+          </TableCell>
+          <TableCell>
+            {client.indirectSponsorId ? (
+               <div className="flex items-center gap-2">
+                 <div className="h-6 w-6 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] font-black">
+                   {affiliates.find(a => a.id === client.indirectSponsorId)?.name.charAt(0)}
+                 </div>
+                 <span className="text-sm font-medium">{affiliates.find(a => a.id === client.indirectSponsorId)?.name || 'Inconnu'}</span>
+               </div>
+            ) : (
+              <span className="text-xs text-gray-300 italic">Aucun</span>
+            )}
+          </TableCell>
+          <TableCell className="text-right">
+            <div className="flex justify-end gap-2">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 rounded-lg hover:bg-primary/10 hover:text-primary"
+                onClick={() => onEdit(client)}
+              >
+                <LucideIcons.Edit2 className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 rounded-lg hover:bg-red-50 text-red-500"
+                onClick={() => onDelete(client)}
+              >
+                <LucideIcons.Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </TableCell>
+        </TableRow>
+      ))}
+    </>
+  );
+});
+
+const AffiliateTableBody = React.memo(({ 
+  affiliates, 
+  searchQuery, 
+  onEdit, 
+  onRecordSale, 
+  onDelete 
+}: { 
+  affiliates: any[], 
+  searchQuery: string, 
+  onEdit: (a: any) => void, 
+  onRecordSale: (a: any) => void, 
+  onDelete: (a: any) => void 
+}) => {
+  const filtered = React.useMemo(() => {
+    if (!searchQuery.trim()) return affiliates;
+    const searchTerms = searchQuery.toLowerCase().trim().split(/\s+/);
+    return affiliates.filter(a => {
+      const fullName = (a.name || '').toLowerCase();
+      const code = (a.code || '').toLowerCase();
+      const username = (a.username || '').toLowerCase();
+      const combined = `${fullName} ${code} ${username}`;
+      return searchTerms.every(term => combined.includes(term));
+    });
+  }, [affiliates, searchQuery]);
+
+  return (
+    <>
+      {filtered.map((a) => (
+        <TableRow key={a.id} className="hover:bg-gray-50/50 transition-colors cursor-pointer group" onClick={() => onEdit(a)}>
+          <TableCell>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-accent-light text-primary flex items-center justify-center font-black">
+                {a.name.charAt(0)}
+              </div>
+              <div>
+                <p className="font-bold text-dark">{a.name}</p>
+                <p className="text-[10px] text-gray-400 font-mono">@{a.username}</p>
+              </div>
+            </div>
+          </TableCell>
+          <TableCell>
+            <div className="flex flex-col gap-1">
+              <span className="font-mono text-xs text-primary font-bold">{a.code}</span>
+              <Badge variant="outline" className={`text-[9px] w-fit font-black ${
+                a.level === 'Elite' ? 'border-orange-200 text-orange-600 bg-orange-50' :
+                a.level === 'VIP' ? 'border-purple-200 text-purple-600 bg-purple-50' :
+                'border-gray-200 text-gray-500 bg-gray-50'
+              }`}>
+                {a.level || 'Bronze'}
+              </Badge>
+            </div>
+          </TableCell>
+          <TableCell>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <LucideIcons.Trophy className="h-3 w-3 text-primary" />
+                <span className="text-xs font-bold text-dark">{a.points || 0} pts</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <LucideIcons.Users className="h-3 w-3 text-gray-400" />
+                <span className="text-[10px] text-gray-500">{a.referredClients} référés</span>
+              </div>
+            </div>
+          </TableCell>
+          <TableCell>
+            <p className="font-black text-emerald-600">{a.balance} G</p>
+            <p className="text-[9px] text-gray-400 uppercase font-bold tracking-tight">Solde dispo</p>
+          </TableCell>
+          <TableCell className="text-right">
+            <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent-light hover:text-primary" onClick={() => onEdit(a)}>
+                <LucideIcons.Edit2 className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-primary hover:bg-accent-light" onClick={() => onRecordSale(a)}>
+                <LucideIcons.DollarSign className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-red-500 hover:bg-red-50" onClick={() => onDelete(a)}>
+                <LucideIcons.Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </TableCell>
+        </TableRow>
+      ))}
+    </>
+  );
+});
+
+const AffiliateGridView = React.memo(({ 
+  affiliates, 
+  searchQuery, 
+  onEdit,
+  onCredit,
+  onSale
+}: { 
+  affiliates: any[], 
+  searchQuery: string, 
+  onEdit: (a: any) => void,
+  onCredit: (a: any) => void,
+  onSale: (a: any) => void
+}) => {
+  const filtered = React.useMemo(() => {
+    if (!searchQuery.trim()) return affiliates;
+    const searchTerms = searchQuery.toLowerCase().trim().split(/\s+/);
+    return affiliates.filter(a => {
+      const fullName = (a.name || '').toLowerCase();
+      const code = (a.code || '').toLowerCase();
+      const username = (a.username || '').toLowerCase();
+      const combined = `${fullName} ${code} ${username}`;
+      return searchTerms.every(term => combined.includes(term));
+    });
+  }, [affiliates, searchQuery]);
+
+  return (
+    <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-h-[600px] overflow-y-auto custom-scrollbar">
+      {filtered.map((a) => (
+        <motion.div
+           key={a.id}
+           initial={{ opacity: 0, scale: 0.95 }}
+           animate={{ opacity: 1, scale: 1 }}
+           whileHover={{ y: -4 }}
+           className="group relative"
+        >
+           <Card 
+             className="border-0 shadow-sm rounded-3xl overflow-hidden cursor-pointer bg-white border border-gray-100 hover:shadow-xl hover:border-primary/20 transition-all duration-300"
+             onClick={() => onEdit(a)}
+           >
+             <CardContent className="p-5">
+               <div className="flex items-start justify-between mb-4">
+                 <div className="flex items-center gap-3">
+                   <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-primary/10 to-accent-light flex items-center justify-center text-primary font-black text-xl shadow-inner group-hover:scale-110 transition-transform">
+                     {a.name.charAt(0)}
+                   </div>
+                   <div>
+                     <h4 className="font-black text-dark group-hover:text-primary transition-colors truncate max-w-[120px]">{a.name}</h4>
+                     <p className="text-[10px] text-primary font-black tracking-widest uppercase">{a.level || 'Bronze'}</p>
+                     <p className="text-[10px] text-gray-400 font-mono mt-0.5">{a.code}</p>
+                   </div>
+                 </div>
+                 <div className="text-right">
+                   <p className="text-lg font-black text-emerald-600 leading-tight">{a.balance} G</p>
+                   <p className="text-[9px] text-gray-400 uppercase font-black">Disponible</p>
+                 </div>
+               </div>
+
+               <div className="grid grid-cols-3 gap-2 py-3 border-y border-gray-50 mb-3">
+                  <div className="text-center">
+                    <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Points</p>
+                    <p className="text-xs font-black text-dark">{a.points || 0}</p>
+                  </div>
+                  <div className="text-center border-x">
+                    <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Ventes</p>
+                    <p className="text-xs font-black text-dark">{a.monthlySales || 0}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[9px] text-gray-400 font-bold uppercase mb-1">Référés</p>
+                    <p className="text-xs font-black text-dark">{a.referredClients || 0}</p>
+                  </div>
+               </div>
+
+               <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    className="h-9 w-9 p-0 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                    onClick={() => onCredit(a)}
+                  >
+                    <LucideIcons.PlusCircle className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    className="h-9 w-9 p-0 rounded-xl bg-primary/10 text-primary hover:bg-primary/20"
+                    onClick={() => onSale(a)}
+                  >
+                    <LucideIcons.DollarSign className="h-4 w-4" />
+                  </Button>
+               </div>
+             </CardContent>
+           </Card>
+        </motion.div>
+      ))}
+    </div>
+  );
+});
+
+const ClientsSearchHeader = React.memo(({ 
+  searchQuery, 
+  onSearchChange,
+  totalClients
+}: { 
+  searchQuery: string, 
+  onSearchChange: (v: string) => void,
+  totalClients: number
+}) => {
+  const [localValue, setLocalValue] = useState(searchQuery);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onSearchChange(localValue);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [localValue, onSearchChange]);
+
+  return (
+    <div className="p-6 border-b border-gray-50 bg-gray-50/30 flex flex-col sm:flex-row gap-4 justify-between items-center">
+      <div className="relative w-full sm:w-96">
+        <LucideIcons.Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <Input 
+          placeholder="Chercher par numéro..." 
+          className="pl-10 h-11 rounded-xl border-gray-200"
+          value={localValue}
+          onChange={(e) => setLocalValue(e.target.value)}
+        />
+      </div>
+      <p className="text-xs font-black text-gray-400 uppercase tracking-widest">{totalClients} Clients Enregistrés</p>
+    </div>
+  );
+});
+
+const AffiliateSearchHeader = React.memo(({ 
+  searchQuery, 
+  onSearchChange,
+  viewMode,
+  onViewModeChange
+}: { 
+  searchQuery: string, 
+  onSearchChange: (v: string) => void,
+  viewMode: 'table' | 'grid',
+  onViewModeChange: (m: 'table' | 'grid') => void
+}) => {
+  const [localValue, setLocalValue] = useState(searchQuery);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onSearchChange(localValue);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [localValue, onSearchChange]);
+
+  return (
+    <CardHeader className="border-b bg-gray-50/50 flex flex-col sm:flex-row items-center justify-between gap-4 py-3">
+      <div className="flex items-center gap-2">
+        <CardTitle className="text-lg font-semibold">Répertoire des Affiliés</CardTitle>
+        <div className="flex bg-gray-100 p-1 rounded-lg ml-2">
+          <button 
+            onClick={() => onViewModeChange('table')}
+            className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-white shadow-sm text-primary' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            <LucideIcons.Table className="h-4 w-4" />
+          </button>
+          <button 
+            onClick={() => onViewModeChange('grid')}
+            className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white shadow-sm text-primary' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            <LucideIcons.LayoutGrid className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+      <div className="relative w-full sm:w-72">
+        <LucideIcons.Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <Input 
+          placeholder="Chercher un affilié..." 
+          className="pl-10 h-10 rounded-xl border-gray-200 focus:ring-primary shadow-sm"
+          value={localValue}
+          onChange={(e) => setLocalValue(e.target.value)}
+        />
+      </div>
+    </CardHeader>
+  );
+});
+
 export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps) {
   const [showScrollTop, setShowScrollTop] = useState(false);
 
@@ -583,6 +1010,152 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const [selectingSponsorType, setSelectingSponsorType] = useState<'direct' | 'indirect' | 'extra'>('direct');
   const [sponsorSearchQuery, setSponsorSearchQuery] = useState('');
 
+  // Affiliate Search Feature States
+  const [affiliateSearchInput, setAffiliateSearchInput] = useState('');
+  const [isSearchingAffiliate, setIsSearchingAffiliate] = useState(false);
+  const [searchAffiliateResults, setSearchAffiliateResults] = useState<Affiliate[]>([]);
+  const [selectedAffiliateDetail, setSelectedAffiliateDetail] = useState<Affiliate | null>(null);
+  const [selectedClientDetail, setSelectedClientDetail] = useState<Client | null>(null);
+  const [referralDetails, setReferralDetails] = useState<{ directReferrals: Affiliate[], indirectReferrals: Affiliate[] } | null>(null);
+  const [searchStatus, setSearchStatus] = useState<'idle' | 'searching' | 'found' | 'not_found'>('idle');
+
+  // Client Management States
+  const { clients, loading: clientsLoading } = useAllClients();
+  const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [isClientDeleteDialogOpen, setIsClientDeleteDialogOpen] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [clientFormData, setClientFormData] = useState<Partial<Client>>({
+    name: '',
+    phone: '',
+    directSponsorId: '',
+    indirectSponsorId: ''
+  });
+  const [clientSearchQuery, setClientSearchQuery] = useState('');
+  const [isSponsorSelectorForClientOpen, setIsSponsorSelectorForClientOpen] = useState(false);
+  const [selectingSponsorTypeForClient, setSelectingSponsorTypeForClient] = useState<'direct' | 'indirect'>('direct');
+
+  const handleSearchAffiliate = async () => {
+    if (!affiliateSearchInput.trim()) return;
+    
+    setIsSearchingAffiliate(true);
+    setSearchStatus('searching');
+    setSelectedAffiliateDetail(null);
+    setSelectedClientDetail(null);
+    
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    try {
+      const results = await searchAffiliatesByName(affiliateSearchInput.trim());
+      const clientResults = await searchClientsByPhone(affiliateSearchInput.trim());
+      
+      setSearchAffiliateResults(results);
+      
+      if (results.length > 0) {
+        setSearchStatus('found');
+        if (results.length === 1 && clientResults.length === 0) {
+          handleViewAffiliateDetail(results[0]);
+        }
+      } else if (clientResults.length > 0) {
+        setSearchStatus('found');
+        setSelectedClientDetail(clientResults[0]);
+      } else {
+        setSearchStatus('not_found');
+      }
+    } catch (error) {
+      console.error(error);
+      setSearchStatus('not_found');
+    } finally {
+      setIsSearchingAffiliate(false);
+    }
+  };
+
+  const handleViewAffiliateDetail = async (affiliate: Affiliate) => {
+    setIsSearchingAffiliate(true);
+    try {
+      const referrals = await getAffiliateReferrals(affiliate.id!);
+      setSelectedAffiliateDetail(affiliate);
+      setReferralDetails(referrals);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsSearchingAffiliate(false);
+    }
+  };
+
+  const handleSaveClient = async () => {
+    if (!clientFormData.name || !clientFormData.phone) {
+      toast.error("Le nom et le téléphone sont obligatoires.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await saveClient(clientFormData, editingClient?.id);
+      toast.success(editingClient ? "Client mis à jour !" : "Client ajouté avec succès !");
+      setIsClientDialogOpen(false);
+      setEditingClient(null);
+      setClientFormData({
+        name: '',
+        phone: '',
+        directSponsorId: '',
+        indirectSponsorId: ''
+      });
+    } catch (error: any) {
+      console.error("Save Client Error:", error);
+      let errorMessage = "Erreur lors de l'enregistrement du client.";
+      
+      // Try to parse specialized firestore error
+      try {
+        const parsed = JSON.parse(error.message);
+        if (parsed.error && parsed.error.includes('permissions')) {
+          errorMessage = "Permission refusée. Vérifiez vos accès administrateur.";
+        }
+      } catch (e) {
+        // Not a JSON error
+      }
+      
+      toast.error(errorMessage);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleConfirmDeleteClient = async () => {
+    if (!clientToDelete?.id) return;
+    setIsDeleting(true);
+    try {
+      await deleteClient(clientToDelete.id);
+      toast.success("Client supprimé.");
+      setIsClientDeleteDialogOpen(false);
+      setClientToDelete(null);
+    } catch (error) {
+      toast.error("Erreur lors de la suppression.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleSelectSponsorForClient = (sponsor: Affiliate) => {
+    if (selectingSponsorTypeForClient === 'direct') {
+      setClientFormData(prev => ({ ...prev, directSponsorId: sponsor.id }));
+    } else {
+      setClientFormData(prev => ({ ...prev, indirectSponsorId: sponsor.id }));
+    }
+    setIsSponsorSelectorForClientOpen(false);
+    setSponsorSearchQuery('');
+  };
+
+  const handleContactWhatsApp = (name: string, phone: string, isAffiliate: boolean) => {
+    // Standardize phone number: remove non-digits
+    const cleanPhone = phone.replace(/\D/g, '');
+    const message = isAffiliate 
+      ? `Bonjour ${name}, nous vous contactons concernant votre statut d'affilié sur Neopay.` 
+      : `Bonjour, nous vous contactons concernant votre dossier client Neopay (N° ${phone}).`;
+    
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+  };
+
   // Helper to ensure the admin creation dialog is always usable
   const handleOpenAdminDialog = (adminAccount?: AdminAccount) => {
     if (adminAccount) {
@@ -640,25 +1213,59 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     }
   };
 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
   const hasPermission = (permission: string) => {
     if (admin.isSuperAdmin || admin.permissions.includes('all')) return true;
     return admin.permissions.includes(permission);
   };
 
-  const menuItems = [
-    { value: 'analytics', label: 'Intelligence', icon: TrendingUp, permission: 'analytics' },
-    { value: 'parcels', label: 'Colis', icon: Package, permission: 'parcels' },
-    { value: 'products', label: 'Produits / Services', icon: LayoutGrid, permission: 'products' },
-    { value: 'games', label: 'Top-up Jeux', icon: Gamepad2, permission: 'games' },
-    { value: 'cards', label: 'Recharge Cartes', icon: CreditCard, permission: 'cards' },
-    { value: 'slider', label: 'Slider', icon: ImageIcon, permission: 'slider' },
-    { value: 'affiliates', label: 'Affiliés', icon: Users, permission: 'affiliates' },
-    { value: 'notifications', label: 'Notifications', icon: Bell, permission: 'notifications' },
-    { value: 'shipping', label: 'Shipping', icon: Truck, permission: 'shipping' },
-    { value: 'nav-buttons', label: 'Boutons Nav', icon: LayoutGrid, permission: 'nav-buttons' },
-    { value: 'settings', label: 'Paramètres', icon: SettingsIcon, permission: 'settings' },
-    { value: 'admins', label: 'Gérer Admins', icon: Shield, permission: 'super_admin_only' },
+  // Define categorized menu items for better organization
+  const menuGroups = [
+    {
+      title: "Gestion Commerciale",
+      items: [
+        { value: 'analytics', label: 'Intelligence', icon: TrendingUp, permission: 'analytics' },
+        { value: 'affiliates', label: 'Affiliés', icon: Users, permission: 'affiliates' },
+        { value: 'clients', label: 'Base Clients', icon: Smartphone, permission: 'affiliates' },
+        { value: 'products', label: 'Catalogue', icon: LayoutGrid, permission: 'products' },
+      ]
+    },
+    {
+      title: "Logistique & Opérations",
+      items: [
+        { value: 'parcels', label: 'Colis & Tracking', icon: Package, permission: 'parcels' },
+        { value: 'shipping', label: 'Expéditions', icon: Truck, permission: 'shipping' },
+        { value: 'cards', label: 'Recharges', icon: CreditCard, permission: 'cards' },
+        { value: 'games', label: 'Gaming', icon: Gamepad2, permission: 'games' },
+      ]
+    },
+    {
+      title: "Contenu & Interface",
+      items: [
+        { value: 'slider', label: 'Bannières Slider', icon: ImageIcon, permission: 'slider' },
+        { value: 'nav-buttons', label: 'Boutons Navigation', icon: Network, permission: 'nav-buttons' },
+        { value: 'notifications', label: 'Alertes Système', icon: Bell, permission: 'notifications' },
+      ]
+    },
+    {
+      title: "Gestion des Fonds",
+      items: [
+        { value: 'withdrawals', label: 'Retraits', icon: ArrowUp, permission: 'affiliates' },
+        { value: 'wallet-tx', label: 'Dépôts & Flux', icon: CreditCard, permission: 'affiliates' },
+      ]
+    },
+    {
+      title: "Administration & Paramètres",
+      items: [
+        { value: 'admins', label: 'Administrateurs', icon: Shield, permission: 'super_admin_only' },
+        { value: 'settings', label: 'Paramètres Généraux', icon: SettingsIcon, permission: 'settings' },
+      ]
+    }
   ];
+
+  // Flat list for internal logic compatibility
+  const menuItems = menuGroups.flatMap(group => group.items);
 
   const visibleMenuItems = menuItems.filter(item => {
     if (item.permission === 'super_admin_only') return admin.isSuperAdmin;
@@ -741,6 +1348,25 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const [notifSearch, setNotifSearch] = useState('');
   const [affiliateSearch, setAffiliateSearch] = useState('');
 
+  const { transactions: walletTransactions, loading: walletTxLoading } = useAllWalletTransactions();
+
+  // Optimized Filtering for Affiliates
+  const filteredAffiliatesList = React.useMemo(() => {
+    return affiliates.filter(aff => 
+      aff.name.toLowerCase().includes(affiliateSearch.toLowerCase()) ||
+      aff.username?.toLowerCase().includes(affiliateSearch.toLowerCase()) ||
+      aff.code?.toLowerCase().includes(affiliateSearch.toLowerCase())
+    );
+  }, [affiliates, affiliateSearch]);
+
+  // Optimized Filtering for Clients
+  const filteredClientsList = React.useMemo(() => {
+    return clients.filter(c => 
+      c.name.toLowerCase().includes(clientSearchQuery.toLowerCase()) ||
+      c.phone.includes(clientSearchQuery)
+    );
+  }, [clients, clientSearchQuery]);
+
   const [isSliderImageDeleteDialogOpen, setIsSliderImageDeleteDialogOpen] = useState(false);
   const [sliderImageToDelete, setSliderImageToDelete] = useState<{id: string, url: string} | null>(null);
   const [isSliderImageEditDialogOpen, setIsSliderImageEditDialogOpen] = useState(false);
@@ -762,7 +1388,12 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     [allWithdrawals]
   );
   
-  const totalPending = pendingRegistrations.length + pendingWithdrawals.length;
+  const pendingDeposits = React.useMemo(() => 
+    walletTransactions.filter(tx => tx.type === 'deposit' && tx.status === 'pending'),
+    [walletTransactions]
+  );
+  
+  const totalPending = pendingRegistrations.length + pendingWithdrawals.length + pendingDeposits.length;
 
   const totalAffiliateBalance = React.useMemo(() => {
     return affiliates.reduce((sum, affiliate) => sum + (affiliate.balance || 0), 0);
@@ -1547,27 +2178,100 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v)} className="space-y-6">
-        <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
-          <TabsList className="bg-white border p-1 rounded-xl h-auto flex flex-nowrap sm:flex-wrap gap-1 sm:gap-2 min-w-max sm:min-w-0">
-            {visibleMenuItems.map((item) => (
-              <TabsTrigger 
-                key={item.value}
-                value={item.value} 
-                className="rounded-lg data-[state=active]:bg-primary data-[state=active]:text-white py-2 px-3 sm:px-4 flex items-center gap-2 text-xs sm:text-sm whitespace-nowrap transition-all"
-              >
-                <item.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                {item.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </div>
+      {/* Main Admin Content with Sidebar Layout */}
+      <div className="flex flex-col lg:flex-row gap-8 relative items-start">
+        {/* Toggle Button for Mobile/Collapsed */}
+        {!isSidebarOpen && (
+          <Button
+            onClick={() => setIsSidebarOpen(true)}
+            className="fixed left-6 bottom-6 z-50 h-16 w-16 rounded-full bg-black text-white border-0 shadow-2xl hover:scale-110 active:scale-95 flex items-center justify-center p-0 group overflow-hidden"
+          >
+            <div className="absolute inset-0 bg-primary opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <LucideIcons.Settings2 className="h-7 w-7 relative z-10" />
+            <motion.div 
+              animate={{ rotate: 360 }}
+              transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+              className="absolute inset-0 border-2 border-white/20 rounded-full scale-90"
+            />
+          </Button>
+        )}
 
-        <TabsContent value="analytics" className="space-y-6">
-          <AnalyticsDashboard stats={stats} loading={analyticsLoading} />
-        </TabsContent>
+        <AnimatePresence mode="wait">
+          {isSidebarOpen && (
+            <motion.aside 
+              initial={{ x: -300, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -300, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="lg:w-80 shrink-0 w-full lg:sticky lg:top-24 z-40"
+            >
+              <Card className="rounded-[2.5rem] p-6 bg-white border-0 shadow-2xl overflow-hidden relative group">
+                <div className="absolute top-0 right-0 p-4">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => setIsSidebarOpen(false)}
+                    className="h-10 w-10 rounded-2xl bg-gray-50 text-gray-400 hover:bg-primary/10 hover:text-primary transition-all"
+                  >
+                    <LucideIcons.PanelLeftClose className="h-5 w-5" />
+                  </Button>
+                </div>
 
-        <TabsContent value="parcels" className="space-y-6">
+                <div className="space-y-8 mt-4">
+                  {menuGroups.map((group, groupIdx) => {
+                    const visibleItemsInGroup = group.items.filter(item => 
+                      visibleMenuItems.some(v => v.value === item.value)
+                    );
+                    
+                    if (visibleItemsInGroup.length === 0) return null;
+
+                    return (
+                      <div key={groupIdx} className="space-y-3">
+                        <h4 className="px-4 text-[11px] font-black text-gray-400 uppercase tracking-widest leading-none flex items-center gap-2">
+                          <span className="h-px bg-gray-100 flex-1"></span>
+                          {group.title}
+                        </h4>
+                        <div className="space-y-1">
+                          {visibleItemsInGroup.map((item) => (
+                            <button
+                              key={item.value}
+                              onClick={() => {
+                                setActiveTab(item.value);
+                                if (window.innerWidth < 1024) setIsSidebarOpen(false);
+                              }}
+                              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all group ${
+                                activeTab === item.value 
+                                ? 'bg-primary text-white shadow-xl shadow-primary/30 scale-[1.02]' 
+                                : 'text-gray-500 hover:bg-accent-light hover:text-primary'
+                              }`}
+                            >
+                              <item.icon className={`h-5 w-5 transition-transform ${activeTab === item.value ? 'scale-110' : 'group-hover:scale-110'}`} />
+                              <span className="font-black text-sm tracking-tight">{item.label}</span>
+                              {activeTab === item.value && (
+                                <motion.div 
+                                  layoutId="active-tab-indicator"
+                                  className="ml-auto w-1.5 h-1.5 rounded-full bg-white shadow-sm"
+                                />
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            </motion.aside>
+          )}
+        </AnimatePresence>
+
+        <div className="flex-1 min-w-0 w-full transition-all duration-500">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v)} className="space-y-8">
+            <TabsContent value="analytics" className="focus-visible:outline-none focus-visible:ring-0 mt-0">
+              <AnalyticsDashboard stats={stats} loading={analyticsLoading} />
+            </TabsContent>
+
+            <TabsContent value="parcels" className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <h2 className="text-xl font-bold text-dark">Gestion des Colis</h2>
             <Button onClick={() => handleOpenDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 border-0">
@@ -2165,35 +2869,58 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
           </Dialog>
         </TabsContent>
 
-        <TabsContent value="affiliates" className="space-y-6">
-          <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md py-4 border-b -mx-6 px-6 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-sm">
-            <h2 className="text-xl font-bold text-dark">Gestion des Affiliés</h2>
-            <Button onClick={() => {
-              setEditingAffiliate(null);
-              setAffiliateFormData({ 
-                name: '', 
-                username: '', 
-                password: '', 
-                code: '',
-                balance: 0,
-                referredClients: 0,
-                points: 0,
-                level: 'Bronze',
-                directRevenue: 0,
-                indirectRevenue: 0,
-                totalEarnings: 0,
-                parentAffiliateId: '',
-                grandparentAffiliateId: '',
-                additionalSponsors: []
-              });
-              setIsAffiliateDialogOpen(true);
-            }} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 shadow-md border-0">
-              <PlusCircle className="h-4 w-4" />
-              Nouvel Affilié
-            </Button>
-          </div>
+        <TabsContent value="affiliates" className="space-y-0 h-full flex flex-col">
+          <Tabs defaultValue="list" className="w-full h-full flex flex-col">
+            <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md py-4 border-b -mx-6 px-6 flex flex-col sm:flex-row justify-between items-center gap-4 shadow-sm">
+              <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                <h2 className="text-xl font-bold text-dark whitespace-nowrap">Gestion des Affiliés</h2>
+                <TabsList className="bg-gray-100/80 p-1 rounded-xl h-auto border border-gray-200/50">
+                  <TabsTrigger 
+                    value="list" 
+                    className="rounded-lg px-6 py-2 text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all"
+                  >
+                    <Users className="h-3 w-3 mr-2" />
+                    Liste & Stats
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="search" 
+                    className="rounded-lg px-6 py-2 text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all"
+                  >
+                    <Search className="h-3 w-3 mr-2" />
+                    Recherche & Généalogie
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <Button onClick={() => {
+                  setEditingAffiliate(null);
+                  setAffiliateFormData({ 
+                    name: '', 
+                    username: '', 
+                    password: '', 
+                    code: '',
+                    balance: 0,
+                    referredClients: 0,
+                    points: 0,
+                    level: 'Bronze',
+                    directRevenue: 0,
+                    indirectRevenue: 0,
+                    totalEarnings: 0,
+                    parentAffiliateId: '',
+                    grandparentAffiliateId: '',
+                    additionalSponsors: []
+                  });
+                  setIsAffiliateDialogOpen(true);
+                }} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 shadow-md border-0 h-10 px-6 rounded-xl font-black text-xs">
+                  <PlusCircle className="h-4 w-4" />
+                  Nouvel Affilié
+                </Button>
+              </div>
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="flex-1 overflow-y-auto pt-6 custom-scrollbar">
+              <TabsContent value="list" className="space-y-6 mt-0 px-6 pb-20">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <Card className="bg-accent-light/30 border-accent-light">
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
@@ -2281,73 +3008,20 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredAffiliates.map((a) => (
-                            <TableRow key={a.id} className="hover:bg-gray-50/50 transition-colors cursor-pointer group" onClick={() => {
+                          <AffiliateTableBody 
+                            affiliates={affiliates}
+                            searchQuery={affiliateSearch}
+                            onEdit={(a) => {
                               setEditingAffiliate(a);
                               setAffiliateFormData(a);
                               setIsAffiliateDialogOpen(true);
-                            }}>
-                              <TableCell>
-                                <div className="flex items-center gap-3">
-                                  <div className="h-10 w-10 rounded-xl bg-accent-light text-primary flex items-center justify-center font-black">
-                                    {a.name.charAt(0)}
-                                  </div>
-                                  <div>
-                                    <p className="font-bold text-dark">{a.name}</p>
-                                    <p className="text-[10px] text-gray-400 font-mono">@{a.username}</p>
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex flex-col gap-1">
-                                  <span className="font-mono text-xs text-primary font-bold">{a.code}</span>
-                                  <Badge variant="outline" className={`text-[9px] w-fit font-black ${
-                                    a.level === 'Elite' ? 'border-orange-200 text-orange-600 bg-orange-50' :
-                                    a.level === 'VIP' ? 'border-purple-200 text-purple-600 bg-purple-50' :
-                                    'border-gray-200 text-gray-500 bg-gray-50'
-                                  }`}>
-                                    {a.level || 'Bronze'}
-                                  </Badge>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
-                                    <Trophy className="h-3 w-3 text-primary" />
-                                    <span className="text-xs font-bold text-dark">{a.points || 0} pts</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Users className="h-3 w-3 text-gray-400" />
-                                    <span className="text-[10px] text-gray-500">{a.referredClients} référés</span>
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <p className="font-black text-emerald-600">{a.balance} G</p>
-                                <p className="text-[9px] text-gray-400 uppercase font-bold tracking-tight">Solde dispo</p>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent-light hover:text-primary" onClick={() => {
-                                    setEditingAffiliate(a);
-                                    setAffiliateFormData(a);
-                                    setIsAffiliateDialogOpen(true);
-                                  }}>
-                                    <Edit2 className="h-4 w-4" />
-                                  </Button>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-primary hover:bg-accent-light" onClick={() => {
-                                    setSelectedAffiliateForSale(a);
-                                    setIsRecordSaleDialogOpen(true);
-                                  }}>
-                                    <DollarSign className="h-4 w-4" />
-                                  </Button>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-red-500 hover:bg-red-50" onClick={() => handleOpenAffiliateDeleteDialog(a)}>
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                            }}
+                            onRecordSale={(a) => {
+                              setSelectedAffiliateForSale(a);
+                              setIsRecordSaleDialogOpen(true);
+                            }}
+                            onDelete={(a) => handleOpenAffiliateDeleteDialog(a)}
+                          />
                         </TableBody>
                       </Table>
                     </div>
@@ -2706,6 +3380,678 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                 </CardContent>
               </Card>
             </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="withdrawals" className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <h2 className="text-xl font-bold text-dark">Demandes de Retraits</h2>
+          </div>
+          <Card className="shadow-sm border-gray-200">
+            <CardContent className="p-0">
+              {allWithdrawalsLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                  <p>Chargement des retraits...</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50/50">
+                        <TableHead>Affilié</TableHead>
+                        <TableHead>Montant</TableHead>
+                        <TableHead>Méthode</TableHead>
+                        <TableHead>Statut</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {allWithdrawals.map((w) => (
+                        <TableRow key={w.id}>
+                          <TableCell className="font-bold">{w.affiliateName}</TableCell>
+                          <TableCell className="font-mono text-emerald-600">{w.amount} G</TableCell>
+                          <TableCell>{w.method} - {w.accountNumber}</TableCell>
+                          <TableCell>
+                            <Badge variant={w.status === 'approved' ? 'default' : w.status === 'rejected' ? 'destructive' : 'outline'}>
+                              {w.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {w.status === 'pending' && (
+                              <div className="flex gap-2">
+                                <Button size="sm" onClick={() => handleWithdrawalAction(w, 'approved')}>Approuver</Button>
+                                <Button size="sm" variant="destructive" onClick={() => handleWithdrawalAction(w, 'rejected')}>Rejeter</Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="wallet-tx" className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <h2 className="text-xl font-bold text-dark">Flux Financiers & Dépôts</h2>
+          </div>
+          <Card className="shadow-sm border-gray-200">
+            <CardHeader className="border-b bg-gray-50/50">
+              <CardTitle className="text-lg font-semibold">Toutes les transactions</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {walletTxLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                  <p>Chargement des flux...</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50/50">
+                        <TableHead>Type</TableHead>
+                        <TableHead>Affilié</TableHead>
+                        <TableHead>Montant</TableHead>
+                        <TableHead>Détails</TableHead>
+                        <TableHead>Statut</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {walletTransactions.map((tx) => (
+                        <TableRow key={tx.id}>
+                          <TableCell>
+                            <Badge variant="outline" className={`uppercase text-[10px] ${
+                              tx.type === 'deposit' ? 'bg-emerald-50 text-emerald-600' :
+                              tx.type === 'withdrawal' ? 'bg-red-50 text-red-600' :
+                              'bg-blue-50 text-blue-600'
+                            }`}>
+                              {tx.type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-bold">
+                            {affiliates.find(a => a.id === tx.affiliateId)?.name || tx.affiliateId.slice(0,8)}
+                          </TableCell>
+                          <TableCell className={`font-mono font-bold ${
+                            tx.type === 'deposit' ? 'text-emerald-600' :
+                            tx.type === 'withdrawal' ? 'text-red-600' :
+                            'text-blue-600'
+                          }`}>
+                            {tx.type === 'withdrawal' ? '-' : '+'}{tx.amount} G
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-500">
+                            {tx.description}
+                            {tx.recipientWalletId && ` -> Dest: ${tx.recipientWalletId}`}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={tx.status === 'approved' ? 'default' : tx.status === 'rejected' ? 'destructive' : 'outline'} className="uppercase text-[9px]">
+                              {tx.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-400">
+                            {tx.createdAt ? format(tx.createdAt.toDate(), 'dd/MM/yy HH:mm') : '-'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {tx.type === 'deposit' && tx.status === 'pending' && (
+                              <div className="flex justify-end gap-2">
+                                <Button 
+                                  size="sm" 
+                                  className="bg-emerald-600 hover:bg-emerald-700 h-8 text-[10px]"
+                                  onClick={async () => {
+                                    try {
+                                      await updateWalletTransactionStatus(tx.id!, 'approved');
+                                      toast.success("Dépôt approuvé !");
+                                    } catch (e) {
+                                      toast.error("Erreur.");
+                                    }
+                                  }}
+                                >
+                                  Approuver
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="destructive" 
+                                  className="h-8 text-[10px]"
+                                  onClick={async () => {
+                                    try {
+                                      await updateWalletTransactionStatus(tx.id!, 'rejected');
+                                      toast.success("Dépôt rejeté !");
+                                    } catch (e) {
+                                      toast.error("Erreur.");
+                                    }
+                                  }}
+                                >
+                                  Rejeter
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {walletTransactions.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={7} className="h-32 text-center text-gray-400">
+                            Aucune transaction enregistrée.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="search" className="mt-0 h-full bg-white/50">
+            <div className="max-w-6xl mx-auto space-y-6 px-6 py-8 pb-32">
+              <IntelligenceSearch 
+                onSearch={async (query) => {
+                  setAffiliateSearchInput(query);
+                  // We need to trigger the search logic
+                  // Because IntelligenceSearch has its own state, we use the callback
+                  const results = await searchAffiliatesByName(query);
+                  setSearchAffiliateResults(results);
+                  if (results.length === 1) {
+                    await handleViewAffiliateDetail(results[0]);
+                  } else if (results.length > 0) {
+                    setSearchStatus('found');
+                  } else {
+                    setSearchStatus('not_found');
+                  }
+                }}
+                isSearching={isSearchingAffiliate}
+              />
+
+              <div className="min-h-[500px]">
+                {searchStatus === 'searching' && (
+                  <div className="flex flex-col items-center justify-center py-32 text-primary">
+                    <div className="relative mb-8">
+                      <div className="absolute inset-0 bg-primary/20 blur-3xl animate-pulse rounded-full"></div>
+                      <div className="relative h-24 w-24 rounded-full border-4 border-primary/10 border-t-primary animate-spin"></div>
+                      <Search className="absolute inset-0 m-auto h-8 w-8 animate-bounce" />
+                    </div>
+                    <p className="text-2xl font-black tracking-widest uppercase">Exploration Sémantique...</p>
+                    <p className="text-sm text-gray-400 font-black mt-2">Recherche de "{affiliateSearchInput}" dans la base de données.</p>
+                  </div>
+                )}
+
+                {searchStatus === 'not_found' && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex flex-col items-center justify-center py-20 bg-white rounded-[3rem] border border-red-100 shadow-sm"
+                  >
+                    <div className="p-6 bg-red-50 rounded-full mb-6 text-red-500">
+                      <AlertCircle className="h-12 w-12" />
+                    </div>
+                    <h3 className="text-2xl font-black text-dark mb-2">Aucun Résultat Crital</h3>
+                    <p className="text-gray-400 font-medium mb-8">Nous n'avons trouvé aucun profil correspondant à votre recherche.</p>
+                    <Button variant="outline" className="border-red-200 text-red-600 font-black px-10 h-12 rounded-xl" onClick={() => setSearchStatus('idle')}>ESSAYER À NOUVEAU</Button>
+                  </motion.div>
+                )}
+
+                {searchStatus === 'found' && !selectedAffiliateDetail && (
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3 px-2 border-l-4 border-emerald-500 py-1 ml-2">
+                       <p className="text-lg font-black text-dark uppercase tracking-tighter">{searchAffiliateResults.length} Correspondance(s) Identifiée(s)</p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {searchAffiliateResults.map(a => (
+                        <motion.div 
+                          key={a.id} 
+                          onClick={() => handleViewAffiliateDetail(a)}
+                          whileHover={{ y: -8, scale: 1.02 }}
+                          className="p-6 rounded-[2.5rem] bg-white border border-gray-100 shadow-sm hover:shadow-2xl hover:border-primary/30 transition-all cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-5 mb-4">
+                            <div className="h-16 w-16 rounded-3xl bg-accent-light text-primary flex items-center justify-center font-black text-2xl group-hover:bg-primary group-hover:text-white transition-colors duration-500">
+                              {a.name.charAt(0)}
+                            </div>
+                            <div>
+                               <p className="font-black text-dark group-hover:text-primary transition-colors text-xl leading-tight">{a.name}</p>
+                               <div className="flex flex-wrap gap-2 mt-2">
+                                 <Badge variant="outline" className="text-[10px] font-black uppercase bg-gray-50 border-gray-200">#{a.code}</Badge>
+                                 <Badge className="text-[10px] font-black uppercase bg-emerald-100 text-emerald-600 border-0">{a.level}</Badge>
+                               </div>
+                            </div>
+                          </div>
+                          <div className="pt-4 border-t border-gray-50 flex items-center justify-between">
+                            <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest">Ouvrir l'Analyse</span>
+                            <ChevronRight className="h-5 w-5 text-gray-300 group-hover:text-primary transition-all group-hover:translate-x-2" />
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedAffiliateDetail && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-8"
+                  >
+                    <div className="flex items-center justify-between">
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => {
+                          if (searchAffiliateResults.length > 1) setSelectedAffiliateDetail(null);
+                          else setSearchStatus('idle');
+                        }}
+                        className="h-12 rounded-2xl text-primary font-black uppercase tracking-widest bg-white shadow-sm border border-gray-100 hover:bg-accent-light"
+                      >
+                        <ChevronLeft className="h-5 w-5 mr-3" /> Retourner aux résultats
+                      </Button>
+                      <div className="flex items-center gap-2 px-6 py-2 bg-emerald-500 text-white rounded-2xl shadow-lg shadow-emerald-500/20 font-black text-xs uppercase tracking-widest">
+                        <CheckCircle2 className="h-4 w-4" /> Analyse Active
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                       {/* Left Sidebar: Profile Dashboard */}
+                       <div className="lg:col-span-1 space-y-6">
+                         <Card className="rounded-[3rem] border-0 shadow-2xl bg-white overflow-hidden group">
+                           <div className="h-32 bg-navy relative overflow-hidden">
+                              <div className="absolute inset-0 bg-gradient-to-br from-primary/40 to-transparent"></div>
+                           </div>
+                           <div className="px-8 pb-10 -mt-16 text-center relative z-10">
+                             <div className="h-32 w-32 rounded-[2.5rem] bg-white shadow-2xl mx-auto flex items-center justify-center text-primary text-5xl font-black border-8 border-white mb-6 group-hover:scale-105 transition-transform duration-500">
+                               {selectedAffiliateDetail.name.charAt(0)}
+                             </div>
+                             <h3 className="text-2xl font-black text-dark leading-tight">{selectedAffiliateDetail.name}</h3>
+                             <p className="text-gray-400 font-mono font-bold text-xs mt-1">ID: {selectedAffiliateDetail.id.substring(0, 10)}...</p>
+                             
+                             <div className="mt-8 space-y-3">
+                                <Button 
+                                  onClick={() => handleContactWhatsApp(selectedAffiliateDetail.name, selectedAffiliateDetail.info?.phone || '', true)}
+                                  className="w-full h-14 rounded-2xl bg-[#25D366] hover:bg-[#128C7E] text-white font-black uppercase tracking-widest text-[11px] shadow-lg shadow-[#25D366]/20 border-0"
+                                >
+                                  <LucideIcons.MessageSquare className="h-4 w-4 mr-2" />
+                                  Contact WhatsApp
+                                </Button>
+                                <div className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                                   <span className="text-[11px] font-black text-gray-400 uppercase">Niveau actuel</span>
+                                   <Badge className="bg-primary hover:bg-primary text-white border-0 font-black px-4">{selectedAffiliateDetail.level}</Badge>
+                                </div>
+                                <div className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                                   <span className="text-[11px] font-black text-gray-400 uppercase">Performance</span>
+                                   <span className="text-lg font-black text-dark">{selectedAffiliateDetail.points || 0} pts</span>
+                                </div>
+                             </div>
+
+                             <Button 
+                               className="w-full mt-8 rounded-2xl h-16 bg-navy text-white font-black text-[13px] uppercase tracking-widest hover:bg-primary transition-all duration-300 shadow-xl shadow-navy/20"
+                               onClick={() => {
+                                 setEditingAffiliate(selectedAffiliateDetail);
+                                 setAffiliateFormData(selectedAffiliateDetail);
+                                 setIsAffiliateDialogOpen(true);
+                               }}
+                             >
+                               Configuration Avancée
+                             </Button>
+                           </div>
+                         </Card>
+
+                         <Card className="rounded-[2.5rem] bg-emerald-600 text-white p-8 shadow-2xl shadow-emerald-600/20 relative overflow-hidden">
+                            <div className="absolute -bottom-10 -right-10 h-40 w-40 bg-white/10 rounded-full blur-2xl"></div>
+                            <div className="relative z-10">
+                               <p className="text-emerald-100 text-[11px] font-black uppercase tracking-widest mb-2 opacity-80">Capitaux Disponibles</p>
+                               <p className="text-5xl font-black tracking-tighter">{selectedAffiliateDetail.balance?.toLocaleString()} <span className="text-xl font-bold opacity-70">G</span></p>
+                               <div className="mt-6 flex gap-2">
+                                  <div className="flex-1 p-3 bg-white/10 rounded-2xl text-center">
+                                     <p className="text-[9px] font-black uppercase opacity-60">Revenue Direct</p>
+                                     <p className="text-sm font-black mt-1">{selectedAffiliateDetail.directRevenue || 0} G</p>
+                                  </div>
+                                  <div className="flex-1 p-3 bg-white/10 rounded-2xl text-center">
+                                     <p className="text-[9px] font-black uppercase opacity-60">Revenue Indirect</p>
+                                     <p className="text-sm font-black mt-1">{selectedAffiliateDetail.indirectRevenue || 0} G</p>
+                                  </div>
+                               </div>
+                            </div>
+                         </Card>
+                       </div>
+
+                       {/* Right/Main Area: Genealogy Map */}
+                       <div className="lg:col-span-3 space-y-8">
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <Card className="rounded-[3rem] p-8 bg-white border border-gray-100 shadow-xl relative group">
+                               <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                                 <Users className="h-20 w-20" />
+                               </div>
+                               <h4 className="text-xs font-black uppercase tracking-widest text-primary mb-6 flex items-center gap-2">
+                                 <div className="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
+                                 Structure Ascendante (N+1 & N+2)
+                               </h4>
+                               
+                               <div className="space-y-6">
+                                  <div className="relative">
+                                    {selectedAffiliateDetail.parentAffiliateId ? (
+                                      <motion.button 
+                                        onClick={() => {
+                                          const sponsor = affiliates.find(a => a.id === selectedAffiliateDetail.parentAffiliateId);
+                                          if (sponsor) handleViewAffiliateDetail(sponsor);
+                                        }}
+                                        whileHover={{ x: 10 }}
+                                        className="w-full text-left p-6 rounded-[2rem] bg-gray-50 border border-gray-100 hover:border-primary transition-all flex items-center justify-between"
+                                      >
+                                        <div className="flex items-center gap-4">
+                                          <div className="h-14 w-14 rounded-2xl bg-white shadow-md text-primary flex items-center justify-center font-black text-xl">
+                                            {affiliates.find(a => a.id === selectedAffiliateDetail.parentAffiliateId)?.name.charAt(0)}
+                                          </div>
+                                          <div>
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Direct Sponsor</p>
+                                            <p className="text-xl font-black text-dark">{affiliates.find(a => a.id === selectedAffiliateDetail.parentAffiliateId)?.name}</p>
+                                          </div>
+                                        </div>
+                                        <ArrowRight className="h-5 w-5 text-primary" />
+                                      </motion.button>
+                                    ) : (
+                                      <div className="p-10 rounded-[2rem] border-2 border-dashed border-gray-100 bg-gray-50/50 text-center">
+                                        <p className="text-sm font-bold text-gray-300 italic">Pas de sponsor de 1er rang</p>
+                                      </div>
+                                    )}
+                                    <div className="absolute left-12 top-full h-8 w-1 bg-gradient-to-b from-gray-100 to-transparent"></div>
+                                  </div>
+
+                                  {selectedAffiliateDetail.grandparentAffiliateId ? (
+                                    <motion.button 
+                                      onClick={() => {
+                                        const sponsor = affiliates.find(a => a.id === selectedAffiliateDetail.grandparentAffiliateId);
+                                        if (sponsor) handleViewAffiliateDetail(sponsor);
+                                      }}
+                                      whileHover={{ x: 10 }}
+                                      className="w-full text-left p-6 rounded-[2rem] bg-white border border-gray-50 transition-all flex items-center justify-between shadow-sm"
+                                    >
+                                      <div className="flex items-center gap-4">
+                                        <div className="h-12 w-12 rounded-xl bg-gray-50 text-gray-400 flex items-center justify-center font-black text-lg">
+                                          {affiliates.find(a => a.id === selectedAffiliateDetail.grandparentAffiliateId)?.name.charAt(0)}
+                                        </div>
+                                        <div>
+                                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Indirect Sponsor</p>
+                                          <p className="text-lg font-black text-dark/70">{affiliates.find(a => a.id === selectedAffiliateDetail.grandparentAffiliateId)?.name}</p>
+                                        </div>
+                                      </div>
+                                      <ArrowRight className="h-5 w-5 text-gray-300" />
+                                    </motion.button>
+                                  ) : (
+                                    <div className="p-8 rounded-[2.5rem] border-2 border-dashed border-gray-50 bg-white/50 text-center">
+                                      <p className="text-sm font-bold text-gray-300 italic">Pas de sponsor de 2ème rang</p>
+                                    </div>
+                                  )}
+                               </div>
+                            </Card>
+
+                            <Card className="rounded-[3rem] p-8 bg-navy text-white shadow-2xl relative overflow-hidden">
+                               <div className="absolute top-0 right-0 h-48 w-48 bg-primary/20 rounded-full blur-[80px] -mr-24 -mt-24"></div>
+                               <h4 className="text-xs font-black uppercase tracking-widest text-primary mb-8 relative z-10">Rapport de Compression Réseau</h4>
+                               <div className="space-y-6 relative z-10">
+                                  <div className="flex items-center justify-between py-4 border-b border-white/5">
+                                     <span className="text-gray-400 font-bold">Volume Total Réseau</span>
+                                     <span className="text-xl font-black">{(selectedAffiliateDetail.directRevenue || 0) + (selectedAffiliateDetail.indirectRevenue || 0)} G</span>
+                                  </div>
+                                  <div className="flex items-center justify-between py-4 border-b border-white/5">
+                                     <span className="text-gray-400 font-bold">Nombre de Clients Référés</span>
+                                     <span className="text-xl font-black">{selectedAffiliateDetail.referredClients || 0}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between py-4">
+                                     <span className="text-gray-400 font-bold">Code Promo Actif</span>
+                                     <Badge className="bg-white/10 text-primary font-mono text-lg py-2 px-6 rounded-xl border-white/10">{selectedAffiliateDetail.code}</Badge>
+                                  </div>
+                               </div>
+                            </Card>
+                         </div>
+
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {/* Direct Referrals Generation 1 */}
+                            <div className="space-y-6">
+                              <div className="flex items-center justify-between px-6">
+                                <h4 className="text-xs font-black font-mono uppercase tracking-tighter text-gray-400">Génération 1 / Direct Downline</h4>
+                                <Badge className="bg-primary/10 text-primary border-0 font-black">{referralDetails?.directReferrals.length || 0}</Badge>
+                              </div>
+                              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-3 custom-scrollbar overscroll-contain">
+                                {referralDetails?.directReferrals.length ? (
+                                  referralDetails.directReferrals.map(ref => (
+                                    <motion.button 
+                                      whileHover={{ scale: 1.02 }}
+                                      key={ref.id} 
+                                      onClick={() => handleViewAffiliateDetail(ref)}
+                                      className="w-full text-left p-5 rounded-[2.5rem] bg-white border border-gray-100 hover:border-primary shadow-sm hover:shadow-xl transition-all flex items-center justify-between group/down"
+                                    >
+                                      <div className="flex items-center gap-4">
+                                        <div className="h-12 w-12 rounded-2xl bg-accent-light text-primary flex items-center justify-center font-black">
+                                          {ref.name.charAt(0)}
+                                        </div>
+                                        <div>
+                                          <p className="text-sm font-black text-dark group-hover/down:text-primary transition-colors">{ref.name}</p>
+                                          <p className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full w-fit mt-1">{ref.balance} G</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex flex-col items-end gap-1">
+                                         <Badge variant="outline" className="text-[9px] border-gray-100 bg-gray-50/50 font-black uppercase">{ref.level}</Badge>
+                                         <ChevronRight className="h-4 w-4 text-gray-300 group-hover/down:translate-x-1 transition-transform" />
+                                      </div>
+                                    </motion.button>
+                                  ))
+                                ) : (
+                                  <div className="py-20 rounded-[3rem] bg-white border border-dashed border-gray-100 text-center">
+                                    <Users className="h-10 w-10 text-gray-100 mx-auto mb-4" />
+                                    <p className="text-xs font-black text-gray-300 uppercase tracking-widest leading-relaxed px-10">Aucun profil de premier rang détecté</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Indirect Referrals Generation 2 */}
+                            <div className="space-y-6">
+                              <div className="flex items-center justify-between px-6">
+                                <h4 className="text-xs font-black font-mono uppercase tracking-tighter text-gray-400">Génération 2 / Indirect Downline</h4>
+                                <Badge className="bg-gray-100 text-gray-500 border-0 font-black">{referralDetails?.indirectReferrals.length || 0}</Badge>
+                              </div>
+                              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-3 custom-scrollbar overscroll-contain">
+                                {referralDetails?.indirectReferrals.length ? (
+                                  referralDetails.indirectReferrals.map(ref => (
+                                    <motion.button 
+                                      whileHover={{ scale: 1.02 }}
+                                      key={ref.id} 
+                                      onClick={() => handleViewAffiliateDetail(ref)}
+                                      className="w-full text-left p-5 rounded-[2.5rem] bg-gray-50/50 border border-transparent hover:bg-white hover:border-primary hover:shadow-xl transition-all flex items-center justify-between group/down"
+                                    >
+                                      <div className="flex items-center gap-4">
+                                        <div className="h-10 w-10 rounded-xl bg-white shadow-sm text-gray-400 flex items-center justify-center font-black">
+                                          {ref.name.charAt(0)}
+                                        </div>
+                                        <div>
+                                          <p className="text-sm font-black text-dark/70 group-hover/down:text-primary transition-colors">{ref.name}</p>
+                                          <div className="flex items-center gap-2 mt-1">
+                                             <span className="text-[9px] font-black text-gray-300 uppercase">Points: {ref.points || 0}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <ChevronRight className="h-4 w-4 text-gray-300 group-hover/down:translate-x-1 transition-transform" />
+                                    </motion.button>
+                                  ))
+                                ) : (
+                                  <div className="py-20 rounded-[3rem] bg-gray-50/50 border border-dashed border-gray-100 text-center">
+                                    <Network className="h-10 w-10 text-gray-100 mx-auto mb-4" />
+                                    <p className="text-xs font-black text-gray-300 uppercase tracking-widest leading-relaxed px-10">Réseau indirect vide ou inexistant</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                         </div>
+                       </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                 {selectedClientDetail && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-8"
+                  >
+                    <div className="flex items-center justify-between">
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => {
+                          if (searchAffiliateResults.length > 0) setSelectedClientDetail(null);
+                          else setSearchStatus('idle');
+                        }}
+                        className="h-12 rounded-2xl text-primary font-black uppercase tracking-widest bg-white shadow-sm border border-gray-100 hover:bg-accent-light"
+                      >
+                        <ChevronLeft className="h-5 w-5 mr-3" /> Retourner
+                      </Button>
+                      <div className="flex items-center gap-2 px-6 py-2 bg-blue-500 text-white rounded-2xl shadow-lg shadow-blue-500/20 font-black text-xs uppercase tracking-widest">
+                        <Smartphone className="h-4 w-4" /> Analyse Client
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                       <Card className="lg:col-span-1 rounded-[3rem] p-8 bg-white border-0 shadow-xl text-center">
+                          <div className="h-24 w-24 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center mx-auto mb-6 text-3xl font-black">
+                            {selectedClientDetail.name.charAt(0)}
+                          </div>
+                          <h3 className="text-2xl font-black text-dark">{selectedClientDetail.name}</h3>
+                          <p className="text-primary font-bold text-lg mt-2">{selectedClientDetail.phone}</p>
+                          
+                          <div className="mt-8 space-y-3">
+                             <Button 
+                                onClick={() => handleContactWhatsApp(selectedClientDetail.name, selectedClientDetail.phone, false)}
+                                className="w-full h-14 rounded-2xl bg-[#25D366] hover:bg-[#128C7E] text-white font-black uppercase tracking-widest text-[10px] shadow-lg shadow-[#25D366]/20 border-0"
+                             >
+                               <LucideIcons.MessageSquare className="h-4 w-4 mr-2" />
+                               Contacter sur WhatsApp
+                             </Button>
+                          </div>
+                          
+                          <div className="mt-8 pt-8 border-t border-gray-50 flex justify-center">
+                             <Badge variant="outline" className="px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">{selectedClientDetail.id?.substring(0, 8)}</Badge>
+                          </div>
+                       </Card>
+
+                       <Card className="lg:col-span-2 rounded-[3rem] p-8 bg-navy text-white shadow-2xl relative overflow-hidden">
+                          <div className="absolute top-0 right-0 h-40 w-40 bg-primary/20 rounded-full blur-[60px] -mr-20 -mt-20"></div>
+                          <h4 className="text-xs font-black uppercase tracking-widest text-primary mb-8 relative z-10">Structure de Parrainage</h4>
+                          
+                          <div className="space-y-6 relative z-10">
+                             <div className="flex items-center justify-between p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
+                                <div>
+                                   <p className="text-[10px] font-black text-primary uppercase mb-1">Parrain Direct (N+1)</p>
+                                   <p className="text-xl font-black">
+                                      {selectedClientDetail.directSponsorId 
+                                        ? (affiliates.find(a => a.id === selectedClientDetail.directSponsorId)?.name || "Chargement...") 
+                                        : "Aucun"}
+                                   </p>
+                                </div>
+                                <ArrowRight className="h-5 w-5 text-white/30" />
+                             </div>
+
+                             <div className="flex items-center justify-between p-6 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
+                                <div>
+                                   <p className="text-[10px] font-black text-primary uppercase mb-1">Parrain Indirect (N+2)</p>
+                                   <p className="text-xl font-black">
+                                      {selectedClientDetail.indirectSponsorId 
+                                        ? (affiliates.find(a => a.id === selectedClientDetail.indirectSponsorId)?.name || "Chargement...") 
+                                        : "Aucun"}
+                                   </p>
+                                </div>
+                                <ArrowRight className="h-5 w-5 text-white/30" />
+                             </div>
+                          </div>
+                       </Card>
+                    </div>
+                  </motion.div>
+                )}
+
+                {searchStatus === 'idle' && (
+                  <div className="flex flex-col items-center justify-center py-20 text-gray-200">
+                     <div className="p-12 rounded-[50%] bg-gray-50 border border-gray-100 mb-10 shadow-inner relative">
+                        <motion.div 
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                          className="absolute inset-0 m-auto h-32 w-32 border-2 border-dashed border-primary/20 rounded-full"
+                        ></motion.div>
+                        <Network className="h-20 w-20 opacity-10 relative z-10" />
+                     </div>
+                     <h3 className="text-2xl font-black text-dark/20 uppercase tracking-widest">En attente de déploiement</h3>
+                     <p className="text-sm font-medium text-gray-400 mt-4 max-w-sm text-center leading-relaxed">Le système d'analyse d'intention est inactif. Veuillez interroger la base de données via le moteur de recherche ci-dessus.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </TabsContent>
+        </div>
+      </Tabs>
+    </TabsContent>
+
+        <TabsContent value="clients" className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <h2 className="text-xl font-bold flex items-center gap-2 text-dark">
+              <Smartphone className="h-5 w-5 text-primary" />
+              Base de Données Clients
+            </h2>
+            <Button 
+                onClick={() => {
+                   setEditingClient(null);
+                   setClientFormData({ name: '', phone: '', directSponsorId: '', indirectSponsorId: '' });
+                   setIsClientDialogOpen(true);
+                }} 
+                className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 border-0 h-11 px-6 rounded-2xl shadow-lg shadow-primary/20 font-black uppercase text-xs"
+            >
+              <Plus className="h-4 w-4" />
+              Ajouter un Client
+            </Button>
+          </div>
+
+          <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+            <ClientsSearchHeader 
+              searchQuery={clientSearchQuery}
+              onSearchChange={setClientSearchQuery}
+              totalClients={clients.length}
+            />
+
+            <div className="overflow-x-auto overflow-y-auto max-h-[600px] custom-scrollbar">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent border-gray-50">
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest text-gray-400">Client</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest text-gray-400">Numéro</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest text-gray-400">Parrain Direct</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest text-gray-400">Parrain Indirect</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest text-gray-400 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <ClientsTableBody 
+                    clients={clients}
+                    searchQuery={clientSearchQuery}
+                    affiliates={affiliates}
+                    onEdit={(client) => {
+                      setEditingClient(client);
+                      setClientFormData(client);
+                      setIsClientDialogOpen(true);
+                    }}
+                    onDelete={(client) => {
+                      setClientToDelete(client);
+                      setIsClientDeleteDialogOpen(true);
+                    }}
+                  />
+                </TableBody>
+              </Table>
+            </div>
+            {clients.length === 0 && (
+              <div className="text-center py-20">
+                <Smartphone className="h-12 w-12 text-gray-200 mx-auto mb-4" />
+                <p className="text-gray-400 font-bold">Aucun client enregistré pour le moment.</p>
+              </div>
+            )}
           </div>
         </TabsContent>
 
@@ -3229,7 +4575,9 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
             ))}
           </div>
         </TabsContent>
-      </Tabs>
+          </Tabs>
+        </div>
+      </div>
 
       {/* Record Sale Dialog */}
       <Dialog open={isRecordSaleDialogOpen} onOpenChange={setIsRecordSaleDialogOpen}>
@@ -3934,6 +5282,8 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
           </div>
         </DialogContent>
       </Dialog>
+      
+
 
       {/* Affiliate Delete Confirmation Dialog */}
       <Dialog open={isAffiliateDeleteConfirmOpen} onOpenChange={setIsAffiliateDeleteConfirmOpen}>
@@ -5135,6 +6485,165 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
             <Button variant="destructive" onClick={handleConfirmDeleteAdmin} disabled={isDeleting} className="bg-red-600 hover:bg-red-700 rounded-2xl h-12 font-bold px-8 shadow-lg shadow-red-100">
               {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
               Supprimer l'accès
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sponsor Selector Dialog for Client */}
+      <Dialog open={isSponsorSelectorForClientOpen} onOpenChange={setIsSponsorSelectorForClientOpen}>
+        <DialogContent className="sm:max-w-[500px] rounded-[3rem] p-8 border-0 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3 text-dark text-2xl font-black">
+              <div className="h-12 w-12 rounded-2xl bg-accent-light text-primary flex items-center justify-center">
+                <Search className="h-6 w-6" />
+              </div>
+              Sélectionner un Parrain
+            </DialogTitle>
+            <DialogDescription className="text-gray-400 font-medium">
+              Veuillez sélectionner l'affilié qui servira de parrain {selectingSponsorTypeForClient === 'direct' ? 'direct (N+1)' : 'indirect (N+2)'} pour ce client.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input 
+                placeholder="Nom ou code de l'affilié..." 
+                className="pl-10 h-12 rounded-xl"
+                value={sponsorSearchQuery}
+                onChange={(e) => setSponsorSearchQuery(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+              {affiliates
+                .filter(a => a.name.toLowerCase().includes(sponsorSearchQuery.toLowerCase()) || a.code.toLowerCase().includes(sponsorSearchQuery.toLowerCase()))
+                .map(sponsor => (
+                  <button
+                    key={sponsor.id}
+                    onClick={() => handleSelectSponsorForClient(sponsor)}
+                    className="w-full flex items-center justify-between p-4 rounded-2xl bg-gray-50 hover:bg-primary/5 hover:border-primary/20 border border-transparent transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-white shadow-sm flex items-center justify-center font-black text-gray-400 group-hover:text-primary">
+                        {sponsor.name.charAt(0)}
+                      </div>
+                      <div className="text-left">
+                        <p className="font-bold text-dark">{sponsor.name}</p>
+                        <p className="text-[10px] font-black text-primary uppercase">{sponsor.code}</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                  </button>
+                ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save/Edit Client Dialog */}
+      <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
+        <DialogContent className="sm:max-w-[500px] rounded-[3.5rem] p-0 border-0 shadow-2xl overflow-hidden">
+          <div className="p-10">
+            <DialogHeader className="mb-8">
+              <DialogTitle className="flex items-center gap-4 text-dark text-3xl font-black">
+                <div className="h-14 w-14 rounded-[1.25rem] bg-navy text-white flex items-center justify-center shadow-xl shadow-navy/20">
+                  {editingClient ? <Edit2 className="h-6 w-6" /> : <Smartphone className="h-6 w-6" />}
+                </div>
+                {editingClient ? 'Modifier Client' : 'Nouveau Client'}
+              </DialogTitle>
+              <DialogDescription className="text-gray-400 font-medium pt-2 text-lg">
+                Enregistrez manuellement les informations du client dans le réseau.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 gap-6">
+                 <div className="space-y-3">
+                    <Label className="text-[11px] font-black uppercase tracking-widest text-gray-400 ml-4">Nom complet</Label>
+                    <Input 
+                      placeholder="Ex: Jean Dupont" 
+                      className="h-14 rounded-2xl bg-gray-50 border-gray-100 px-6 font-bold focus:bg-white transition-colors"
+                      value={clientFormData.name}
+                      onChange={(e) => setClientFormData(prev => ({ ...prev, name: e.target.value }))}
+                    />
+                 </div>
+                 <div className="space-y-3">
+                    <Label className="text-[11px] font-black uppercase tracking-widest text-gray-400 ml-4">Numéro de téléphone</Label>
+                    <Input 
+                      placeholder="Ex: 01 23 45 67 89" 
+                      className="h-14 rounded-2xl bg-gray-50 border-gray-100 px-6 font-bold font-mono focus:bg-white transition-colors"
+                      value={clientFormData.phone}
+                      onChange={(e) => setClientFormData(prev => ({ ...prev, phone: e.target.value }))}
+                    />
+                 </div>
+              </div>
+
+              <div className="space-y-4">
+                 <h4 className="text-[11px] font-black uppercase tracking-widest text-primary ml-4">Attribution de Parrainage</h4>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div 
+                      onClick={() => {
+                        setSelectingSponsorTypeForClient('direct');
+                        setIsSponsorSelectorForClientOpen(true);
+                      }}
+                      className="p-5 rounded-3xl bg-gray-50 border border-gray-100 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group"
+                    >
+                       <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Direct (N+1)</p>
+                       <p className="font-bold text-dark truncate">
+                         {clientFormData.directSponsorId 
+                           ? (affiliates.find(a => a.id === clientFormData.directSponsorId)?.name || 'Sélectionné') 
+                           : 'Non rattaché'}
+                       </p>
+                    </div>
+
+                    <div 
+                      onClick={() => {
+                        setSelectingSponsorTypeForClient('indirect');
+                        setIsSponsorSelectorForClientOpen(true);
+                      }}
+                      className="p-5 rounded-3xl bg-gray-50 border border-gray-100 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group"
+                    >
+                       <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Indirect (N+2)</p>
+                       <p className="font-bold text-dark truncate">
+                         {clientFormData.indirectSponsorId 
+                           ? (affiliates.find(a => a.id === clientFormData.indirectSponsorId)?.name || 'Sélectionné') 
+                           : 'Non rattaché'}
+                       </p>
+                    </div>
+                 </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="p-8 bg-gray-50/50 border-t border-gray-100 gap-4">
+            <Button variant="ghost" onClick={() => setIsClientDialogOpen(false)} className="h-14 rounded-2xl font-bold px-8">Annuler</Button>
+            <Button 
+                onClick={handleSaveClient} 
+                disabled={isSaving}
+                className="h-14 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black px-12 shadow-xl shadow-primary/20 flex-1 sm:flex-none"
+            >
+              {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : (editingClient ? 'Mettre à jour' : 'Enregistrer Client')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Client Confirmation */}
+      <Dialog open={isClientDeleteDialogOpen} onOpenChange={setIsClientDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px] rounded-[3rem] p-8 border-0 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3 text-red-600 text-2xl font-black">
+              <AlertTriangle className="h-6 w-6" />
+              Supprimer Client
+            </DialogTitle>
+            <DialogDescription className="text-gray-500 pt-2 font-medium">
+              Action irréversible. Êtes-vous sûr de vouloir supprimer le client <span className="font-bold text-gray-900">{clientToDelete?.name}</span> ?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-3 mt-6 sm:justify-end">
+            <Button variant="ghost" onClick={() => setIsClientDeleteDialogOpen(false)} className="rounded-2xl h-12 font-bold px-6">Garder</Button>
+            <Button variant="destructive" onClick={handleConfirmDeleteClient} disabled={isDeleting} className="bg-red-600 hover:bg-red-700 rounded-2xl h-12 font-bold px-8 shadow-lg shadow-red-100">
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Supprimer Définitivement'}
             </Button>
           </DialogFooter>
         </DialogContent>

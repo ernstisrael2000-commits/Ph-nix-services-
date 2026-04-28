@@ -117,6 +117,8 @@
         "directRevenue": { "type": "number" },
         "indirectRevenue": { "type": "number" },
         "totalEarnings": { "type": "number" },
+        "totalWithdrawn": { "type": "number" },
+        "walletId": { "type": "string" },
         "isMonthlyWinner": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
@@ -330,6 +332,40 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["itemName", "itemType", "price", "createdAt"]
+    },
+    "client": {
+      "title": "Client",
+      "description": "Represents a customer manually added by an admin.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "directSponsorId": { "type": "string" },
+        "indirectSponsorId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "phone"]
+    },
+    "wallet_transaction": {
+      "title": "Wallet Transaction",
+      "description": "Represents a financial transaction for an affiliate.",
+      "type": "object",
+      "properties": {
+        "affiliateId": { "type": "string" },
+        "type": { "type": "string", "enum": ["deposit", "withdrawal", "transfer_sent", "transfer_received"] },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "completed", "rejected"] },
+        "description": { "type": "string" },
+        "relatedAffiliateId": { "type": "string" },
+        "relatedAffiliateName": { "type": "string" },
+        "method": { "type": "string" },
+        "accountNumber": { "type": "string" },
+        "rejectionReason": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["affiliateId", "type", "amount", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -396,6 +432,14 @@
     "/sales/{saleId}": {
       "schema": "sale",
       "description": "Collection of recorded sales for analytics."
+    },
+    "/clients/{clientId}": {
+      "schema": "client",
+      "description": "Collection of manually added clients."
+    },
+    "/wallet_transactions/{transactionId}": {
+      "schema": "wallet_transaction",
+      "description": "Collection of unified wallet transactions."
     }
   }
 }

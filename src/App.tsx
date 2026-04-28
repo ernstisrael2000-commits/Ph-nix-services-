@@ -12,10 +12,13 @@ import AccessChoice from './components/AccessChoice';
 import { useAuth } from './hooks/useAuth';
 import { useSettings } from './services/parcelService';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Loader2, Package, ChevronLeft, Bell, X } from 'lucide-react';
+import { Loader2, Package, ChevronLeft, Bell, X, WifiOff } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Affiliate, AdminAccount } from './types';
 import { motion, AnimatePresence } from 'motion/react';
+import { doc, getDocFromServer } from 'firebase/firestore';
+import { db } from './lib/firebase';
+import { toast } from 'sonner';
 
 export default function App() {
   const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping'>('home');
@@ -24,6 +27,7 @@ export default function App() {
   const { loading } = useAuth();
   const { settings } = useSettings();
   const [showAnnouncement, setShowAnnouncement] = useState(true);
+  const [isOffline, setIsOffline] = useState(false);
   
   const [loggedAdmin, setLoggedAdmin] = useState<AdminAccount | null>(() => {
     const saved = localStorage.getItem('neopay_admin');
@@ -40,6 +44,28 @@ export default function App() {
     localStorage.removeItem('neopay_admin');
     setView('home');
   };
+
+  // Connection Test
+  useEffect(() => {
+    const testConnection = async () => {
+      try {
+        // Attempt to reach the backend
+        await getDocFromServer(doc(db, '_connection_test_', 'ping'));
+        setIsOffline(false);
+      } catch (error: any) {
+        if (error?.message?.includes('offline') || error?.code === 'unavailable') {
+          setIsOffline(true);
+          toast.error("Connexion perdue. Neopay fonctionne en mode hors-ligne.", {
+            description: "Certaines fonctionnalités peuvent être limitées.",
+            duration: Infinity,
+            icon: <WifiOff className="h-4 w-4" />,
+            id: 'offline-toast'
+          });
+        }
+      }
+    };
+    testConnection();
+  }, []);
 
   // Bootstrap Super Admin
   useEffect(() => {

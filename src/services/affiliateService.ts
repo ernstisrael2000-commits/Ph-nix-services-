@@ -19,7 +19,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { handleFirestoreError } from '../lib/firebase-errors';
-import { Affiliate, WithdrawalRequest, AffiliateRequest, AffiliateNotification } from '../types';
+import { Affiliate, WithdrawalRequest, AffiliateRequest, AffiliateNotification, Client } from '../types';
 
 export const loginAffiliate = async (username: string, password: string): Promise<Affiliate | null> => {
   const q = query(
@@ -105,7 +105,11 @@ export const submitWithdrawal = async (
   }
 
   try {
-    await addDoc(collection(db, 'withdrawals'), {
+    const batch = writeBatch(db);
+    
+    // Create legacy withdrawal request
+    const withdrawalRef = doc(collection(db, 'withdrawals'));
+    batch.set(withdrawalRef, {
       affiliateId: affiliate.id,
       affiliateName: affiliate.name,
       affiliateCode: affiliate.code,
@@ -116,6 +120,22 @@ export const submitWithdrawal = async (
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
+
+    // Create unified wallet transaction
+    const transactionRef = doc(collection(db, 'wallet_transactions'));
+    batch.set(transactionRef, {
+      affiliateId: affiliate.id,
+      type: 'withdrawal',
+      amount,
+      status: 'pending',
+      method,
+      accountNumber,
+      description: `Retrait via ${method}`,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    await batch.commit();
   } catch (error) {
     handleFirestoreError(error, 'create', 'withdrawals', auth);
   }
@@ -157,22 +177,31 @@ export const useAffiliateWithdrawals = (affiliateId: string | null) => {
 
 export const deleteWithdrawalHistory = async (affiliateId: string) => {
   try {
-    const q = query(
+    // 1. Clear legacy withdrawals
+    const qWith = query(
       collection(db, 'withdrawals'),
       where('affiliateId', '==', affiliateId)
     );
-    const snapshot = await getDocs(q);
+    const snapshotWith = await getDocs(qWith);
     
-    if (snapshot.empty) return;
-
+    // 2. Clear unified transactions
+    const qTx = query(
+      collection(db, 'wallet_transactions'),
+      where('affiliateId', '==', affiliateId)
+    );
+    const snapshotTx = await getDocs(qTx);
+    
     const batch = writeBatch(db);
-    snapshot.docs.forEach((docSnap) => {
-      batch.delete(doc(db, 'withdrawals', docSnap.id));
+    snapshotWith.docs.forEach((docSnap) => {
+      batch.delete(docSnap.ref);
+    });
+    snapshotTx.docs.forEach((docSnap) => {
+      batch.delete(docSnap.ref);
     });
     
     await batch.commit();
   } catch (error) {
-    handleFirestoreError(error, 'delete', 'withdrawals', auth);
+    console.error("Error clearing history:", error);
   }
 };
 
@@ -273,24 +302,48 @@ export const updateWithdrawalStatus = async (
     if (!requestSnap.exists()) return;
     const requestData = requestSnap.data() as WithdrawalRequest;
 
+    const batch = writeBatch(db);
+
+    // 1. Update legacy withdrawal and also the unified transaction log
+    batch.update(requestRef, {
+      status,
+      rejectionReason: reason || '',
+      updatedAt: serverTimestamp()
+    });
+
+    // 2. Find and update the corresponding unified wallet transaction
+    const qTx = query(
+      collection(db, 'wallet_transactions'),
+      where('affiliateId', '==', requestData.affiliateId),
+      where('type', '==', 'withdrawal'),
+      where('amount', '==', requestData.amount),
+      where('status', '==', 'pending')
+    );
+    const snapTx = await getDocs(qTx);
+    if (!snapTx.empty) {
+      // Update the most relevant one (this is a bit heuristic but usually safe for single requests)
+      batch.update(snapTx.docs[0].ref, {
+        status,
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    // 3. Adjust affiliate balance if approved
     if (status === 'approved') {
-      // Deduct from affiliate balance
       const affiliateRef = doc(db, 'affiliates', requestData.affiliateId);
       const affiliateSnap = await getDoc(affiliateRef);
       
       if (affiliateSnap.exists()) {
         const affiliateData = affiliateSnap.data() as Affiliate;
-        await updateDoc(affiliateRef, {
-          balance: (affiliateData.balance || 0) - requestData.amount
+        batch.update(affiliateRef, {
+          balance: (affiliateData.balance || 0) - requestData.amount,
+          totalWithdrawn: (affiliateData.totalWithdrawn || 0) + requestData.amount,
+          updatedAt: serverTimestamp()
         });
       }
     }
 
-    await updateDoc(requestRef, {
-      status,
-      rejectionReason: reason || '',
-      updatedAt: serverTimestamp()
-    });
+    await batch.commit();
   } catch (error) {
     handleFirestoreError(error, 'update', 'withdrawals', auth);
   }
@@ -824,4 +877,358 @@ export const recordPurchase = async (
   } catch (error) {
     handleFirestoreError(error, 'update', 'affiliates', auth);
   }
+};
+
+/**
+ * Searches for an affiliate by name (case-insensitive partial match).
+ */
+export const searchAffiliatesByName = async (name: string): Promise<Affiliate[]> => {
+  try {
+    const q = query(
+      collection(db, 'affiliates'),
+      orderBy('name'),
+      where('name', '>=', name),
+      where('name', '<=', name + '\uf8ff')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Affiliate));
+  } catch (error) {
+    // Silently fail or log
+    console.error("Search error:", error);
+    return [];
+  }
+};
+
+/**
+ * Searches for a client by phone number.
+ */
+export const searchClientsByPhone = async (phone: string): Promise<Client[]> => {
+  try {
+    const q = query(
+      collection(db, 'clients'),
+      where('phone', '==', phone)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client));
+  } catch (error) {
+    console.error("Client search error:", error);
+    return [];
+  }
+};
+
+/**
+ * Hooks for managing clients.
+ */
+export const useAllClients = () => {
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, 'clients'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Client[];
+      setClients(data);
+      setLoading(false);
+    }, (error) => {
+      setLoading(false);
+      try { handleFirestoreError(error, 'list', 'clients', auth); } catch (e) {}
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return { clients, loading };
+};
+
+export const saveClient = async (clientData: Partial<Client>, id?: string) => {
+  const dataToSave = { ...clientData };
+  delete dataToSave.id;
+
+  try {
+    if (id) {
+      const clientRef = doc(db, 'clients', id);
+      await updateDoc(clientRef, {
+        ...dataToSave,
+        updatedAt: serverTimestamp()
+      });
+    } else {
+      await addDoc(collection(db, 'clients'), {
+        ...dataToSave,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    }
+  } catch (error) {
+    handleFirestoreError(error, id ? 'update' : 'create', 'clients', auth);
+  }
+};
+
+export const deleteClient = async (id: string) => {
+  try {
+    await deleteDoc(doc(db, 'clients', id));
+  } catch (error) {
+    handleFirestoreError(error, 'delete', 'clients', auth);
+  }
+};
+
+/**
+ * Gets direct and indirect referrals for an affiliate.
+ */
+export const getAffiliateReferrals = async (affiliateId: string) => {
+  try {
+    // Direct Referrals (parentAffiliateId == affiliateId)
+    const directQ = query(collection(db, 'affiliates'), where('parentAffiliateId', '==', affiliateId));
+    const directSnap = await getDocs(directQ);
+    const directReferrals = directSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Affiliate));
+
+    // Indirect Referrals (grandparentAffiliateId == affiliateId)
+    const indirectQ = query(collection(db, 'affiliates'), where('grandparentAffiliateId', '==', affiliateId));
+    const indirectSnap = await getDocs(indirectQ);
+    const indirectReferrals = indirectSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Affiliate));
+
+    return { directReferrals, indirectReferrals };
+  } catch (error) {
+    console.error("Error fetching referrals:", error);
+    return { directReferrals: [], indirectReferrals: [] };
+  }
+};
+
+/**
+ * Admin hook to see all unified wallet transactions
+ */
+export const useAllWalletTransactions = () => {
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, 'wallet_transactions'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const txList: WalletTransaction[] = [];
+      snapshot.forEach((doc) => {
+        txList.push({ id: doc.id, ...doc.data() } as WalletTransaction);
+      });
+      setTransactions(txList);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching transactions:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return { transactions, loading };
+};
+
+/**
+ * Admin action to approve/reject a wallet transaction (specifically for deposits)
+ */
+export const updateWalletTransactionStatus = async (transactionId: string, status: 'approved' | 'rejected') => {
+  try {
+    const txRef = doc(db, 'wallet_transactions', transactionId);
+    const txSnap = await getDoc(txRef);
+    
+    if (!txSnap.exists()) throw new Error("Transaction not found");
+    const txData = txSnap.data() as WalletTransaction;
+    if (txData.status !== 'pending') throw new Error("Transaction is not pending");
+
+    const batch = writeBatch(db);
+    batch.update(txRef, { status, updatedAt: serverTimestamp() });
+
+    // If it's a deposit and approved, add to affiliate balance
+    if (txData.type === 'deposit' && status === 'approved') {
+      const affRef = doc(db, 'affiliates', txData.affiliateId);
+      const affSnap = await getDoc(affRef);
+      if (affSnap.exists()) {
+        const affData = affSnap.data() as Affiliate;
+        batch.update(affRef, {
+          balance: (affData.balance || 0) + txData.amount,
+          updatedAt: serverTimestamp()
+        });
+      }
+    }
+
+    await batch.commit();
+  } catch (error) {
+    console.error("Error updating transaction status:", error);
+    throw error;
+  }
+};
+
+/**
+ * Ensures an affiliate has a unique 8-digit wallet ID.
+ */
+export const ensureWalletId = async (affiliate: Affiliate) => {
+  if (affiliate.walletId) return affiliate.walletId;
+
+  // Generate a random 8-digit string
+  let isUnique = false;
+  let newWalletId = '';
+
+  while (!isUnique) {
+    newWalletId = Math.floor(10000000 + Math.random() * 90000000).toString();
+    const q = query(collection(db, 'affiliates'), where('walletId', '==', newWalletId));
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      isUnique = true;
+    }
+  }
+
+  if (affiliate.id) {
+    await updateDoc(doc(db, 'affiliates', affiliate.id), {
+      walletId: newWalletId,
+      updatedAt: serverTimestamp()
+    });
+  }
+
+  return newWalletId;
+};
+
+/**
+ * Searches for an affiliate by wallet ID.
+ */
+export const findAffiliateByWalletId = async (walletId: string): Promise<Affiliate | null> => {
+  const q = query(collection(db, 'affiliates'), where('walletId', '==', walletId));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  return { id: snap.docs[0].id, ...snap.docs[0].data() } as Affiliate;
+};
+
+/**
+ * Submits a transfer between affiliates.
+ */
+export const submitTransfer = async (sender: Affiliate, recipientWalletId: string, amount: number) => {
+  if (amount > sender.balance) throw new Error("Solde insuffisant.");
+  if (amount <= 0) throw new Error("Montant invalide.");
+
+  const recipient = await findAffiliateByWalletId(recipientWalletId);
+  if (!recipient) throw new Error("Destinataire introuvable.");
+  if (recipient.id === sender.id) throw new Error("Vous ne pouvez pas vous envoyer d'argent à vous-même.");
+
+  const batch = writeBatch(db);
+
+  // Update Sender
+  const senderRef = doc(db, 'affiliates', sender.id!);
+  batch.update(senderRef, {
+    balance: increment(-amount),
+    updatedAt: serverTimestamp()
+  });
+
+  // Update Recipient
+  const recipientRef = doc(db, 'affiliates', recipient.id!);
+  batch.update(recipientRef, {
+    balance: increment(amount),
+    updatedAt: serverTimestamp()
+  });
+
+  // Create Sender Transaction
+  const senderTxRef = doc(collection(db, 'wallet_transactions'));
+  batch.set(senderTxRef, {
+    affiliateId: sender.id,
+    type: 'transfer_sent',
+    amount: amount,
+    status: 'completed',
+    description: `Transfert envoyé à ${recipient.name}`,
+    relatedAffiliateId: recipient.id,
+    relatedAffiliateName: recipient.name,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+
+  // Create Recipient Transaction
+  const recipientTxRef = doc(collection(db, 'wallet_transactions'));
+  batch.set(recipientTxRef, {
+    affiliateId: recipient.id,
+    type: 'transfer_received',
+    amount: amount,
+    status: 'completed',
+    description: `Transfert reçu de ${sender.name}`,
+    relatedAffiliateId: sender.id,
+    relatedAffiliateName: sender.name,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+
+  // Notifications
+  const senderNotifRef = doc(collection(db, 'notifications'));
+  batch.set(senderNotifRef, {
+    affiliateId: sender.id,
+    title: "Transfert Réussi",
+    message: `Vous avez envoyé ${amount} Goud à ${recipient.name}.`,
+    type: 'system',
+    read: false,
+    createdAt: serverTimestamp()
+  });
+
+  const recipientNotifRef = doc(collection(db, 'notifications'));
+  batch.set(recipientNotifRef, {
+    affiliateId: recipient.id,
+    title: "Argent Reçu",
+    message: `Vous avez reçu un transfert de ${amount} Goud de la part de ${sender.name}.`,
+    type: 'revenue',
+    read: false,
+    createdAt: serverTimestamp()
+  });
+
+  await batch.commit();
+};
+
+/**
+ * Submits a deposit request.
+ */
+export const submitDepositRequest = async (affiliate: Affiliate, amount: number, method: string) => {
+  if (amount <= 0) throw new Error("Montant invalide.");
+
+  await addDoc(collection(db, 'wallet_transactions'), {
+    affiliateId: affiliate.id,
+    type: 'deposit',
+    amount: amount,
+    status: 'pending',
+    method: method,
+    description: `Demande de dépôt via ${method}`,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+};
+
+/**
+ * Unified way to get all wallet transactions.
+ */
+import { WalletTransaction } from '../types';
+
+export const useWalletTransactions = (affiliateId: string | null) => {
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!affiliateId) {
+      setLoading(false);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'wallet_transactions'),
+      where('affiliateId', '==', affiliateId),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as WalletTransaction[];
+      setTransactions(data);
+      setLoading(false);
+    }, (error) => {
+      console.error("Transactions fetch error:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [affiliateId]);
+
+  return { transactions, loading };
 };

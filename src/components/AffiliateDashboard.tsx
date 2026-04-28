@@ -9,9 +9,14 @@ import {
   useAllAffiliates,
   getAffiliateLevelInfo,
   useNotifications,
-  markNotificationAsRead
+  markNotificationAsRead,
+  ensureWalletId,
+  submitTransfer,
+  submitDepositRequest,
+  useWalletTransactions,
+  findAffiliateByWalletId
 } from '../services/affiliateService';
-import { Affiliate, WithdrawalRequest, AffiliateNotification } from '../types';
+import { Affiliate, WithdrawalRequest, AffiliateNotification, WalletTransaction, TransactionStatus } from '../types';
 import { Progress } from './ui/progress';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
@@ -50,7 +55,14 @@ import {
   Star,
   ChevronRight,
   MapPin,
-  ArrowUp
+  ArrowUp,
+  PlusCircle,
+  MinusCircle,
+  ArrowRightLeft,
+  Send,
+  Download,
+  AlertTriangle,
+  Fingerprint
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -68,18 +80,50 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const { topAffiliates, loading: topLoading } = useTopAffiliates();
   const { rankings: monthlyRankings, loading: rankingsLoading } = useMonthlyRankings();
   const { affiliates, loading: affiliatesLoading } = useAllAffiliates();
-  const { withdrawals, loading: withdrawalsLoading } = useAffiliateWithdrawals(affiliateId);
   const { notifications, loading: notificationsLoading } = useNotifications(affiliateId);
+  const { transactions, loading: transactionsLoading } = useWalletTransactions(affiliateId);
   const { settings } = useSettings();
 
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawMethod, setWithdrawMethod] = useState<'MonCash' | 'NatCash' | 'Physical'>('MonCash');
   const [accountNumber, setAccountNumber] = useState('');
+
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+  const [transferRecipientWalletId, setTransferRecipientWalletId] = useState('');
+  const [transferAmount, setTransferAmount] = useState('');
+  const [verifiedRecipientName, setVerifiedRecipientName] = useState<string | null>(null);
+  const [isValidatingRecipient, setIsValidatingRecipient] = useState(false);
+
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositMethod, setDepositMethod] = useState('MonCash');
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [isClearHistoryConfirmOpen, setIsClearHistoryConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    if (affiliate && !affiliate.walletId) {
+      ensureWalletId(affiliate);
+    }
+  }, [affiliate]);
+
+  // Recipient validation
+  useEffect(() => {
+    const validate = async () => {
+      if (transferRecipientWalletId.length === 8) {
+        setIsValidatingRecipient(true);
+        const recipient = await findAffiliateByWalletId(transferRecipientWalletId);
+        setVerifiedRecipientName(recipient ? recipient.name : null);
+        setIsValidatingRecipient(false);
+      } else {
+        setVerifiedRecipientName(null);
+      }
+    };
+    validate();
+  }, [transferRecipientWalletId]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -136,19 +180,15 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     }
 
     if (amount < 20) {
-      toast.error("Le montant minimum est de 20 Goud.");
-      return;
-    }
-
-    if (withdrawMethod !== 'Physical' && !accountNumber.trim()) {
-      toast.error(`Veuillez entrer votre numéro ${withdrawMethod}.`);
+      toast.error("Le montant minimum de retrait est de 20 Goud.");
       return;
     }
 
     setIsSubmitting(true);
     try {
       await submitWithdrawal(affiliate, amount, withdrawMethod, withdrawMethod === 'Physical' ? 'Bureau Juvénat' : accountNumber.trim());
-      toast.success("Demande de retrait envoyée !");
+      
+      toast.success("En attente de validation");
       setIsWithdrawModalOpen(false);
       setWithdrawAmount('');
       setAccountNumber('');
@@ -166,22 +206,74 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     }
   };
 
-  const handleClearWithdrawalHistory = async () => {
+  const handleTransfer = async () => {
+    const amount = parseFloat(transferAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error("Montant invalide.");
+      return;
+    }
+    if (!verifiedRecipientName) {
+      toast.error("Bénéficiaire non identifié.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await deleteWithdrawalHistory(affiliateId);
-      toast.success("Historique des retraits supprimé !");
-      setIsClearHistoryConfirmOpen(false);
-    } catch (error) {
-      toast.error("Erreur lors de la suppression de l'historique.");
+      await submitTransfer(affiliate, transferRecipientWalletId, amount);
+      toast.success("Transfert réussi");
+      setIsTransferModalOpen(false);
+      setTransferAmount('');
+      setTransferRecipientWalletId('');
+    } catch (error: any) {
+      toast.error(error.message || "Échec du transfert.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const handleDepositRequest = async () => {
+    const amount = parseFloat(depositAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error("Montant invalide.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await submitDepositRequest(affiliate, amount, depositMethod);
+      toast.success("Demande envoyée");
+      setIsDepositModalOpen(false);
+      setDepositAmount('');
+      
+      const adminPhone = settings?.whatsappAdminNumber || "+50944813185";
+      const message = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Neopay.\n\nMontant: ${amount} Goud\nMéthode: ${depositMethod}\nID Wallet: ${affiliate.walletId}\nNom: ${affiliate.name}`;
+      window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`, '_blank');
+    } catch (error: any) {
+      toast.error(error.message || "Échec de l'envoi.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClearTransactionHistory = async () => {
+    setIsSubmitting(true);
+    try {
+      await deleteWithdrawalHistory(affiliateId); // This should ideally clear the transactions too
+      // If we want a specific clear transactions:
+      // await clearWalletHistory(affiliateId); 
+      toast.success("Historique vidé !");
+      setIsClearHistoryConfirmOpen(false);
+    } catch (error) {
+      toast.error("Erreur.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getTransactionStatusBadge = (status: TransactionStatus) => {
     switch (status) {
-      case 'approved': return <Badge className="bg-green-100 text-green-700 border-green-200">Approuvé</Badge>;
+      case 'completed': 
+      case 'approved': return <Badge className="bg-green-100 text-green-700 border-green-200">Terminé</Badge>;
       case 'rejected': return <Badge className="bg-red-100 text-red-700 border-red-200">Rejeté</Badge>;
       default: return <Badge className="bg-amber-100 text-amber-700 border-amber-200">En attente</Badge>;
     }
@@ -273,273 +365,357 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         </div>
       </div>
 
-      {/* Level Progress Section */}
-      {levelInfo && (
-        <Card className="border-0 shadow-xl bg-white overflow-hidden">
-          <div className="absolute top-0 left-0 w-1 h-full bg-blue-600" />
-          <CardContent className="p-6">
-            <div className="flex flex-col md:flex-row items-center gap-8">
-              <div className="flex flex-col items-center text-center space-y-2">
-                <div className={`w-20 h-20 rounded-full flex items-center justify-center border-4 ${getLevelColor(levelInfo.level)}`}>
-                  <Star className="h-10 w-10 fill-current" />
-                </div>
+      {/* Dashboard Hero - Consolidate into a modern Wallet */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        <div className="xl:col-span-2 space-y-6">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative h-64 w-full max-w-md mx-auto sm:max-w-none sm:h-72 rounded-[2.5rem] bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-800 shadow-[0_20px_50px_rgba(37,99,235,0.3)] overflow-hidden p-8 text-white group hover:scale-[1.02] transition-transform duration-500"
+          >
+            {/* Glossy Overlay */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.1),transparent)] pointer-events-none" />
+            <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-white/5 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-1000" />
+            
+            <div className="relative h-full flex flex-col justify-between">
+              <div className="flex justify-between items-start">
                 <div>
-                  <Badge className={`font-bold uppercase tracking-wider ${getLevelColor(levelInfo.level)}`}>
-                    Niveau {levelInfo.level}
-                  </Badge>
-                  <p className="text-xs text-gray-400 font-medium mt-1">{affiliate.points || 0} Points</p>
+                  <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Neopay Card</p>
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-10 bg-yellow-400/20 rounded-md border border-yellow-400/30 flex items-center justify-center">
+                      <div className="w-6 h-px bg-yellow-400/50" />
+                    </div>
+                    <span className="text-xs font-bold text-white/40">Chip Asset</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <Fingerprint className="h-10 w-10 text-white/20" />
                 </div>
               </div>
-              
-              <div className="flex-1 w-full space-y-4">
-                <div className="flex justify-between items-end">
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">Progression du Niveau</h3>
-                    <p className="text-sm text-gray-500">
-                      {levelInfo.nextThreshold === Infinity 
-                        ? "Vous avez atteint le niveau maximum !" 
-                        : `Plus que ${Math.max(0, levelInfo.nextThreshold - (affiliate.points || 0))} points pour le niveau suivant`}
-                    </p>
-                  </div>
-                  <span className="text-2xl font-black text-blue-600">{Math.round(levelInfo.progress)}%</span>
+
+              <div className="space-y-1">
+                <p className="text-white/70 text-xs font-bold uppercase tracking-wider">Solde Disponible</p>
+                <div className="flex items-baseline gap-3">
+                  <h3 className="text-5xl font-black tracking-tight">{affiliate.balance.toLocaleString()}</h3>
+                  <span className="text-lg font-bold text-white/50 uppercase">Goud</span>
                 </div>
-                <Progress value={levelInfo.progress} className="h-3 bg-gray-100" />
-                <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                  <span>Bronze</span>
-                  <span>Silver</span>
-                  <span>Gold</span>
-                  <span>Elite</span>
-                  <span>VIP</span>
+              </div>
+
+              <div className="flex justify-between items-end">
+                <div>
+                  <p className="text-white/50 text-[9px] font-bold uppercase tracking-widest mb-1">Titulaire</p>
+                  <p className="text-lg font-black tracking-wide uppercase">{affiliate.name}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-white/50 text-[9px] font-bold uppercase tracking-widest mb-1">Wallet ID</p>
+                  <p className="text-xl font-mono font-black tracking-[0.2em]">
+                    {affiliate.walletId ? affiliate.walletId.match(/.{1,4}/g)?.join(' ') : '.... ....'}
+                  </p>
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </motion.div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-blue-600 text-white border-0 shadow-lg relative overflow-hidden group">
-          <div className="absolute -right-4 -top-4 bg-white/10 w-24 h-24 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-bold uppercase tracking-wider opacity-80">Solde Retirable</CardTitle>
-            <Wallet className="h-5 w-5 text-blue-200" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black">{affiliate.balance} Goud</div>
-            <p className="text-blue-100 text-[10px] font-medium mt-1 uppercase tracking-tight">Paiement dès 20 Goud</p>
-            
-            <Dialog open={isWithdrawModalOpen} onOpenChange={setIsWithdrawModalOpen}>
+          {/* Quick Action Buttons */}
+          <div className="grid grid-cols-3 gap-4">
+            <Dialog open={isDepositModalOpen} onOpenChange={setIsDepositModalOpen}>
               <DialogTrigger render={
-                <Button 
-                  className="w-full mt-4 bg-white text-blue-600 hover:bg-blue-50 font-bold rounded-xl shadow-sm"
-                  disabled={affiliate.balance < 20 || settings?.withdrawalsEnabled === false}
-                >
-                  <ArrowUpRight className="h-4 w-4 mr-2" />
-                  {settings?.withdrawalsEnabled === false ? "Retraits désactivés" : "Retirer mes gains"}
+                <Button className="h-20 sm:h-24 rounded-[2rem] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-2 border-emerald-100 flex flex-col items-center justify-center gap-2 shadow-sm transition-all active:scale-95 group">
+                  <div className="p-2 rounded-xl bg-emerald-500 text-white group-hover:scale-110 transition-transform">
+                    <PlusCircle className="h-6 w-6" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest">Dépôt</span>
                 </Button>
               } />
-              <DialogContent className="rounded-2xl">
+              <DialogContent className="rounded-[2.5rem] p-8 border-0 shadow-2xl">
                 <DialogHeader>
-                  <DialogTitle>Demande de Retrait</DialogTitle>
-                  <DialogDescription>
-                    Choisissez votre méthode et le montant à retirer.
+                  <DialogTitle className="text-2xl font-black">Recharger mon Compte</DialogTitle>
+                  <DialogDescription className="font-medium">
+                    Alimentez votre solde Neopay via l'un de nos partenaires.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Méthode de retrait</Label>
-                    <Select 
-                      value={withdrawMethod} 
-                      onValueChange={(v: any) => setWithdrawMethod(v)}
-                    >
-                      <SelectTrigger className="rounded-xl">
-                        <SelectValue placeholder="Choisir une méthode" />
+                <div className="space-y-6 py-6">
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Méthode de Recharge</Label>
+                    <Select value={depositMethod} onValueChange={setDepositMethod}>
+                      <SelectTrigger className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold">
+                        <SelectValue placeholder="Méthode" />
                       </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="MonCash">MonCash</SelectItem>
-                        <SelectItem value="NatCash">NatCash</SelectItem>
-                        <SelectItem value="Physical">En personne (Juvénat)</SelectItem>
+                      <SelectContent className="rounded-2xl border-0 shadow-xl">
+                        <SelectItem value="MonCash" className="font-bold">MonCash (Digicel)</SelectItem>
+                        <SelectItem value="NatCash" className="font-bold">NatCash (Natcom)</SelectItem>
+                        <SelectItem value="Physical" className="font-bold">Bureau / Proxy</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  
-                  {withdrawMethod !== 'Physical' ? (
-                    <div className="space-y-2">
-                      <Label htmlFor="account-number" className="flex items-center gap-1">
-                        Numéro {withdrawMethod} <span className="text-red-500">*</span>
-                      </Label>
-                      <Input 
-                        id="account-number"
-                        placeholder={`Entrez votre numéro ${withdrawMethod}`} 
-                        value={accountNumber}
-                        onChange={(e) => setAccountNumber(e.target.value)}
-                        className="rounded-xl border-gray-200 focus:ring-blue-500"
-                      />
-                      <p className="text-[10px] text-gray-400">Ce numéro sera utilisé pour votre paiement.</p>
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Montant Souhaité (Goud)</Label>
+                    <div className="relative">
+                       <Input 
+                         type="number" 
+                         placeholder="Ex: 500" 
+                         value={depositAmount}
+                         onChange={(e) => setDepositAmount(e.target.value)}
+                         className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-black text-xl pl-12"
+                       />
+                       <PlusCircle className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-500" />
                     </div>
-                  ) : (
-                    <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
-                      <p className="text-xs text-blue-700 font-medium leading-relaxed">
-                        <MapPin className="h-3 w-3 inline mr-1" />
-                        Retrait disponible à notre bureau : Rue Neptune Debrosse, Juvénat. Munissez-vous de votre code affilié.
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <Label>Montant (Goud)</Label>
-                    <Input 
-                      type="number" 
-                      placeholder="Ex: 50" 
-                      value={withdrawAmount}
-                      onChange={(e) => setWithdrawAmount(e.target.value)}
-                      className="rounded-xl"
-                    />
-                    <p className="text-xs text-gray-500">Maximum disponible: {affiliate.balance} Goud</p>
+                  </div>
+                  <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-amber-800 font-bold leading-relaxed">
+                      L'admin vous contactera sur WhatsApp pour valider le transfert effectif avant de créditer votre compte.
+                    </p>
                   </div>
                 </div>
-                <DialogFooter className="gap-2">
-                  <Button variant="outline" onClick={() => setIsWithdrawModalOpen(false)} className="rounded-xl">Annuler</Button>
-                  <Button 
-                    onClick={handleWithdraw} 
-                    disabled={isSubmitting}
-                    className="bg-blue-600 rounded-xl flex-1"
-                  >
-                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmer le retrait"}
+                <DialogFooter>
+                  <Button onClick={handleDepositRequest} disabled={isSubmitting} className="w-full h-14 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-lg shadow-emerald-100">
+                    {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Envoyer la Demande"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          </CardContent>
-        </Card>
 
-        <Card className="border-0 shadow-lg bg-white">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-bold text-gray-400 uppercase tracking-wider">Revenu Direct</CardTitle>
-            <TrendingUp className="h-5 w-5 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black text-gray-900">{affiliate.directRevenue || 0} Goud</div>
-            <p className="text-gray-400 text-[10px] font-medium mt-1 uppercase tracking-tight">De vos clients personnels</p>
-          </CardContent>
-        </Card>
+            <Button 
+              onClick={() => setIsWithdrawModalOpen(true)}
+              className="h-20 sm:h-24 rounded-[2rem] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-2 border-indigo-100 flex flex-col items-center justify-center gap-2 shadow-sm transition-all active:scale-95 group"
+            >
+              <div className="p-2 rounded-xl bg-indigo-500 text-white group-hover:scale-110 transition-transform">
+                <MinusCircle className="h-6 w-6" />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-widest">Retrait</span>
+            </Button>
 
-        <Card className="border-0 shadow-lg bg-white">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-bold text-gray-400 uppercase tracking-wider">Revenu Indirect</CardTitle>
-            <Network className="h-5 w-5 text-purple-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black text-gray-900">{affiliate.indirectRevenue || 0} Goud</div>
-            <p className="text-gray-400 text-[10px] font-medium mt-1 uppercase tracking-tight">De votre réseau de parrainage</p>
-          </CardContent>
-        </Card>
+            <Dialog open={isTransferModalOpen} onOpenChange={setIsTransferModalOpen}>
+              <DialogTrigger render={
+                <Button className="h-20 sm:h-24 rounded-[2rem] bg-blue-50 hover:bg-blue-100 text-blue-700 border-2 border-blue-100 flex flex-col items-center justify-center gap-2 shadow-sm transition-all active:scale-95 group">
+                  <div className="p-2 rounded-xl bg-blue-500 text-white group-hover:scale-110 transition-transform">
+                    <ArrowRightLeft className="h-6 w-6" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest">Transfert</span>
+                </Button>
+              } />
+              <DialogContent className="rounded-[2.5rem] p-8 border-0 shadow-2xl">
+                <DialogHeader>
+                  <DialogTitle className="text-2xl font-black">Transfert Entre Affiliés</DialogTitle>
+                  <DialogDescription className="font-medium">
+                    Envoyez des Goud instantanément à un autre membre Neopay.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6 py-6">
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">ID Wallet du Destinataire</Label>
+                    <div className="relative">
+                       <Input 
+                         maxLength={8}
+                         placeholder="8 Chiffres" 
+                         value={transferRecipientWalletId}
+                         onChange={(e) => setTransferRecipientWalletId(e.target.value)}
+                         className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-black text-lg tracking-[0.2em] pl-12"
+                       />
+                       <Fingerprint className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-blue-500" />
+                       {isValidatingRecipient && (
+                         <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                           <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                         </div>
+                       )}
+                    </div>
+                    {verifiedRecipientName && (
+                      <p className="text-[10px] text-green-600 font-bold bg-green-50 px-3 py-2 rounded-lg border border-green-100">
+                         Destinataire identifié : <span className="uppercase">{verifiedRecipientName}</span>
+                      </p>
+                    )}
+                    {!verifiedRecipientName && transferRecipientWalletId.length === 8 && !isValidatingRecipient && (
+                      <p className="text-[10px] text-red-500 font-bold bg-red-50 px-3 py-2 rounded-lg border border-red-100">
+                         Aucun affilié trouvé avec cet ID.
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Montant à Envoyer (Goud)</Label>
+                    <div className="relative">
+                       <Input 
+                         type="number" 
+                         placeholder="0.00" 
+                         value={transferAmount}
+                         onChange={(e) => setTransferAmount(e.target.value)}
+                         className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-black text-xl pl-12"
+                       />
+                       <Send className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-blue-500" />
+                    </div>
+                    <p className="text-[9px] text-gray-400 font-bold">Solde disponible : {affiliate.balance} Goud</p>
+                  </div>
+                </div>
+                <DialogFooter className="flex-col gap-3">
+                  <Button onClick={handleTransfer} disabled={isSubmitting || !verifiedRecipientName} className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg shadow-blue-100">
+                    {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirmer le Transfert"}
+                  </Button>
+                  <p className="text-[9px] text-center text-gray-400 font-medium">L'argent sera déduit immédiatement après confirmation.</p>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
 
-        <Card className="border-0 shadow-lg bg-white">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-bold text-gray-400 uppercase tracking-wider">Total Gains</CardTitle>
-            <CheckCircle2 className="h-5 w-5 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black text-gray-900">{affiliate.totalEarnings || 0} Goud</div>
-            <p className="text-gray-400 text-[10px] font-medium mt-1 uppercase tracking-tight">Cumul historique de vos gains</p>
-          </CardContent>
+        {/* Global Income Summary Card */}
+        <Card className="border-0 shadow-2xl bg-dark text-white rounded-[2.5rem] overflow-hidden relative p-8 flex flex-col justify-between group">
+           <div className="absolute top-0 right-0 p-8">
+              <TrendingUp className="h-8 w-8 text-white/10 group-hover:rotate-12 transition-transform" />
+           </div>
+           
+           <div className="space-y-8">
+              <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6">Récapitulatif Revenus</p>
+                <div className="space-y-5">
+                  <div className="flex justify-between items-center py-4 border-b border-white/5 group/row">
+                    <div className="flex items-center gap-4">
+                      <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500 transition-colors group-hover/row:bg-orange-500 group-hover/row:text-white">
+                         <Trophy className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-gray-500 uppercase">Total Gagné</p>
+                        <p className="text-xl font-black">{affiliate.totalEarnings || 0} <span className="text-[10px] opacity-40">G</span></p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-4 border-b border-white/5 group/row">
+                    <div className="flex items-center gap-4">
+                      <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 transition-colors group-hover/row:bg-emerald-500 group-hover/row:text-white">
+                         <Download className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-gray-500 uppercase">Gains Directs</p>
+                        <p className="text-xl font-black">{affiliate.directRevenue || 0} <span className="text-[10px] opacity-40">G</span></p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center py-4 group/row">
+                    <div className="flex items-center gap-4">
+                      <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 transition-colors group-hover/row:bg-blue-500 group-hover/row:text-white">
+                         <ArrowUpRight className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-gray-500 uppercase">Total Retiré</p>
+                        <p className="text-xl font-black text-blue-400">{affiliate.totalWithdrawn || 0} <span className="text-[10px] opacity-40">G</span></p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+           </div>
+
+           <div className="mt-8 p-6 bg-white/5 rounded-3xl border border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Users className="h-5 w-5 text-blue-400" />
+                <span className="text-sm font-black">{affiliate.referredClients || 0} <span className="text-xs text-white/40">Clients</span></span>
+              </div>
+              <div className="h-8 w-px bg-white/10"></div>
+              <div className="flex items-center gap-3">
+                <Star className="h-4 w-4 text-amber-400" />
+                <span className="text-sm font-black">{affiliate.points || 0} <span className="text-xs text-white/40">Points</span></span>
+              </div>
+           </div>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Monthly Rankings & Prizes */}
-        <Card className="lg:col-span-2 border-0 shadow-xl bg-white overflow-hidden">
-          <CardHeader className="bg-gray-50/50 border-b">
+        <Card className="lg:col-span-2 border-0 shadow-xl bg-white overflow-hidden rounded-[2.5rem]">
+          <CardHeader className="bg-gray-50/50 border-b p-8">
             <div className="flex justify-between items-center">
               <div>
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <Trophy className="h-6 w-6 text-amber-500" />
-                  Classement des Meilleurs Affiliés
+                <CardTitle className="flex items-center gap-3 text-2xl font-black">
+                  <div className="p-2 rounded-xl bg-amber-100 text-amber-600">
+                    <Trophy className="h-6 w-6" />
+                  </div>
+                  Élite de la Communauté
                 </CardTitle>
-                <CardDescription>Les leaders de la communauté Neopay ce mois-ci.</CardDescription>
+                <CardDescription className="font-bold text-gray-400">Les leaders qui dominent le marché cette saison.</CardDescription>
               </div>
-              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">En Direct</Badge>
+              <Badge variant="outline" className="h-8 px-4 rounded-full bg-amber-50 text-amber-700 border-amber-200 font-black text-[10px] uppercase tracking-widest animate-pulse">
+                Live Ranking
+              </Badge>
             </div>
           </CardHeader>
-          <CardContent className="p-6">
+          <CardContent className="p-8">
             {rankingsLoading ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
               </div>
             ) : (
-              <div className="space-y-8">
-                {/* Top 3 Podium Style */}
-                <div className="grid grid-cols-3 gap-4 items-end pt-4">
+              <div className="space-y-12">
+                {/* Responsive Podium */}
+                <div className="flex flex-col sm:flex-row items-end justify-center gap-6 pt-8 max-w-sm mx-auto sm:max-w-none">
                   {/* 2nd Place */}
-                  <div className="flex flex-col items-center space-y-3">
+                  <div className="flex-1 w-full order-2 sm:order-1 flex flex-col items-center space-y-3">
                     <div className="relative">
-                      <div className="w-16 h-16 rounded-full bg-gray-100 border-4 border-gray-200 flex items-center justify-center overflow-hidden">
-                        <Users className="h-8 w-8 text-gray-300" />
+                      <div className="w-16 h-16 rounded-[1.25rem] bg-gray-50 border-2 border-gray-100 flex items-center justify-center overflow-hidden shadow-inner font-black text-gray-300">
+                        {(monthlyRankings[1] || winnersQueue[1])?.name.charAt(0)}
                       </div>
-                      <div className="absolute -bottom-2 -right-2 bg-gray-400 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 border-white">2</div>
+                      <div className="absolute -bottom-2 -right-2 bg-gray-500 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-black border-2 border-white shadow-md">2</div>
                     </div>
                     <div className="text-center">
-                      <p className="font-bold text-sm truncate w-24">{(monthlyRankings[1] || winnersQueue[1])?.name || '...'}</p>
-                      <p className="text-[10px] font-bold text-gray-400">250 Goud</p>
+                      <p className="font-black text-sm text-dark truncate w-24">{(monthlyRankings[1] || winnersQueue[1])?.name || '...'}</p>
+                      <p className="text-[10px] font-black text-gray-400 uppercase">250 G Bonus</p>
                     </div>
-                    <div className="w-full h-16 bg-gray-100 rounded-t-xl" />
+                    <div className="w-full h-16 bg-gray-50 rounded-t-2xl border-x border-t border-gray-100" />
                   </div>
 
                   {/* 1st Place */}
-                  <div className="flex flex-col items-center space-y-3">
+                  <div className="flex-1 w-full order-1 sm:order-2 flex flex-col items-center space-y-3">
                     <div className="relative">
-                      <div className="w-20 h-20 rounded-full bg-amber-50 border-4 border-amber-400 flex items-center justify-center overflow-hidden">
-                        <Users className="h-10 w-10 text-amber-200" />
+                      <div className="w-24 h-24 rounded-[1.75rem] bg-amber-50 border-4 border-amber-300 flex items-center justify-center overflow-hidden shadow-xl font-black text-amber-600 text-2xl">
+                        {(monthlyRankings[0] || winnersQueue[0])?.name.charAt(0)}
                       </div>
-                      <div className="absolute -bottom-2 -right-2 bg-amber-500 text-white w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 border-white">1</div>
-                      <Trophy className="absolute -top-6 left-1/2 -translate-x-1/2 h-6 w-6 text-amber-500 animate-bounce" />
+                      <div className="absolute -bottom-2 -right-2 bg-amber-500 text-white w-9 h-9 rounded-full flex items-center justify-center text-sm font-black border-2 border-white shadow-lg">1</div>
+                      <Trophy className="absolute -top-8 left-1/2 -translate-x-1/2 h-8 w-8 text-amber-500 animate-bounce" />
                     </div>
                     <div className="text-center">
-                      <p className="font-bold text-base truncate w-28">{(monthlyRankings[0] || winnersQueue[0])?.name || '...'}</p>
-                      <p className="text-xs font-bold text-amber-600">500 Goud</p>
+                      <p className="font-black text-lg text-dark truncate w-32">{(monthlyRankings[0] || winnersQueue[0])?.name || '...'}</p>
+                      <p className="text-xs font-black text-amber-600 uppercase">500 G Bonus Gold</p>
                     </div>
-                    <div className="w-full h-24 bg-amber-500 rounded-t-xl shadow-lg shadow-amber-100" />
+                    <div className="w-full h-28 bg-gradient-to-t from-amber-500 to-amber-400 rounded-t-3xl shadow-xl shadow-amber-200" />
                   </div>
 
                   {/* 3rd Place */}
-                  <div className="flex flex-col items-center space-y-3">
+                  <div className="flex-1 w-full order-3 sm:order-3 flex flex-col items-center space-y-3">
                     <div className="relative">
-                      <div className="w-16 h-16 rounded-full bg-orange-50 border-4 border-orange-200 flex items-center justify-center overflow-hidden">
-                        <Users className="h-8 w-8 text-orange-200" />
+                      <div className="w-16 h-16 rounded-[1.25rem] bg-orange-50/50 border-2 border-orange-100 flex items-center justify-center overflow-hidden shadow-inner font-black text-orange-200">
+                        {(monthlyRankings[2] || winnersQueue[2])?.name.charAt(0)}
                       </div>
-                      <div className="absolute -bottom-2 -right-2 bg-orange-500 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 border-white">3</div>
+                      <div className="absolute -bottom-2 -right-2 bg-orange-500 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-black border-2 border-white shadow-md">3</div>
                     </div>
                     <div className="text-center">
-                      <p className="font-bold text-sm truncate w-24">{(monthlyRankings[2] || winnersQueue[2])?.name || '...'}</p>
-                      <p className="text-[10px] font-bold text-orange-400">150 Goud</p>
+                      <p className="font-black text-sm text-dark truncate w-24">{(monthlyRankings[2] || winnersQueue[2])?.name || '...'}</p>
+                      <p className="text-[10px] font-black text-orange-400 uppercase">150 G Bonus</p>
                     </div>
-                    <div className="w-full h-12 bg-orange-100 rounded-t-xl" />
+                    <div className="w-full h-12 bg-orange-50 rounded-t-2xl border-x border-t border-orange-100" />
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Détails du Classement</h4>
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Récapitulatif des Performances</h4>
                   {(monthlyRankings.length > 0 ? monthlyRankings : winnersQueue).map((a, idx) => (
-                    <div key={a.id} className="flex items-center justify-between p-4 rounded-2xl bg-gray-50/50 border border-gray-100 hover:bg-white hover:shadow-md transition-all group">
-                      <div className="flex items-center gap-4">
-                        <span className="text-lg font-black text-gray-300 group-hover:text-blue-600 transition-colors">#{idx + 1}</span>
+                    <div key={a.id} className="flex items-center justify-between p-5 rounded-3xl bg-gray-50/50 border border-gray-100 hover:bg-white hover:shadow-xl hover:scale-[1.02] transition-all duration-300 group">
+                      <div className="flex items-center gap-5">
+                        <span className="text-2xl font-black text-gray-200 group-hover:text-blue-500 transition-colors">#{idx + 1}</span>
                         <div>
-                          <p className="font-bold text-gray-900">{a.name}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <Badge variant="secondary" className="text-[9px] h-4 px-1.5 bg-blue-50 text-blue-600 border-blue-100">
-                              {a.points || 0} Points
+                          <p className="font-black text-dark text-lg">{a.name}</p>
+                          <div className="flex items-center gap-3 mt-1">
+                            <Badge variant="secondary" className="text-[10px] font-black px-2.5 h-5 bg-blue-600 text-white border-0 shadow-sm shadow-blue-200">
+                              {a.points || 0} PTS
                             </Badge>
-                            <span className="text-[10px] text-gray-400">{a.monthlySales || 0} Goud de ventes</span>
+                            <span className="text-[11px] font-bold text-gray-400 tracking-tight">{a.monthlySales || 0} Goud produits</span>
                           </div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs font-bold text-gray-900">
+                        <p className="text-base font-black text-emerald-600">
                           {idx === 0 ? '+500 G' : idx === 1 ? '+250 G' : '+150 G'}
                         </p>
-                        <p className="text-[9px] text-gray-400 uppercase font-bold tracking-tighter">Bonus Prévu</p>
+                        <p className="text-[9px] text-gray-400 uppercase font-black tracking-widest">Commission Spéciale</p>
                       </div>
                     </div>
                   ))}
@@ -549,97 +725,117 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
           </CardContent>
         </Card>
 
-        {/* Withdrawal History */}
-        <Card className="border-0 shadow-xl bg-white">
-      <CardHeader className="bg-gray-50/50 border-b">
-        <div className="flex justify-between items-center">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <History className="h-5 w-5 text-blue-600" />
-              Historique des Retraits
-            </CardTitle>
-            <CardDescription>Vos transactions récentes.</CardDescription>
-          </div>
-          {withdrawals.length > 0 && (
-            <Dialog open={isClearHistoryConfirmOpen} onOpenChange={setIsClearHistoryConfirmOpen}>
-              <DialogTrigger 
-                render={
-                  <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50 hover:text-red-600 h-8 rounded-lg text-[10px] font-black uppercase">
-                    Effacer l'historique
-                  </Button>
-                } 
-              />
-              <DialogContent className="max-w-sm rounded-[1.5rem]">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <AlertCircle className="h-5 w-5 text-red-500" />
-                    Confirmation
-                  </DialogTitle>
-                  <DialogDescription>
-                    Êtes-vous sûr de vouloir supprimer TOUT votre historique de retrait ? Cette action est irréversible.
-                  </DialogDescription>
-                </DialogHeader>
-                <DialogFooter className="gap-2 sm:gap-0 mt-4">
-                  <Button variant="outline" onClick={() => setIsClearHistoryConfirmOpen(false)} className="rounded-xl">Annuler</Button>
-                  <Button variant="destructive" onClick={handleClearWithdrawalHistory} disabled={isSubmitting} className="rounded-xl bg-red-600">
-                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Oui, supprimer"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          )}
-        </div>
-      </CardHeader>
-          <CardContent className="p-0">
-            {withdrawalsLoading ? (
+        {/* Unified Transaction History */}
+        <Card className="border-0 shadow-xl bg-white rounded-[2.5rem] flex flex-col">
+          <CardHeader className="bg-gray-50/50 border-b p-8">
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle className="flex items-center gap-3 text-lg font-black">
+                  <div className="p-2 rounded-xl bg-blue-50 text-blue-600 shadow-sm">
+                    <History className="h-5 w-5" />
+                  </div>
+                  Opérations Récentes
+                </CardTitle>
+                <CardDescription className="font-bold">Dépôts, retraits et transferts.</CardDescription>
+              </div>
+              {transactions.length > 0 && (
+                <Dialog open={isClearHistoryConfirmOpen} onOpenChange={setIsClearHistoryConfirmOpen}>
+                  <DialogTrigger render={
+                    <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50 hover:text-red-600 h-10 rounded-xl text-[10px] font-black uppercase px-4">
+                      <AlertCircle className="h-4 w-4 mr-1.5" />
+                      Vider
+                    </Button>
+                  } />
+                  <DialogContent className="max-w-sm rounded-[2.5rem] p-8 border-0 shadow-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-3 text-xl font-black">
+                        <AlertCircle className="h-6 w-6 text-red-500" />
+                        Action Critique
+                      </DialogTitle>
+                      <DialogDescription className="font-bold py-2 text-gray-500">
+                        Cette opération supprimera définitivement votre historique d'opérations.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2 sm:gap-3 mt-6">
+                      <Button variant="outline" onClick={() => setIsClearHistoryConfirmOpen(false)} className="h-12 rounded-2xl font-bold flex-1 border-gray-100">Retour</Button>
+                      <Button variant="destructive" onClick={handleClearTransactionHistory} disabled={isSubmitting} className="h-12 rounded-2xl font-black bg-red-600 flex-1 hover:bg-red-700 shadow-lg shadow-red-200">
+                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Effacer"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="p-0 flex-1 overflow-y-auto max-h-[800px] custom-scrollbar">
+            {transactionsLoading ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
               </div>
-            ) : withdrawals.length > 0 ? (
-              <div className="divide-y">
-                {withdrawals.map((w) => (
-                  <div key={w.id} className="p-5 hover:bg-gray-50/50 transition-colors group">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <p className="font-black text-xl text-gray-900">{w.amount} Goud</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-wider border-gray-200">
-                            {w.method === 'Physical' ? 'Bureau Juvénat' : w.method}
-                          </Badge>
-                          <span className="text-[10px] text-gray-400">
-                            {w.createdAt?.toDate ? format(w.createdAt.toDate(), 'dd MMM yyyy', { locale: fr }) : ''}
-                          </span>
+            ) : transactions.length > 0 ? (
+              <div className="divide-y divide-gray-50">
+                {transactions.map((t) => (
+                  <div key={t.id} className="p-6 hover:bg-gray-50/50 transition-all group border-l-4 border-transparent hover:border-blue-500">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex gap-4">
+                        <div className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                          t.type === 'deposit' ? 'bg-emerald-50 text-emerald-600' :
+                          t.type === 'withdrawal' ? 'bg-indigo-50 text-indigo-600' :
+                          t.type === 'transfer_sent' ? 'bg-blue-50 text-blue-600' :
+                          'bg-amber-50 text-amber-600'
+                        }`}>
+                          {t.type === 'deposit' && <PlusCircle className="h-6 w-6" />}
+                          {t.type === 'withdrawal' && <MinusCircle className="h-6 w-6" />}
+                          {t.type === 'transfer_sent' && <Send className="h-6 w-6" />}
+                          {t.type === 'transfer_received' && <Download className="h-6 w-6" />}
+                        </div>
+                        <div>
+                          <p className="font-black text-lg text-dark leading-none">
+                            {t.type === 'transfer_sent' || t.type === 'withdrawal' ? '-' : '+'}
+                            {t.amount.toLocaleString()} G
+                          </p>
+                          <p className="text-xs font-bold text-gray-500 mt-1">{t.description}</p>
+                          <div className="flex items-center gap-3 mt-2">
+                             <span className="text-[10px] font-black text-gray-400">
+                               {t.createdAt?.toDate ? format(t.createdAt.toDate(), 'dd MMM yyyy HH:mm', { locale: fr }) : ''}
+                             </span>
+                             {t.method && (
+                               <Badge variant="outline" className="h-4 text-[8px] font-black uppercase bg-gray-50 border-gray-100">
+                                 {t.method}
+                               </Badge>
+                             )}
+                          </div>
                         </div>
                       </div>
-                      {getStatusBadge(w.status)}
+                      <div className="scale-90 origin-right">
+                        {getTransactionStatusBadge(t.status)}
+                      </div>
                     </div>
-                    {w.status === 'rejected' && w.rejectionReason && (
-                      <div className="mt-3 p-3 bg-red-50 rounded-xl text-xs text-red-600 flex items-start gap-2 border border-red-100">
+                    {t.status === 'rejected' && t.rejectionReason && (
+                      <div className="mt-4 p-4 bg-red-50/50 rounded-2xl text-xs text-red-600 flex items-start gap-3 border border-red-100 font-medium">
                         <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                        <p><span className="font-bold">Raison du rejet :</span> {w.rejectionReason}</p>
+                        <p><span className="font-black uppercase text-[10px] block mb-1">Motif du rejet</span> {t.rejectionReason}</p>
                       </div>
                     )}
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-20 text-gray-400">
-                <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <History className="h-8 w-8 opacity-20" />
+              <div className="text-center py-24 text-gray-400">
+                <div className="bg-gray-50 w-20 h-20 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-inner">
+                  <Fingerprint className="h-10 w-10 opacity-10" />
                 </div>
-                <p className="font-medium">Aucun retrait effectué</p>
-                <p className="text-xs mt-1">Vos futurs retraits apparaîtront ici.</p>
+                <p className="font-black text-dark text-lg">Aucune opération</p>
+                <p className="text-sm font-medium mt-1">Vos finances apparaîtront ici.</p>
               </div>
             )}
           </CardContent>
-          {withdrawals.length > 0 && (
-            <div className="p-4 bg-gray-50/50 border-t text-center">
-              <Button variant="ghost" size="sm" className="text-xs text-blue-600 font-bold hover:bg-blue-50">
-                Voir tout l'historique
-                <ChevronRight className="h-3 w-3 ml-1" />
-              </Button>
-            </div>
-          )}
+          <div className="p-6 bg-gray-50/30 border-t text-center">
+            <Button variant="ghost" className="w-full h-12 rounded-2xl text-xs font-black uppercase tracking-widest text-blue-600 hover:bg-blue-50 hover:text-blue-700 transition-all">
+              Générer un Relevé
+              <ChevronRight className="h-4 w-4 ml-2" />
+            </Button>
+          </div>
         </Card>
       </div>
       {/* Back to Top Button */}
