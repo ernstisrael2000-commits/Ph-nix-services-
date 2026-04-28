@@ -62,7 +62,8 @@ import {
   Send,
   Download,
   AlertTriangle,
-  Fingerprint
+  Fingerprint,
+  Copy
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -137,6 +138,13 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const copyWalletId = () => {
+    if (affiliate?.walletId) {
+      navigator.clipboard.writeText(affiliate.walletId);
+      toast.success("Wallet ID copié !");
+    }
+  };
+
   // Memoize ranking position for performance
   const rankingPosition = React.useMemo(() => {
     if (!affiliate) return 0;
@@ -188,7 +196,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     try {
       await submitWithdrawal(affiliate, amount, withdrawMethod, withdrawMethod === 'Physical' ? 'Bureau Juvénat' : accountNumber.trim());
       
-      toast.success("En attente de validation");
+      toast.success("Demande soumise : En attente de validation par l'admin");
       setIsWithdrawModalOpen(false);
       setWithdrawAmount('');
       setAccountNumber('');
@@ -371,44 +379,71 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="relative h-64 w-full max-w-md mx-auto sm:max-w-none sm:h-72 rounded-[2.5rem] bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-800 shadow-[0_20px_50px_rgba(37,99,235,0.3)] overflow-hidden p-8 text-white group hover:scale-[1.02] transition-transform duration-500"
+            className="relative h-64 w-full max-w-md mx-auto sm:max-w-none sm:h-72 rounded-[2.5rem] bg-slate-900 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] overflow-hidden p-8 text-white group hover:scale-[1.01] transition-all duration-500"
           >
-            {/* Glossy Overlay */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.1),transparent)] pointer-events-none" />
-            <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-white/5 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-1000" />
+            {/* Card Texture & Effects */}
+            <div className="absolute inset-0 opacity-10 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-transparent to-indigo-900/40" />
+            <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/10 rounded-full blur-[80px]" />
+            <div className="absolute top-0 left-0 w-full h-full bg-[linear-gradient(110deg,transparent_40%,rgba(255,255,255,0.05)_45%,rgba(255,255,255,0.1)_50%,rgba(255,255,255,0.05)_55%,transparent_60%)] bg-[length:200%_100%] animate-[shimmer_6s_infinite] pointer-events-none" />
             
             <div className="relative h-full flex flex-col justify-between">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-white/40 text-[9px] font-black uppercase tracking-[0.3em] mb-1 drop-shadow-sm">Neopay Privilege</p>
-                  <div className="flex items-center gap-2">
-                    <div className="h-7 w-10 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-md shadow-inner flex items-center justify-center">
-                      <div className="w-6 h-[1px] bg-white/30" />
+                  <p className="text-white/30 text-[9px] font-black uppercase tracking-[0.4em] mb-1 drop-shadow-sm">Neopay Titanium</p>
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-11 bg-gradient-to-br from-yellow-200 via-yellow-500 to-yellow-700 rounded-md shadow-lg flex flex-col justify-center px-1.5 gap-0.5 overflow-hidden">
+                      <div className="h-[1px] w-full bg-black/20" />
+                      <div className="h-[1px] w-full bg-black/20" />
+                      <div className="h-[1px] w-full bg-black/20" />
                     </div>
-                    <span className="text-[10px] font-black text-white/30 tracking-tighter">SECURE ASSET</span>
+                    <span className="text-[10px] font-black text-white/20 tracking-widest flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                      SECURE CHIP
+                    </span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <Fingerprint className="h-12 w-12 text-white/10" />
+                  <div className="flex -space-x-4 opacity-30">
+                    <div className="w-10 h-10 rounded-full bg-red-500" />
+                    <div className="w-10 h-10 rounded-full bg-orange-500" />
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-0 text-center sm:text-left">
-                <p className="text-white/60 text-[10px] font-black uppercase tracking-widest mb-1">Solde Disponible</p>
-                <div className="flex items-baseline justify-center sm:justify-start gap-2">
-                  <h3 className="text-5xl sm:text-6xl font-black tracking-tighter text-white drop-shadow-2xl">{affiliate.balance.toLocaleString()}</h3>
-                  <span className="text-lg font-black text-white/50 uppercase tracking-tighter">Goud</span>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 mb-1">
+                   <div className="w-1 h-1 rounded-full bg-white/40" />
+                   <p className="text-white/50 text-[10px] font-black uppercase tracking-widest">Solde Courant</p>
+                </div>
+                <div className="flex items-baseline gap-3">
+                  <motion.h3 
+                    animate={{ textShadow: ["0 0 0px rgba(255,255,255,0)", "0 0 15px rgba(255,255,255,0.3)", "0 0 0px rgba(255,255,255,0)"] }}
+                    transition={{ duration: 3, repeat: Infinity }}
+                    className="text-5xl sm:text-6xl font-black tracking-tight text-white"
+                  >
+                    {affiliate.balance.toLocaleString()}
+                  </motion.h3>
+                  <span className="text-lg font-black text-white/30 uppercase tracking-tighter">Goud</span>
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row justify-between items-end gap-4 sm:gap-0">
-                <div className="w-full sm:w-auto text-center sm:text-left">
-                  <p className="text-white/40 text-[8px] font-black uppercase tracking-[0.2em] mb-1">Titulaire de Carte</p>
-                  <p className="text-xl font-black tracking-wide text-white uppercase drop-shadow-md">{affiliate.name}</p>
+              <div className="flex flex-col sm:flex-row justify-between items-end gap-2 sm:gap-0">
+                <div className="w-full sm:w-auto">
+                  <p className="text-white/20 text-[8px] font-black uppercase tracking-[0.2em] mb-1">Account Holder</p>
+                  <p className="text-lg font-bold tracking-wider text-white uppercase font-sans">{affiliate.name}</p>
                 </div>
-                <div className="w-full sm:w-auto text-center sm:text-right">
-                  <p className="text-white/40 text-[8px] font-black uppercase tracking-[0.2em] mb-1">Identifiant Unique</p>
-                  <p className="text-2xl font-mono font-black text-white tracking-[0.3em] drop-shadow-md">
+                <div className="w-full sm:w-auto text-right">
+                  <div className="flex items-center justify-end gap-2 mb-1">
+                    <p className="text-white/20 text-[8px] font-black uppercase tracking-[0.2em]">Wallet Serial</p>
+                    <button 
+                      onClick={copyWalletId}
+                      className="p-1 rounded-md hover:bg-white/10 transition-colors text-white/40 hover:text-white"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <p className="text-xl font-mono font-medium tracking-[0.3em] text-white/90">
                     {affiliate.walletId ? affiliate.walletId.match(/.{1,4}/g)?.join(' ') : '.... ....'}
                   </p>
                 </div>
@@ -476,15 +511,80 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
               </DialogContent>
             </Dialog>
 
-            <Button 
-              onClick={() => setIsWithdrawModalOpen(true)}
-              className="h-20 sm:h-24 rounded-[2rem] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-2 border-indigo-100 flex flex-col items-center justify-center gap-2 shadow-sm transition-all active:scale-95 group"
-            >
-              <div className="p-2 rounded-xl bg-indigo-500 text-white group-hover:scale-110 transition-transform">
-                <MinusCircle className="h-6 w-6" />
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-widest">Retrait</span>
-            </Button>
+            <Dialog open={isWithdrawModalOpen} onOpenChange={setIsWithdrawModalOpen}>
+              <DialogTrigger render={
+                <Button className="h-20 sm:h-24 rounded-[2rem] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-2 border-indigo-100 flex flex-col items-center justify-center gap-2 shadow-sm transition-all active:scale-95 group">
+                  <div className="p-2 rounded-xl bg-indigo-500 text-white group-hover:scale-110 transition-transform">
+                    <MinusCircle className="h-6 w-6" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest">Retrait</span>
+                </Button>
+              } />
+              <DialogContent className="rounded-[2.5rem] p-8 border-0 shadow-2xl">
+                <DialogHeader>
+                  <DialogTitle className="text-2xl font-black">Retrait de Fonds</DialogTitle>
+                  <DialogDescription className="font-medium">
+                    Choisissez votre méthode de retrait préférée.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6 py-6">
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Méthode de Retrait</Label>
+                    <Select value={withdrawMethod} onValueChange={(v: any) => setWithdrawMethod(v)}>
+                      <SelectTrigger className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold">
+                        <SelectValue placeholder="Méthode" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-2xl border-0 shadow-xl">
+                        <SelectItem value="MonCash" className="font-bold">MonCash</SelectItem>
+                        <SelectItem value="NatCash" className="font-bold">NatCash</SelectItem>
+                        <SelectItem value="Physical" className="font-bold">Retrait Physique (Bureau Juvénat)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {withdrawMethod !== 'Physical' && (
+                    <div className="space-y-3">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Numéro {withdrawMethod}</Label>
+                      <Input 
+                        placeholder="Ex: 44XXXXXX" 
+                        value={accountNumber}
+                        onChange={(e) => setAccountNumber(e.target.value)}
+                        className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-black text-xl"
+                      />
+                    </div>
+                  )}
+
+                  {withdrawMethod === 'Physical' && (
+                    <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-start gap-3">
+                      <AlertTriangle className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+                      <p className="text-[10px] text-blue-800 font-bold leading-relaxed">
+                        Le retrait physique s'effectue à notre bureau de Juvénat sur présentation d'une pièce d'identité.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Montant (Goud)</Label>
+                    <div className="relative">
+                       <Input 
+                         type="number" 
+                         placeholder="Min 20.00" 
+                         value={withdrawAmount}
+                         onChange={(e) => setWithdrawAmount(e.target.value)}
+                         className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-black text-xl pl-12"
+                       />
+                       <MinusCircle className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-indigo-500" />
+                    </div>
+                    <p className="text-[9px] text-gray-400 font-bold ml-1">Solde disponible : {affiliate.balance} Goud</p>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button onClick={handleWithdraw} disabled={isSubmitting} className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-lg shadow-indigo-100">
+                    {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirmer le Retrait"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             <Dialog open={isTransferModalOpen} onOpenChange={setIsTransferModalOpen}>
               <DialogTrigger render={

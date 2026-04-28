@@ -1402,13 +1402,18 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const allPendingRequests = React.useMemo(() => {
     const registrations = pendingRegistrations.map(r => ({ ...r, type: 'registration' as const }));
     const withdrawals = pendingWithdrawals.map(w => ({ ...w, type: 'withdrawal' as const, name: w.affiliateName }));
+    const deposits = pendingDeposits.map(d => ({ 
+      ...d, 
+      type: 'deposit_request' as const, 
+      name: affiliates.find(a => a.id === d.affiliateId)?.name || 'Affilié inconnu' 
+    }));
 
-    let combined = [...registrations, ...withdrawals];
+    let combined = [...registrations, ...withdrawals, ...deposits];
 
     if (notifFilter === 'registration') {
       combined = combined.filter(r => r.type === 'registration');
     } else if (notifFilter === 'withdrawal') {
-      combined = combined.filter(r => r.type === 'withdrawal');
+      combined = combined.filter(r => r.type === 'withdrawal' || r.type === 'deposit_request');
     }
 
     if (notifSearch) {
@@ -1439,6 +1444,17 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
       p.currentLocation.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [parcels, searchTerm]);
+
+  const [walletTxFilter, setWalletTxFilter] = useState<'all' | 'deposit' | 'withdrawal' | 'transfer'>('all');
+  const [walletStatusFilter, setWalletStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+
+  const filteredWalletTransactions = React.useMemo(() => {
+    return walletTransactions.filter(tx => {
+      const matchesType = walletTxFilter === 'all' || tx.type === walletTxFilter;
+      const matchesStatus = walletStatusFilter === 'all' || tx.status === walletStatusFilter;
+      return matchesType && matchesStatus;
+    });
+  }, [walletTransactions, walletTxFilter, walletStatusFilter]);
 
   const filteredAffiliates = React.useMemo(() => {
     if (!affiliateSearch.trim()) return affiliates;
@@ -2239,7 +2255,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                                 setActiveTab(item.value);
                                 if (window.innerWidth < 1024) setIsSidebarOpen(false);
                               }}
-                              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all group ${
+                              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all group relative ${
                                 activeTab === item.value 
                                 ? 'bg-primary text-white shadow-xl shadow-primary/30 scale-[1.02]' 
                                 : 'text-gray-500 hover:bg-accent-light hover:text-primary'
@@ -2247,6 +2263,29 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                             >
                               <item.icon className={`h-5 w-5 transition-transform ${activeTab === item.value ? 'scale-110' : 'group-hover:scale-110'}`} />
                               <span className="font-black text-sm tracking-tight">{item.label}</span>
+                              
+                              {/* Sidebar Badges */}
+                              {item.value === 'affiliates' && pendingRegistrations.length > 0 && (
+                                <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white border-2 border-white shadow-sm ring-1 ring-red-200">
+                                  {pendingRegistrations.length}
+                                </span>
+                              )}
+                              {item.value === 'withdrawals' && pendingWithdrawals.length > 0 && (
+                                <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white border-2 border-white shadow-sm ring-1 ring-red-200">
+                                  {pendingWithdrawals.length}
+                                </span>
+                              )}
+                              {item.value === 'wallet-tx' && pendingDeposits.length > 0 && (
+                                <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white border-2 border-white shadow-sm ring-1 ring-red-200">
+                                  {pendingDeposits.length}
+                                </span>
+                              )}
+                              {item.value === 'notifications' && totalPending > 0 && (
+                                <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-red-600 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
+                                  {totalPending}
+                                </span>
+                              )}
+
                               {activeTab === item.value && (
                                 <motion.div 
                                   layoutId="active-tab-indicator"
@@ -3408,20 +3447,36 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                     </TableHeader>
                     <TableBody>
                       {allWithdrawals.map((w) => (
-                        <TableRow key={w.id}>
+                        <TableRow key={w.id} className="hover:bg-gray-50/30 transition-colors">
                           <TableCell className="font-bold">{w.affiliateName}</TableCell>
-                          <TableCell className="font-mono text-emerald-600">{w.amount} G</TableCell>
-                          <TableCell>{w.method} - {w.accountNumber}</TableCell>
+                          <TableCell className="font-mono text-emerald-600 font-bold">{w.amount} G</TableCell>
+                          <TableCell className="text-xs">
+                            <span className="font-black uppercase text-[9px] block text-gray-400">{w.method}</span>
+                            {w.accountNumber}
+                          </TableCell>
                           <TableCell>
-                            <Badge variant={w.status === 'approved' ? 'default' : w.status === 'rejected' ? 'destructive' : 'outline'}>
-                              {w.status}
+                            <Badge variant={w.status === 'approved' ? 'default' : w.status === 'rejected' ? 'destructive' : 'outline'} className="uppercase text-[9px] font-black">
+                              {w.status === 'pending' ? 'En attente' : w.status === 'approved' ? 'Terminé' : 'Refusé'}
                             </Badge>
                           </TableCell>
                           <TableCell>
                             {w.status === 'pending' && (
                               <div className="flex gap-2">
-                                <Button size="sm" onClick={() => handleWithdrawalAction(w, 'approved')}>Approuver</Button>
-                                <Button size="sm" variant="destructive" onClick={() => handleWithdrawalAction(w, 'rejected')}>Rejeter</Button>
+                                <Button 
+                                  size="sm" 
+                                  className="bg-emerald-600 hover:bg-emerald-700 h-8 rounded-xl text-[10px] font-black uppercase"
+                                  onClick={() => handleWithdrawalAction(w, 'approved')}
+                                >
+                                  Accepter
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="destructive" 
+                                  className="h-8 rounded-xl text-[10px] font-black uppercase"
+                                  onClick={() => handleWithdrawalAction(w, 'rejected')}
+                                >
+                                  Rejeter
+                                </Button>
                               </div>
                             )}
                           </TableCell>
@@ -3439,9 +3494,82 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <h2 className="text-xl font-bold text-dark">Flux Financiers & Dépôts</h2>
           </div>
+
+          {pendingDeposits.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Demandes de Dépôts en Attente ({pendingDeposits.length})
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {pendingDeposits.map((tx) => (
+                  <Card key={tx.id} className="border-emerald-100 bg-emerald-50/30 overflow-hidden">
+                    <CardContent className="p-4 space-y-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Dépôt {tx.method}</p>
+                          <p className="font-bold text-dark truncate">
+                            {affiliates.find(a => a.id === tx.affiliateId)?.name || 'Affilié...'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xl font-black text-emerald-700">{tx.amount} G</p>
+                          <p className="text-[9px] text-gray-400 font-bold">
+                            {tx.createdAt ? format(tx.createdAt.toDate(), 'dd/MM/yy HH:mm') : '-'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-9 rounded-xl text-[10px] font-black uppercase"
+                          onClick={() => updateWalletTransactionStatus(tx.id!, 'approved')}
+                        >
+                          Approuver
+                        </Button>
+                        <Button 
+                          variant="destructive"
+                          className="flex-1 h-9 rounded-xl text-[10px] font-black uppercase"
+                          onClick={() => updateWalletTransactionStatus(tx.id!, 'rejected')}
+                        >
+                          Rejeter
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
           <Card className="shadow-sm border-gray-200">
-            <CardHeader className="border-b bg-gray-50/50">
-              <CardTitle className="text-lg font-semibold">Toutes les transactions</CardTitle>
+            <CardHeader className="border-b bg-gray-50/50 py-4">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <CardTitle className="text-sm font-black uppercase tracking-widest text-gray-500">Historique des Flux Financiers</CardTitle>
+                <div className="flex flex-wrap gap-2">
+                  <Select value={walletTxFilter} onValueChange={(v: any) => setWalletTxFilter(v)}>
+                    <SelectTrigger className="w-[140px] h-9 text-xs">
+                      <SelectValue placeholder="Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tous types</SelectItem>
+                      <SelectItem value="deposit">Dépôts</SelectItem>
+                      <SelectItem value="withdrawal">Retraits</SelectItem>
+                      <SelectItem value="transfer">Transferts</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={walletStatusFilter} onValueChange={(v: any) => setWalletStatusFilter(v)}>
+                    <SelectTrigger className="w-[140px] h-9 text-xs">
+                      <SelectValue placeholder="Statut" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tous statuts</SelectItem>
+                      <SelectItem value="pending">En attente</SelectItem>
+                      <SelectItem value="approved">Approuvé</SelectItem>
+                      <SelectItem value="rejected">Rejeté</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {walletTxLoading ? (
@@ -3464,15 +3592,15 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {walletTransactions.map((tx) => (
+                      {filteredWalletTransactions.map((tx) => (
                         <TableRow key={tx.id}>
                           <TableCell>
                             <Badge variant="outline" className={`uppercase text-[10px] ${
-                              tx.type === 'deposit' ? 'bg-emerald-50 text-emerald-600' :
-                              tx.type === 'withdrawal' ? 'bg-red-50 text-red-600' :
-                              'bg-blue-50 text-blue-600'
+                              tx.type === 'deposit' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                              tx.type === 'withdrawal' ? 'bg-red-50 text-red-600 border-red-100' :
+                              'bg-blue-50 text-blue-600 border-blue-100'
                             }`}>
-                              {tx.type}
+                              {tx.type === 'deposit' ? 'Dépôt' : tx.type === 'withdrawal' ? 'Retrait' : 'Transfert'}
                             </Badge>
                           </TableCell>
                           <TableCell className="font-bold">
@@ -3485,13 +3613,13 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                           }`}>
                             {tx.type === 'withdrawal' ? '-' : '+'}{tx.amount} G
                           </TableCell>
-                          <TableCell className="text-xs text-gray-500">
+                          <TableCell className="text-xs text-gray-500 max-w-[200px] truncate">
                             {tx.description}
                             {tx.recipientWalletId && ` -> Dest: ${tx.recipientWalletId}`}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={tx.status === 'approved' ? 'default' : tx.status === 'rejected' ? 'destructive' : 'outline'} className="uppercase text-[9px]">
-                              {tx.status}
+                            <Badge variant={tx.status === 'approved' ? 'default' : tx.status === 'rejected' ? 'destructive' : 'outline'} className="uppercase text-[9px] font-black">
+                              {tx.status === 'pending' ? 'En attente' : tx.status === 'approved' ? 'Validé' : 'Refusé'}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-xs text-gray-400">
@@ -3502,7 +3630,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                               <div className="flex justify-end gap-2">
                                 <Button 
                                   size="sm" 
-                                  className="bg-emerald-600 hover:bg-emerald-700 h-8 text-[10px]"
+                                  className="bg-emerald-600 hover:bg-emerald-700 h-8 text-[10px] font-black uppercase px-3"
                                   onClick={async () => {
                                     try {
                                       await updateWalletTransactionStatus(tx.id!, 'approved');
@@ -3512,12 +3640,12 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                                     }
                                   }}
                                 >
-                                  Approuver
+                                  Valider
                                 </Button>
                                 <Button 
                                   size="sm" 
-                                  variant="destructive" 
-                                  className="h-8 text-[10px]"
+                                  variant="destructive"
+                                  className="h-8 text-[10px] font-black uppercase px-3"
                                   onClick={async () => {
                                     try {
                                       await updateWalletTransactionStatus(tx.id!, 'rejected');
@@ -3527,17 +3655,17 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                                     }
                                   }}
                                 >
-                                  Rejeter
+                                  Refuser
                                 </Button>
                               </div>
                             )}
                           </TableCell>
                         </TableRow>
                       ))}
-                      {walletTransactions.length === 0 && (
+                      {filteredWalletTransactions.length === 0 && (
                         <TableRow>
                           <TableCell colSpan={7} className="h-32 text-center text-gray-400">
-                            Aucune transaction enregistrée.
+                            Aucune transaction trouvée.
                           </TableCell>
                         </TableRow>
                       )}
@@ -4098,15 +4226,20 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                         <div className={`p-2 rounded-lg shrink-0 ${
                           req.type === 'registration' ? 'bg-accent-light text-primary' : 'bg-accent-light/50 text-dark'
                         }`}>
-                          {req.type === 'registration' ? <Users className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
+                          {req.type === 'registration' ? <Users className="h-5 w-5" /> : 
+                           req.type === 'withdrawal' ? <Wallet className="h-5 w-5" /> : 
+                           <PlusCircle className="h-5 w-5" />}
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <p className="font-bold text-dark truncate">{req.name}</p>
                             <Badge variant="outline" className={
-                              req.type === 'registration' ? 'bg-accent-light text-primary border-primary/20' : 'bg-muted text-subtext border-muted'
+                              req.type === 'registration' ? 'bg-accent-light text-primary border-primary/20' : 
+                              req.type === 'withdrawal' ? 'bg-red-50 text-red-600 border-red-100' :
+                              'bg-emerald-50 text-emerald-600 border-emerald-100'
                             }>
-                              {req.type === 'registration' ? 'Inscription' : 'Retrait'}
+                              {req.type === 'registration' ? 'Inscription' : 
+                               req.type === 'withdrawal' ? 'Retrait' : 'Dépôt'}
                             </Badge>
                           </div>
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
@@ -4116,10 +4249,19 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                             </span>
                             {req.type === 'withdrawal' && (
                               <div className="flex flex-col gap-1 mt-1">
+                                <span className="font-black text-red-600">{(req as any).amount} Goud</span>
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-red-50 rounded-lg w-fit border border-red-100">
+                                  <Smartphone className="h-3 w-3 text-red-500" />
+                                  <span className="font-black text-red-500 text-[10px] uppercase">{(req as any).method}: {(req as any).accountNumber}</span>
+                                </div>
+                              </div>
+                            )}
+                            {req.type === 'deposit_request' && (
+                              <div className="flex flex-col gap-1 mt-1">
                                 <span className="font-black text-emerald-600">{(req as any).amount} Goud</span>
-                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-accent-light/30 rounded-lg w-fit border border-accent-light/50">
-                                  <Smartphone className="h-3 w-3 text-primary" />
-                                  <span className="font-black text-primary text-[10px] uppercase">{(req as any).method}: {(req as any).accountNumber}</span>
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 rounded-lg w-fit border border-emerald-100">
+                                  <PlusCircle className="h-3 w-3 text-emerald-500" />
+                                  <span className="font-black text-emerald-500 text-[10px] uppercase">Dépôt: {(req as any).method}</span>
                                 </div>
                               </div>
                             )}
@@ -4144,8 +4286,10 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                           onClick={() => {
                             if (req.type === 'registration') {
                               handleAffiliateRequestAction(req as any, 'approved');
-                            } else {
+                            } else if (req.type === 'withdrawal') {
                               handleWithdrawalAction(req as any, 'approved');
+                            } else {
+                              updateWalletTransactionStatus(req.id!, 'approved');
                             }
                           }}
                         >
@@ -4158,8 +4302,10 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                           onClick={() => {
                             if (req.type === 'registration') {
                               handleAffiliateRequestAction(req as any, 'rejected');
-                            } else {
+                            } else if (req.type === 'withdrawal') {
                               handleWithdrawalAction(req as any, 'rejected');
+                            } else {
+                              updateWalletTransactionStatus(req.id!, 'rejected');
                             }
                           }}
                         >
