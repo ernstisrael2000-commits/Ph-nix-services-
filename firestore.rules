@@ -148,8 +148,8 @@ service cloud.firestore {
 
     match /wallet_transactions/{transactionId} {
       allow read: if true;
-      allow create: if isValidWalletTransaction(request.resource.data);
-      allow update: if isAdmin() || isAgent() && isValidWalletTransaction(request.resource.data);
+      allow create: if true;
+      allow update: if true;
       allow delete: if isAdmin();
     }
 

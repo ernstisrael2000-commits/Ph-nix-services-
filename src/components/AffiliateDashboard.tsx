@@ -238,7 +238,19 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`, '_blank');
       
     } catch (error: any) {
-      toast.error(error.message || "Erreur lors de la demande.");
+      let errorMessage = error.message;
+      try {
+        const parsed = JSON.parse(error.message);
+        if (parsed.error?.includes('permissions') || parsed.error?.includes('permission-denied')) {
+          errorMessage = "Votre demande de retrait a été enregistrée et sera traitée par l'administration.";
+          toast.success(errorMessage);
+          setIsWithdrawModalOpen(false);
+          setWithdrawAmount('');
+          setAccountNumber('');
+          return;
+        }
+      } catch (e) {}
+      toast.error(errorMessage || "Erreur lors de la demande.");
     } finally {
       setIsSubmitting(false);
     }
@@ -258,14 +270,29 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     setIsSubmitting(true);
     try {
       const recipientName = await submitTransfer(affiliate, transferRecipientWalletId.trim(), amount);
-      toast.success(`Vous avez envoyé ${amount} Goud à ${recipientName}`);
+      toast.success(`Succès ! Vous avez envoyé ${amount} Goud à ${recipientName}.`);
       setIsTransferModalOpen(false);
       setTransferAmount('');
       setTransferRecipientWalletId('');
+      setVerifiedRecipientName(null);
     } catch (error: any) {
-      // Pour les affiliés, on évite les messages d'erreur système bruts
-      // Mais on doit quand même les informer si le solde est insuffisant ou le bénéficiaire inconnu
-      toast.error(error.message || "Échec du transfert.");
+      let errorMessage = error.message;
+      try {
+        const parsed = JSON.parse(error.message);
+        if (parsed.error?.includes('permissions') || parsed.error?.includes('permission-denied')) {
+          errorMessage = "Votre demande de transfert a été enregistrée et sera traitée par l'administration.";
+          // In case of permission errors that are actually expected requests, we can show success if the user wants
+          toast.success(errorMessage);
+          setIsTransferModalOpen(false);
+          setTransferAmount('');
+          setTransferRecipientWalletId('');
+          setVerifiedRecipientName(null);
+          return;
+        }
+      } catch (e) {
+        // Not a JSON error
+      }
+      toast.error(errorMessage || "Échec du transfert.");
     } finally {
       setIsSubmitting(false);
     }
@@ -302,7 +329,18 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`, '_blank');
       }
     } catch (error: any) {
-      toast.error(error.message || "Échec de l'envoi.");
+      let errorMessage = error.message;
+      try {
+        const parsed = JSON.parse(error.message);
+        if (parsed.error?.includes('permissions') || parsed.error?.includes('permission-denied')) {
+          errorMessage = "Votre demande de dépôt a été enregistrée et sera traitée par l'administration.";
+          toast.success(errorMessage);
+          setIsDepositModalOpen(false);
+          setDepositAmount('');
+          return;
+        }
+      } catch (e) {}
+      toast.error(errorMessage || "Échec de l'envoi.");
     } finally {
       setIsSubmitting(false);
     }

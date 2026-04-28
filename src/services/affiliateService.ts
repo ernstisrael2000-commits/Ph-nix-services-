@@ -1118,18 +1118,22 @@ export const submitTransfer = async (sender: Affiliate, recipientWalletId: strin
   if (recipient.id === sender.id) throw new Error("Vous ne pouvez pas vous envoyer d'argent à vous-même.");
 
   // Create a pending transfer transaction
-  await addDoc(collection(db, 'wallet_transactions'), {
-    affiliateId: sender.id,
-    type: 'transfer',
-    amount: amount,
-    status: 'pending',
-    description: `Demande de transfert vers ${recipient.name} (${recipientWalletId})`,
-    relatedAffiliateId: recipient.id,
-    relatedAffiliateName: recipient.name,
-    recipientWalletId: recipientWalletId,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  });
+  try {
+    await addDoc(collection(db, 'wallet_transactions'), {
+      affiliateId: sender.id,
+      type: 'transfer',
+      amount: amount,
+      status: 'pending',
+      description: `Demande de transfert vers ${recipient.name} (${recipientWalletId})`,
+      relatedAffiliateId: recipient.id,
+      relatedAffiliateName: recipient.name,
+      recipientWalletId: recipientWalletId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    handleFirestoreError(error, 'create', 'wallet_transactions', auth);
+  }
 
   return recipient.name;
 };
@@ -1209,16 +1213,20 @@ export const rejectTransfer = async (transactionId: string) => {
 export const submitDepositRequest = async (affiliate: Affiliate, amount: number, method: string) => {
   if (amount <= 0) throw new Error("Montant invalide.");
 
-  await addDoc(collection(db, 'wallet_transactions'), {
-    affiliateId: affiliate.id,
-    type: 'deposit',
-    amount: amount,
-    status: 'pending',
-    method: method,
-    description: `Demande de dépôt via ${method}`,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  });
+  try {
+    await addDoc(collection(db, 'wallet_transactions'), {
+      affiliateId: affiliate.id,
+      type: 'deposit',
+      amount: amount,
+      status: 'pending',
+      method: method,
+      description: `Demande de dépôt via ${method}`,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    handleFirestoreError(error, 'create', 'wallet_transactions', auth);
+  }
 };
 
 /**
