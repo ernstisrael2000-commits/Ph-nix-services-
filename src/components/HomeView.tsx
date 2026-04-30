@@ -460,18 +460,20 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
         </div>
       </section>
 
+      {/* Games Dialog */}
       <Dialog open={isGamesDialogOpen} onOpenChange={setIsGamesDialogOpen}>
-        <DialogContent className="w-[94%] sm:max-w-[800px] max-h-[92vh] overflow-y-auto p-0 gap-0 border-0 shadow-2xl custom-scrollbar rounded-[1.5rem] sm:rounded-[2rem]">
-          <DialogHeader className="p-6 sm:p-8 bg-primary text-white rounded-t-[1.5rem] sm:rounded-t-[2rem] sticky top-0 z-10 shadow-md">
-            <DialogTitle className="text-2xl font-black flex items-center gap-2">
-              <Gamepad2 className="h-6 w-6 text-white" />
-              Récapitulatif Jeux
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl flex items-center gap-2">
+              <Gamepad2 className="h-6 w-6 text-purple-600" />
+              Top-up Jeux
             </DialogTitle>
-            <DialogDescription className="text-white/80 font-medium">
-              Explorez tous nos jeux disponibles.
+            <DialogDescription>
+              Choisissez votre jeu préféré pour effectuer une recharge.
             </DialogDescription>
           </DialogHeader>
-          <div className="p-4 sm:p-8">
+          
+          {gamesLoading ? (
             <div className="flex justify-center py-10">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600" />
             </div>
@@ -542,18 +544,20 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
         </DialogContent>
       </Dialog>
       
+      {/* Cards Dialog */}
       <Dialog open={isCardsDialogOpen} onOpenChange={setIsCardsDialogOpen}>
-        <DialogContent className="w-[94%] sm:max-w-[800px] max-h-[92vh] overflow-y-auto p-0 gap-0 border-0 shadow-2xl custom-scrollbar rounded-[1.5rem] sm:rounded-[2rem]">
-          <DialogHeader className="p-6 sm:p-8 bg-emerald-600 text-white rounded-t-[1.5rem] sm:rounded-t-[2rem] sticky top-0 z-10 shadow-md">
-            <DialogTitle className="text-2xl font-black flex items-center gap-2">
-              <CreditCard className="h-6 w-6" />
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl flex items-center gap-2">
+              <CreditCard className="h-6 w-6 text-emerald-600" />
               Recharge Cartes
             </DialogTitle>
-            <DialogDescription className="text-white/80 font-medium">
+            <DialogDescription>
               Choisissez une carte pour recharger votre compte.
             </DialogDescription>
           </DialogHeader>
-          <div className="p-4 sm:p-8">
+          
+          {cardsLoading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="h-10 w-10 animate-spin text-emerald-600" />
             </div>
