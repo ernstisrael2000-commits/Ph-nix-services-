@@ -219,8 +219,12 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       return;
     }
 
-    if (amount < 20) {
-      toast.error("Le montant minimum de retrait est de 20 $.");
+    const exchangeRate = settings?.exchangeRate || 146;
+    const minWithdrawGourdes = 20;
+    const minWithdrawUSD = minWithdrawGourdes / exchangeRate;
+
+    if (amount < minWithdrawUSD) {
+      toast.error(`Le montant minimum de retrait est de ${minWithdrawGourdes} Gourdes (soit ${minWithdrawUSD.toFixed(2)} $).`);
       return;
     }
 
@@ -407,17 +411,17 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 )}
               </Button>
             } />
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Bell className="h-5 w-5 text-blue-600" />
-                  Notifications
-                </DialogTitle>
-                <DialogDescription>
-                  Restez informé de vos gains et de votre progression.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="md:max-h-[60vh] overflow-y-auto py-4 space-y-3 overscroll-contain">
+          <DialogContent className="w-[94%] sm:max-w-md p-0 overflow-y-auto max-h-[92vh] rounded-[2rem] border-0 shadow-2xl custom-scrollbar">
+            <DialogHeader className="p-6 bg-blue-600 text-white rounded-t-[2rem] sticky top-0 z-10">
+              <DialogTitle className="flex items-center gap-2">
+                <Bell className="h-5 w-5 text-white" />
+                Notifications
+              </DialogTitle>
+              <DialogDescription className="text-white/70">
+                Restez informé de vos gains et de votre progression.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="p-6 space-y-3">
                 {notificationsLoading ? (
                   <div className="flex justify-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
@@ -555,7 +559,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
               <div className="space-y-1 mt-4">
                 <div className="flex items-center gap-2 mb-1">
-                   <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">Solde Disponible</p>
+                   <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">Solde Principal (USD)</p>
                 </div>
                 <div className="flex flex-col">
                   <div className="flex items-baseline gap-3">
@@ -566,11 +570,11 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                     </motion.h3>
                     <span className="text-2xl font-black text-emerald-600/40 uppercase tracking-tighter">$</span>
                   </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <p className="text-sm font-bold text-emerald-600/70 tracking-tight">
-                      ≈ {((affiliate.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
+                  <div className="flex items-center gap-2 mt-1 bg-emerald-50 w-fit px-3 py-1 rounded-full border border-emerald-100">
+                    <p className="text-sm font-black text-emerald-700 tracking-tight">
+                      {((affiliate.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
                     </p>
-                    <ArrowUpRight className="h-3 w-3 text-emerald-400" />
+                    <ArrowUpRight className="h-3 w-3 text-emerald-500" />
                   </div>
                 </div>
               </div>
@@ -610,14 +614,14 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                   <span className="text-[10px] font-black uppercase tracking-widest">Dépôt</span>
                 </Button>
               } />
-              <DialogContent className="rounded-[2.5rem] p-8 border-0 shadow-2xl">
-                <DialogHeader>
+              <DialogContent className="w-[94%] sm:max-w-lg p-0 overflow-y-auto max-h-[92vh] rounded-[2.5rem] border-0 shadow-2xl custom-scrollbar">
+                <DialogHeader className="p-8 bg-emerald-600 text-white rounded-t-[2.5rem] sticky top-0 z-10 transition-all">
                   <DialogTitle className="text-2xl font-black">Recharger mon Compte</DialogTitle>
-                  <DialogDescription className="font-medium">
+                  <DialogDescription className="font-medium text-white/70">
                     Alimentez votre solde Neopay via l'un de nos partenaires.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-6 py-6">
+                <div className="p-8 space-y-6">
                   <div className="space-y-3">
                     <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Méthode de Recharge</Label>
                     <Select value={depositMethod} onValueChange={setDepositMethod}>
@@ -715,14 +719,14 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                   <span className="text-[10px] font-black uppercase tracking-widest">Retrait</span>
                 </Button>
               } />
-              <DialogContent className="rounded-[2.5rem] p-8 border-0 shadow-2xl">
-                <DialogHeader>
+              <DialogContent className="w-[94%] sm:max-w-lg p-0 overflow-y-auto max-h-[92vh] rounded-[2.5rem] border-0 shadow-2xl custom-scrollbar">
+                <DialogHeader className="p-8 bg-indigo-600 text-white rounded-t-[2.5rem] sticky top-0 z-10 transition-all">
                   <DialogTitle className="text-2xl font-black">Retrait de Fonds</DialogTitle>
-                  <DialogDescription className="font-medium">
+                  <DialogDescription className="font-medium text-white/70">
                     Choisissez votre méthode de retrait préférée.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-6 py-6">
+                <div className="p-8 space-y-6">
                   <div className="space-y-3">
                     <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Méthode de Retrait</Label>
                     <Select value={withdrawMethod} onValueChange={(v: any) => setWithdrawMethod(v)}>
@@ -800,14 +804,14 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                   <span className="text-[10px] font-black uppercase tracking-widest">Transfert</span>
                 </Button>
               } />
-              <DialogContent className="rounded-[2.5rem] p-8 border-0 shadow-2xl">
-                <DialogHeader>
+              <DialogContent className="w-[94%] sm:max-w-lg p-0 overflow-y-auto max-h-[92vh] rounded-[2.5rem] border-0 shadow-2xl custom-scrollbar">
+                <DialogHeader className="p-8 bg-blue-600 text-white rounded-t-[2.5rem] sticky top-0 z-10 transition-all">
                   <DialogTitle className="text-2xl font-black">Transfert Entre Affiliés</DialogTitle>
-                  <DialogDescription className="font-medium">
+                  <DialogDescription className="font-medium text-white/70">
                     Envoyez des Dollars ($) instantanément à un autre membre Neopay.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-6 py-6">
+                <div className="p-8 space-y-6">
                   <div className="space-y-3">
                     <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">ID Wallet du Destinataire</Label>
                     <div className="relative">
@@ -870,7 +874,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
            
            <div className="space-y-8">
               <div>
-                <p className="text-[10px] font-black text-emerald-600/40 uppercase tracking-[0.2em] mb-6">Récapitulatif Revenus</p>
+                <p className="text-[10px] font-black text-emerald-600/40 uppercase tracking-[0.2em] mb-6">Récapitulatif Revenus (HTG)</p>
                 <div className="space-y-2">
                   <div className="flex justify-between items-center py-4 border-b border-gray-50 group/row px-2 rounded-2xl hover:bg-emerald-50/30 transition-colors">
                     <div className="flex items-center gap-4">
@@ -879,7 +883,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                       </div>
                       <div>
                         <p className="text-[10px] font-black text-gray-400 uppercase">Gains Cumulés</p>
-                        <p className="text-xl font-black text-emerald-950">{(affiliate.totalEarnings || 0).toLocaleString()} <span className="text-xs font-bold text-gray-300">$</span></p>
+                        <p className="text-xl font-black text-emerald-950">{((affiliate.totalEarnings || 0) * (settings?.exchangeRate || 146)).toLocaleString()} <span className="text-xs font-bold text-gray-300">HTG</span></p>
                       </div>
                     </div>
                   </div>
@@ -891,7 +895,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                       </div>
                       <div>
                         <p className="text-[10px] font-black text-gray-400 uppercase">Revenus Directs</p>
-                        <p className="text-xl font-black text-emerald-950">{(affiliate.directRevenue || 0).toLocaleString()} <span className="text-xs font-bold text-gray-300">$</span></p>
+                        <p className="text-xl font-black text-emerald-950">{((affiliate.directRevenue || 0) * (settings?.exchangeRate || 146)).toLocaleString()} <span className="text-xs font-bold text-gray-300">HTG</span></p>
                       </div>
                     </div>
                   </div>
@@ -903,7 +907,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                       </div>
                       <div>
                         <p className="text-[10px] font-black text-gray-400 uppercase">Total Retiré</p>
-                        <p className="text-xl font-black text-indigo-600">{(affiliate.totalWithdrawn || 0).toLocaleString()} <span className="text-xs font-bold text-gray-300">$</span></p>
+                        <p className="text-xl font-black text-indigo-600">{((affiliate.totalWithdrawn || 0) * (settings?.exchangeRate || 146)).toLocaleString()} <span className="text-xs font-bold text-gray-300">HTG</span></p>
                       </div>
                     </div>
                   </div>
@@ -1052,23 +1056,23 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                       Vider
                     </Button>
                   } />
-                  <DialogContent className="max-w-sm rounded-[2.5rem] p-8 border-0 shadow-2xl">
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center gap-3 text-xl font-black">
-                        <AlertCircle className="h-6 w-6 text-red-500" />
-                        Action Critique
-                      </DialogTitle>
-                      <DialogDescription className="font-bold py-2 text-gray-500">
-                        Cette opération supprimera définitivement votre historique d'opérations.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter className="gap-2 sm:gap-3 mt-6">
-                      <Button variant="outline" onClick={() => setIsClearHistoryConfirmOpen(false)} className="h-12 rounded-2xl font-bold flex-1 border-gray-100">Retour</Button>
-                      <Button variant="destructive" onClick={handleClearTransactionHistory} disabled={isSubmitting} className="h-12 rounded-2xl font-black bg-red-600 flex-1 hover:bg-red-700 shadow-lg shadow-red-200">
-                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Effacer"}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
+                      <DialogContent className="w-[94%] sm:max-w-sm rounded-[2.5rem] p-0 overflow-y-auto max-h-[92vh] border-0 shadow-2xl custom-scrollbar">
+                        <DialogHeader className="p-8 bg-red-600 text-white rounded-t-[2.5rem] sticky top-0 z-10">
+                          <DialogTitle className="flex items-center gap-3 text-xl font-black">
+                            <AlertCircle className="h-6 w-6 text-white" />
+                            Action Critique
+                          </DialogTitle>
+                          <DialogDescription className="font-bold py-2 text-white/70">
+                            Cette opération supprimera définitivement votre historique d'opérations.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter className="gap-2 sm:gap-3 p-8 bg-gray-50 border-t rounded-b-[2.5rem]">
+                          <Button variant="outline" onClick={() => setIsClearHistoryConfirmOpen(false)} className="h-12 rounded-2xl font-bold flex-1 border-gray-100 bg-white">Retour</Button>
+                          <Button variant="destructive" onClick={handleClearTransactionHistory} disabled={isSubmitting} className="h-12 rounded-2xl font-black bg-red-600 flex-1 hover:bg-red-700 shadow-lg shadow-red-200">
+                            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Effacer"}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
                 </Dialog>
               )}
             </div>

@@ -1257,7 +1257,7 @@ const AffiliateEditForm = ({
   };
 
   return (
-    <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-[2.5rem] border-0 shadow-2xl">
+    <DialogContent className="w-[94%] sm:max-w-[700px] max-h-[92vh] flex flex-col p-0 overflow-y-auto rounded-[2.5rem] border-0 shadow-2xl custom-scrollbar">
       <div className="relative h-32 bg-gradient-to-r from-primary/20 via-accent-light to-primary/10 p-6 flex flex-col justify-end">
         <div className="absolute top-4 right-6 flex gap-2">
           {editingAffiliate && (
@@ -7284,16 +7284,15 @@ const AffiliateEditForm = ({
         </DialogContent>
       </Dialog>
 
-      {/* Edit/Add Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>{editingParcel ? 'Modifier le colis' : 'Ajouter un nouveau colis'}</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="w-[94%] sm:max-w-[500px] p-0 overflow-y-auto max-h-[92vh] rounded-[2.5rem] border-0 shadow-2xl custom-scrollbar">
+          <DialogHeader className="p-8 bg-primary text-white rounded-t-[2.5rem] sticky top-0 z-10 shadow-lg">
+            <DialogTitle className="text-2xl font-black">{editingParcel ? 'Modifier le colis' : 'Ajouter un nouveau colis'}</DialogTitle>
+            <DialogDescription className="text-white/70 font-medium">
               Remplissez les informations ci-dessous pour mettre à jour le suivi.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="p-8 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
               <Label htmlFor="tracking" className="sm:text-right">N° Suivi</Label>
               <Input 
@@ -7444,58 +7443,77 @@ const AffiliateEditForm = ({
 
       {/* Quick Credit Dialog */}
       <Dialog open={isQuickCreditDialogOpen} onOpenChange={setIsQuickCreditDialogOpen}>
-        <DialogContent className="w-[94%] sm:max-w-[400px] p-0 overflow-y-auto max-h-[92vh] rounded-[2rem] border-0 shadow-2xl custom-scrollbar">
-          <DialogHeader className="p-6 bg-emerald-600 text-white rounded-t-[2rem] sticky top-0 z-10">
-            <DialogTitle className="flex items-center gap-2 text-2xl font-black">
-              <PlusCircle className="h-6 w-6" />
-              Ajout Rapide d'Argent
+        <DialogContent className="w-[94%] sm:max-w-[420px] p-0 overflow-y-auto max-h-[92vh] rounded-[2.5rem] border-0 shadow-2xl custom-scrollbar">
+          <DialogHeader className="p-8 bg-emerald-600 text-white rounded-t-[2.5rem] sticky top-0 z-10 shadow-lg">
+            <DialogTitle className="flex items-center gap-3 text-2xl font-black uppercase tracking-tight">
+              <PlusCircle className="h-7 w-7" />
+              Ajouter des Fonds
             </DialogTitle>
-            <DialogDescription className="text-emerald-100 opacity-90">
-              Ajouter des Gouds au compte de {selectedAffiliateForCredit?.name}.
+            <DialogDescription className="text-emerald-100 font-bold uppercase tracking-[0.1em] text-[10px] opacity-80">
+               Conversion Automatique Gourdes → Dollars
             </DialogDescription>
           </DialogHeader>
-          <div className="p-8 space-y-6">
-            <div className="space-y-3">
-              <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest text-center">Montant à Ajouter (HTG)</p>
-              <div className="relative">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-gray-300">G</div>
+          <div className="p-8 space-y-8 bg-white">
+            <div className="text-center p-6 bg-emerald-50/50 rounded-3xl border border-emerald-100 flex flex-col items-center">
+               <p className="text-[10px] font-black text-emerald-600/60 uppercase tracking-widest mb-2">Compte Affilié</p>
+               <p className="text-xl font-black text-emerald-950 uppercase tracking-tight leading-tight">{selectedAffiliateForCredit?.name}</p>
+               <div className="mt-3 flex items-center gap-2 px-3 py-1 bg-white rounded-full border border-emerald-100">
+                  <span className="text-[9px] font-black text-emerald-600 uppercase">Solde Actuel:</span>
+                  <span className="text-xs font-black text-emerald-950">{selectedAffiliateForCredit?.balance.toLocaleString()} $</span>
+               </div>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex justify-between items-center px-1">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant en Gourdes (HTG)</Label>
+                <div className="flex items-center gap-1.5 grayscale opacity-50">
+                   <Landmark className="h-3 w-3" />
+                   <span className="text-[9px] font-black uppercase tracking-tighter">HTG Only</span>
+                </div>
+              </div>
+              <div className="relative group">
+                <div className="absolute left-5 top-1/2 -translate-y-1/2 font-black text-emerald-300 text-xl group-focus-within:text-emerald-500 transition-colors">G</div>
                 <Input 
                   type="number"
-                  value={quickCreditAmount}
-                  onChange={(e) => setQuickCreditAmount(Number(e.target.value))}
+                  value={quickCreditAmount || ''}
+                  onChange={(e) => setQuickCreditAmount(parseFloat(e.target.value) || 0)}
                   placeholder="0.00"
-                  className="pl-12 h-14 rounded-2xl text-2xl font-black border-emerald-100 focus:ring-emerald-200"
+                  className="pl-14 h-16 rounded-3xl text-3xl font-black border-emerald-100 focus:ring-4 focus:ring-emerald-50 bg-gray-50/30 transition-all text-center tracking-tighter"
                 />
               </div>
-              <div className="flex flex-col items-center gap-1">
-                <p className="text-[11px] text-gray-400 text-center">Conversion: <span className="font-bold text-emerald-600">{(quickCreditAmount / (settings?.exchangeRate || 146)).toFixed(2)} $</span></p>
-                <p className="text-[9px] text-gray-300 italic">Taux actuel: 1$ = {settings?.exchangeRate || 146} HTG</p>
+              
+              <div className="flex flex-col items-center gap-2 p-4 rounded-3xl bg-emerald-500/5 border border-emerald-500/10 scale-95 transform">
+                <p className="text-gray-400 text-[9px] font-black uppercase tracking-widest leading-none">Conversion en Temps Réel</p>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-3xl font-black text-emerald-700">{(quickCreditAmount / (settings?.exchangeRate || 146)).toFixed(2)}</p>
+                  <span className="text-sm font-black text-emerald-600/40 uppercase">$ USD</span>
+                </div>
+                <p className="text-[8px] text-gray-300 font-bold italic">Taux appliqué: 1$ = {settings?.exchangeRate || 146} HTG</p>
               </div>
-              <p className="text-[11px] text-gray-400 text-center pt-2 border-t border-gray-50">Solde actuel de {selectedAffiliateForCredit?.name}: <span className="font-bold text-dark">{selectedAffiliateForCredit?.balance} $</span></p>
             </div>
 
             <div className="flex gap-2 flex-wrap justify-center">
-              {[50, 100, 250, 500, 1000].map(amt => (
+              {[100, 500, 1000, 2500, 5000].map(amt => (
                 <Button 
-                  key={amt} 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setQuickCreditAmount(amt)}
-                  className="rounded-xl border-emerald-100 hover:bg-emerald-50 text-emerald-600 font-bold"
+                   key={amt} 
+                   variant="outline" 
+                   size="sm" 
+                   onClick={() => setQuickCreditAmount(amt)}
+                   className={`rounded-xl border-emerald-100 font-bold ${quickCreditAmount === amt ? 'bg-emerald-100 border-emerald-200 text-emerald-700 shadow-sm' : 'text-emerald-600 hover:bg-emerald-50'}`}
                 >
-                  +{amt}
+                  +{amt.toLocaleString()} G
                 </Button>
               ))}
             </div>
           </div>
           <DialogFooter className="p-8 border-t bg-gray-50 rounded-b-[2rem] gap-2">
-            <Button variant="outline" onClick={() => setIsQuickCreditDialogOpen(false)} className="rounded-xl h-12 font-bold">Annuler</Button>
+            <Button variant="outline" onClick={() => setIsQuickCreditDialogOpen(false)} className="rounded-xl h-12 font-bold shadow-sm">Annuler</Button>
             <Button 
-              onClick={handleQuickCredit} 
-              disabled={isSaving || quickCreditAmount <= 0}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-12 font-black px-8 shadow-lg shadow-emerald-200 border-0 flex-1"
+               onClick={handleQuickCredit} 
+               disabled={isSaving || quickCreditAmount <= 0}
+               className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-12 font-black px-8 shadow-lg shadow-emerald-200 border-0 flex-1 group"
             >
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+              {isSaving ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <CheckCircle2 className="h-5 w-5 mr-2 group-hover:scale-110 transition-transform" />}
               Confirmer l'ajout
             </Button>
           </DialogFooter>
