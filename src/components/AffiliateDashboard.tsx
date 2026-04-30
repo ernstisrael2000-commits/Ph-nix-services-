@@ -64,7 +64,9 @@ import {
   Download,
   AlertTriangle,
   Fingerprint,
-  Copy
+  Copy,
+  Medal,
+  Calendar
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -450,6 +452,72 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
             <LogOut className="h-4 w-4" />
             <span className="hidden sm:inline">Déconnexion</span>
           </Button>
+          {/* Level Progress Card - New Addition for 'Beautiful' design */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.1 }}
+            className="p-8 rounded-[2.5rem] bg-white border border-gray-100 shadow-xl relative overflow-hidden group"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 rounded-xl ${getLevelColor(levelInfo?.level || 'Bronze')} border shadow-sm`}>
+                  <Trophy className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Niveau Actuel</h4>
+                  <p className="text-xl font-black text-dark mt-1">{levelInfo?.level || 'Bronze'}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Score Total</p>
+                <p className="text-lg font-black text-emerald-600 mt-1">{affiliate.points || 0} PTS</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex justify-between items-end mb-1">
+                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                  Progression vers {levelInfo?.level === 'VIP' ? 'Légende' : 'Niveau Suivant'}
+                </p>
+                <p className="text-sm font-black text-dark">{Math.round(levelInfo?.progress || 0)}%</p>
+              </div>
+              <div className="h-4 w-full bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${levelInfo?.progress || 0}%` }}
+                  transition={{ duration: 1.5, ease: "easeOut" }}
+                  className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                />
+              </div>
+              {levelInfo?.nextThreshold !== Infinity && (
+                <p className="text-[9px] text-gray-400 font-bold text-center">
+                  Plus que <span className="text-emerald-600">{(levelInfo?.nextThreshold || 0) - (affiliate.points || 0)} points</span> pour débloquer de nouveaux avantages.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-8 grid grid-cols-2 gap-4 pb-1">
+               <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                    <TrendingUp className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-[8px] font-black text-gray-400 uppercase">Growth</p>
+                    <p className="text-xs font-black text-dark">+12% cette semaine</p>
+                  </div>
+               </div>
+               <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+                    <Star className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-[8px] font-black text-gray-400 uppercase">Status</p>
+                    <p className="text-xs font-black text-dark">Verified Partner</p>
+                  </div>
+               </div>
+            </div>
+          </motion.div>
         </div>
       </div>
 
@@ -459,82 +527,77 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="relative h-64 w-full max-w-md mx-auto sm:max-w-none sm:h-72 rounded-[2.5rem] bg-slate-900 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] overflow-hidden p-8 text-white group hover:scale-[1.01] transition-all duration-500"
+            className="relative h-64 w-full max-w-md mx-auto sm:max-w-none sm:h-72 rounded-[2.5rem] bg-white border border-emerald-100 shadow-[0_20px_50px_-15px_rgba(16,185,129,0.15)] overflow-hidden p-8 text-dark group hover:scale-[1.01] transition-all duration-500"
           >
             {/* Card Texture & Effects */}
-            <div className="absolute inset-0 opacity-10 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]" />
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-transparent to-indigo-900/40" />
-            <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/10 rounded-full blur-[80px]" />
-            <div className="absolute top-0 left-0 w-full h-full bg-[linear-gradient(110deg,transparent_40%,rgba(255,255,255,0.05)_45%,rgba(255,255,255,0.1)_50%,rgba(255,255,255,0.05)_55%,transparent_60%)] bg-[length:200%_100%] animate-[shimmer_6s_infinite] pointer-events-none" />
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]" />
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-emerald-600/10" />
+            <div className="absolute -top-24 -right-24 w-64 h-64 bg-emerald-500/5 rounded-full blur-[80px]" />
             
             <div className="relative h-full flex flex-col justify-between">
               <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-white/30 text-[9px] font-black uppercase tracking-[0.4em] mb-1 drop-shadow-sm">Neopay Titanium</p>
-                  <div className="flex items-center gap-3">
-                    <div className="h-8 w-11 bg-gradient-to-br from-yellow-200 via-yellow-500 to-yellow-700 rounded-md shadow-lg flex flex-col justify-center px-1.5 gap-0.5 overflow-hidden">
-                      <div className="h-[1px] w-full bg-black/20" />
-                      <div className="h-[1px] w-full bg-black/20" />
-                      <div className="h-[1px] w-full bg-black/20" />
-                    </div>
-                    <span className="text-[10px] font-black text-white/20 tracking-widest flex items-center gap-1">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                      SECURE CHIP
-                    </span>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-emerald-600 shadow-lg shadow-emerald-200">
+                    <Wallet className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-emerald-600 text-[10px] font-black uppercase tracking-[0.4em] drop-shadow-sm leading-none">NEOPAY BANK</p>
+                    <p className="text-[8px] font-bold text-gray-400 mt-1 uppercase tracking-widest">Premium Affiliate Account</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="flex -space-x-4 opacity-30">
-                    <div className="w-10 h-10 rounded-full bg-red-500" />
-                    <div className="w-10 h-10 rounded-full bg-orange-500" />
+                  <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-100 rounded-full">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-[9px] font-black text-emerald-700 tracking-wider">ACTIVE</span>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-1">
+              <div className="space-y-1 mt-4">
                 <div className="flex items-center gap-2 mb-1">
-                   <div className="w-1 h-1 rounded-full bg-white/40" />
-                   <p className="text-white/50 text-[10px] font-black uppercase tracking-widest">Solde Courant</p>
+                   <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">Solde Disponible</p>
                 </div>
                 <div className="flex flex-col">
                   <div className="flex items-baseline gap-3">
                     <motion.h3 
-                      animate={{ textShadow: ["0 0 0px rgba(255,255,255,0)", "0 0 15px rgba(255,255,255,0.3)", "0 0 0px rgba(255,255,255,0)"] }}
-                      transition={{ duration: 3, repeat: Infinity }}
-                      className="text-5xl sm:text-6xl font-black tracking-tight text-white"
+                      className="text-5xl sm:text-6xl font-black tracking-tight text-emerald-950 font-sans"
                     >
                       {affiliate.balance.toLocaleString()}
                     </motion.h3>
-                    <span className="text-lg font-black text-white/30 uppercase tracking-tighter">$</span>
+                    <span className="text-2xl font-black text-emerald-600/40 uppercase tracking-tighter">$</span>
                   </div>
-                  <p className="text-sm font-bold text-white/40 tracking-tight">
-                    ≈ {((affiliate.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
-                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-sm font-bold text-emerald-600/70 tracking-tight">
+                      ≈ {((affiliate.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
+                    </p>
+                    <ArrowUpRight className="h-3 w-3 text-emerald-400" />
+                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row justify-between items-end gap-2 sm:gap-0">
+              <div className="flex flex-col sm:flex-row justify-between items-end gap-2 sm:gap-0 mt-auto pt-4 border-t border-emerald-50">
                 <div className="w-full sm:w-auto">
-                  <p className="text-white/20 text-[8px] font-black uppercase tracking-[0.2em] mb-1">Account Holder</p>
-                  <p className="text-lg font-bold tracking-wider text-white uppercase font-sans">{affiliate.name}</p>
+                  <p className="text-gray-300 text-[8px] font-black uppercase tracking-[0.2em] mb-1">Détenteur du Compte</p>
+                  <p className="text-lg font-black tracking-wider text-emerald-950 uppercase font-sans truncate max-w-[200px]">{affiliate.name}</p>
                 </div>
                 <div className="w-full sm:w-auto text-right">
                   <div className="flex items-center justify-end gap-2 mb-1">
-                    <p className="text-white/20 text-[8px] font-black uppercase tracking-[0.2em]">Wallet Serial</p>
+                    <p className="text-gray-300 text-[8px] font-black uppercase tracking-[0.2em]">Wallet Serial ID</p>
                     <button 
                       onClick={copyWalletId}
-                      className="p-1 rounded-md hover:bg-white/10 transition-colors text-white/40 hover:text-white"
+                      className="p-1 rounded-md hover:bg-emerald-50 transition-colors text-gray-300 hover:text-emerald-500"
                     >
                       <Copy className="h-3 w-3" />
                     </button>
                   </div>
-                  <p className="text-xl font-mono font-medium tracking-[0.3em] text-white/90">
+                  <p className="text-xl font-mono font-black tracking-[0.3em] text-emerald-900/40">
                     {affiliate.walletId ? affiliate.walletId.match(/.{1,4}/g)?.join(' ') : '.... ....'}
                   </p>
                 </div>
               </div>
             </div>
           </motion.div>
+
 
           {/* Quick Action Buttons */}
           <div className="grid grid-cols-3 gap-4">
@@ -800,47 +863,47 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         </div>
 
         {/* Global Income Summary Card */}
-        <Card className="border-0 shadow-2xl bg-dark text-white rounded-[2.5rem] overflow-hidden relative p-8 flex flex-col justify-between group">
+        <Card className="border border-emerald-50 shadow-xl bg-white text-dark rounded-[2.5rem] overflow-hidden relative p-8 flex flex-col justify-between group">
            <div className="absolute top-0 right-0 p-8">
-              <TrendingUp className="h-8 w-8 text-white/10 group-hover:rotate-12 transition-transform" />
+              <TrendingUp className="h-8 w-8 text-emerald-500/10 group-hover:rotate-12 transition-transform" />
            </div>
            
            <div className="space-y-8">
               <div>
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-6">Récapitulatif Revenus</p>
-                <div className="space-y-5">
-                  <div className="flex justify-between items-center py-4 border-b border-white/5 group/row">
+                <p className="text-[10px] font-black text-emerald-600/40 uppercase tracking-[0.2em] mb-6">Récapitulatif Revenus</p>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center py-4 border-b border-gray-50 group/row px-2 rounded-2xl hover:bg-emerald-50/30 transition-colors">
                     <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500 transition-colors group-hover/row:bg-orange-500 group-hover/row:text-white">
+                      <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 transition-colors group-hover/row:bg-emerald-500 group-hover/row:text-white">
                          <Trophy className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="text-[10px] font-black text-gray-500 uppercase">Total Gagné</p>
-                        <p className="text-xl font-black">{affiliate.totalEarnings || 0} <span className="text-[10px] opacity-40">G</span></p>
+                        <p className="text-[10px] font-black text-gray-400 uppercase">Gains Cumulés</p>
+                        <p className="text-xl font-black text-emerald-950">{(affiliate.totalEarnings || 0).toLocaleString()} <span className="text-xs font-bold text-gray-300">$</span></p>
                       </div>
                     </div>
                   </div>
                   
-                  <div className="flex justify-between items-center py-4 border-b border-white/5 group/row">
+                  <div className="flex justify-between items-center py-4 border-b border-gray-50 group/row px-2 rounded-2xl hover:bg-emerald-50/30 transition-colors">
                     <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 transition-colors group-hover/row:bg-emerald-500 group-hover/row:text-white">
-                         <Download className="h-5 w-5" />
+                      <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 transition-colors group-hover/row:bg-blue-500 group-hover/row:text-white">
+                         <TrendingUp className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="text-[10px] font-black text-gray-500 uppercase">Gains Directs</p>
-                        <p className="text-xl font-black">{affiliate.directRevenue || 0} <span className="text-[10px] opacity-40">G</span></p>
+                        <p className="text-[10px] font-black text-gray-400 uppercase">Revenus Directs</p>
+                        <p className="text-xl font-black text-emerald-950">{(affiliate.directRevenue || 0).toLocaleString()} <span className="text-xs font-bold text-gray-300">$</span></p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-center py-4 group/row">
+                  <div className="flex justify-between items-center py-4 group/row px-2 rounded-2xl hover:bg-emerald-50/30 transition-colors">
                     <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 transition-colors group-hover/row:bg-blue-500 group-hover/row:text-white">
+                      <div className="h-10 w-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-500 transition-colors group-hover/row:bg-indigo-50 group-hover/row:text-white">
                          <ArrowUpRight className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="text-[10px] font-black text-gray-500 uppercase">Total Retiré</p>
-                        <p className="text-xl font-black text-blue-400">{affiliate.totalWithdrawn || 0} <span className="text-[10px] opacity-40">G</span></p>
+                        <p className="text-[10px] font-black text-gray-400 uppercase">Total Retiré</p>
+                        <p className="text-xl font-black text-indigo-600">{(affiliate.totalWithdrawn || 0).toLocaleString()} <span className="text-xs font-bold text-gray-300">$</span></p>
                       </div>
                     </div>
                   </div>
@@ -848,18 +911,19 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
               </div>
            </div>
 
-           <div className="mt-8 p-6 bg-white/5 rounded-3xl border border-white/5 flex items-center justify-between">
+           <div className="mt-8 p-6 bg-emerald-50/30 rounded-3xl border border-emerald-50 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Users className="h-5 w-5 text-blue-400" />
-                <span className="text-sm font-black">{affiliate.referredClients || 0} <span className="text-xs text-white/40">Clients</span></span>
+                <Users className="h-5 w-5 text-emerald-600" />
+                <span className="text-sm font-black text-emerald-950">{affiliate.referredClients || 0} <span className="text-xs text-gray-400">Prospects</span></span>
               </div>
-              <div className="h-8 w-px bg-white/10"></div>
+              <div className="h-8 w-px bg-emerald-100"></div>
               <div className="flex items-center gap-3">
-                <Star className="h-4 w-4 text-amber-400" />
-                <span className="text-sm font-black">{affiliate.points || 0} <span className="text-xs text-white/40">Points</span></span>
+                <Star className="h-4 w-4 text-amber-500" />
+                <span className="text-sm font-black text-emerald-950">{affiliate.points || 0} <span className="text-xs text-gray-400">Score</span></span>
               </div>
            </div>
         </Card>
+
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -900,7 +964,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                     </div>
                     <div className="text-center">
                       <p className="font-black text-sm text-dark truncate w-24">{(monthlyRankings[1] || winnersQueue[1])?.name || '...'}</p>
-                      <p className="text-[10px] font-black text-gray-400 uppercase">250 G Bonus</p>
+                      <p className="text-[10px] font-black text-gray-400 uppercase">250 $ Bonus</p>
                     </div>
                     <div className="w-full h-16 bg-gray-50 rounded-t-2xl border-x border-t border-gray-100" />
                   </div>
@@ -916,7 +980,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                     </div>
                     <div className="text-center">
                       <p className="font-black text-lg text-dark truncate w-32">{(monthlyRankings[0] || winnersQueue[0])?.name || '...'}</p>
-                      <p className="text-xs font-black text-amber-600 uppercase">500 G Bonus Gold</p>
+                      <p className="text-xs font-black text-emerald-600 uppercase">500 $ Bonus Gold</p>
                     </div>
                     <div className="w-full h-28 bg-gradient-to-t from-amber-500 to-amber-400 rounded-t-3xl shadow-xl shadow-amber-200" />
                   </div>
@@ -931,7 +995,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                     </div>
                     <div className="text-center">
                       <p className="font-black text-sm text-dark truncate w-24">{(monthlyRankings[2] || winnersQueue[2])?.name || '...'}</p>
-                      <p className="text-[10px] font-black text-orange-400 uppercase">150 G Bonus</p>
+                      <p className="text-[10px] font-black text-orange-400 uppercase">150 $ Bonus</p>
                     </div>
                     <div className="w-full h-12 bg-orange-50 rounded-t-2xl border-x border-t border-orange-100" />
                   </div>
@@ -1020,11 +1084,11 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                   <div key={t.id} className="p-6 hover:bg-gray-50/50 transition-all group border-l-4 border-transparent hover:border-blue-500">
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex gap-4">
-                        <div className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 ${
-                          t.type === 'deposit' ? 'bg-emerald-50 text-emerald-600' :
-                          t.type === 'withdrawal' ? 'bg-indigo-50 text-indigo-600' :
-                          (t.type === 'transfer' || t.type === 'transfer_sent') ? 'bg-blue-50 text-blue-600' :
-                          'bg-amber-50 text-amber-600'
+                        <div className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${
+                          t.type === 'deposit' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                          t.type === 'withdrawal' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' :
+                          (t.type === 'transfer' || t.type === 'transfer_sent') ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                          'bg-amber-50 text-amber-600 border border-amber-100'
                         }`}>
                           {t.type === 'deposit' && <PlusCircle className="h-6 w-6" />}
                           {t.type === 'withdrawal' && <MinusCircle className="h-6 w-6" />}
@@ -1032,17 +1096,20 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                           {t.type === 'transfer_received' && <Download className="h-6 w-6" />}
                         </div>
                         <div>
-                          <p className="font-black text-lg text-dark leading-none">
+                          <p className="font-black text-lg text-emerald-950 leading-none">
                             {t.type === 'transfer' || t.type === 'transfer_sent' || t.type === 'withdrawal' ? '-' : '+'}
-                            {t.amount.toLocaleString()} G
+                            {t.amount.toLocaleString()} <span className="text-[10px] text-gray-300 font-bold">$</span>
                           </p>
-                          <p className="text-xs font-bold text-gray-500 mt-1">{t.description}</p>
+                          <p className="text-xs font-bold text-gray-500 mt-1 capitalize">{t.description}</p>
                           <div className="flex items-center gap-3 mt-2">
-                             <span className="text-[10px] font-black text-gray-400">
-                               {t.createdAt?.toDate ? format(t.createdAt.toDate(), 'dd MMM yyyy HH:mm', { locale: fr }) : ''}
-                             </span>
+                             <div className="flex items-center gap-1.5 grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all">
+                               <Calendar className="h-3 w-3 text-gray-400" />
+                               <span className="text-[10px] font-black text-gray-400">
+                                 {t.createdAt?.toDate ? format(t.createdAt.toDate(), 'dd MMM yyyy • HH:mm', { locale: fr }) : ''}
+                               </span>
+                             </div>
                              {t.method && (
-                               <Badge variant="outline" className="h-4 text-[8px] font-black uppercase bg-gray-50 border-gray-100">
+                               <Badge variant="outline" className="h-4 text-[8px] font-black uppercase bg-white border-emerald-50 text-emerald-600">
                                  {t.method}
                                </Badge>
                              )}

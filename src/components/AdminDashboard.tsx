@@ -723,13 +723,15 @@ const AffiliateGridView = React.memo(({
   searchQuery, 
   onEdit,
   onCredit,
-  onSale
+  onSale,
+  settings
 }: { 
   affiliates: any[], 
   searchQuery: string, 
   onEdit: (a: any) => void,
   onCredit: (a: any) => void,
-  onSale: (a: any) => void
+  onSale: (a: any) => void,
+  settings: any
 }) => {
   const filtered = React.useMemo(() => {
     if (!searchQuery.trim()) return affiliates;
@@ -4801,22 +4803,24 @@ const AffiliateEditForm = ({
                            </div>
                          </Card>
 
-                         <Card className="rounded-[2.5rem] bg-emerald-600 text-white p-8 shadow-2xl shadow-emerald-600/20 relative overflow-hidden">
-                            <div className="absolute -bottom-10 -right-10 h-40 w-40 bg-white/10 rounded-full blur-2xl"></div>
+                         <Card className="rounded-[2.5rem] bg-white border border-emerald-100 p-8 shadow-2xl shadow-emerald-600/5 relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                             <div className="absolute bottom-0 left-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
                             <div className="relative z-10">
-                               <p className="text-emerald-100 text-[11px] font-black uppercase tracking-widest mb-2 opacity-80">Capitaux Disponibles</p>
-                               <p className="text-5xl font-black tracking-tighter">{selectedAffiliateDetail.balance?.toLocaleString()} <span className="text-xl font-bold opacity-70">$</span></p>
-                               <p className="text-xs font-bold text-emerald-100/60 mt-1">≈ {((selectedAffiliateDetail.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
-                               <div className="mt-6 flex gap-2">
-                                  <div className="flex-1 p-3 bg-white/10 rounded-2xl text-center">
-                                     <p className="text-[9px] font-black uppercase opacity-60">Revenue Direct</p>
-                                     <p className="text-sm font-black mt-1">{selectedAffiliateDetail.directRevenue || 0} $</p>
+                               <p className="text-emerald-600/60 text-[10px] font-black uppercase tracking-widest mb-1 opacity-80 font-bold">Capitaux Disponibles</p>
+                               <p className="text-5xl font-black tracking-tighter">{(selectedAffiliateDetail.balance || 0).toLocaleString()} <span className="text-xl font-bold opacity-30 text-emerald-950/20">$</span></p>
+                               <p className="text-xs font-bold text-emerald-600/40 mt-1">≈ {((selectedAffiliateDetail.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
+                               <div className="mt-8 grid grid-cols-2 gap-3 text-left">
+                                  <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-50 transition-all hover:bg-emerald-50">
+                                     <p className="text-[9px] font-black uppercase text-emerald-600/60 tracking-wider">Direct</p>
+                                     <p className="text-lg font-black text-emerald-950 mt-1">{(selectedAffiliateDetail.directRevenue || 0).toLocaleString()} <span className="text-[10px] text-gray-300 font-bold ml-1">$</span></p>
                                   </div>
-                                  <div className="flex-1 p-3 bg-white/10 rounded-2xl text-center">
-                                     <p className="text-[9px] font-black uppercase opacity-60">Revenue Indirect</p>
-                                     <p className="text-sm font-black mt-1">{selectedAffiliateDetail.indirectRevenue || 0} $</p>
+                                  <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-50 transition-all hover:bg-emerald-50">
+                                     <p className="text-[9px] font-black uppercase text-emerald-600/60 tracking-wider">Indirect</p>
+                                     <p className="text-lg font-black text-emerald-950 mt-1">{(selectedAffiliateDetail.indirectRevenue || 0).toLocaleString()} <span className="text-[10px] text-gray-300 font-bold ml-1">$</span></p>
                                   </div>
                                </div>
+
                             </div>
                          </Card>
                        </div>
@@ -6450,7 +6454,7 @@ const AffiliateEditForm = ({
                 Fermer
               </Button>
               <Button 
-                onClick={handleSaveAffiliate} 
+                onClick={() => handleSaveAffiliate(affiliateFormData)} 
                 disabled={isSaving || settings?.lockAffiliateEdits} 
                 className={`flex-1 sm:flex-none rounded-2xl h-12 font-bold shadow-xl border-0 px-10 transition-all active:scale-95 ${
                   settings?.lockAffiliateEdits 
