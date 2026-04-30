@@ -770,8 +770,8 @@ const AffiliateGridView = React.memo(({
                    </div>
                  </div>
                  <div className="text-right">
-                   <p className="text-lg font-black text-emerald-600 leading-tight">{a.balance} G</p>
-                   <p className="text-[9px] text-gray-400 uppercase font-black">Disponible</p>
+                   <p className="text-lg font-black text-emerald-600 leading-tight">{a.balance} $</p>
+                   <p className="text-[9px] text-gray-400 uppercase font-black">≈ {((a.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
                  </div>
                </div>
 
@@ -1227,10 +1227,500 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  const hasPermission = (permission: string) => {
-    if (admin.isSuperAdmin || admin.permissions.includes('all')) return true;
-    return admin.permissions.includes(permission);
+// New component to isolate state and prevent massive re-renders
+const AffiliateEditForm = ({ 
+  initialData, 
+  onSave, 
+  onClose, 
+  settings, 
+  affiliates, 
+  editingAffiliate, 
+  handleOpenAffiliateDeleteDialog,
+  setSelectingSponsorType,
+  setSponsorSearchQuery,
+  setIsSponsorSelectorOpen
+}: any) => {
+  const [affiliateFormData, setAffiliateFormData] = useState<Partial<Affiliate>>(initialData);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await onSave(affiliateFormData);
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  return (
+    <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-[2.5rem] border-0 shadow-2xl">
+      <div className="relative h-32 bg-gradient-to-r from-primary/20 via-accent-light to-primary/10 p-6 flex flex-col justify-end">
+        <div className="absolute top-4 right-6 flex gap-2">
+          {editingAffiliate && (
+            <Badge className="bg-white/80 text-primary border-0 font-black shadow-sm">ID: {editingAffiliate.id?.slice(0, 8)}</Badge>
+          )}
+        </div>
+        <DialogHeader>
+          <DialogTitle className="text-3xl font-black text-dark flex items-center gap-3">
+            <div className="p-2 rounded-2xl bg-white shadow-md">
+              <LucideIcons.Users className="h-6 w-6 text-primary" />
+            </div>
+            {editingAffiliate ? 'Profil Affilié' : 'Nouveau Compte Affilié'}
+          </DialogTitle>
+          <DialogDescription className="text-subtext font-medium text-xs ml-12">
+            Configuration et ajustement des paramètres de l'affilié.
+          </DialogDescription>
+        </DialogHeader>
+      </div>
+      
+      <Tabs defaultValue="identity" className="flex-1 flex flex-col overflow-hidden">
+        <div className="bg-white px-6 border-b flex justify-between items-center h-12 shadow-sm z-10 overflow-x-auto no-scrollbar">
+          <TabsList className="bg-transparent h-full p-0 gap-4 sm:gap-6 flex-nowrap">
+            <TabsTrigger value="identity" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none font-bold text-[10px] sm:text-xs uppercase tracking-widest text-gray-400 data-[state=active]:text-primary mb-[-1px] whitespace-nowrap">Identité</TabsTrigger>
+            <TabsTrigger value="financial" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none font-bold text-[10px] sm:text-xs uppercase tracking-widest text-gray-400 data-[state=active]:text-primary mb-[-1px] whitespace-nowrap">Finances</TabsTrigger>
+            <TabsTrigger value="stats" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none font-bold text-[10px] sm:text-xs uppercase tracking-widest text-gray-400 data-[state=active]:text-primary mb-[-1px] whitespace-nowrap">Statistiques</TabsTrigger>
+            <TabsTrigger value="info" className="h-full rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none font-bold text-[10px] sm:text-xs uppercase tracking-widest text-gray-400 data-[state=active]:text-primary mb-[-1px] whitespace-nowrap">Informations Personnelles</TabsTrigger>
+          </TabsList>
+          
+          <div className="flex items-center gap-2 ml-4 shrink-0">
+             {settings?.lockAffiliateEdits && (
+               <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 font-black text-[10px] uppercase gap-1.5 px-3 py-1 animate-pulse">
+                 < LucideIcons.ShieldAlert className="h-3 w-3" />
+                 MODIFICATIONS VERROUILLÉES
+               </Badge>
+             )}
+             <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-100 font-black text-[10px] uppercase">ACTIF</Badge>
+          </div>
+        </div>
+
+        <div className={`flex-1 overflow-y-auto px-8 py-6 custom-scrollbar bg-gray-50/30 ${settings?.lockAffiliateEdits ? 'grayscale-[0.5] opacity-80' : ''}`}>
+          <TabsContent value="identity" className="mt-0 space-y-6 animate-in fade-in slide-in-from-bottom-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Nom Complet</Label>
+                <div className="relative group">
+                  < LucideIcons.Users className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary group-focus-within:scale-110 transition-transform" />
+                  <Input 
+                    value={affiliateFormData.name} 
+                    onChange={(e) => setAffiliateFormData({...affiliateFormData, name: e.target.value})}
+                    className="pl-10 h-12 rounded-2xl border-gray-200 focus:ring-primary shadow-sm bg-white" 
+                    placeholder="Jean Dupont"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Code Affilié</Label>
+                <div className="relative group">
+                  < LucideIcons.Zap className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
+                  <Input 
+                    value={affiliateFormData.code} 
+                    onChange={(e) => setAffiliateFormData({...affiliateFormData, code: e.target.value})}
+                    className="pl-10 h-12 rounded-2xl border-gray-200 font-mono font-bold shadow-sm bg-white" 
+                    placeholder="AFF2024"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Username (Login)</Label>
+                <div className="relative">
+                  < LucideIcons.AtSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input 
+                    value={affiliateFormData.username} 
+                    onChange={(e) => setAffiliateFormData({...affiliateFormData, username: e.target.value})}
+                    className="pl-10 h-12 rounded-2xl border-gray-200 shadow-sm bg-white" 
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Mot de Passe</Label>
+                <div className="relative">
+                  < LucideIcons.Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input 
+                    value={affiliateFormData.password} 
+                    onChange={(e) => setAffiliateFormData({...affiliateFormData, password: e.target.value})}
+                    className="pl-10 h-12 rounded-2xl border-gray-200 shadow-sm bg-white" 
+                    placeholder="********"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Niveau du compte</Label>
+                <Select 
+                  value={affiliateFormData.level} 
+                  onValueChange={(v: any) => setAffiliateFormData({...affiliateFormData, level: v})}
+                >
+                  <SelectTrigger className="h-12 rounded-2xl border-gray-200 shadow-sm bg-white px-4 font-bold text-dark">
+                    <SelectValue placeholder="Niveau" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-2xl border-gray-100">
+                    <SelectItem value="Bronze" className="rounded-xl">🥉 Bronze</SelectItem>
+                    <SelectItem value="Silver" className="rounded-xl">🥈 Silver</SelectItem>
+                    <SelectItem value="Gold" className="rounded-xl">🥇 Gold</SelectItem>
+                    <SelectItem value="Elite" className="rounded-xl">💎 Elite</SelectItem>
+                    <SelectItem value="VIP" className="rounded-xl">👑 VIP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-4 pt-2 border-t border-gray-100">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Parrains & Sponsors</Label>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger 
+                      className="inline-flex h-7 items-center justify-center rounded-lg text-[10px] font-black uppercase bg-primary/5 hover:bg-primary/10 border border-primary/20 text-primary px-3 transition-colors cursor-pointer outline-none"
+                    >
+                      < LucideIcons.Plus className="h-3 w-3 mr-1" /> Nouveau Parrain
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="rounded-xl border-gray-100 shadow-xl">
+                      <DropdownMenuGroup>
+                        <DropdownMenuLabel className="text-[10px] font-black uppercase text-gray-400 px-3 py-2">Type de parrain</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setSelectingSponsorType('direct');
+                            setSponsorSearchQuery('');
+                            setIsSponsorSelectorOpen(true);
+                          }}
+                          className="flex items-center gap-2 cursor-pointer p-3 rounded-lg hover:bg-primary/5 focus:bg-primary/5 group"
+                        >
+                          <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                            < LucideIcons.Users className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-dark group-hover:text-primary">Parrain Direct</p>
+                            <p className="text-[10px] text-gray-400 font-medium">Commission de Niveau 1</p>
+                          </div>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setSelectingSponsorType('indirect');
+                            setSponsorSearchQuery('');
+                            setIsSponsorSelectorOpen(true);
+                          }}
+                          className="flex items-center gap-2 cursor-pointer p-3 rounded-lg hover:bg-primary/5 focus:bg-primary/5 group"
+                        >
+                          <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
+                            < LucideIcons.Users className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-dark group-hover:text-primary">Parrain Indirect</p>
+                            <p className="text-[10px] text-gray-400 font-medium">Commission de Niveau 2</p>
+                          </div>
+                        </DropdownMenuItem>
+                      </DropdownMenuGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                
+                <div className="space-y-3">
+                  {/* Primary Direct Sponsor */}
+                  {affiliateFormData.parentAffiliateId && (
+                    <div className="bg-emerald-50/30 border border-emerald-100/50 p-3 rounded-2xl flex items-center justify-between group">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold group-hover:bg-emerald-200 transition-colors shadow-sm">
+                          {affiliates.find((a: any) => a.id === affiliateFormData.parentAffiliateId)?.name.charAt(0) || < LucideIcons.Users className="h-5 w-5" />}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-black text-dark">{affiliates.find((a: any) => a.id === affiliateFormData.parentAffiliateId)?.name || 'Inconnu'}</p>
+                            <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-100 text-[8px] font-black uppercase px-1.5 py-0">Principal Direct</Badge>
+                          </div>
+                          <p className="text-[10px] text-gray-400 font-mono tracking-tight">{affiliates.find((a: any) => a.id === affiliateFormData.parentAffiliateId)?.code || affiliateFormData.parentAffiliateId}</p>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => setAffiliateFormData({...affiliateFormData, parentAffiliateId: ''})}
+                        className="h-9 w-9 rounded-xl text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all hover:scale-110 active:scale-95"
+                      >
+                        < LucideIcons.Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Primary Indirect Sponsor */}
+                  {affiliateFormData.grandparentAffiliateId && (
+                    <div className="bg-blue-50/30 border border-blue-100/50 p-3 rounded-2xl flex items-center justify-between group">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 font-bold group-hover:bg-blue-200 transition-colors shadow-sm">
+                          {affiliates.find((a: any) => a.id === affiliateFormData.grandparentAffiliateId)?.name.charAt(0) || < LucideIcons.Users className="h-5 w-5" />}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-black text-dark">{affiliates.find((a: any) => a.id === affiliateFormData.grandparentAffiliateId)?.name || 'Inconnu'}</p>
+                            <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-100 text-[8px] font-black uppercase px-1.5 py-0">Principal Indirect</Badge>
+                          </div>
+                          <p className="text-[10px] text-gray-400 font-mono tracking-tight">{affiliates.find((a: any) => a.id === affiliateFormData.grandparentAffiliateId)?.code || affiliateFormData.grandparentAffiliateId}</p>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => setAffiliateFormData({...affiliateFormData, grandparentAffiliateId: ''})}
+                        className="h-9 w-9 rounded-xl text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all hover:scale-110 active:scale-95"
+                      >
+                        < LucideIcons.Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Additional Sponsors List */}
+                  {affiliateFormData.additionalSponsors && affiliateFormData.additionalSponsors.length > 0 && (
+                    <div className="grid grid-cols-1 gap-2 pt-1">
+                      {affiliateFormData.additionalSponsors.map((sponsor: any) => {
+                        const affiliate = affiliates.find((a: any) => a.id === sponsor.id);
+                        const isDirect = sponsor.type === 'direct';
+                        return (
+                          <div key={sponsor.id} className="flex items-center justify-between p-3 rounded-2xl bg-white border border-gray-100 shadow-sm group hover:border-primary/20 transition-all">
+                            <div className="flex items-center gap-3">
+                              <div className={`h-9 w-9 rounded-xl flex items-center justify-center font-bold text-xs shadow-sm ${isDirect ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
+                                 {affiliate?.name.charAt(0) || '?'}
+                              </div>
+                              <div>
+                                 <div className="flex items-center gap-2">
+                                   <p className="text-xs font-bold text-dark leading-tight">{affiliate?.name || 'Inconnu'}</p>
+                                   <Badge variant="outline" className={`${isDirect ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-blue-50 text-blue-600 border-blue-100'} text-[7px] font-black uppercase px-1.5 py-0 opacity-70`}>Plus {isDirect ? 'Direct' : 'Indirect'}</Badge>
+                                 </div>
+                                 <p className="text-[9px] text-gray-400 font-mono">{affiliate?.code || sponsor.id}</p>
+                              </div>
+                            </div>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => setAffiliateFormData({
+                                ...affiliateFormData, 
+                                additionalSponsors: affiliateFormData.additionalSponsors?.filter((s: any) => s.id !== sponsor.id)
+                              })}
+                              className="h-8 w-8 rounded-xl text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all hover:scale-110 active:scale-95"
+                            >
+                              < LucideIcons.Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {!affiliateFormData.parentAffiliateId && !affiliateFormData.grandparentAffiliateId && (!affiliateFormData.additionalSponsors || affiliateFormData.additionalSponsors.length === 0) && (
+                    <div className="p-8 rounded-3xl border-2 border-dashed border-gray-100 text-center bg-gray-50/50">
+                       <div className="h-12 w-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-gray-300 mx-auto mb-3">
+                         < LucideIcons.Users className="h-6 w-6" />
+                       </div>
+                       <p className="text-xs text-gray-500 font-medium">Aucun parrain défini pour cet affilié.</p>
+                       <p className="text-[10px] text-gray-400 mt-1">Cliquez sur Nouveau Parrain pour en ajouter un.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="financial" className="mt-0 space-y-6 animate-in fade-in slide-in-from-bottom-2">
+             <div className="bg-emerald-50/50 p-6 rounded-[2rem] border border-emerald-100 text-center mb-8 relative overflow-hidden group">
+                <div className="absolute top-2 right-2 p-2 bg-white rounded-full shadow-sm text-emerald-500 scale-110 opacity-50 group-hover:opacity-100 transition-opacity">
+                  < LucideIcons.TrendingUp className="h-4 w-4" />
+                </div>
+                <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest mb-1">Gains Totaux Cumulés</p>
+                <p className="text-4xl font-black text-emerald-700">{(affiliateFormData.totalEarnings || 0).toLocaleString()} <span className="text-lg">$</span></p>
+             </div>
+
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase text-gray-400 ml-1 flex items-center justify-between">
+                    Solde Disponible
+                    <span className="text-emerald-600 font-black">USD ($)</span>
+                  </Label>
+                  <div className="relative group">
+                    < LucideIcons.Wallet className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-500" />
+                    <Input 
+                      type="number"
+                      value={affiliateFormData.balance} 
+                      onChange={(e) => setAffiliateFormData({...affiliateFormData, balance: Number(e.target.value)})}
+                      className="pl-10 h-14 rounded-2xl border-gray-200 text-xl font-black text-dark focus:ring-emerald-500 shadow-md bg-white" 
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase text-gray-400 ml-1 flex items-center justify-between">
+                    Points du mois
+                    < LucideIcons.Trophy className="h-3 w-3 text-primary" />
+                  </Label>
+                  <div className="relative">
+                    < LucideIcons.Star className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-primary" />
+                    <Input 
+                      type="number"
+                      value={affiliateFormData.points || 0} 
+                      onChange={(e) => setAffiliateFormData({...affiliateFormData, points: Number(e.target.value)})}
+                      className="pl-10 h-14 rounded-2xl border-gray-200 text-xl font-black text-dark focus:ring-primary shadow-md bg-white" 
+                    />
+                  </div>
+                </div>
+             </div>
+
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t">
+                <div className="space-y-1 bg-white p-4 rounded-2xl border shadow-sm">
+                  <Label className="text-[10px] font-black uppercase text-gray-500">Revenus Directs</Label>
+                  <Input 
+                    type="number"
+                    value={affiliateFormData.directRevenue || 0} 
+                    onChange={(e) => setAffiliateFormData({...affiliateFormData, directRevenue: Number(e.target.value)})}
+                    className="border-none shadow-none text-lg font-bold p-0 h-8 focus-visible:ring-0" 
+                  />
+                </div>
+                <div className="space-y-1 bg-white p-4 rounded-2xl border shadow-sm">
+                  <Label className="text-[10px] font-black uppercase text-gray-500">Revenus Indirects</Label>
+                  <Input 
+                    type="number"
+                    value={affiliateFormData.indirectRevenue || 0} 
+                    onChange={(e) => setAffiliateFormData({...affiliateFormData, indirectRevenue: Number(e.target.value)})}
+                    className="border-none shadow-none text-lg font-bold p-0 h-8 focus-visible:ring-0" 
+                  />
+                </div>
+             </div>
+          </TabsContent>
+
+          <TabsContent value="stats" className="mt-0 space-y-6 animate-in fade-in slide-in-from-right-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+               <div className="p-6 rounded-[2.5rem] bg-indigo-50/50 border border-indigo-100 flex flex-col items-center text-center group transition-all hover:bg-indigo-50">
+                  <div className="h-12 w-12 rounded-[1.25rem] bg-white shadow-md flex items-center justify-center text-indigo-500 mb-3 group-hover:rotate-12 transition-transform">
+                    < LucideIcons.Users className="h-6 w-6" />
+                  </div>
+                  <p className="text-[10px] font-black uppercase text-indigo-400 tracking-widest mb-1">Affiliés Référés</p>
+                  <Input 
+                    type="number"
+                    value={affiliateFormData.referredClients} 
+                    onChange={(e) => setAffiliateFormData({...affiliateFormData, referredClients: Number(e.target.value)})}
+                    className="w-24 text-center border-none shadow-none text-2xl font-black bg-transparent focus-visible:ring-0 h-10 p-0" 
+                  />
+                  <p className="text-[9px] text-indigo-300 font-bold mt-1">TOTAL HISTORIQUE</p>
+               </div>
+               
+               <div className="p-6 rounded-[2.5rem] bg-orange-50/50 border border-orange-100 flex flex-col items-center text-center group transition-all hover:bg-orange-50">
+                  <div className="h-12 w-12 rounded-[1.25rem] bg-white shadow-md flex items-center justify-center text-orange-500 mb-3 group-hover:rotate-12 transition-transform">
+                    < LucideIcons.DollarSign className="h-6 w-6" />
+                  </div>
+                  <p className="text-[10px] font-black uppercase text-orange-400 tracking-widest mb-1">Ventes Mensuelles</p>
+                  <Input 
+                    type="number"
+                    value={affiliateFormData.monthlySales || 0} 
+                    onChange={(e) => setAffiliateFormData({...affiliateFormData, monthlySales: Number(e.target.value)})}
+                    className="w-24 text-center border-none shadow-none text-2xl font-black bg-transparent focus-visible:ring-0 h-10 p-0" 
+                  />
+                  <p className="text-[9px] text-orange-300 font-bold mt-1">OBJECTIF: 100 VENTES</p>
+               </div>
+
+               <div className="p-4 rounded-3xl bg-gray-100/50 border border-gray-200 sm:col-span-2">
+                  <Label className="text-[10px] font-black uppercase text-gray-400 mb-4 block text-center">Référés ce mois</Label>
+                  <div className="flex items-center justify-center gap-6">
+                     <Button 
+                       variant="outline" 
+                       size="icon" 
+                       className="rounded-xl h-10 w-10 shrink-0 border-gray-200"
+                       onClick={() => setAffiliateFormData({...affiliateFormData, monthlyReferredClients: Math.max(0, (affiliateFormData.monthlyReferredClients || 0) - 1)})}
+                     >
+                       < LucideIcons.Minus className="h-4 w-4" />
+                     </Button>
+                     <Input 
+                        type="number"
+                        value={affiliateFormData.monthlyReferredClients || 0} 
+                        onChange={(e) => setAffiliateFormData({...affiliateFormData, monthlyReferredClients: Number(e.target.value)})}
+                        className="w-32 text-center text-4xl font-black border-none shadow-none bg-transparent h-16 pt-2" 
+                      />
+                      <Button 
+                       variant="outline" 
+                       size="icon" 
+                       className="rounded-xl h-10 w-10 shrink-0 border-gray-200"
+                       onClick={() => setAffiliateFormData({...affiliateFormData, monthlyReferredClients: (affiliateFormData.monthlyReferredClients || 0) + 1})}
+                     >
+                       < LucideIcons.Plus className="h-4 w-4" />
+                     </Button>
+                  </div>
+               </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="info" className="mt-0 space-y-6">
+            <div className="space-y-4">
+              <h3 className="text-lg font-black text-dark flex items-center gap-2">
+                < LucideIcons.User className="h-5 w-5 text-primary" />
+                Informations Personnelles
+              </h3>
+              <div className="grid grid-cols-1 gap-4">
+                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col gap-1">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Email</p>
+                  <p className="font-bold text-dark">{affiliateFormData.info?.email || 'Non renseigné'}</p>
+                </div>
+                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col gap-1">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Téléphone</p>
+                  <p className="font-bold text-dark">{affiliateFormData.info?.phone || 'Non renseigné'}</p>
+                </div>
+                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col gap-1">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Message d'inscription</p>
+                  <p className="text-sm text-gray-600 italic">"{affiliateFormData.info?.message || 'Aucun message'}"</p>
+                </div>
+                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col gap-1">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Date d'approbation</p>
+                  <p className="font-bold text-dark">
+                    {affiliateFormData.info?.approvedAt ? format(new Date(affiliateFormData.info.approvedAt), 'dd/MM/yyyy HH:mm', { locale: fr }) : 'Inconnue'}
+                  </p>
+                </div>
+              </div>
+              
+              {settings?.lockAffiliateEdits && (
+                <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-start gap-4">
+                  < LucideIcons.ShieldAlert className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-red-900">Modifications impossibles</p>
+                    <p className="text-[11px] text-red-700">Le verrouillage global des modifications est activé. Déverrouillez dans les paramètres pour modifier ces informations.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </div>
+      </Tabs>
+
+      <div className="p-8 bg-white border-t flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="flex gap-2">
+          {editingAffiliate && (
+            <Button 
+              variant="ghost" 
+              onClick={() => {
+                handleOpenAffiliateDeleteDialog(editingAffiliate);
+                onClose();
+              }}
+              className="text-red-500 hover:bg-red-50 rounded-2xl h-12 font-bold flex items-center gap-2 group"
+            >
+              < LucideIcons.Trash2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Supprimer l'affilié</span>
+            </Button>
+          )}
+        </div>
+        <div className="flex gap-3 w-full sm:w-auto">
+          <Button 
+            variant="outline" 
+            onClick={onClose}
+            className="flex-1 sm:flex-none rounded-2xl h-12 font-bold px-8 border-gray-200"
+          >
+            Fermer
+          </Button>
+          <Button 
+            onClick={handleSave} 
+            disabled={isSaving || settings?.lockAffiliateEdits} 
+            className={`flex-1 sm:flex-none rounded-2xl h-12 font-bold shadow-xl border-0 px-10 transition-all active:scale-95 ${
+              settings?.lockAffiliateEdits 
+                ? 'bg-gray-400 cursor-not-allowed opacity-50' 
+                : 'bg-primary hover:bg-[#D98A1E] text-white shadow-accent-light/50'
+            }`}
+          >
+            {isSaving ? < LucideIcons.Loader2 className="h-4 w-4 animate-spin mr-2" /> : < LucideIcons.CheckCircle2 className="h-4 w-4 mr-2" />}
+            {editingAffiliate ? 'Mettre à jour' : 'Créer le compte'}
+          </Button>
+        </div>
+      </div>
+    </DialogContent>
+  );
+};
 
   // Define categorized menu items for better organization
   const menuGroups = [
@@ -1280,6 +1770,11 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
 
   // Flat list for internal logic compatibility
   const menuItems = menuGroups.flatMap(group => group.items);
+
+  const hasPermission = (permission: string) => {
+    if (admin.isSuperAdmin) return true;
+    return admin.permissions?.includes(permission);
+  };
 
   const visibleMenuItems = menuItems.filter(item => {
     if (item.permission === 'super_admin_only') return admin.isSuperAdmin;
@@ -1945,15 +2440,15 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     }
   };
 
-  const handleSaveAffiliate = async () => {
-    if (!affiliateFormData.name || !affiliateFormData.username || !affiliateFormData.password || !affiliateFormData.code) {
+  const handleSaveAffiliate = async (formData: Partial<Affiliate>) => {
+    if (!formData.name || !formData.username || !formData.password || !formData.code) {
       toast.error("Veuillez remplir tous les champs.");
       return;
     }
 
     setIsSaving(true);
     try {
-      await saveAffiliate(affiliateFormData, editingAffiliate?.id);
+      await saveAffiliate(formData, editingAffiliate?.id);
       toast.success(editingAffiliate ? "Affilié mis à jour !" : "Affilié ajouté !");
       setIsAffiliateDialogOpen(false);
     } catch (error) {
