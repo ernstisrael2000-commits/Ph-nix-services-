@@ -582,10 +582,10 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 </div>
                 <div className="w-full sm:w-auto text-right">
                   <div className="flex items-center justify-end gap-2 mb-1">
-                    <p className="text-gray-300 text-[8px] font-black uppercase tracking-[0.2em]">Wallet Serial ID</p>
+                    <p className="text-emerald-600/60 text-[8px] font-black uppercase tracking-[0.2em]">Wallet Serial ID</p>
                     <button 
                       onClick={copyWalletId}
-                      className="p-1 rounded-md hover:bg-emerald-50 transition-colors text-gray-300 hover:text-emerald-500"
+                      className="p-1 rounded-md hover:bg-emerald-50 transition-colors text-emerald-400"
                     >
                       <Copy className="h-3 w-3" />
                     </button>

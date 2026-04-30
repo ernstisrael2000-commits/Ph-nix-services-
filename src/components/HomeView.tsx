@@ -606,7 +606,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
       </Dialog>
       {/* Product Detail Dialog */}
       <Dialog open={isProductDetailOpen} onOpenChange={setIsProductDetailOpen}>
-        <DialogContent className="sm:max-w-[500px] rounded-[2rem] overflow-hidden p-0 gap-0 border-0 shadow-2xl">
+        <DialogContent className="w-[94%] sm:max-w-[500px] rounded-[1.5rem] sm:rounded-[2rem] overflow-y-auto max-h-[92vh] p-0 gap-0 border-0 shadow-2xl custom-scrollbar">
           {selectedProduct && (
             <div className="flex flex-col">
               <div className="relative aspect-video">
@@ -691,8 +691,8 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
 
       {/* Payment Modal */}
       <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-        <DialogContent className="sm:max-w-[450px] p-0 overflow-hidden border-0 bg-white rounded-[2.5rem] shadow-2xl">
-          <div className="bg-primary p-6 text-white">
+        <DialogContent className="w-[94%] sm:max-w-[450px] p-0 overflow-y-auto max-h-[92vh] border-0 bg-white rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl custom-scrollbar">
+          <div className="bg-primary p-6 text-white sticky top-0 z-10">
             <DialogHeader>
               <div className="flex items-center gap-2 mb-2">
                 <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-md">

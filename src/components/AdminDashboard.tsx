@@ -7444,8 +7444,8 @@ const AffiliateEditForm = ({
 
       {/* Quick Credit Dialog */}
       <Dialog open={isQuickCreditDialogOpen} onOpenChange={setIsQuickCreditDialogOpen}>
-        <DialogContent className="sm:max-w-[400px] rounded-[2rem] border-0 shadow-2xl">
-          <DialogHeader className="p-6 bg-emerald-600 text-white rounded-t-[2rem]">
+        <DialogContent className="w-[94%] sm:max-w-[400px] p-0 overflow-y-auto max-h-[92vh] rounded-[2rem] border-0 shadow-2xl custom-scrollbar">
+          <DialogHeader className="p-6 bg-emerald-600 text-white rounded-t-[2rem] sticky top-0 z-10">
             <DialogTitle className="flex items-center gap-2 text-2xl font-black">
               <PlusCircle className="h-6 w-6" />
               Ajout Rapide d'Argent
@@ -7504,7 +7504,7 @@ const AffiliateEditForm = ({
 
       {/* Sponsor Selector Dialog */}
       <Dialog open={isSponsorSelectorOpen} onOpenChange={setIsSponsorSelectorOpen}>
-        <DialogContent className="sm:max-w-[500px] rounded-[2rem] p-0 overflow-hidden border-0 shadow-2xl h-[600px] flex flex-col">
+        <DialogContent className="w-[94%] sm:max-w-[500px] rounded-[2rem] p-0 border-0 shadow-2xl max-h-[92vh] flex flex-col overflow-hidden">
           <DialogHeader className="p-6 bg-primary text-white shrink-0">
             <DialogTitle className="flex items-center gap-2 text-xl font-black">
               <Search className="h-6 w-6" />
