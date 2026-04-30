@@ -138,6 +138,10 @@ export interface AffiliateNotification {
 
 export interface AppSettings {
   logoUrl?: string;
+  moncashLogoUrl?: string;
+  natcashLogoUrl?: string;
+  adminLogoUrl?: string;
+  exchangeRate?: number;
   whatsappAdminNumber?: string;
   lockAffiliateEdits?: boolean;
   lockAffiliateEditsCode?: string;

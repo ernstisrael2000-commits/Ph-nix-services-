@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useDeferredValue } from 'react';
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -485,7 +485,7 @@ const AnalyticsDashboard = ({ stats, loading }: { stats: any, loading: boolean }
               <Wallet className="h-5 w-5 text-indigo-600 flex-shrink-0" />
               <div>
                 <p className="text-sm font-bold text-indigo-900 leading-none mb-1">Total à Payer (Dettes Affiliés)</p>
-                <p className="text-xs text-indigo-700">La somme totale due aux affiliés est de <span className="font-bold">{(stats.totalAffiliateBalances || 0).toLocaleString()} G</span>.</p>
+                <p className="text-xs text-indigo-700">La somme totale due aux affiliés est de <span className="font-bold">{(stats.totalAffiliateBalances || 0).toLocaleString()} $</span>.</p>
               </div>
             </div>
           </div>
@@ -696,7 +696,7 @@ const AffiliateTableBody = React.memo(({
             </div>
           </TableCell>
           <TableCell>
-            <p className="font-black text-emerald-600">{a.balance} G</p>
+            <p className="font-black text-emerald-600">{a.balance} $</p>
             <p className="text-[9px] text-gray-400 uppercase font-bold tracking-tight">Solde dispo</p>
           </TableCell>
           <TableCell className="text-right">
@@ -916,6 +916,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
   const { stats, loading: analyticsLoading } = useAnalytics();
   const { parcels, loading: parcelsLoading } = useParcels();
   const { products, loading: productsLoading } = useProducts();
@@ -947,6 +948,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const [isLogsDialogOpen, setIsLogsDialogOpen] = useState(false);
   
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [parcelToDelete, setParcelToDelete] = useState<Parcel | null>(null);
@@ -1041,6 +1043,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     indirectSponsorId: ''
   });
   const [clientSearchQuery, setClientSearchQuery] = useState('');
+  const deferredClientSearchQuery = useDeferredValue(clientSearchQuery);
   const [isSponsorSelectorForClientOpen, setIsSponsorSelectorForClientOpen] = useState(false);
   const [selectingSponsorTypeForClient, setSelectingSponsorTypeForClient] = useState<'direct' | 'indirect'>('direct');
 
@@ -1357,26 +1360,28 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
 
   const [notifFilter, setNotifFilter] = useState<'all' | 'registration' | 'withdrawal' | 'deposit'>('all');
   const [notifSearch, setNotifSearch] = useState('');
+  const deferredNotifSearch = useDeferredValue(notifSearch);
   const [affiliateSearch, setAffiliateSearch] = useState('');
+  const deferredAffiliateSearch = useDeferredValue(affiliateSearch);
 
   const { transactions: walletTransactions, loading: walletTxLoading } = useAllWalletTransactions();
 
   // Optimized Filtering for Affiliates
   const filteredAffiliatesList = React.useMemo(() => {
     return affiliates.filter(aff => 
-      aff.name.toLowerCase().includes(affiliateSearch.toLowerCase()) ||
-      aff.username?.toLowerCase().includes(affiliateSearch.toLowerCase()) ||
-      aff.code?.toLowerCase().includes(affiliateSearch.toLowerCase())
+      aff.name.toLowerCase().includes(deferredAffiliateSearch.toLowerCase()) ||
+      aff.username?.toLowerCase().includes(deferredAffiliateSearch.toLowerCase()) ||
+      aff.code?.toLowerCase().includes(deferredAffiliateSearch.toLowerCase())
     );
-  }, [affiliates, affiliateSearch]);
+  }, [affiliates, deferredAffiliateSearch]);
 
   // Optimized Filtering for Clients
   const filteredClientsList = React.useMemo(() => {
     return clients.filter(c => 
-      c.name.toLowerCase().includes(clientSearchQuery.toLowerCase()) ||
-      c.phone.includes(clientSearchQuery)
+      c.name.toLowerCase().includes(deferredClientSearchQuery.toLowerCase()) ||
+      c.phone.includes(deferredClientSearchQuery)
     );
-  }, [clients, clientSearchQuery]);
+  }, [clients, deferredClientSearchQuery]);
 
   const [isSliderImageDeleteDialogOpen, setIsSliderImageDeleteDialogOpen] = useState(false);
   const [sliderImageToDelete, setSliderImageToDelete] = useState<{id: string, url: string} | null>(null);
@@ -1391,19 +1396,21 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const { agents: allAgents, loading: agentsLoading } = useAllAgents();
 
   const [agentSearch, setAgentSearch] = useState('');
+  const deferredAgentSearch = useDeferredValue(agentSearch);
   const [isAgentDialogOpen, setIsAgentDialogOpen] = useState(false);
   const [agentName, setAgentName] = useState('');
   const [agentPhone, setAgentPhone] = useState('');
   const [isAgentBalanceDialogOpen, setIsAgentBalanceDialogOpen] = useState(false);
+  const [isAutoApproveOn, setIsAutoApproveOn] = useState(false);
   const [selectedAgentForBalance, setSelectedAgentForBalance] = useState<Agent | null>(null);
   const [balanceAdjustment, setBalanceAdjustment] = useState('');
 
   const filteredAgentsList = React.useMemo(() => {
     return allAgents.filter(a => 
-      a.name.toLowerCase().includes(agentSearch.toLowerCase()) ||
-      a.agentCode.includes(agentSearch)
+      a.name.toLowerCase().includes(deferredAgentSearch.toLowerCase()) ||
+      a.agentCode.includes(deferredAgentSearch)
     );
-  }, [allAgents, agentSearch]);
+  }, [allAgents, deferredAgentSearch]);
 
   const pendingRegistrations = React.useMemo(() => 
     affiliateRequests.filter(r => r.status === 'pending'), 
@@ -1426,6 +1433,19 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   );
   
   const totalPending = pendingRegistrations.length + pendingWithdrawals.length + pendingDeposits.length + pendingTransfersCount;
+
+  useEffect(() => {
+    if (totalPending > 0) {
+      toast.info(`Vous avez ${totalPending} nouvelle(s) demande(s) en attente.`, {
+        id: 'new-requests-toast',
+        duration: 8000,
+        action: {
+          label: 'Voir les demandes',
+          onClick: () => setActiveTab('notifications')
+        }
+      });
+    }
+  }, [totalPending]);
 
   const totalAffiliateBalance = React.useMemo(() => {
     return affiliates.reduce((sum, affiliate) => sum + (affiliate.balance || 0), 0);
@@ -1450,10 +1470,10 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
       combined = combined.filter(r => r.type === 'deposit_request');
     }
 
-    if (notifSearch) {
+    if (deferredNotifSearch) {
       combined = combined.filter(r => 
-        r.name.toLowerCase().includes(notifSearch.toLowerCase()) ||
-        (r.type === 'withdrawal' && (r as any).affiliateCode?.toLowerCase().includes(notifSearch.toLowerCase()))
+        r.name.toLowerCase().includes(deferredNotifSearch.toLowerCase()) ||
+        (r.type === 'withdrawal' && (r as any).affiliateCode?.toLowerCase().includes(deferredNotifSearch.toLowerCase()))
       );
     }
 
@@ -1474,10 +1494,10 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
 
   const filteredParcels = React.useMemo(() => {
     return parcels.filter(p => 
-      p.trackingNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.currentLocation.toLowerCase().includes(searchTerm.toLowerCase())
+      p.trackingNumber.toLowerCase().includes(deferredSearchTerm.toLowerCase()) ||
+      p.currentLocation.toLowerCase().includes(deferredSearchTerm.toLowerCase())
     );
-  }, [parcels, searchTerm]);
+  }, [parcels, deferredSearchTerm]);
 
   const [walletTxFilter, setWalletTxFilter] = useState<'all' | 'deposit' | 'withdrawal' | 'transfer'>('all');
   const [walletStatusFilter, setWalletStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
@@ -2103,6 +2123,18 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     setIsSaving(false);
   };
 
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isAutoApproveOn) {
+      interval = setInterval(() => {
+        handleApproveAllTransfers();
+      }, 60000); // 1 minute
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isAutoApproveOn, walletTransactions, handleApproveAllTransfers]);
+
   const handleWithdrawalAction = async (request: WithdrawalRequest, status: 'approved' | 'rejected') => {
     if (status === 'rejected') {
       setWithdrawalToReject(request);
@@ -2115,7 +2147,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
       await updateWithdrawalStatus(request.id!, status);
       toast.success(`Demande approuvée !`);
       
-      const message = `Bonjour ${request.affiliateName},\n\nVotre demande de retrait de ${request.amount} Goud a été validée avec succès. Vous recevrez le paiement sur votre compte ${request.method} dans les plus brefs délais.\n\nMerci pour votre patience et votre engagement avec Neopay Affilié.\n\nCordialement,\nL'équipe Neopay`;
+      const message = `Bonjour ${request.affiliateName},\n\nVotre demande de retrait de ${request.amount} $ a été validée avec succès. Vous recevrez le paiement sur votre compte ${request.method} dans les plus brefs délais.\n\nMerci pour votre patience et votre engagement avec Neopay Affilié.\n\nCordialement,\nL'équipe Neopay`;
       
       toast.success("Message de confirmation prêt.");
       console.log("Message pour l'affilié:", message);
@@ -2321,7 +2353,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                     {agent.phone}
                   </TableCell>
                   <TableCell className="text-right">
-                    <span className="text-xl font-black text-primary">{agent.balance.toLocaleString()} G</span>
+                    <span className="text-xl font-black text-primary">{agent.balance.toLocaleString()} $</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge className={`rounded-xl px-3 py-1 text-[10px] font-black uppercase ${
@@ -2421,7 +2453,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
           <div className="pt-8 space-y-8">
             <div className="text-center bg-gray-50 p-6 rounded-3xl border border-gray-100">
               <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Solde Actuel</span>
-              <span className="text-4xl font-black text-primary">{selectedAgentForBalance?.balance.toLocaleString()} G</span>
+              <span className="text-4xl font-black text-primary">{selectedAgentForBalance?.balance.toLocaleString()} $</span>
             </div>
             
             <div className="space-y-2">
@@ -2468,16 +2500,26 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
             <h2 className="text-2xl font-black text-dark tracking-tight">Approbation des Transferts</h2>
             <p className="text-gray-500 text-sm">Validez les transferts entre affiliés.</p>
           </div>
-          {pendingTransfers.length > 1 && (
-            <Button 
-              onClick={handleApproveAllTransfers}
-              disabled={isSaving}
-              className="rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 h-12 px-6 font-black uppercase tracking-widest text-[10px] border-0"
+          <div className="flex flex-wrap gap-3">
+            {pendingTransfers.length > 1 && (
+              <Button 
+                onClick={handleApproveAllTransfers}
+                disabled={isSaving}
+                className="rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 h-12 px-6 font-black uppercase tracking-widest text-[10px] border-0"
+              >
+                {isSaving ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <CheckCircle2 className="h-5 w-5 mr-2" />}
+                Approuver Tout ({pendingTransfers.length})
+              </Button>
+            )}
+            <Button
+              onClick={() => setIsAutoApproveOn(!isAutoApproveOn)}
+              variant={isAutoApproveOn ? "default" : "outline"}
+              className={`rounded-2xl h-12 px-6 font-black uppercase tracking-widest text-[10px] ${isAutoApproveOn ? 'bg-primary text-white' : 'border-2 text-gray-400'}`}
             >
-              {isSaving ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <CheckCircle2 className="h-5 w-5 mr-2" />}
-              Approuver Tout ({pendingTransfers.length})
+              {isAutoApproveOn ? <Zap className="h-4 w-4 mr-2 animate-pulse" /> : <Clock className="h-4 w-4 mr-2" />}
+              Auto-Approbation: {isAutoApproveOn ? 'ON' : 'OFF'}
             </Button>
-          )}
+          </div>
         </div>
 
         <Card className="rounded-[2.5rem] border-0 shadow-xl overflow-hidden bg-white">
@@ -2518,7 +2560,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <span className="text-xl font-black text-primary">{tx.amount.toLocaleString()} G</span>
+                      <span className="text-xl font-black text-primary">{tx.amount.toLocaleString()} $</span>
                     </TableCell>
                     <TableCell className="text-center text-xs font-medium text-gray-500">
                       {tx.createdAt?.toDate ? format(tx.createdAt.toDate(), 'Pp', { locale: fr }) : '-'}
@@ -3409,7 +3451,8 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-primary uppercase">Total à Payer</p>
-                    <p className="text-3xl font-bold text-dark">{totalAffiliateBalance} Goud</p>
+                    <p className="text-3xl font-bold text-dark">{totalAffiliateBalance} USD</p>
+                    <p className="text-xs font-bold text-gray-400 mt-1">≈ {(totalAffiliateBalance * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
                   </div>
                   <Wallet className="h-8 w-8 text-primary/40" />
                 </div>
@@ -3528,8 +3571,8 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                                   </div>
                                 </div>
                                 <div className="text-right">
-                                  <p className="text-lg font-black text-emerald-600 leading-tight">{a.balance} G</p>
-                                  <p className="text-[9px] text-gray-400 uppercase font-black">Disponible</p>
+                                  <p className="text-lg font-black text-emerald-600 leading-tight">{a.balance} $</p>
+                                  <p className="text-[9px] text-gray-400 uppercase font-black">≈ {( (a.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
                                 </div>
                               </div>
 
@@ -3819,7 +3862,10 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                               </p>
                             </div>
                           </div>
-                          <Badge className="bg-accent-light text-primary shrink-0 border-primary/20">{w.amount} Goud</Badge>
+                          <Badge className="bg-accent-light text-primary shrink-0 border-primary/20">{w.amount} $</Badge>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <span className="text-[10px] font-bold text-gray-400">≈ {((w.amount || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG</span>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-gray-500">
                           <Wallet className="h-3 w-3" />
@@ -3882,7 +3928,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                       {allWithdrawals.map((w) => (
                         <TableRow key={w.id} className="hover:bg-gray-50/30 transition-colors">
                           <TableCell className="font-bold">{w.affiliateName}</TableCell>
-                          <TableCell className="font-mono text-emerald-600 font-bold">{w.amount} G</TableCell>
+                          <TableCell className="font-mono text-emerald-600 font-bold">{w.amount} $</TableCell>
                           <TableCell className="text-xs">
                             <span className="font-black uppercase text-[9px] block text-gray-400">{w.method}</span>
                             {w.accountNumber}
@@ -3946,9 +3992,9 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xl font-black text-emerald-700">{tx.amount} G</p>
-                          <p className="text-[9px] text-gray-400 font-bold">
-                            {tx.createdAt ? format(tx.createdAt.toDate(), 'dd/MM/yy HH:mm') : '-'}
+                          <p className="text-xl font-black text-emerald-700">{tx.amount} $</p>
+                          <p className="text-[10px] font-bold text-gray-400">
+                             ≈ {((tx.amount || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
                           </p>
                         </div>
                       </div>
@@ -4264,15 +4310,16 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                             <div className="absolute -bottom-10 -right-10 h-40 w-40 bg-white/10 rounded-full blur-2xl"></div>
                             <div className="relative z-10">
                                <p className="text-emerald-100 text-[11px] font-black uppercase tracking-widest mb-2 opacity-80">Capitaux Disponibles</p>
-                               <p className="text-5xl font-black tracking-tighter">{selectedAffiliateDetail.balance?.toLocaleString()} <span className="text-xl font-bold opacity-70">G</span></p>
+                               <p className="text-5xl font-black tracking-tighter">{selectedAffiliateDetail.balance?.toLocaleString()} <span className="text-xl font-bold opacity-70">$</span></p>
+                               <p className="text-xs font-bold text-emerald-100/60 mt-1">≈ {((selectedAffiliateDetail.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
                                <div className="mt-6 flex gap-2">
                                   <div className="flex-1 p-3 bg-white/10 rounded-2xl text-center">
                                      <p className="text-[9px] font-black uppercase opacity-60">Revenue Direct</p>
-                                     <p className="text-sm font-black mt-1">{selectedAffiliateDetail.directRevenue || 0} G</p>
+                                     <p className="text-sm font-black mt-1">{selectedAffiliateDetail.directRevenue || 0} $</p>
                                   </div>
                                   <div className="flex-1 p-3 bg-white/10 rounded-2xl text-center">
                                      <p className="text-[9px] font-black uppercase opacity-60">Revenue Indirect</p>
-                                     <p className="text-sm font-black mt-1">{selectedAffiliateDetail.indirectRevenue || 0} G</p>
+                                     <p className="text-sm font-black mt-1">{selectedAffiliateDetail.indirectRevenue || 0} $</p>
                                   </div>
                                </div>
                             </div>
@@ -4355,7 +4402,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                                <div className="space-y-6 relative z-10">
                                   <div className="flex items-center justify-between py-4 border-b border-white/5">
                                      <span className="text-gray-400 font-bold">Volume Total Réseau</span>
-                                     <span className="text-xl font-black">{(selectedAffiliateDetail.directRevenue || 0) + (selectedAffiliateDetail.indirectRevenue || 0)} G</span>
+                                     <span className="text-xl font-black">{(selectedAffiliateDetail.directRevenue || 0) + (selectedAffiliateDetail.indirectRevenue || 0)} $</span>
                                   </div>
                                   <div className="flex items-center justify-between py-4 border-b border-white/5">
                                      <span className="text-gray-400 font-bold">Nombre de Clients Référés</span>
@@ -4391,7 +4438,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                                         </div>
                                         <div>
                                           <p className="text-sm font-black text-dark group-hover/down:text-primary transition-colors">{ref.name}</p>
-                                          <p className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full w-fit mt-1">{ref.balance} G</p>
+                                          <p className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full w-fit mt-1">{ref.balance} $</p>
                                         </div>
                                       </div>
                                       <div className="flex flex-col items-end gap-1">
@@ -4683,7 +4730,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                             </span>
                             {req.type === 'withdrawal' && (
                               <div className="flex flex-col gap-1 mt-1">
-                                <span className="font-black text-red-600">{(req as any).amount} Goud</span>
+                                <span className="font-black text-red-600">{(req as any).amount} $</span>
                                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-red-50 rounded-lg w-fit border border-red-100">
                                   <Smartphone className="h-3 w-3 text-red-500" />
                                   <span className="font-black text-red-500 text-[10px] uppercase">{(req as any).method}: {(req as any).accountNumber}</span>
@@ -4692,7 +4739,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                             )}
                             {req.type === 'deposit_request' && (
                               <div className="flex flex-col gap-1 mt-1">
-                                <span className="font-black text-emerald-600">{(req as any).amount} Goud</span>
+                                <span className="font-black text-emerald-600">{(req as any).amount} $</span>
                                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 rounded-lg w-fit border border-emerald-100">
                                   <PlusCircle className="h-3 w-3 text-emerald-500" />
                                   <span className="font-black text-emerald-500 text-[10px] uppercase">Dépôt: {(req as any).method}</span>
@@ -4829,6 +4876,67 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                       className="bg-primary hover:bg-[#D98A1E] w-full sm:w-auto border-0"
                     >
                       Ajouter
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t">
+                  <h3 className="text-sm font-bold text-dark flex items-center gap-2">
+                    < LucideIcons.Palette className="h-4 w-4 text-primary" />
+                    Gestion des logos de paiement
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-gray-500">Logo MonCash (URL)</Label>
+                      <Input 
+                        placeholder="https://..." 
+                        value={pendingSettings?.moncashLogoUrl ?? settings?.moncashLogoUrl ?? ''}
+                        onChange={(e) => setPendingSettings(prev => ({ ...prev, moncashLogoUrl: e.target.value }))}
+                        className="rounded-xl border-gray-100"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-gray-500">Logo NatCash (URL)</Label>
+                      <Input 
+                        placeholder="https://..." 
+                        value={pendingSettings?.natcashLogoUrl ?? settings?.natcashLogoUrl ?? ''}
+                        onChange={(e) => setPendingSettings(prev => ({ ...prev, natcashLogoUrl: e.target.value }))}
+                        className="rounded-xl border-gray-100"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-gray-500">Logo Admin (URL - Optionnel)</Label>
+                      <Input 
+                        placeholder="https://..." 
+                        value={pendingSettings?.adminLogoUrl ?? settings?.adminLogoUrl ?? ''}
+                        onChange={(e) => setPendingSettings(prev => ({ ...prev, adminLogoUrl: e.target.value }))}
+                        className="rounded-xl border-gray-100"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-gray-500">Taux de Change (1 USD = ? HTG)</Label>
+                      <Input 
+                        type="number"
+                        placeholder="146" 
+                        value={pendingSettings?.exchangeRate ?? settings?.exchangeRate ?? 146}
+                        onChange={(e) => setPendingSettings(prev => ({ ...prev, exchangeRate: parseFloat(e.target.value) }))}
+                        className="rounded-xl border-gray-100"
+                      />
+                    </div>
+                    <Button 
+                      onClick={async () => {
+                        const dataToUpdate = {
+                          moncashLogoUrl: pendingSettings.moncashLogoUrl !== undefined ? pendingSettings.moncashLogoUrl : settings?.moncashLogoUrl,
+                          natcashLogoUrl: pendingSettings.natcashLogoUrl !== undefined ? pendingSettings.natcashLogoUrl : settings?.natcashLogoUrl,
+                          adminLogoUrl: pendingSettings.adminLogoUrl !== undefined ? pendingSettings.adminLogoUrl : settings?.adminLogoUrl,
+                          exchangeRate: pendingSettings.exchangeRate !== undefined ? pendingSettings.exchangeRate : (settings?.exchangeRate || 146),
+                        };
+                        await updateSettings(dataToUpdate);
+                        toast.success("Paramètres mis à jour !");
+                      }}
+                      className="w-full bg-navy hover:bg-navy/90 text-white font-bold rounded-xl"
+                    >
+                      Enregistrer les paramètres
                     </Button>
                   </div>
                 </div>
@@ -5179,9 +5287,9 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                   <SelectValue placeholder="Sélectionner le type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="purchase">Top Up / Autres (2 Goud)</SelectItem>
-                  <SelectItem value="subscription">Streaming / Abonnement (75 Goud+)</SelectItem>
-                  <SelectItem value="virtual_card">Carte Virtuelle (350 Goud)</SelectItem>
+                  <SelectItem value="purchase">Top Up / Autres (2 $)</SelectItem>
+                  <SelectItem value="subscription">Streaming / Abonnement (75 $+)</SelectItem>
+                  <SelectItem value="virtual_card">Carte Virtuelle (350 $)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -5196,7 +5304,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                   className="rounded-xl"
                 />
                 <p className="text-[10px] text-blue-600 font-bold">
-                  Note: Netflix / Prime = 75 Goud direct + 15 Goud (P1) + 10 Goud (P2).
+                  Note: Netflix / Prime = 75 $ direct + 15 $ (P1) + 10 $ (P2).
                 </p>
               </div>
             )}
@@ -5663,14 +5771,14 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                       <TrendingUp className="h-4 w-4" />
                     </div>
                     <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest mb-1">Gains Totaux Cumulés</p>
-                    <p className="text-4xl font-black text-emerald-700">{(affiliateFormData.totalEarnings || 0).toLocaleString()} <span className="text-lg">G</span></p>
+                    <p className="text-4xl font-black text-emerald-700">{(affiliateFormData.totalEarnings || 0).toLocaleString()} <span className="text-lg">$</span></p>
                  </div>
 
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black uppercase text-gray-400 ml-1 flex items-center justify-between">
                         Solde Disponible
-                        <span className="text-emerald-600 font-black">HTG</span>
+                        <span className="text-emerald-600 font-black">USD ($)</span>
                       </Label>
                       <div className="relative group">
                         <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-500" />
@@ -6725,7 +6833,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
                   className="pl-12 h-14 rounded-2xl text-2xl font-black border-emerald-100 focus:ring-emerald-200"
                 />
               </div>
-              <p className="text-[11px] text-gray-400 text-center">Solde actuel: <span className="font-bold text-dark">{selectedAffiliateForCredit?.balance} G</span></p>
+              <p className="text-[11px] text-gray-400 text-center">Solde actuel: <span className="font-bold text-dark">{selectedAffiliateForCredit?.balance} $</span></p>
             </div>
 
             <div className="flex gap-2 flex-wrap justify-center">

@@ -34,6 +34,8 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '../hooks/useAuth';
 
+import { useSettings } from '../services/parcelService';
+
 interface AgentDashboardProps {
   agentUid: string;
   onLogout: () => void;
@@ -42,6 +44,7 @@ interface AgentDashboardProps {
 export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardProps) {
   const { agent, loading: agentLoading } = useAgentDataByUid(agentUid);
   const { transactions: agentHistory, loading: historyLoading } = useAgentWithdrawals(agent?.id || null);
+  const { settings } = useSettings();
   
   // Also need to fetch pending transactions for this agent
   const [isProcessing, setIsProcessing] = useState(false);
@@ -125,9 +128,14 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
             <CardTitle className="text-gray-400 text-xs font-black uppercase tracking-[0.2em] mb-2">Solde Agent Disponible</CardTitle>
           </CardHeader>
           <CardContent className="p-8 pt-4">
-            <div className="flex items-baseline gap-3">
-              <span className="text-6xl font-black">{agent.balance.toLocaleString()}</span>
-              <span className="text-xl font-black text-white/30 uppercase tracking-widest">Goud</span>
+            <div className="flex flex-col">
+              <div className="flex items-baseline gap-3">
+                <span className="text-6xl font-black">{agent.balance.toLocaleString()}</span>
+                <span className="text-xl font-black text-white/30 uppercase tracking-widest">$</span>
+              </div>
+              <p className="text-sm font-bold text-white/40 tracking-tight mt-1">
+                ≈ {((agent.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -175,7 +183,10 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
                   
                   <div className="text-center">
                     <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Montant</p>
-                    <p className="text-2xl font-black text-primary">{request.amount.toLocaleString()} G</p>
+                    <p className="text-2xl font-black text-primary">{request.amount.toLocaleString()} $</p>
+                    <p className="text-[10px] font-bold text-gray-400 tracking-tighter">
+                      ({((request.amount || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG)
+                    </p>
                   </div>
 
                   <div className="flex gap-2">
@@ -234,8 +245,13 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
                       <span className="font-black text-dark text-sm lowercase">{tx.description}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-right font-black text-lg">
-                    {tx.amount.toLocaleString()} G
+                  <TableCell className="text-right">
+                    <div className="flex flex-col items-end">
+                      <span className="font-black text-lg">{tx.amount.toLocaleString()} $</span>
+                      <span className="text-[10px] font-bold text-gray-400 tracking-tighter">
+                        ≈ {((tx.amount || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell className="text-center px-8">
                     <Badge className={`rounded-xl px-3 py-1 font-black uppercase text-[9px] ${

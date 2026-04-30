@@ -50,7 +50,14 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
   const { buttons, loading: buttonsLoading } = useNavButtons();
   const [isGamesDialogOpen, setIsGamesDialogOpen] = React.useState(false);
   const [isCardsDialogOpen, setIsCardsDialogOpen] = React.useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [isProductDetailOpen, setIsProductDetailOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+
+  const handleProductClick = (product: any) => {
+    setSelectedProduct(product);
+    setIsProductDetailOpen(true);
+  };
   
   const servicesRef = useRef<HTMLElement>(null);
 
@@ -359,9 +366,10 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: idx * 0.1 }}
-                className="mobile-product-card-wrapper"
+                className="mobile-product-card-wrapper cursor-pointer"
+                onClick={() => handleProductClick(product)}
               >
-                <Card className="product-card overflow-hidden border-0 bg-white h-full flex flex-col pt-0">
+                <Card className="product-card overflow-hidden border-0 bg-white h-full flex flex-col pt-0 hover:shadow-xl transition-shadow">
                   <div className="aspect-[16/10] relative overflow-hidden bg-gray-50">
                     <img 
                       src={product.image} 
@@ -567,6 +575,68 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
           )}
         </DialogContent>
       </Dialog>
+      {/* Product Detail Dialog */}
+      <Dialog open={isProductDetailOpen} onOpenChange={setIsProductDetailOpen}>
+        <DialogContent className="sm:max-w-[500px] rounded-[2rem] overflow-hidden p-0 gap-0 border-0 shadow-2xl">
+          {selectedProduct && (
+            <div className="flex flex-col">
+              <div className="relative aspect-video">
+                <img 
+                  src={selectedProduct.image} 
+                  alt={selectedProduct.name}
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute top-4 right-4">
+                  <Badge className="bg-primary text-white text-lg font-black px-4 py-1 rounded-full shadow-lg">
+                    {selectedProduct.price}
+                  </Badge>
+                </div>
+              </div>
+              
+              <div className="p-8 space-y-6">
+                <div>
+                  <h2 className="text-3xl font-black text-dark leading-tight">{selectedProduct.name}</h2>
+                  <p className="text-gray-400 font-medium">Service Premium • Neopay Digital</p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 p-4 rounded-2xl bg-accent-light/30 border border-primary/10">
+                    < LucideIcons.Info className="h-5 w-5 text-primary shrink-0" />
+                    <p className="text-sm text-dark font-medium leading-relaxed">
+                      {selectedProduct.description || "Profitez de ce service exceptionnel avec Neopay. Qualité garantie et livraison ultra-rapide."}
+                    </p>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded-2xl bg-gray-50 flex items-center gap-2">
+                      <LucideIcons.Clock className="h-4 w-4 text-emerald-500" />
+                      <span className="text-[10px] font-bold text-gray-500 uppercase">Livraison <br/>24/7</span>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-gray-50 flex items-center gap-2">
+                       <LucideIcons.ShieldCheck className="h-4 w-4 text-primary" />
+                       <span className="text-[10px] font-bold text-gray-500 uppercase">Paiement <br/>Sécurisé</span>
+                    </div>
+                  </div>
+                </div>
+
+                <Button 
+                  onClick={() => openWhatsApp(selectedProduct.whatsappMessage || `Bonjour, je suis intéressé par : ${selectedProduct.name}.`)}
+                  className="w-full h-14 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-3 active:scale-95 transition-all"
+                >
+                  <LucideIcons.MessageCircle className="h-6 w-6" />
+                  Commander maintenant
+                </Button>
+                
+                <p className="text-center text-[10px] text-gray-400 font-medium italic">
+                  *Un agent vous répondra instantanément sur WhatsApp
+                </p>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <motion.div 
         initial={{ opacity: 0, scale: 0.5 }}
         animate={{ opacity: showScrollTop ? 1 : 0, scale: showScrollTop ? 1 : 0 }}

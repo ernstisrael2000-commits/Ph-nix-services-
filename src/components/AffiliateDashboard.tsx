@@ -218,7 +218,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     }
 
     if (amount < 20) {
-      toast.error("Le montant minimum de retrait est de 20 Goud.");
+      toast.error("Le montant minimum de retrait est de 20 $.");
       return;
     }
 
@@ -234,7 +234,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       // Send WhatsApp notification to admin
       const adminPhone = settings?.whatsappAdminNumber || "+50944813185";
       const methodText = withdrawMethod === 'Physical' ? 'En personne (Juvénat)' : withdrawMethod;
-      const message = `Bonjour Admin, j'ai soumis une demande de retrait Neopay.\n\nMontant: ${amount} Goud\nMéthode: ${methodText}\nNuméro/Lieu: ${withdrawMethod === 'Physical' ? 'Bureau Juvénat' : accountNumber.trim()}\nCode Affilié: ${affiliate.code}\nNom: ${affiliate.name}`;
+      const message = `Bonjour Admin, j'ai soumis une demande de retrait Neopay.\n\nMontant: ${amount} $\nMéthode: ${methodText}\nNuméro/Lieu: ${withdrawMethod === 'Physical' ? 'Bureau Juvénat' : accountNumber.trim()}\nCode Affilié: ${affiliate.code}\nNom: ${affiliate.name}`;
       window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`, '_blank');
       
     } catch (error: any) {
@@ -270,7 +270,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     setIsSubmitting(true);
     try {
       const recipientName = await submitTransfer(affiliate, transferRecipientWalletId.trim(), amount);
-      toast.success(`Votre demande de transfert de ${amount} Goud vers ${recipientName} a été envoyée.`);
+      toast.success(`Votre demande de transfert de ${amount} $ vers ${recipientName} a été envoyée.`);
       setIsTransferModalOpen(false);
       setTransferAmount('');
       setTransferRecipientWalletId('');
@@ -322,7 +322,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         setDepositAmount('');
         
         const adminPhone = settings?.whatsappAdminNumber || "+50944813185";
-        const message = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Neopay.\n\nMontant: ${amount} Goud\nMéthode: ${depositMethod}\nID Wallet: ${affiliate.walletId}\nNom: ${affiliate.name}`;
+        const message = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Neopay.\n\nMontant: ${amount} $\nMéthode: ${depositMethod}\nID Wallet: ${affiliate.walletId}\nNom: ${affiliate.name}`;
         window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`, '_blank');
       }
     } catch (error: any) {
@@ -496,15 +496,20 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                    <div className="w-1 h-1 rounded-full bg-white/40" />
                    <p className="text-white/50 text-[10px] font-black uppercase tracking-widest">Solde Courant</p>
                 </div>
-                <div className="flex items-baseline gap-3">
-                  <motion.h3 
-                    animate={{ textShadow: ["0 0 0px rgba(255,255,255,0)", "0 0 15px rgba(255,255,255,0.3)", "0 0 0px rgba(255,255,255,0)"] }}
-                    transition={{ duration: 3, repeat: Infinity }}
-                    className="text-5xl sm:text-6xl font-black tracking-tight text-white"
-                  >
-                    {affiliate.balance.toLocaleString()}
-                  </motion.h3>
-                  <span className="text-lg font-black text-white/30 uppercase tracking-tighter">Goud</span>
+                <div className="flex flex-col">
+                  <div className="flex items-baseline gap-3">
+                    <motion.h3 
+                      animate={{ textShadow: ["0 0 0px rgba(255,255,255,0)", "0 0 15px rgba(255,255,255,0.3)", "0 0 0px rgba(255,255,255,0)"] }}
+                      transition={{ duration: 3, repeat: Infinity }}
+                      className="text-5xl sm:text-6xl font-black tracking-tight text-white"
+                    >
+                      {affiliate.balance.toLocaleString()}
+                    </motion.h3>
+                    <span className="text-lg font-black text-white/30 uppercase tracking-tighter">$</span>
+                  </div>
+                  <p className="text-sm font-bold text-white/40 tracking-tight">
+                    ≈ {((affiliate.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
+                  </p>
                 </div>
               </div>
 
@@ -557,8 +562,18 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                         <SelectValue placeholder="Méthode" />
                       </SelectTrigger>
                       <SelectContent className="rounded-2xl border-0 shadow-xl">
-                        <SelectItem value="MonCash" className="font-bold">MonCash (Digicel)</SelectItem>
-                        <SelectItem value="NatCash" className="font-bold">NatCash (Natcom)</SelectItem>
+                        <SelectItem value="MonCash" className="font-bold">
+                          <div className="flex items-center gap-2">
+                            {settings?.moncashLogoUrl && <img src={settings.moncashLogoUrl} alt="MonCash" className="h-4 w-auto object-contain" referrerPolicy="no-referrer" />}
+                            MonCash (Digicel)
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="NatCash" className="font-bold">
+                          <div className="flex items-center gap-2">
+                            {settings?.natcashLogoUrl && <img src={settings.natcashLogoUrl} alt="NatCash" className="h-4 w-auto object-contain" referrerPolicy="no-referrer" />}
+                            NatCash (Natcom)
+                          </div>
+                        </SelectItem>
                         <SelectItem value="Agent" className="font-bold">Dépôt via Agent (Physique)</SelectItem>
                         <SelectItem value="Physical" className="font-bold">Bureau / Proxy</SelectItem>
                       </SelectContent>
@@ -601,7 +616,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                     </div>
                   )}
                   <div className="space-y-3">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Montant Souhaité (Goud)</Label>
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Montant Souhaité ($)</Label>
                     <div className="relative">
                        <Input 
                          type="number" 
@@ -652,8 +667,18 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                         <SelectValue placeholder="Méthode" />
                       </SelectTrigger>
                       <SelectContent className="rounded-2xl border-0 shadow-xl">
-                        <SelectItem value="MonCash" className="font-bold">MonCash</SelectItem>
-                        <SelectItem value="NatCash" className="font-bold">NatCash</SelectItem>
+                        <SelectItem value="MonCash" className="font-bold">
+                          <div className="flex items-center gap-2">
+                            {settings?.moncashLogoUrl && <img src={settings.moncashLogoUrl} alt="MonCash" className="h-4 w-auto object-contain" referrerPolicy="no-referrer" />}
+                            MonCash
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="NatCash" className="font-bold">
+                          <div className="flex items-center gap-2">
+                            {settings?.natcashLogoUrl && <img src={settings.natcashLogoUrl} alt="NatCash" className="h-4 w-auto object-contain" referrerPolicy="no-referrer" />}
+                            NatCash
+                          </div>
+                        </SelectItem>
                         <SelectItem value="Physical" className="font-bold">Retrait Physique (Bureau Juvénat)</SelectItem>
                       </SelectContent>
                     </Select>
@@ -681,7 +706,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                   )}
 
                   <div className="space-y-3">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Montant (Goud)</Label>
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Montant ($)</Label>
                     <div className="relative">
                        <Input 
                          type="number" 
@@ -692,7 +717,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                        />
                        <MinusCircle className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-indigo-500" />
                     </div>
-                    <p className="text-[9px] text-gray-400 font-bold ml-1">Solde disponible : {affiliate.balance} Goud</p>
+                    <p className="text-[9px] text-gray-400 font-bold ml-1">Solde disponible : {affiliate.balance} $</p>
                   </div>
                 </div>
                 <DialogFooter>
@@ -716,7 +741,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 <DialogHeader>
                   <DialogTitle className="text-2xl font-black">Transfert Entre Affiliés</DialogTitle>
                   <DialogDescription className="font-medium">
-                    Envoyez des Goud instantanément à un autre membre Neopay.
+                    Envoyez des Dollars ($) instantanément à un autre membre Neopay.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-6 py-6">
@@ -749,7 +774,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                     )}
                   </div>
                   <div className="space-y-3">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Montant à Envoyer (Goud)</Label>
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Montant à Envoyer ($)</Label>
                     <div className="relative">
                        <Input 
                          type="number" 
@@ -760,7 +785,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                        />
                        <Send className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-blue-500" />
                     </div>
-                    <p className="text-[9px] text-gray-400 font-bold">Solde disponible : {affiliate.balance} Goud</p>
+                    <p className="text-[9px] text-gray-400 font-bold">Solde disponible : {affiliate.balance} $</p>
                   </div>
                 </div>
                 <DialogFooter className="flex-col gap-3">
@@ -924,7 +949,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                             <Badge variant="secondary" className="text-[10px] font-black px-2.5 h-5 bg-blue-600 text-white border-0 shadow-sm shadow-blue-200">
                               {a.points || 0} PTS
                             </Badge>
-                            <span className="text-[11px] font-bold text-gray-400 tracking-tight">{a.monthlySales || 0} Goud produits</span>
+                            <span className="text-[11px] font-bold text-gray-400 tracking-tight">{a.monthlySales || 0} $ produits</span>
                           </div>
                         </div>
                       </div>
