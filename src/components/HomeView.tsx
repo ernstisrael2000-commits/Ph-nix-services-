@@ -16,7 +16,7 @@ import * as LucideIcons from 'lucide-react';
 import { Button } from './ui/button';
 import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { useProducts, useGames, useCardTopups, useSliderImages, useNavButtons } from '../services/parcelService';
+import { useProducts, useGames, useCardTopups, useSliderImages, useNavButtons, useSettings } from '../services/parcelService';
 import { AnimatePresence } from 'motion/react';
 import { 
   Dialog, 
@@ -27,7 +27,9 @@ import {
   DialogFooter
 } from './ui/dialog';
 import { Badge } from './ui/badge';
-import { Loader2, ShieldCheck, Zap, Star, Headphones } from 'lucide-react';
+import { Label } from './ui/label';
+import { Input } from './ui/input';
+import { Loader2, ShieldCheck, Zap, Star, Headphones, QrCode, Wallet, Smartphone, Landmark } from 'lucide-react';
 
 const WHATSAPP_NUMBER = "+50944813185";
 
@@ -48,15 +50,39 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
   const { cards, loading: cardsLoading } = useCardTopups();
   const { sliderImages, loading: sliderLoading } = useSliderImages();
   const { buttons, loading: buttonsLoading } = useNavButtons();
+  const { settings } = useSettings();
   const [isGamesDialogOpen, setIsGamesDialogOpen] = React.useState(false);
   const [isCardsDialogOpen, setIsCardsDialogOpen] = React.useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [isProductDetailOpen, setIsProductDetailOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
+  // Payment Modal States
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentTarget, setPaymentTarget] = useState<{ name: string, price: string, type: string } | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'moncash' | 'natcash' | 'admi' | null>('moncash');
+  const [paymentTransactionInfo, setPaymentTransactionInfo] = useState('');
+
   const handleProductClick = (product: any) => {
     setSelectedProduct(product);
     setIsProductDetailOpen(true);
+  };
+
+  const handleBuyRequested = (item: { name: string, price: string, type: string }) => {
+    setPaymentTarget(item);
+    setIsPaymentModalOpen(true);
+    setSelectedPaymentMethod('moncash');
+  };
+
+  const handleFinalPaymentSubmit = () => {
+    if (!paymentTarget || !selectedPaymentMethod) return;
+
+    const methodLabel = selectedPaymentMethod === 'moncash' ? 'Mon Cash' : selectedPaymentMethod === 'natcash' ? 'Natcash' : 'Admi';
+    const message = `Bonjour Neopay,\n\nJe souhaite commander :\n📦 *${paymentTarget.name}*\n💰 Prix : *${paymentTarget.price}*\n\n💳 Mode de paiement : *${methodLabel}*\n📝 Infos Transaction : *${paymentTransactionInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`;
+    
+    openWhatsApp(message);
+    setIsPaymentModalOpen(false);
+    setPaymentTransactionInfo('');
   };
   
   const servicesRef = useRef<HTMLElement>(null);
@@ -390,7 +416,10 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                       <span className="product-price">{product.price}</span>
                       <Button 
                         size="sm"
-                        onClick={() => openWhatsApp(product.whatsappMessage || `Bonjour, je suis intéressé par ce service Neopay : ${product.name}. Je souhaite passer commande.`)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleBuyRequested({ name: product.name, price: product.price, type: 'product' });
+                        }}
                         className="product-buy-button"
                       >
                         ⚡ Acheter
@@ -485,7 +514,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                               </div>
                               <Button 
                                 size="sm" 
-                                onClick={() => openWhatsApp(item.whatsappMessage || `Bonjour, je souhaite acheter le pack ${item.name} (${item.price}) pour le jeu ${game.name}.`)}
+                                onClick={() => handleBuyRequested({ name: `${game.name} - ${item.name}`, price: item.price, type: 'game' })}
                                 className="h-8 px-4 text-[10px] font-bold bg-purple-600 text-white hover:bg-purple-700 shadow-md rounded-full transition-all active:scale-95 border-0"
                               >
                                 Commander
@@ -558,7 +587,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                     <div className="product-footer mt-auto pt-2">
                       <Button 
                         size="sm"
-                        onClick={() => openWhatsApp(card.whatsappMessage || `Bonjour, je souhaite recharger ma carte via le service : ${card.name}.`)}
+                        onClick={() => handleBuyRequested({ name: card.name, price: card.price, type: 'card' })}
                         className="product-buy-button w-full justify-center text-[10px] py-1 h-7"
                       >
                         ⚡ Recharger
@@ -621,11 +650,11 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                 </div>
 
                 <Button 
-                  onClick={() => openWhatsApp(selectedProduct.whatsappMessage || `Bonjour, je suis intéressé par : ${selectedProduct.name}.`)}
+                  onClick={() => handleBuyRequested({ name: selectedProduct.name, price: selectedProduct.price, type: 'product' })}
                   className="w-full h-14 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-3 active:scale-95 transition-all"
                 >
-                  <LucideIcons.MessageCircle className="h-6 w-6" />
-                  Commander maintenant
+                  <LucideIcons.CreditCard className="h-6 w-6" />
+                  Payer maintenant
                 </Button>
                 
                 <p className="text-center text-[10px] text-gray-400 font-medium italic">
@@ -659,6 +688,136 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
           <MessageCircle className="h-6 w-6" />
         </Button>
       </div>
+
+      {/* Payment Modal */}
+      <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
+        <DialogContent className="sm:max-w-[450px] p-0 overflow-hidden border-0 bg-white rounded-[2.5rem] shadow-2xl">
+          <div className="bg-primary p-6 text-white">
+            <DialogHeader>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-md">
+                   <ShieldCheck className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <DialogTitle className="text-xl font-black uppercase tracking-tight">Finaliser Paiement</DialogTitle>
+                  <DialogDescription className="text-white/70 text-xs font-bold uppercase tracking-widest">Paiement Sécurisé Neopay</DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            {paymentTarget && (
+              <div className="mt-4 p-4 rounded-2xl bg-black/20 border border-white/10 backdrop-blur-sm">
+                <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-1">Commande</p>
+                <p className="text-lg font-bold truncate">{paymentTarget.name}</p>
+                <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/10">
+                  <span className="text-xs font-bold text-white/60">Total à payer</span>
+                  <span className="text-2xl font-black text-white">{paymentTarget.price}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="p-6 space-y-6">
+            <div className="space-y-3">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Choisir le mode de paiement</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'moncash', label: 'Mon Cash', icon: Smartphone, color: 'text-rose-500', bg: 'bg-rose-50', border: 'border-rose-100' },
+                  { id: 'natcash', label: 'Natcash', icon: Smartphone, color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-100' },
+                  { id: 'admi', label: 'Admi', icon: Landmark, color: 'text-indigo-500', bg: 'bg-indigo-50', border: 'border-indigo-100' }
+                ].map(method => (
+                  <button
+                    key={method.id}
+                    onClick={() => setSelectedPaymentMethod(method.id as any)}
+                    className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 transition-all ${
+                      selectedPaymentMethod === method.id 
+                        ? `${method.border} ${method.bg} shadow-md scale-105` 
+                        : 'border-gray-50 bg-gray-50/50 grayscale hover:grayscale-0 hover:border-gray-100'
+                    }`}
+                  >
+                    <method.icon className={`h-6 w-6 ${method.color} mb-1`} />
+                    <span className="text-[10px] font-black uppercase text-dark">{method.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <AnimatePresence mode="wait">
+              {selectedPaymentMethod && (
+                <motion.div
+                  key={selectedPaymentMethod}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="p-5 rounded-[2rem] bg-gray-50 border border-gray-100 space-y-4 shadow-inner"
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-black text-primary uppercase tracking-widest">Infos de Paiement</p>
+                    <Badge variant="outline" className="text-[10px] font-black bg-white">{selectedPaymentMethod.toUpperCase()}</Badge>
+                  </div>
+
+                  <div className="flex flex-col items-center text-center space-y-3">
+                    <div className="space-y-1">
+                      <p className="text-gray-400 text-[10px] font-bold uppercase">Numéro de réception</p>
+                      <p className="text-2xl font-black text-dark tracking-tighter">
+                        {selectedPaymentMethod === 'moncash' ? (settings?.moncashNumber || 'Précisé sur WhatsApp') : 
+                         selectedPaymentMethod === 'natcash' ? (settings?.natcashNumber || 'Précisé sur WhatsApp') : 
+                         (settings?.admiNumber || 'Précisé sur WhatsApp')}
+                      </p>
+                    </div>
+
+                    {(settings?.[`${selectedPaymentMethod}QR` as keyof typeof settings]) && (
+                      <div className="relative group">
+                        <div className="absolute inset-0 bg-primary/5 rounded-2xl blur-xl group-hover:bg-primary/10 transition-colors" />
+                        <Card className="relative p-2 rounded-2xl border-2 border-white shadow-xl bg-white">
+                          <img 
+                            src={settings[`${selectedPaymentMethod}QR` as keyof typeof settings] as string} 
+                            alt="QR Code" 
+                            className="h-24 w-24 object-contain"
+                          />
+                          <div className="absolute -bottom-2 -right-2 bg-primary text-white p-1 rounded-lg">
+                            <QrCode className="h-4 w-4" />
+                          </div>
+                        </Card>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="space-y-3">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Détails de votre transaction</Label>
+              <div className="relative">
+                <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-300" />
+                <Input 
+                  placeholder="ID Transaction, Nom ou Numéro de l'expéditeur" 
+                  value={paymentTransactionInfo}
+                  onChange={(e) => setPaymentTransactionInfo(e.target.value)}
+                  className="pl-12 h-14 rounded-2xl border-gray-100 focus:ring-primary/20 bg-gray-50/50 font-bold"
+                />
+              </div>
+              <p className="text-[9px] text-gray-400 italic px-2 text-center">
+                Veuillez saisir les informations permettant d'identifier votre transfert pour une validation immédiate.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="p-6 bg-gray-50/50 border-t border-gray-100 sm:flex-col gap-3">
+            <Button 
+               onClick={handleFinalPaymentSubmit}
+               disabled={!paymentTransactionInfo.trim()}
+               className="w-full h-14 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-3 transition-all active:scale-95 disabled:grayscale disabled:opacity-50"
+            >
+               Envoyer et Payer
+               <ArrowRight className="h-5 w-5" />
+            </Button>
+            <p className="text-center text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+              En cliquant, vous serez redirigé vers WhatsApp pour finaliser
+            </p>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

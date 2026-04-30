@@ -146,6 +146,12 @@ export interface AppSettings {
   lockAffiliateEdits?: boolean;
   lockAffiliateEditsCode?: string;
   withdrawalsEnabled?: boolean;
+  moncashNumber?: string;
+  moncashQR?: string;
+  natcashNumber?: string;
+  natcashQR?: string;
+  admiNumber?: string;
+  admiQR?: string;
   globalAnnouncement?: string;
   showGlobalAnnouncement?: boolean;
   officialWinners?: {

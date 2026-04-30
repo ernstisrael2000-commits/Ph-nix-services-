@@ -26,6 +26,7 @@ import {
   Trash,
   Settings as SettingsIcon,
   LayoutGrid,
+  Landmark,
   Image as ImageIcon,
   Edit,
   PlusCircle,
@@ -5403,11 +5404,121 @@ const AffiliateEditForm = ({
                   </div>
                 </div>
 
-                <div className="space-y-4 pt-4 border-t">
-                  <h3 className="text-sm font-bold text-dark flex items-center gap-2">
-                    < LucideIcons.Palette className="h-4 w-4 text-primary" />
-                    Gestion des logos de paiement
-                  </h3>
+                    <div className="space-y-4 pt-4 border-t">
+                      <h3 className="text-sm font-bold text-dark flex items-center gap-2">
+                        <Wallet className="h-4 w-4 text-emerald-600" />
+                        Coordonnées de Paiement Clients
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* MonCash Settings */}
+                        <div className="space-y-4 p-4 rounded-3xl bg-rose-50/30 border border-rose-100">
+                           <div className="flex items-center gap-2 mb-2">
+                             <div className="h-8 w-8 rounded-xl bg-white shadow-sm flex items-center justify-center">
+                               <Smartphone className="h-4 w-4 text-rose-500" />
+                             </div>
+                             <span className="text-sm font-black text-rose-700">Mon Cash</span>
+                           </div>
+                           <div className="space-y-1">
+                             <Label className="text-[10px] font-bold text-rose-600/60 uppercase">Numéro de téléphone</Label>
+                             <Input 
+                               placeholder="Ex: +509..." 
+                               value={pendingSettings?.moncashNumber ?? settings?.moncashNumber ?? ''}
+                               onChange={(e) => setPendingSettings(prev => ({ ...prev, moncashNumber: e.target.value }))}
+                               className="rounded-xl border-rose-100 focus:ring-rose-200"
+                             />
+                           </div>
+                           <div className="space-y-1">
+                             <Label className="text-[10px] font-bold text-rose-600/60 uppercase">Lien QR Code</Label>
+                             <Input 
+                               placeholder="https://..." 
+                               value={pendingSettings?.moncashQR ?? settings?.moncashQR ?? ''}
+                               onChange={(e) => setPendingSettings(prev => ({ ...prev, moncashQR: e.target.value }))}
+                               className="rounded-xl border-rose-100 focus:ring-rose-200"
+                             />
+                           </div>
+                        </div>
+
+                        {/* NatCash Settings */}
+                        <div className="space-y-4 p-4 rounded-3xl bg-amber-50/30 border border-amber-100">
+                           <div className="flex items-center gap-2 mb-2">
+                             <div className="h-8 w-8 rounded-xl bg-white shadow-sm flex items-center justify-center">
+                               <Smartphone className="h-4 w-4 text-amber-500" />
+                             </div>
+                             <span className="text-sm font-black text-amber-700">Natcash</span>
+                           </div>
+                           <div className="space-y-1">
+                             <Label className="text-[10px] font-bold text-amber-600/60 uppercase">Numéro de téléphone</Label>
+                             <Input 
+                               placeholder="Ex: +509..." 
+                               value={pendingSettings?.natcashNumber ?? settings?.natcashNumber ?? ''}
+                               onChange={(e) => setPendingSettings(prev => ({ ...prev, natcashNumber: e.target.value }))}
+                               className="rounded-xl border-amber-100 focus:ring-amber-200"
+                             />
+                           </div>
+                           <div className="space-y-1">
+                             <Label className="text-[10px] font-bold text-amber-600/60 uppercase">Lien QR Code</Label>
+                             <Input 
+                               placeholder="https://..." 
+                               value={pendingSettings?.natcashQR ?? settings?.natcashQR ?? ''}
+                               onChange={(e) => setPendingSettings(prev => ({ ...prev, natcashQR: e.target.value }))}
+                               className="rounded-xl border-amber-100 focus:ring-amber-200"
+                             />
+                           </div>
+                        </div>
+
+                        {/* Admi Settings */}
+                        <div className="space-y-4 p-4 rounded-3xl bg-indigo-50/30 border border-indigo-100">
+                           <div className="flex items-center gap-2 mb-2">
+                             <div className="h-8 w-8 rounded-xl bg-white shadow-sm flex items-center justify-center">
+                               <Landmark className="h-4 w-4 text-indigo-500" />
+                             </div>
+                             <span className="text-sm font-black text-indigo-700">Admi</span>
+                           </div>
+                           <div className="space-y-1">
+                             <Label className="text-[10px] font-bold text-indigo-600/60 uppercase">Coordonnées / Numéro</Label>
+                             <Input 
+                               placeholder="Ex: 5500-0000" 
+                               value={pendingSettings?.admiNumber ?? settings?.admiNumber ?? ''}
+                               onChange={(e) => setPendingSettings(prev => ({ ...prev, admiNumber: e.target.value }))}
+                               className="rounded-xl border-indigo-100 focus:ring-indigo-200"
+                             />
+                           </div>
+                           <div className="space-y-1">
+                             <Label className="text-[10px] font-bold text-indigo-600/60 uppercase">Lien QR Code</Label>
+                             <Input 
+                               placeholder="https://..." 
+                               value={pendingSettings?.admiQR ?? settings?.admiQR ?? ''}
+                               onChange={(e) => setPendingSettings(prev => ({ ...prev, admiQR: e.target.value }))}
+                               className="rounded-xl border-indigo-100 focus:ring-indigo-200"
+                             />
+                           </div>
+                        </div>
+                      </div>
+
+                      <Button 
+                        onClick={async () => {
+                          const dataToUpdate = {
+                            moncashNumber: pendingSettings.moncashNumber !== undefined ? pendingSettings.moncashNumber : settings?.moncashNumber,
+                            moncashQR: pendingSettings.moncashQR !== undefined ? pendingSettings.moncashQR : settings?.moncashQR,
+                            natcashNumber: pendingSettings.natcashNumber !== undefined ? pendingSettings.natcashNumber : settings?.natcashNumber,
+                            natcashQR: pendingSettings.natcashQR !== undefined ? pendingSettings.natcashQR : settings?.natcashQR,
+                            admiNumber: pendingSettings.admiNumber !== undefined ? pendingSettings.admiNumber : settings?.admiNumber,
+                            admiQR: pendingSettings.admiQR !== undefined ? pendingSettings.admiQR : settings?.admiQR,
+                          };
+                          await updateSettings(dataToUpdate);
+                          toast.success("Coordonnées de paiement mises à jour !");
+                        }}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl h-14 shadow-xl active:scale-95 transition-all"
+                      >
+                        Enregistrer les coordonnées de paiement
+                      </Button>
+                    </div>
+
+                    <div className="space-y-4 pt-4 border-t">
+                      <h3 className="text-sm font-bold text-dark flex items-center gap-2">
+                        < LucideIcons.Palette className="h-4 w-4 text-primary" />
+                        Gestion des logos de paiement
+                      </h3>
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label className="text-xs font-bold text-gray-500">Logo MonCash (URL)</Label>
