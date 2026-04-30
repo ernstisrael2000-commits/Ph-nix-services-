@@ -124,7 +124,8 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Timestamp, serverTimestamp } from 'firebase/firestore';
+import { Timestamp, serverTimestamp, collection, addDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { LogOut, Shield, ShieldAlert as ShieldAlertIcon, History } from 'lucide-react';
@@ -2708,21 +2709,34 @@ const AffiliateEditForm = ({
     if (!selectedAffiliateForCredit || quickCreditAmount === 0) return;
     setIsSaving(true);
     try {
-      const newBalance = (selectedAffiliateForCredit.balance || 0) + quickCreditAmount;
-      const newEarnings = (selectedAffiliateForCredit.totalEarnings || 0) + (quickCreditAmount > 0 ? quickCreditAmount : 0);
+      const exchangeRate = settings?.exchangeRate || 146;
+      const usdAmount = Number((quickCreditAmount / exchangeRate).toFixed(2));
+      const newBalance = (selectedAffiliateForCredit.balance || 0) + usdAmount;
+      const newEarnings = (selectedAffiliateForCredit.totalEarnings || 0) + (usdAmount > 0 ? usdAmount : 0);
       
       await saveAffiliate({
-        ...selectedAffiliateForCredit,
         balance: newBalance,
         totalEarnings: newEarnings,
         updatedAt: serverTimestamp()
       }, selectedAffiliateForCredit.id);
+
+      // Record Transaction for transparency
+      await addDoc(collection(db, 'wallet_transactions'), {
+        affiliateId: selectedAffiliateForCredit.id,
+        type: 'deposit',
+        amount: usdAmount,
+        status: 'completed',
+        description: `Dépôt Admin (${quickCreditAmount.toLocaleString()} HTG @ ${exchangeRate})`,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
       
-      toast.success(`Le compte de ${selectedAffiliateForCredit.name} a été crédité de ${quickCreditAmount} G.`);
+      toast.success(`Le compte de ${selectedAffiliateForCredit.name} a été crédité de ${usdAmount} $ (${quickCreditAmount} G).`);
       setIsQuickCreditDialogOpen(false);
       setQuickCreditAmount(0);
       setSelectedAffiliateForCredit(null);
     } catch (error) {
+      console.error("Credit error:", error);
       toast.error("Erreur lors du crédit du compte.");
     } finally {
       setIsSaving(false);
@@ -4770,7 +4784,17 @@ const AffiliateEditForm = ({
                                {selectedAffiliateDetail.name.charAt(0)}
                              </div>
                              <h3 className="text-2xl font-black text-dark leading-tight">{selectedAffiliateDetail.name}</h3>
-                             <p className="text-gray-400 font-mono font-bold text-xs mt-1">ID: {selectedAffiliateDetail.id.substring(0, 10)}...</p>
+                             <div className="flex flex-col items-center gap-1 mt-1">
+                               <p className="text-gray-400 font-mono font-bold text-xs">ID: {selectedAffiliateDetail.id.substring(0, 10)}...</p>
+                               {selectedAffiliateDetail.walletId && (
+                                 <div className="mt-2 inline-flex flex-col items-center px-4 py-2 rounded-xl bg-emerald-50 border border-emerald-100">
+                                   <p className="text-[8px] font-black text-emerald-600/60 uppercase tracking-[0.2em] mb-0.5">Wallet ID</p>
+                                   <p className="text-sm font-mono font-black tracking-[0.2em] text-emerald-950">
+                                     {selectedAffiliateDetail.walletId.match(/.{1,4}/g)?.join(' ')}
+                                   </p>
+                                 </div>
+                               )}
+                             </div>
                              
                              <div className="mt-8 space-y-3">
                                 <Button 
@@ -7320,10 +7344,10 @@ const AffiliateEditForm = ({
             </DialogDescription>
           </DialogHeader>
           <div className="p-8 space-y-6">
-            <div className="space-y-2">
-              <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Montant à ajouter (Goud)</Label>
+            <div className="space-y-3">
+              <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest text-center">Montant à Ajouter (HTG)</p>
               <div className="relative">
-                <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-600" />
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-gray-300">G</div>
                 <Input 
                   type="number"
                   value={quickCreditAmount}
@@ -7332,7 +7356,11 @@ const AffiliateEditForm = ({
                   className="pl-12 h-14 rounded-2xl text-2xl font-black border-emerald-100 focus:ring-emerald-200"
                 />
               </div>
-              <p className="text-[11px] text-gray-400 text-center">Solde actuel: <span className="font-bold text-dark">{selectedAffiliateForCredit?.balance} $</span></p>
+              <div className="flex flex-col items-center gap-1">
+                <p className="text-[11px] text-gray-400 text-center">Conversion: <span className="font-bold text-emerald-600">{(quickCreditAmount / (settings?.exchangeRate || 146)).toFixed(2)} $</span></p>
+                <p className="text-[9px] text-gray-300 italic">Taux actuel: 1$ = {settings?.exchangeRate || 146} HTG</p>
+              </div>
+              <p className="text-[11px] text-gray-400 text-center pt-2 border-t border-gray-50">Solde actuel de {selectedAffiliateForCredit?.name}: <span className="font-bold text-dark">{selectedAffiliateForCredit?.balance} $</span></p>
             </div>
 
             <div className="flex gap-2 flex-wrap justify-center">

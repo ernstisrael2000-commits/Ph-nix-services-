@@ -590,7 +590,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                       <Copy className="h-3 w-3" />
                     </button>
                   </div>
-                  <p className="text-xl font-mono font-black tracking-[0.3em] text-emerald-900/40">
+                  <p className="text-xl font-mono font-black tracking-[0.3em] text-emerald-950">
                     {affiliate.walletId ? affiliate.walletId.match(/.{1,4}/g)?.join(' ') : '.... ....'}
                   </p>
                 </div>
