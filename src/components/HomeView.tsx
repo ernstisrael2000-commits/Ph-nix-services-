@@ -306,59 +306,8 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                 />
                 
                 {/* Enhanced Overlay Gradients */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-black via-black/40 to-transparent opacity-90" />
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60" />
-                
-                {/* Content Overlay - Staggered Animations */}
-                <div className="relative z-20 h-full flex flex-col justify-end items-start p-8 md:p-12 pb-10 md:pb-14 space-y-4 md:space-y-6">
-                  <div className="space-y-2 md:space-y-3 max-w-3xl">
-                    <motion.div
-                      initial={{ opacity: 0, y: 30, filter: "blur(10px)" }}
-                      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                      transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
-                    >
-                      <h1 className="text-4xl md:text-7xl font-black tracking-tighter text-white uppercase italic leading-[0.9]">
-                        <span className="bg-gradient-to-br from-white via-white to-primary/80 bg-clip-text text-transparent drop-shadow-2xl">
-                          {imagesToDisplay[currentSlide]?.title || 'Neopay'}
-                        </span>
-                      </h1>
-                    </motion.div>
-
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.8, ease: "easeOut", delay: 0.4 }}
-                      className="flex items-center gap-3"
-                    >
-                      <div className="h-px w-8 md:w-12 bg-primary/60" />
-                      <h2 className="text-xs md:text-xl font-bold text-white/80 uppercase tracking-[0.2em] leading-tight">
-                        {imagesToDisplay[currentSlide]?.description || 'Services Digitaux & Recharges'}
-                      </h2>
-                    </motion.div>
-                  </div>
-
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: 0.6 }}
-                  >
-                    <Button 
-                      size="lg"
-                      onClick={scrollToServices}
-                      className="bg-primary hover:bg-[#D98A1E] text-white hover:scale-105 active:scale-95 transition-all rounded-full h-12 md:h-16 px-8 md:px-12 text-xs md:text-lg font-black shadow-[0_20px_50px_rgba(245,166,35,0.3)] group overflow-hidden relative"
-                    >
-                      <span className="relative z-10 flex items-center gap-2">
-                        Démarrer l'expérience
-                        <ArrowRight className="h-5 w-5 md:h-6 md:w-6 group-hover:translate-x-2 transition-transform duration-300" />
-                      </span>
-                      <motion.div 
-                        animate={{ x: ['100%', '-100%'] }}
-                        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12"
-                      />
-                    </Button>
-                  </motion.div>
-                </div>
+                <div className="absolute inset-0 bg-gradient-to-tr from-black via-black/40 to-transparent opacity-60" />
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40" />
               </motion.div>
             </AnimatePresence>
           </div>
