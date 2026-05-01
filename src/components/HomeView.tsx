@@ -494,18 +494,12 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                       <p className="product-subtitle truncate">Livraison rapide / Neopay</p>
                     </div>
                     
-                    <div className="product-footer">
+                    <div className="product-footer flex items-center justify-between">
                       <span className="product-price">{product.price}</span>
-                      <Button 
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleBuyRequested({ name: product.name, price: product.price, type: 'product' });
-                        }}
-                        className="product-buy-button"
-                      >
-                        ⚡ Acheter
-                      </Button>
+                      <div className="flex items-center gap-1.5 text-primary text-[10px] font-black uppercase tracking-widest group-hover:translate-x-1 transition-transform">
+                        Détails
+                        <ArrowRight className="h-3 w-3" />
+                      </div>
                     </div>
                   </div>
                 </Card>
@@ -788,8 +782,8 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                   })}
                   className="w-full h-14 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-3 active:scale-95 transition-all"
                 >
-                  <LucideIcons.CreditCard className="h-6 w-6" />
-                  Payer maintenant
+                  <LucideIcons.ArrowRight className="h-6 w-6" />
+                  Continuer
                 </Button>
                 
                 <p className="text-center text-[10px] text-gray-400 font-medium italic">
