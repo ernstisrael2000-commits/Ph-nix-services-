@@ -27,6 +27,7 @@ export interface Product {
   price: string;
   stock?: number;
   whatsappMessage?: string;
+  plans?: { id: string; name: string; price: string }[];
   createdAt: any;
 }
 

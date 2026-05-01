@@ -55,6 +55,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
   const [isGamesDialogOpen, setIsGamesDialogOpen] = React.useState(false);
   const [isCardsDialogOpen, setIsCardsDialogOpen] = React.useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [isProductDetailOpen, setIsProductDetailOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
@@ -66,6 +67,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
 
   const handleProductClick = (product: any) => {
     setSelectedProduct(product);
+    setSelectedPlan(product.plans && product.plans.length > 0 ? product.plans[0] : null);
     setIsProductDetailOpen(true);
   };
 
@@ -632,7 +634,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                 />
                 <div className="absolute top-4 right-4">
                   <Badge className="bg-primary text-white text-lg font-black px-4 py-1 rounded-full shadow-lg">
-                    {selectedProduct.price}
+                    {selectedPlan ? selectedPlan.price : selectedProduct.price}
                   </Badge>
                 </div>
               </div>
@@ -661,10 +663,46 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                        <span className="text-[10px] font-bold text-gray-500 uppercase">Paiement <br/>Sécurisé</span>
                     </div>
                   </div>
+
+                  {selectedProduct.plans && selectedProduct.plans.length > 0 && (
+                    <div className="space-y-3 pt-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Choissisez votre plan</Label>
+                      <div className="grid grid-cols-1 gap-2">
+                        {selectedProduct.plans.map((plan: any) => (
+                          <button
+                            key={plan.id}
+                            onClick={() => setSelectedPlan(plan)}
+                            className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all group ${
+                              selectedPlan?.id === plan.id 
+                                ? 'border-primary bg-primary/5 shadow-md shadow-primary/5' 
+                                : 'border-gray-100 hover:border-gray-200 bg-white'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${selectedPlan?.id === plan.id ? 'border-primary' : 'border-gray-300 group-hover:border-gray-400'}`}>
+                                {selectedPlan?.id === plan.id && (
+                                  <motion.div 
+                                    layoutId="plan-indicator"
+                                    className="h-2.5 w-2.5 rounded-full bg-primary" 
+                                  />
+                                )}
+                              </div>
+                              <span className={`font-bold transition-colors ${selectedPlan?.id === plan.id ? 'text-primary' : 'text-dark'}`}>{plan.name}</span>
+                            </div>
+                            <span className={`font-black tracking-tight transition-colors ${selectedPlan?.id === plan.id ? 'text-primary' : 'text-gray-400'}`}>{plan.price}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <Button 
-                  onClick={() => handleBuyRequested({ name: selectedProduct.name, price: selectedProduct.price, type: 'product' })}
+                  onClick={() => handleBuyRequested({ 
+                    name: selectedPlan ? `${selectedProduct.name} (${selectedPlan.name})` : selectedProduct.name, 
+                    price: selectedPlan ? selectedPlan.price : selectedProduct.price, 
+                    type: 'product' 
+                  })}
                   className="w-full h-14 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-3 active:scale-95 transition-all"
                 >
                   <LucideIcons.CreditCard className="h-6 w-6" />

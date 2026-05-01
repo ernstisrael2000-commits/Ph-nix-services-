@@ -1854,7 +1854,8 @@ const AffiliateEditForm = ({
     description: '',
     price: '',
     stock: 0,
-    whatsappMessage: ''
+    whatsappMessage: '',
+    plans: []
   });
 
   const [tempGameImageUrl, setTempGameImageUrl] = useState('');
@@ -2045,7 +2046,10 @@ const AffiliateEditForm = ({
   const handleOpenProductDialog = (product?: Product) => {
     if (product) {
       setEditingProduct(product);
-      setProductFormData(product);
+      setProductFormData({
+        ...product,
+        plans: product.plans || []
+      });
     } else {
       setEditingProduct(null);
       setProductFormData({
@@ -2054,10 +2058,35 @@ const AffiliateEditForm = ({
         description: '',
         price: '',
         stock: 0,
-        whatsappMessage: ''
+        whatsappMessage: '',
+        plans: []
       });
     }
     setIsProductDialogOpen(true);
+  };
+
+  const updateProductPlan = (id: string, updates: any) => {
+    setProductFormData({
+      ...productFormData,
+      plans: (productFormData.plans || []).map(plan => plan.id === id ? { ...plan, ...updates } : plan)
+    });
+  };
+
+  const addProductPlan = () => {
+    const generateId = () => Math.random().toString(36).substr(2, 9);
+    setProductFormData({
+      ...productFormData,
+      plans: [...(productFormData.plans || []), { id: generateId(), name: '', price: '' }]
+    });
+  };
+
+  const removeProductPlan = (id: string) => {
+    if (!id) return;
+    setProductFormData(prev => ({
+      ...prev,
+      plans: (prev.plans || []).filter(plan => plan.id !== id)
+    }));
+    toast.info("Plan retiré. N'oubliez pas d'enregistrer.");
   };
 
   const handleSaveProduct = async () => {
@@ -6724,9 +6753,56 @@ const AffiliateEditForm = ({
                 <Input 
                   value={productFormData.price} 
                   onChange={(e) => setProductFormData({...productFormData, price: e.target.value})}
-                  className="sm:col-span-3" 
+                  className="sm:col-span-3 h-10 rounded-xl" 
                   placeholder="Ex: 1500 HTG"
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label className="sm:text-right text-xs font-bold uppercase text-gray-400">Plans / Variantes</Label>
+                <div className="sm:col-span-3 space-y-4">
+                  <div className="flex flex-col gap-3">
+                    {productFormData.plans?.map((plan, idx) => (
+                      <div key={plan.id} className="p-4 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col gap-3 relative group">
+                        <div className="flex items-center gap-2">
+                           <Badge variant="outline" className="h-5 px-2 rounded-md bg-white border-gray-200 text-gray-400 text-[8px] font-black uppercase">Plan #{idx + 1}</Badge>
+                           <Button 
+                             variant="ghost" 
+                             size="icon-sm" 
+                             className="h-6 w-6 rounded-full text-red-400 hover:text-red-600 hover:bg-red-50 ml-auto"
+                             onClick={() => removeProductPlan(plan.id)}
+                           >
+                             <LucideIcons.Trash2 className="h-3 w-3" />
+                           </Button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <Input 
+                            value={plan.name} 
+                            placeholder="Nom du plan (ex: 1 Mois)"
+                            className="h-10 rounded-xl bg-white border-gray-200 focus:ring-primary text-xs"
+                            onChange={(e) => updateProductPlan(plan.id, { name: e.target.value })}
+                          />
+                          <Input 
+                            value={plan.price} 
+                            placeholder="Prix (ex: 1500 HTG)"
+                            className="h-10 rounded-xl bg-white border-gray-200 focus:ring-primary text-xs"
+                            onChange={(e) => updateProductPlan(plan.id, { price: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    
+                    <Button 
+                      onClick={addProductPlan}
+                      variant="outline"
+                      type="button"
+                      className="w-full h-12 rounded-2xl border-dashed border-2 hover:border-primary hover:text-primary transition-all group"
+                    >
+                      <LucideIcons.Plus className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform" />
+                      Ajouter un plan / variante
+                    </Button>
+                  </div>
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
                 <Label className="sm:text-right text-sm">Description</Label>
