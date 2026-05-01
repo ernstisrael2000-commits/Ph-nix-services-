@@ -1001,7 +1001,9 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     description: '',
     price: '',
     stock: 0,
-    whatsappMessage: ''
+    whatsappMessage: '',
+    goldRate: 1,
+    presets: []
   });
   const [tempCardImageUrl, setTempCardImageUrl] = useState('');
   const [pendingSettings, setPendingSettings] = useState<Partial<AppSettings>>({});
@@ -2106,7 +2108,11 @@ const AffiliateEditForm = ({
   const handleOpenCardDialog = (card?: CardTopup) => {
     if (card) {
       setEditingCard(card);
-      setCardFormData({ ...card });
+      setCardFormData({ 
+        ...card,
+        goldRate: card.goldRate || 1,
+        presets: card.presets || []
+      });
     } else {
       setEditingCard(null);
       setCardFormData({
@@ -2115,7 +2121,9 @@ const AffiliateEditForm = ({
         description: '',
         price: '',
         stock: 0,
-        whatsappMessage: ''
+        whatsappMessage: '',
+        goldRate: 1,
+        presets: []
       });
     }
     setTempCardImageUrl('');
@@ -7227,6 +7235,31 @@ const AffiliateEditForm = ({
                   value={cardFormData.description} 
                   onChange={(e) => setCardFormData({...cardFormData, description: e.target.value})}
                   placeholder="Détails sur la carte..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="card-gold-rate">Taux Gold (par 1 USD)</Label>
+                <Input 
+                  id="card-gold-rate" 
+                  type="number"
+                  step="0.01"
+                  value={cardFormData.goldRate || 1} 
+                  onChange={(e) => setCardFormData({...cardFormData, goldRate: Number(e.target.value)})}
+                  placeholder="Ex: 1 USD = 10 Gold. Entrez 10"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="card-presets">Montants Prédéfinis (USD, séparés par virgules)</Label>
+                <Input 
+                  id="card-presets" 
+                  placeholder="Ex: 5, 10, 20, 50" 
+                  value={cardFormData.presets?.join(', ') || ''} 
+                  onChange={(e) => {
+                    const values = e.target.value.split(',').map(v => v.trim()).filter(v => v !== '').map(v => parseFloat(v)).filter(v => !isNaN(v));
+                    setCardFormData({...cardFormData, presets: values});
+                  }}
                 />
               </div>
 

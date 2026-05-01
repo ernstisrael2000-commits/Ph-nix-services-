@@ -39,6 +39,8 @@ export interface CardTopup {
   price: string;
   stock?: number;
   whatsappMessage?: string;
+  goldRate?: number;
+  presets?: number[];
   createdAt: any;
   updatedAt?: any;
 }

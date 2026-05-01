@@ -59,6 +59,13 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
   const [isProductDetailOpen, setIsProductDetailOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
+  // Card Recharge States
+  const [isRechargeDialogOpen, setIsRechargeDialogOpen] = useState(false);
+  const [selectedCardForRecharge, setSelectedCardForRecharge] = useState<any>(null);
+  const [rechargeAmountUSD, setRechargeAmountUSD] = useState<string>('');
+  const [customerName, setCustomerName] = useState<string>('');
+  const [isPaymentMethodDialogOpen, setIsPaymentMethodDialogOpen] = useState(false);
+
   // Payment Modal States
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentTarget, setPaymentTarget] = useState<{ name: string, price: string, type: string } | null>(null);
@@ -69,6 +76,12 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
     setSelectedProduct(product);
     setSelectedPlan(product.plans && product.plans.length > 0 ? product.plans[0] : null);
     setIsProductDetailOpen(true);
+  };
+
+  const handleCardClick = (card: any) => {
+    setSelectedCardForRecharge(card);
+    setRechargeAmountUSD(card.presets && card.presets.length > 0 ? card.presets[0].toString() : '');
+    setIsRechargeDialogOpen(true);
   };
 
   const handleBuyRequested = (item: { name: string, price: string, type: string }) => {
@@ -86,6 +99,28 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
     openWhatsApp(message);
     setIsPaymentModalOpen(false);
     setPaymentTransactionInfo('');
+  };
+
+  const handleRechargeSubmit = () => {
+    if (!selectedCardForRecharge || !rechargeAmountUSD) return;
+    setIsRechargeDialogOpen(false);
+    setIsPaymentMethodDialogOpen(true);
+  };
+
+  const handleFinalRechargePayment = (method: string) => {
+    if (!selectedCardForRecharge || !rechargeAmountUSD) return;
+    
+    const usd = parseFloat(rechargeAmountUSD);
+    const gold = usd * (selectedCardForRecharge.goldRate || 1);
+    const gourdes = usd * (settings?.exchangeRate || 146);
+    
+    const message = `Bonjour Neopay,\n\nJe souhaite recharger ma carte :\n👤 Client : *${customerName || 'Non spécifié'}*\n💳 Carte : *${selectedCardForRecharge.name}*\n💵 Montant USD : *${usd}$*\n💰 Équivalent Gold : *${gold} Gold*\n🇭🇹 Montant en Gourdes : *${gourdes.toLocaleString()} HTG*\n\n💳 Moyen de paiement : *${method}*\n\nMerci de valider ma recharge.`;
+    
+    openWhatsApp(message);
+    setIsPaymentMethodDialogOpen(false);
+    setRechargeAmountUSD('');
+    setCustomerName('');
+    setSelectedCardForRecharge(null);
   };
   
   const servicesRef = useRef<HTMLElement>(null);
@@ -600,7 +635,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                     <div className="product-footer mt-auto pt-2">
                       <Button 
                         size="sm"
-                        onClick={() => handleBuyRequested({ name: card.name, price: card.price, type: 'card' })}
+                        onClick={() => handleCardClick(card)}
                         className="product-buy-button w-full justify-center text-[10px] py-1 h-7"
                       >
                         ⚡ Recharger
@@ -873,6 +908,178 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
               En cliquant, vous serez redirigé vers WhatsApp pour finaliser
             </p>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Card Recharge - Step 1: Details */}
+      <Dialog open={isRechargeDialogOpen} onOpenChange={setIsRechargeDialogOpen}>
+        <DialogContent className="w-[94%] sm:max-w-[450px] p-0 overflow-hidden border-0 bg-white rounded-[2rem] shadow-2xl relative">
+          <div className="bg-emerald-600 p-8 text-white relative overflow-hidden">
+            <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
+            <DialogHeader>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-md">
+                    <CreditCard className="h-7 w-7 text-white" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-2xl font-black uppercase tracking-tight">Recharge de Carte</DialogTitle>
+                    <DialogDescription className="text-white/80 text-xs font-bold uppercase tracking-widest">Étape 1: Configuration</DialogDescription>
+                  </div>
+                </div>
+                <DialogClose className="rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
+                  <LucideIcons.X className="h-5 w-5 text-white" />
+                </DialogClose>
+              </div>
+            </DialogHeader>
+
+            {selectedCardForRecharge && (
+              <div className="mt-4 p-5 rounded-[1.5rem] bg-black/20 border border-white/10 backdrop-blur-sm flex items-center gap-4">
+                <div className="h-16 w-16 rounded-xl overflow-hidden bg-white/10 flex-shrink-0">
+                  <img src={selectedCardForRecharge.image} alt="" className="w-full h-full object-cover" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Carte sélectionnée</p>
+                  <p className="text-lg font-bold leading-tight">{selectedCardForRecharge.name}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="p-8 space-y-8">
+            <div className="space-y-4">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Identifiant ou Nom complet</Label>
+              <div className="relative">
+                <LucideIcons.User className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-600" />
+                <Input 
+                  placeholder="Votre nom ou ID Wallet"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="pl-12 h-14 rounded-2xl border-gray-100 focus:ring-emerald-500/20 bg-gray-50/50 font-bold"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Définir le montant (USD)</Label>
+              
+              <div className="relative">
+                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-emerald-600">$</div>
+                <Input 
+                  type="number"
+                  placeholder="0.00"
+                  value={rechargeAmountUSD}
+                  onChange={(e) => setRechargeAmountUSD(e.target.value)}
+                  className="pl-12 h-16 text-2xl font-black rounded-2xl border-gray-100 focus:ring-emerald-500/20 bg-gray-50/50"
+                />
+              </div>
+
+              {selectedCardForRecharge?.presets && selectedCardForRecharge.presets.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedCardForRecharge.presets.map((val: number) => (
+                    <button
+                      key={val}
+                      onClick={() => setRechargeAmountUSD(val.toString())}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                        rechargeAmountUSD === val.toString()
+                          ? 'bg-emerald-600 text-white shadow-lg'
+                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                    >
+                      ${val}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 rounded-[2rem] bg-emerald-50 border border-emerald-100 flex flex-col items-center justify-center text-center space-y-1">
+              <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Valeur en Gold</p>
+              <div className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-emerald-600 fill-emerald-600" />
+                <span className="text-3xl font-black text-emerald-950">
+                  {rechargeAmountUSD ? (parseFloat(rechargeAmountUSD) * (selectedCardForRecharge?.goldRate || 1)).toLocaleString() : '0'} Gold
+                </span>
+              </div>
+              <p className="text-[9px] text-emerald-600/60 font-bold uppercase tracking-tighter">
+                Taux: 1$ = {selectedCardForRecharge?.goldRate || 1} Gold
+              </p>
+            </div>
+
+            <Button
+              onClick={handleRechargeSubmit}
+              disabled={!rechargeAmountUSD || parseFloat(rechargeAmountUSD) <= 0 || !customerName.trim()}
+              className="w-full h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-lg shadow-xl shadow-emerald-600/20 flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-50"
+            >
+              Recharger maintenant
+              <ArrowRight className="h-5 w-5" />
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Card Recharge - Step 2: Payment Method */}
+      <Dialog open={isPaymentMethodDialogOpen} onOpenChange={setIsPaymentMethodDialogOpen}>
+        <DialogContent className="w-[94%] sm:max-w-[450px] p-0 overflow-hidden border-0 bg-white rounded-[2rem] shadow-2xl relative">
+          <div className="bg-emerald-800 p-8 text-white">
+            <DialogHeader>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-md">
+                    <ShieldCheck className="h-7 w-7 text-white" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-2xl font-black uppercase tracking-tight">Moyen de Paiement</DialogTitle>
+                    <DialogDescription className="text-white/80 text-xs font-bold uppercase tracking-widest">Étape 2: Choisir votre mode</DialogDescription>
+                  </div>
+                </div>
+                <DialogClose className="rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
+                  <LucideIcons.X className="h-5 w-5 text-white" />
+                </DialogClose>
+              </div>
+            </DialogHeader>
+            
+            <div className="mt-4 p-5 rounded-[1.5rem] bg-white/10 border border-white/10">
+               <div className="flex justify-between items-center mb-2">
+                 <span className="text-[10px] font-bold text-white/60 uppercase">Montant total</span>
+                 <span className="text-2xl font-black text-white">${rechargeAmountUSD} USD</span>
+               </div>
+               <div className="flex justify-between items-center text-emerald-100">
+                 <span className="text-[10px] font-bold uppercase">Estimation Gourdes</span>
+                 <span className="text-sm font-bold">≈ {(parseFloat(rechargeAmountUSD || '0') * (settings?.exchangeRate || 146)).toLocaleString()} HTG</span>
+               </div>
+            </div>
+          </div>
+
+          <div className="p-8 space-y-6">
+            <div className="grid grid-cols-1 gap-3">
+              {[
+                { id: 'MonCash', icon: Smartphone, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100' },
+                { id: 'NatCash', icon: Smartphone, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
+                { id: 'Admi', icon: Landmark, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100' }
+              ].map(method => (
+                <button
+                  key={method.id}
+                  onClick={() => handleFinalRechargePayment(method.id)}
+                  className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all hover:scale-[1.02] active:scale-[0.98] ${method.bg} ${method.border}`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`h-12 w-12 rounded-xl bg-white shadow-sm flex items-center justify-center ${method.color}`}>
+                      <method.icon className="h-6 w-6" />
+                    </div>
+                    <span className="text-lg font-black text-dark uppercase">{method.id}</span>
+                  </div>
+                  <ArrowRight className={`h-6 w-6 ${method.color}`} />
+                </button>
+              ))}
+            </div>
+            
+            <div className="text-center">
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                Cliquez pour confirmer et être redirigé vers WhatsApp
+              </p>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
