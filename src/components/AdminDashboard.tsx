@@ -1902,7 +1902,8 @@ const AffiliateEditForm = ({
   const [agentName, setAgentName] = useState('');
   const [agentPhone, setAgentPhone] = useState('');
   const [isAgentBalanceDialogOpen, setIsAgentBalanceDialogOpen] = useState(false);
-  const [isAutoApproveOn, setIsAutoApproveOn] = useState(false);
+  const [isAutoApproveOn, setIsAutoApproveOn] = useState(true);
+  const [nextAutoApproveIn, setNextAutoApproveIn] = useState(60);
   const [selectedAgentForBalance, setSelectedAgentForBalance] = useState<Agent | null>(null);
   const [balanceAdjustment, setBalanceAdjustment] = useState('');
 
@@ -2619,20 +2620,31 @@ const AffiliateEditForm = ({
       }
     }
 
-    if (successCount > 0) toast.success(`${successCount} transferts approuvés.`);
-    if (failCount > 0) toast.error(`${failCount} transferts ont échoué (solde insuffisant ou erreur).`);
+    if (successCount > 0) toast.success(`${successCount} transferts approuvés automatiquement.`);
+    if (failCount > 0) console.error(`${failCount} transferts ont échoué lors de l'auto-approbation (solde insuffisant).`);
     setIsSaving(false);
+    setNextAutoApproveIn(60);
   };
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
+    let countdown: NodeJS.Timeout;
+
     if (isAutoApproveOn) {
       interval = setInterval(() => {
         handleApproveAllTransfers();
-      }, 60000); // 1 minute
+      }, 60000);
+
+      countdown = setInterval(() => {
+        setNextAutoApproveIn((prev) => (prev > 0 ? prev - 1 : 60));
+      }, 1000);
+    } else {
+      setNextAutoApproveIn(60);
     }
+
     return () => {
       if (interval) clearInterval(interval);
+      if (countdown) clearInterval(countdown);
     };
   }, [isAutoApproveOn, walletTransactions, handleApproveAllTransfers]);
 
@@ -3028,10 +3040,17 @@ const AffiliateEditForm = ({
             <Button
               onClick={() => setIsAutoApproveOn(!isAutoApproveOn)}
               variant={isAutoApproveOn ? "default" : "outline"}
-              className={`rounded-2xl h-12 px-6 font-black uppercase tracking-widest text-[10px] ${isAutoApproveOn ? 'bg-primary text-white' : 'border-2 text-gray-400'}`}
+              className={`rounded-2xl h-12 px-6 font-black uppercase tracking-widest text-[10px] transition-all duration-300 ${isAutoApproveOn ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' : 'border-2 text-gray-400'}`}
             >
-              {isAutoApproveOn ? <Zap className="h-4 w-4 mr-2 animate-pulse" /> : <Clock className="h-4 w-4 mr-2" />}
-              Auto-Approbation: {isAutoApproveOn ? 'ON' : 'OFF'}
+              <div className="flex flex-col items-center justify-center leading-tight">
+                <div className="flex items-center">
+                  {isAutoApproveOn ? <Zap className="h-3 w-3 mr-2 animate-pulse text-yellow-300" /> : <Clock className="h-4 w-4 mr-2" />}
+                  Auto-Approbation: {isAutoApproveOn ? 'ON' : 'OFF'}
+                </div>
+                {isAutoApproveOn && (
+                  <span className="text-[7px] opacity-80 mt-1">Prochain check dans {nextAutoApproveIn}s</span>
+                )}
+              </div>
             </Button>
           </div>
         </div>
