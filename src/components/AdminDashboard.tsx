@@ -4081,7 +4081,11 @@ const AffiliateEditForm = ({
                                   <div>
                                     <h4 className="font-black text-dark group-hover:text-primary transition-colors truncate max-w-[150px]">{a.name}</h4>
                                     <p className="text-[10px] text-primary font-black tracking-widest uppercase">{a.level || 'Bronze'}</p>
-                                    <p className="text-[10px] text-gray-400 font-mono mt-0.5">{a.code}</p>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-[10px] text-gray-400 font-mono tracking-tighter">{a.code}</p>
+                        <span className="text-[8px] text-gray-300">|</span>
+                        <p className="text-[10px] text-emerald-600 font-mono tracking-tighter">{a.walletId?.match(/.{1,4}/g)?.join(' ')}</p>
+                      </div>
                                   </div>
                                 </div>
                                 <div className="text-right">
@@ -7458,7 +7462,8 @@ const AffiliateEditForm = ({
               </DialogClose>
             </div>
             <DialogDescription className="text-emerald-100 opacity-90">
-              Ajouter des Gouds au compte de {selectedAffiliateForCredit?.name}.
+              Ajouter des Gouds au compte de {selectedAffiliateForCredit?.name} (#{selectedAffiliateForCredit?.code}).
+              <div className="mt-1 text-[10px] text-emerald-600 font-mono">ID Wallet: {selectedAffiliateForCredit?.walletId?.match(/.{1,4}/g)?.join(' ')}</div>
             </DialogDescription>
           </DialogHeader>
           <div className="p-8 space-y-6">

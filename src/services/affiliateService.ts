@@ -422,12 +422,14 @@ export const updateAffiliateRequestStatus = async (requestId: string, status: 'a
         const username = requestData.name.toLowerCase().replace(/\s/g, '') + Math.floor(1000 + Math.random() * 9000);
         const password = Math.random().toString(36).slice(-8); // Random temporary password
         const code = 'AFF' + Math.floor(100000 + Math.random() * 900000);
+        const walletId = Math.floor(10000000 + Math.random() * 90000000).toString();
 
         await addDoc(collection(db, 'affiliates'), {
           name: requestData.name,
           username,
           password,
           code,
+          walletId,
           balance: 0,
           referredClients: 0,
           monthlyReferredClients: 0,
@@ -718,10 +720,15 @@ export const recordPurchase = async (
     
     const affiliateData = affiliateSnap.data() as Affiliate;
     
-    // Commission mapping as requested by user
-    let directCommission = 2; // Default for 'purchase' (Top up / other)
-    let parentCommission = 0.5;
-    let grandparentCommission = 0.5;
+    const settingsRef = doc(db, 'settings', 'global');
+    const settingsSnap = await getDoc(settingsRef);
+    const settings = settingsSnap.exists() ? settingsSnap.data() : { exchangeRate: 146 };
+    const exchangeRate = settings.exchangeRate || 146;
+
+    // Commission mapping as requested by user (Values in HTG/Gourdes)
+    let directCommissionHTG = 2; // Default for 'purchase'
+    let parentCommissionHTG = 0.5;
+    let grandparentCommissionHTG = 0.5;
     let pointsEarned = 1;
     
     const isStreamingSub = itemName && (
@@ -738,31 +745,36 @@ export const recordPurchase = async (
 
     if (type === 'subscription') {
       if (isStreamingSub) {
-        directCommission = 75;
-        parentCommission = 15;
-        grandparentCommission = 10;
+        directCommissionHTG = 75;
+        parentCommissionHTG = 15;
+        grandparentCommissionHTG = 10;
         pointsEarned = 5;
       } else {
         // Other subscriptions
-        directCommission = 75;
-        parentCommission = 15;
-        grandparentCommission = 10;
+        directCommissionHTG = 75;
+        parentCommissionHTG = 15;
+        grandparentCommissionHTG = 10;
         pointsEarned = 10;
       }
     } else if (type === 'virtual_card') {
-      directCommission = 350;
-      parentCommission = 40;
-      grandparentCommission = 10;
+      directCommissionHTG = 350;
+      parentCommissionHTG = 40;
+      grandparentCommissionHTG = 10;
       pointsEarned = 25;
     }
+
+    // Convert to USD for balance (Keep HTG for logs/transparency if needed, but balance is USD)
+    const directCommissionUSD = directCommissionHTG / exchangeRate;
+    const parentCommissionUSD = parentCommissionHTG / exchangeRate;
+    const grandparentCommissionUSD = grandparentCommissionHTG / exchangeRate;
     
     const batch = writeBatch(db);
     
     // 1. Update Direct Affiliate
     batch.update(affiliateRef, {
-      balance: increment(directCommission),
-      directRevenue: increment(directCommission),
-      totalEarnings: increment(directCommission),
+      balance: increment(directCommissionUSD),
+      directRevenue: increment(directCommissionUSD),
+      totalEarnings: increment(directCommissionUSD),
       points: increment(pointsEarned),
       monthlySales: increment(1),
       updatedAt: serverTimestamp()
@@ -775,7 +787,8 @@ export const recordPurchase = async (
       affiliateName: affiliateData.name,
       type,
       itemName: itemName || (type === 'virtual_card' ? 'Carte MasterCard' : 'Produit Rapide'),
-      commission: directCommission,
+      commission: directCommissionUSD,
+      commissionHTG: directCommissionHTG, // Log original HTG
       points: pointsEarned,
       createdAt: serverTimestamp()
     });
@@ -787,9 +800,9 @@ export const recordPurchase = async (
       
       if (parentSnap.exists()) {
         batch.update(parentRef, {
-          balance: increment(parentCommission),
-          indirectRevenue: increment(parentCommission),
-          totalEarnings: increment(parentCommission),
+          balance: increment(parentCommissionUSD),
+          indirectRevenue: increment(parentCommissionUSD),
+          totalEarnings: increment(parentCommissionUSD),
           updatedAt: serverTimestamp()
         });
         
@@ -798,7 +811,7 @@ export const recordPurchase = async (
         batch.set(notifRef, {
           affiliateId: affiliateData.parentAffiliateId,
           title: "Commission Directe (Filleul)",
-          message: `Niveau 1: Vous avez reçu ${parentCommission} Goud suite à une vente de ${affiliateData.name}.`,
+          message: `Niveau 1: Vous avez reçu ${parentCommissionHTG} Goud (~${parentCommissionUSD.toFixed(2)} $) suite à une vente de ${affiliateData.name}.`,
           type: 'revenue',
           read: false,
           createdAt: serverTimestamp()
@@ -813,9 +826,9 @@ export const recordPurchase = async (
       
       if (grandparentSnap.exists()) {
         batch.update(grandparentRef, {
-          balance: increment(grandparentCommission),
-          indirectRevenue: increment(grandparentCommission),
-          totalEarnings: increment(grandparentCommission),
+          balance: increment(grandparentCommissionUSD),
+          indirectRevenue: increment(grandparentCommissionUSD),
+          totalEarnings: increment(grandparentCommissionUSD),
           updatedAt: serverTimestamp()
         });
         
@@ -824,7 +837,7 @@ export const recordPurchase = async (
         batch.set(gNotifRef, {
           affiliateId: affiliateData.grandparentAffiliateId,
           title: "Commission Indirecte (Filleul N2)",
-          message: `Niveau 2: Vous avez reçu ${grandparentCommission} Goud via l'affilié ${affiliateData.name}.`,
+          message: `Niveau 2: Vous avez reçu ${grandparentCommissionHTG} Goud (~${grandparentCommissionUSD.toFixed(2)} $) via l'affilié ${affiliateData.name}.`,
           type: 'revenue',
           read: false,
           createdAt: serverTimestamp()
@@ -837,12 +850,13 @@ export const recordPurchase = async (
       for (const sponsorReq of affiliateData.additionalSponsors) {
         const extraRef = doc(db, 'affiliates', sponsorReq.id);
         const isDirectSponsor = sponsorReq.type === 'direct';
-        const commissionToPay = isDirectSponsor ? parentCommission : grandparentCommission;
+        const commissionHTG = isDirectSponsor ? parentCommissionHTG : grandparentCommissionHTG;
+        const commissionUSD = commissionHTG / exchangeRate;
 
         batch.update(extraRef, {
-          balance: increment(commissionToPay),
-          indirectRevenue: increment(commissionToPay),
-          totalEarnings: increment(commissionToPay),
+          balance: increment(commissionUSD),
+          indirectRevenue: increment(commissionUSD),
+          totalEarnings: increment(commissionUSD),
           updatedAt: serverTimestamp()
         });
 
@@ -850,21 +864,21 @@ export const recordPurchase = async (
         const exNotifRef = doc(collection(db, 'notifications'));
         batch.set(exNotifRef, {
           affiliateId: sponsorReq.id,
-          title: isDirectSponsor ? "Commission Directe !" : "Commission Indirecte !",
-          message: `${isDirectSponsor ? 'Niveau 1' : 'Niveau Extra'}: Vous avez reçu ${commissionToPay} Goud grâce à ${affiliateData.name}.`,
+          title: isDirectSponsor ? "Commission Directe" : "Commission Indirecte",
+          message: `Vous avez reçu ${commissionHTG} Goud (~${commissionUSD.toFixed(2)} $) via l'affilié ${affiliateData.name}.`,
           type: 'revenue',
           read: false,
           createdAt: serverTimestamp()
         });
       }
     }
-    
+
     // Create notification for direct affiliate
     const directNotifRef = doc(collection(db, 'notifications'));
     batch.set(directNotifRef, {
       affiliateId: affiliateId,
       title: "Nouvelle Vente !",
-      message: `Félicitations ! Vous avez gagné ${directCommission} Goud et ${pointsEarned} points.`,
+      message: `Félicitations ! Vous avez gagné ${directCommissionHTG} Goud et ${pointsEarned} points.`,
       type: 'revenue',
       read: false,
       createdAt: serverTimestamp()

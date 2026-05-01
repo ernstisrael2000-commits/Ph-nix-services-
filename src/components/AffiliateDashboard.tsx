@@ -586,7 +586,12 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
               <div className="flex flex-col sm:flex-row justify-between items-end gap-2 sm:gap-0 mt-auto pt-4 border-t border-emerald-50">
                 <div className="w-full sm:w-auto">
-                  <p className="text-gray-300 text-[8px] font-black uppercase tracking-[0.2em] mb-1">Détenteur du Compte</p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-gray-300 text-[8px] font-black uppercase tracking-[0.2em]">Détenteur & ID</p>
+                    <Badge variant="outline" className="h-4 px-2 rounded-md bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[7px] font-black uppercase tracking-widest">
+                      #{affiliate.code}
+                    </Badge>
+                  </div>
                   <p className="text-lg font-black tracking-wider text-emerald-950 uppercase font-sans truncate max-w-[200px]">{affiliate.name}</p>
                 </div>
                 <div className="w-full sm:w-auto text-right">
