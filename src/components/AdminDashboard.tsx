@@ -6739,13 +6739,32 @@ const AffiliateEditForm = ({
 
       {/* Product Edit/Add Dialog */}
       <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader className="pb-4 border-b -mx-4 -mt-4 p-6 bg-white z-20">
-            <DialogTitle className="text-xl font-black">{editingProduct ? 'Modifier le produit' : 'Nouveau produit'}</DialogTitle>
-            <DialogDescription className="text-xs">Ajoutez un service ou un produit dynamique à votre plateforme.</DialogDescription>
-          </DialogHeader>
+        <DialogContent className="sm:max-w-3xl flex flex-col overflow-hidden max-h-[94vh]" showCloseButton={false}>
+          <div className="bg-indigo-900 p-8 text-white relative overflow-hidden shrink-0">
+            <div className="absolute top-0 right-0 -mt-8 -mr-8 w-40 h-40 bg-white/5 rounded-full blur-3xl animate-pulse" />
+            <DialogHeader>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-14 w-14 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md shrink-0 border border-white/10">
+                    <LucideIcons.Package className="h-8 w-8 text-white" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-2xl font-black uppercase tracking-tight leading-none">
+                      {editingProduct ? 'Modifier le Produit' : 'Nouveau Produit'}
+                    </DialogTitle>
+                    <DialogDescription className="text-white/60 text-[10px] font-black uppercase tracking-widest mt-1.5 flex items-center gap-2">
+                       Configuration du catalogue dynamique
+                    </DialogDescription>
+                  </div>
+                </div>
+                <DialogClose className="rounded-full bg-white/10 p-2.5 hover:bg-white/20 transition-all group active:scale-90 border border-white/5">
+                  <LucideIcons.X className="h-5 w-5 text-white" />
+                </DialogClose>
+              </div>
+            </DialogHeader>
+          </div>
           
-          <div className="flex-1 overflow-y-auto pr-2 -mr-2 py-4 custom-scrollbar overscroll-contain">
+          <div className="flex-1 overflow-y-auto p-8 space-y-10 overscroll-contain pb-24 custom-scrollbar">
             <div className="grid gap-6">
               <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
                 <Label className="sm:text-right text-xs font-bold uppercase text-gray-500">Nom</Label>
@@ -6914,36 +6933,35 @@ const AffiliateEditForm = ({
             </div>
           </div>
           </div>
-          <DialogFooter className="sticky bottom-0 z-30 mt-auto border-t pt-4 pb-2 bg-white/95 backdrop-blur-md flex flex-row justify-between items-center sm:justify-between w-full -mx-4 px-6 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
-            <div className="flex gap-2">
+          
+          <div className="shrink-0 p-8 pt-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <div className="flex gap-2 w-full sm:w-auto">
               {editingProduct && (
                 <Button 
-                  variant="ghost" 
-                  size="sm"
+                  variant="outline" 
                   onClick={() => {
                     setProductToDelete(editingProduct);
                     setIsProductDeleteDialogOpen(true);
                     setIsProductDialogOpen(false);
                   }} 
-                  className="text-red-500 hover:bg-red-50 hover:text-red-600 px-2 h-9 text-[10px] sm:text-xs border border-transparent hover:border-red-200"
+                  className="h-14 px-6 rounded-2xl text-red-500 hover:bg-red-50 border-red-100 font-black uppercase text-[10px] tracking-widest gap-2 flex-1 sm:flex-none"
                 >
-                  <Trash2 className="h-3.5 w-3.5 mr-1" />
-                  <span className="hidden xs:inline">Supprimer</span>
+                  <LucideIcons.Trash2 className="h-4 w-4" />
+                  Supprimer
                 </Button>
               )}
+              <Button variant="ghost" onClick={() => setIsProductDialogOpen(false)} className="h-14 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest text-gray-400 flex-1 sm:flex-none">Annuler</Button>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setIsProductDialogOpen(false)} className="rounded-xl h-9 text-xs px-4">Annuler</Button>
-              <Button 
-                onClick={handleSaveProduct} 
-                disabled={isSaving} 
-                className="bg-primary hover:bg-[#D98A1E] text-white font-bold h-9 rounded-xl shadow-lg shadow-accent-light/50 border-0 px-6 min-w-[100px]"
-              >
-                {isSaving ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : null}
-                Enregistrer
-              </Button>
-            </div>
-          </DialogFooter>
+            
+            <Button 
+              onClick={handleSaveProduct} 
+              disabled={isSaving} 
+              className="w-full sm:w-auto h-14 px-10 rounded-2xl bg-indigo-900 hover:bg-indigo-950 text-white font-black text-lg shadow-xl shadow-indigo-900/20 transition-all flex items-center justify-center gap-3"
+            >
+              {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <LucideIcons.Save className="h-5 w-5" />}
+              Enregistrer
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -7196,16 +7214,30 @@ const AffiliateEditForm = ({
 
       {/* Card Editor Dialog */}
       <Dialog open={isCardDialogOpen} onOpenChange={setIsCardDialogOpen}>
-        <DialogContent className="sm:max-w-4xl">
-          <DialogHeader className="p-8 pb-4 bg-gray-50/50 border-b border-gray-100">
-            <DialogTitle className="text-3xl font-black flex items-center gap-3">
-              <CreditCard className="h-6 w-6 text-primary" />
-              {editingCard ? 'Modifier la carte' : 'Ajouter une carte'}
-            </DialogTitle>
-            <DialogDescription>
-              Gérez les informations de la carte de recharge.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="sm:max-w-4xl flex flex-col overflow-hidden max-h-[94vh]" showCloseButton={false}>
+          <div className="bg-emerald-900 p-8 text-white relative overflow-hidden shrink-0">
+            <div className="absolute top-0 right-0 -mt-8 -mr-8 w-40 h-40 bg-white/5 rounded-full blur-3xl animate-pulse" />
+            <DialogHeader>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-14 w-14 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md shrink-0 border border-white/10">
+                    <CreditCard className="h-8 w-8 text-white" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-2xl font-black uppercase tracking-tight leading-none">
+                      {editingCard ? 'Modifier la Carte' : 'Nouvelle Carte'}
+                    </DialogTitle>
+                    <DialogDescription className="text-emerald-300/80 text-[10px] font-black uppercase tracking-widest mt-1.5 flex items-center gap-2">
+                       Gestion des cartes de recharge
+                    </DialogDescription>
+                  </div>
+                </div>
+                <DialogClose className="rounded-full bg-white/10 p-2.5 hover:bg-white/20 transition-all group active:scale-90 border border-white/5">
+                  <LucideIcons.X className="h-5 w-5 text-white" />
+                </DialogClose>
+              </div>
+            </DialogHeader>
+          </div>
           
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             <div className="grid grid-cols-1 gap-6">

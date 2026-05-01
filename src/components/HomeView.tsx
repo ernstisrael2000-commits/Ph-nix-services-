@@ -917,8 +917,8 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
 
       {/* Card Recharge - Step 1: Details */}
       <Dialog open={isRechargeDialogOpen} onOpenChange={setIsRechargeDialogOpen}>
-        <DialogContent className="sm:max-w-2xl border-0 bg-white shadow-2xl relative" showCloseButton={false}>
-          <div className="bg-emerald-600 p-8 text-white relative overflow-hidden rounded-t-[2.5rem]">
+        <DialogContent className="sm:max-w-2xl border-0 bg-white shadow-2xl relative flex flex-col overflow-hidden" showCloseButton={false}>
+          <div className="bg-emerald-600 p-8 text-white relative overflow-hidden shrink-0">
             <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
             <DialogHeader>
               <div className="flex items-center justify-between mb-4">
@@ -927,11 +927,11 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                     <CreditCard className="h-7 w-7 text-white" />
                   </div>
                   <div>
-                    <DialogTitle className="text-2xl font-black uppercase tracking-tight">Recharge de Carte</DialogTitle>
-                    <DialogDescription className="text-white/80 text-xs font-bold uppercase tracking-widest">Étape 1: Configuration</DialogDescription>
+                    <DialogTitle className="text-2xl font-black uppercase tracking-tight leading-none">Recharge de Carte</DialogTitle>
+                    <DialogDescription className="text-white/80 text-[10px] font-black uppercase tracking-widest mt-1">Étape 1: Configuration</DialogDescription>
                   </div>
                 </div>
-                <DialogClose className="rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
+                <DialogClose className="rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors z-50">
                   <LucideIcons.X className="h-5 w-5 text-white" />
                 </DialogClose>
               </div>
@@ -950,7 +950,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
             )}
           </div>
 
-          <div className="p-8 space-y-8">
+          <div className="flex-1 overflow-y-auto p-8 space-y-8 overscroll-contain">
             <div className="space-y-4">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Identifiant ou Nom complet</Label>
               <div className="relative">
@@ -984,10 +984,10 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                     <button
                       key={val}
                       onClick={() => setRechargeAmountUSD(val.toString())}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                      className={`px-6 py-3 rounded-2xl text-xs font-black transition-all ${
                         rechargeAmountUSD === val.toString()
-                          ? 'bg-emerald-600 text-white shadow-lg'
-                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                          ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 scale-105'
+                          : 'bg-gray-100 text-dark hover:bg-gray-200'
                       }`}
                     >
                       ${val}
@@ -1009,14 +1009,16 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                 Taux: 1$ = {selectedCardForRecharge?.goldRate || 1} Gold
               </p>
             </div>
-
+          </div>
+          
+          <div className="p-8 pt-4 shrink-0 bg-white border-t border-gray-100">
             <Button
               onClick={handleRechargeSubmit}
               disabled={!rechargeAmountUSD || parseFloat(rechargeAmountUSD) <= 0 || !customerName.trim()}
-              className="w-full h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-lg shadow-xl shadow-emerald-600/20 flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-50"
+              className="w-full h-16 rounded-[1.5rem] bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xl shadow-xl shadow-emerald-600/20 flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-50"
             >
-              Recharger maintenant
-              <ArrowRight className="h-5 w-5" />
+              Suivant
+              <ArrowRight className="h-6 w-6" />
             </Button>
           </div>
         </DialogContent>
@@ -1024,8 +1026,8 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
 
       {/* Card Recharge - Step 2: Payment Method */}
       <Dialog open={isPaymentMethodDialogOpen} onOpenChange={setIsPaymentMethodDialogOpen}>
-        <DialogContent className="sm:max-w-2xl border-0 bg-white shadow-2xl relative" showCloseButton={false}>
-          <div className="bg-emerald-800 p-8 text-white rounded-t-[2.5rem]">
+        <DialogContent className="sm:max-w-2xl border-0 bg-white shadow-2xl relative flex flex-col overflow-hidden" showCloseButton={false}>
+          <div className="bg-emerald-800 p-8 text-white shrink-0">
             <DialogHeader>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
@@ -1033,54 +1035,59 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                     <ShieldCheck className="h-7 w-7 text-white" />
                   </div>
                   <div>
-                    <DialogTitle className="text-2xl font-black uppercase tracking-tight">Moyen de Paiement</DialogTitle>
-                    <DialogDescription className="text-white/80 text-xs font-bold uppercase tracking-widest">Étape 2: Choisir votre mode</DialogDescription>
+                    <DialogTitle className="text-2xl font-black uppercase tracking-tight leading-none">Moyen de Paiement</DialogTitle>
+                    <DialogDescription className="text-white/80 text-[10px] font-black uppercase tracking-widest mt-1">Étape 2: Choisir votre mode</DialogDescription>
                   </div>
                 </div>
-                <DialogClose className="rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
+                <DialogClose className="rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors z-50">
                   <LucideIcons.X className="h-5 w-5 text-white" />
                 </DialogClose>
               </div>
             </DialogHeader>
             
-            <div className="mt-4 p-5 rounded-[1.5rem] bg-white/10 border border-white/10">
+            <div className="mt-4 p-6 rounded-[1.5rem] bg-white/10 border border-white/5 backdrop-blur-xl">
                <div className="flex justify-between items-center mb-2">
-                 <span className="text-[10px] font-bold text-white/60 uppercase">Montant total</span>
-                 <span className="text-2xl font-black text-white">${rechargeAmountUSD} USD</span>
+                 <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Montant total</span>
+                 <span className="text-3xl font-black text-white">${rechargeAmountUSD} USD</span>
                </div>
-               <div className="flex justify-between items-center text-emerald-100">
-                 <span className="text-[10px] font-bold uppercase">Estimation Gourdes</span>
-                 <span className="text-sm font-bold">≈ {(parseFloat(rechargeAmountUSD || '0') * (settings?.exchangeRate || 146)).toLocaleString()} HTG</span>
+               <div className="flex justify-between items-center text-emerald-100/60">
+                 <span className="text-[10px] font-black uppercase tracking-tighter">Estimation Gourdes</span>
+                 <span className="text-md font-black">≈ {(parseFloat(rechargeAmountUSD || '0') * (settings?.exchangeRate || 146)).toLocaleString()} HTG</span>
                </div>
             </div>
           </div>
 
-          <div className="p-8 space-y-6">
-            <div className="grid grid-cols-1 gap-3">
+          <div className="flex-1 overflow-y-auto p-8 space-y-6 overscroll-contain">
+            <div className="grid grid-cols-1 gap-4">
               {[
-                { id: 'MonCash', icon: Smartphone, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100' },
-                { id: 'NatCash', icon: Smartphone, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
-                { id: 'Admi', icon: Landmark, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100' }
+                { id: 'MonCash', icon: Smartphone, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100', desc: 'Paiement mobile instantané' },
+                { id: 'NatCash', icon: Smartphone, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', desc: 'Sécurisé et rapide' },
+                { id: 'Admi', icon: Landmark, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', desc: 'Virement ou dépôt bancaire' }
               ].map(method => (
                 <button
                   key={method.id}
                   onClick={() => handleFinalRechargePayment(method.id)}
-                  className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all hover:scale-[1.02] active:scale-[0.98] ${method.bg} ${method.border}`}
+                  className={`group flex items-center justify-between p-6 rounded-[1.5rem] border-2 transition-all hover:scale-[1.02] active:scale-[0.98] ${method.bg} ${method.border} hover:shadow-lg`}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className={`h-12 w-12 rounded-xl bg-white shadow-sm flex items-center justify-center ${method.color}`}>
-                      <method.icon className="h-6 w-6" />
+                  <div className="flex items-center gap-5">
+                    <div className={`h-14 w-14 rounded-2xl bg-white shadow-sm flex items-center justify-center transition-transform group-hover:scale-110 ${method.color}`}>
+                      <method.icon className="h-7 w-7" />
                     </div>
-                    <span className="text-lg font-black text-dark uppercase">{method.id}</span>
+                    <div className="text-left">
+                      <span className="block text-xl font-black text-dark uppercase tracking-tight">{method.id}</span>
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{method.desc}</span>
+                    </div>
                   </div>
-                  <ArrowRight className={`h-6 w-6 ${method.color}`} />
+                  <div className={`h-10 w-10 rounded-full flex items-center justify-center transition-colors ${method.color} group-hover:bg-white`}>
+                    <ArrowRight className="h-6 w-6" />
+                  </div>
                 </button>
               ))}
             </div>
             
-            <div className="text-center">
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                Cliquez pour confirmer et être redirigé vers WhatsApp
+            <div className="text-center p-4 bg-gray-50 rounded-2xl mt-4">
+              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest leading-loose">
+                ✅ Une fois le paiement sélectionné, <br/>vous serez redirigé vers notre service client WhatsApp.
               </p>
             </div>
           </div>
