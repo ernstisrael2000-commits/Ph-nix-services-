@@ -596,7 +596,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 </div>
                 <div className="w-full sm:w-auto text-right">
                   <div className="flex items-center justify-end gap-2 mb-1">
-                    <p className="text-emerald-600/60 text-[8px] font-black uppercase tracking-[0.2em]">Wallet Serial ID</p>
+                    <p className="text-emerald-600/60 text-[8px] font-black uppercase tracking-[0.2em]">ID Wallet Personnel</p>
                     <button 
                       onClick={copyWalletId}
                       className="p-1 rounded-md hover:bg-emerald-50 transition-colors text-emerald-400"
@@ -604,8 +604,8 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                       <Copy className="h-3 w-3" />
                     </button>
                   </div>
-                  <p className="text-xl font-mono font-black tracking-[0.3em] text-emerald-950">
-                    {affiliate.walletId ? affiliate.walletId.match(/.{1,4}/g)?.join(' ') : '.... ....'}
+                  <p className="text-2xl font-mono font-black tracking-widest text-emerald-950">
+                    ({affiliate.walletId || '........'})
                   </p>
                 </div>
               </div>
