@@ -252,87 +252,131 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
   return (
     <div className="max-w-7xl mx-auto px-4 pt-8 pb-12 space-y-8">
       {/* Premium Hero Slider Section */}
-      <section className="relative h-[220px] md:h-[300px] w-full rounded-[40px] overflow-hidden bg-black shadow-[0_35px_60px_-15px_rgba(0,0,0,0.3)] group border border-white/10">
-        {/* Slider Track */}
-        <div className="absolute inset-0 w-full h-full">
-          <AnimatePresence mode="wait">
+      <section className="relative w-full overflow-visible group px-2 md:px-0">
+        {/* Animated Glow Backdrop */}
+        <div className="absolute -inset-4 bg-primary/20 rounded-[50px] blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+        
+        <div className="relative h-[240px] md:h-[360px] w-full rounded-[40px] overflow-hidden bg-black shadow-[0_45px_70px_-15px_rgba(0,0,0,0.4)] border border-white/5">
+          {/* Border Beam Effect */}
+          <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden rounded-[40px]">
             <motion.div
-              key={currentSlide}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.5 }}
-              className="absolute inset-0 w-full h-full will-change-transform"
-            >
-                <div 
-                  className="absolute inset-0 bg-cover bg-center transition-transform duration-[6000ms] ease-linear scale-100 group-hover:scale-105"
+              animate={{
+                rotate: [0, 360],
+              }}
+              transition={{
+                duration: 4,
+                repeat: Infinity,
+                ease: "linear",
+              }}
+              className="absolute -inset-[150%] opacity-20 group-hover:opacity-40 transition-opacity duration-1000"
+              style={{
+                background: "conic-gradient(from 0deg, transparent 0 340deg, var(--color-primary) 360deg)",
+                backgroundSize: "cover",
+              }}
+            />
+          </div>
+
+          {/* Slider Track */}
+          <div className="absolute inset-0 w-full h-full z-0">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentSlide}
+                initial={{ opacity: 0, scale: 1.1 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+                className="absolute inset-0 w-full h-full will-change-transform overflow-hidden"
+              >
+                {/* Ken Burns Effect Image */}
+                <motion.div 
+                  initial={{ scale: 1.2, x: -20, y: -20 }}
+                  animate={{ 
+                    scale: 1,
+                    x: 0,
+                    y: 0
+                  }}
+                  transition={{ 
+                    duration: 10,
+                    ease: "linear",
+                    repeat: Infinity,
+                    repeatType: "reverse"
+                  }}
+                  className="absolute inset-0 bg-cover bg-center"
                   style={{ backgroundImage: `url(${imagesToDisplay[currentSlide]?.url || ''})` }}
                 />
-              {/* Overlay Gradients - Enhanced for top/bottom text readability */}
-              <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90" />
-              <div className="absolute inset-0 bg-black/10" />
+                
+                {/* Enhanced Overlay Gradients */}
+                <div className="absolute inset-0 bg-gradient-to-tr from-black via-black/40 to-transparent opacity-90" />
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60" />
+                
+                {/* Content Overlay - Staggered Animations */}
+                <div className="relative z-20 h-full flex flex-col justify-end items-start p-8 md:p-12 pb-10 md:pb-14 space-y-4 md:space-y-6">
+                  <div className="space-y-2 md:space-y-3 max-w-3xl">
+                    <motion.div
+                      initial={{ opacity: 0, y: 30, filter: "blur(10px)" }}
+                      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                      transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
+                    >
+                      <h1 className="text-4xl md:text-7xl font-black tracking-tighter text-white uppercase italic leading-[0.9]">
+                        <span className="bg-gradient-to-br from-white via-white to-primary/80 bg-clip-text text-transparent drop-shadow-2xl">
+                          {imagesToDisplay[currentSlide]?.title || 'Neopay'}
+                        </span>
+                      </h1>
+                    </motion.div>
 
-              {/* Content Overlay - Distributed Layout */}
-              <div className="relative z-10 h-full flex flex-col justify-between items-center py-8 md:py-10 px-6 text-center w-full max-w-7xl mx-auto">
-                {/* Top Section: Stylish Centered Title */}
-                <motion.div
-                  initial={{ opacity: 0, y: -20, filter: "blur(5px)" }}
-                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                  transition={{ duration: 0.6, ease: "easeOut", delay: 0.2 }}
-                  className="w-full"
-                >
-                  <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white drop-shadow-[0_8px_8px_rgba(0,0,0,0.6)] uppercase italic leading-[1]">
-                    <span className="bg-gradient-to-br from-primary/60 via-white to-primary bg-clip-text text-transparent">
-                      {imagesToDisplay[currentSlide]?.title || 'Neopay'}
-                    </span>
-                  </h1>
-                </motion.div>
+                    <motion.div
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.8, ease: "easeOut", delay: 0.4 }}
+                      className="flex items-center gap-3"
+                    >
+                      <div className="h-px w-8 md:w-12 bg-primary/60" />
+                      <h2 className="text-xs md:text-xl font-bold text-white/80 uppercase tracking-[0.2em] leading-tight">
+                        {imagesToDisplay[currentSlide]?.description || 'Services Digitaux & Recharges'}
+                      </h2>
+                    </motion.div>
+                  </div>
 
-                {/* Bottom Section: Description & Action */}
-                <div className="w-full flex flex-col items-center space-y-6 md:space-y-8">
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, ease: "easeOut", delay: 0.3 }}
-                    className="max-w-2xl"
-                  >
-                    <h2 className="text-sm md:text-xl font-medium text-white/95 leading-tight drop-shadow-md">
-                      {imagesToDisplay[currentSlide]?.description || 'Services Digitaux & Recharges'}
-                    </h2>
-                  </motion.div>
-
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.6, delay: 0.4 }}
-                    className="pb-4"
+                    transition={{ duration: 0.6, delay: 0.6 }}
                   >
                     <Button 
                       size="lg"
                       onClick={scrollToServices}
-                      className="bg-white text-black hover:bg-white/90 hover:scale-105 active:scale-95 transition-all rounded-full h-10 md:h-12 px-6 md:px-8 text-xs md:text-sm font-bold shadow-2xl group"
+                      className="bg-primary hover:bg-[#D98A1E] text-white hover:scale-105 active:scale-95 transition-all rounded-full h-12 md:h-16 px-8 md:px-12 text-xs md:text-lg font-black shadow-[0_20px_50px_rgba(245,166,35,0.3)] group overflow-hidden relative"
                     >
-                      Explorer nos services
-                      <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                      <span className="relative z-10 flex items-center gap-2">
+                        Démarrer l'expérience
+                        <ArrowRight className="h-5 w-5 md:h-6 md:w-6 group-hover:translate-x-2 transition-transform duration-300" />
+                      </span>
+                      <motion.div 
+                        animate={{ x: ['100%', '-100%'] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12"
+                      />
                     </Button>
                   </motion.div>
                 </div>
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
 
-        {/* Slider Navigation Dots */}
-        <div className="absolute bottom-4 right-6 z-20 flex gap-2">
-          {imagesToDisplay.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentSlide(i)}
-                className={`h-1.5 transition-all duration-300 rounded-full ${
-                  currentSlide === i ? 'bg-primary w-8' : 'bg-white/30 w-3 hover:bg-white/50'
-                }`}
-              />
-          ))}
+          {/* Slider Navigation Dots - Modern Glass feel */}
+          <div className="absolute bottom-8 right-8 z-30 flex gap-3 bg-black/20 backdrop-blur-md p-2 px-3 rounded-full border border-white/10">
+            {imagesToDisplay.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrentSlide(i)}
+                  className="relative h-2 flex items-center justify-center transition-all duration-500"
+                >
+                  <div className={`h-full rounded-full transition-all duration-500 ${
+                    currentSlide === i ? 'bg-primary w-10' : 'bg-white/30 w-2 hover:bg-white/50'
+                  }`} />
+                </button>
+            ))}
+          </div>
         </div>
       </section>
 
