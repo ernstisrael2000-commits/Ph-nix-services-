@@ -31,7 +31,8 @@ import {
   DialogTitle, 
   DialogTrigger,
   DialogDescription,
-  DialogFooter
+  DialogFooter,
+  DialogClose
 } from './ui/dialog';
 import { 
   Select, 
@@ -48,6 +49,7 @@ import {
   History, 
   LogOut,
   Loader2,
+  X,
   AlertCircle,
   TrendingUp,
   Network,
@@ -219,8 +221,12 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       return;
     }
 
-    if (amount < 20) {
-      toast.error("Le montant minimum de retrait est de 20 $.");
+    const exchangeRate = settings?.exchangeRate || 146;
+    const minWithdrawHTG = 20;
+    const minWithdrawUSD = minWithdrawHTG / exchangeRate;
+
+    if (amount < minWithdrawUSD) {
+      toast.error(`Le montant minimum de retrait est de ${minWithdrawHTG} HTG (soit environ ${minWithdrawUSD.toFixed(2)} $).`);
       return;
     }
 
@@ -407,17 +413,20 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 )}
               </Button>
             } />
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Bell className="h-5 w-5 text-blue-600" />
-                  Notifications
-                </DialogTitle>
-                <DialogDescription>
-                  Restez informé de vos gains et de votre progression.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="md:max-h-[60vh] overflow-y-auto py-4 space-y-3 overscroll-contain">
+              <DialogContent className="max-w-md p-0 overflow-hidden rounded-[2rem]">
+                <DialogHeader className="p-6 bg-blue-600 text-white relative">
+                  <DialogTitle className="flex items-center gap-2">
+                    <Bell className="h-5 w-5" />
+                    Notifications
+                  </DialogTitle>
+                  <DialogDescription className="text-blue-100">
+                    Restez informé de vos gains et de votre progression.
+                  </DialogDescription>
+                  <DialogClose className="absolute right-4 top-4 rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
+                    <X className="h-4 w-4" />
+                  </DialogClose>
+                </DialogHeader>
+                <div className="md:max-h-[60vh] overflow-y-auto p-4 space-y-3 overscroll-contain custom-scrollbar">
                 {notificationsLoading ? (
                   <div className="flex justify-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
@@ -610,14 +619,17 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                   <span className="text-[10px] font-black uppercase tracking-widest">Dépôt</span>
                 </Button>
               } />
-              <DialogContent className="rounded-[2.5rem] p-8 border-0 shadow-2xl">
-                <DialogHeader>
+              <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
+                <DialogHeader className="p-8 bg-emerald-600 text-white relative">
                   <DialogTitle className="text-2xl font-black">Recharger mon Compte</DialogTitle>
-                  <DialogDescription className="font-medium">
+                  <DialogDescription className="font-medium text-emerald-100 italic">
                     Alimentez votre solde Neopay via l'un de nos partenaires.
                   </DialogDescription>
+                  <DialogClose className="absolute right-6 top-6 rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
+                    <X className="h-5 w-5" />
+                  </DialogClose>
                 </DialogHeader>
-                <div className="space-y-6 py-6">
+                <div className="p-8 pb-4 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
                   <div className="space-y-3">
                     <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Méthode de Recharge</Label>
                     <Select value={depositMethod} onValueChange={setDepositMethod}>
@@ -715,14 +727,17 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                   <span className="text-[10px] font-black uppercase tracking-widest">Retrait</span>
                 </Button>
               } />
-              <DialogContent className="rounded-[2.5rem] p-8 border-0 shadow-2xl">
-                <DialogHeader>
+              <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
+                <DialogHeader className="p-8 bg-indigo-600 text-white relative">
                   <DialogTitle className="text-2xl font-black">Retrait de Fonds</DialogTitle>
-                  <DialogDescription className="font-medium">
+                  <DialogDescription className="font-medium text-indigo-100 italic">
                     Choisissez votre méthode de retrait préférée.
                   </DialogDescription>
+                  <DialogClose className="absolute right-6 top-6 rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
+                    <X className="h-5 w-5" />
+                  </DialogClose>
                 </DialogHeader>
-                <div className="space-y-6 py-6">
+                <div className="p-8 pb-4 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
                   <div className="space-y-3">
                     <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Méthode de Retrait</Label>
                     <Select value={withdrawMethod} onValueChange={(v: any) => setWithdrawMethod(v)}>
@@ -773,7 +788,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                     <div className="relative">
                        <Input 
                          type="number" 
-                         placeholder="Min 20.00" 
+                         placeholder={`Min ${(20 / (settings?.exchangeRate || 146)).toFixed(2)}`} 
                          value={withdrawAmount}
                          onChange={(e) => setWithdrawAmount(e.target.value)}
                          className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-black text-xl pl-12"
@@ -800,14 +815,17 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                   <span className="text-[10px] font-black uppercase tracking-widest">Transfert</span>
                 </Button>
               } />
-              <DialogContent className="rounded-[2.5rem] p-8 border-0 shadow-2xl">
-                <DialogHeader>
+              <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
+                <DialogHeader className="p-8 bg-blue-600 text-white relative">
                   <DialogTitle className="text-2xl font-black">Transfert Entre Affiliés</DialogTitle>
-                  <DialogDescription className="font-medium">
+                  <DialogDescription className="font-medium text-blue-100 italic">
                     Envoyez des Dollars ($) instantanément à un autre membre Neopay.
                   </DialogDescription>
+                  <DialogClose className="absolute right-6 top-6 rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
+                    <X className="h-5 w-5" />
+                  </DialogClose>
                 </DialogHeader>
-                <div className="space-y-6 py-6">
+                <div className="p-8 pb-4 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
                   <div className="space-y-3">
                     <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">ID Wallet du Destinataire</Label>
                     <div className="relative">

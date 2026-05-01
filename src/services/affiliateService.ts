@@ -98,8 +98,8 @@ export const submitWithdrawal = async (
   if (amount > affiliate.balance) {
     throw new Error("Montant supérieur au solde disponible.");
   }
-  if (amount < 20) {
-    throw new Error("Le montant minimum de retrait est de 20 Goud.");
+  if (amount < 0.1) { // Very low limit to allow Gourdes-based withdrawal
+    throw new Error("Montant trop faible (Min 20 HTG).");
   }
   if (!accountNumber) {
     throw new Error("Le numéro de compte est obligatoire.");

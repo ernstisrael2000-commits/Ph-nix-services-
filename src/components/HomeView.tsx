@@ -24,12 +24,13 @@ import {
   DialogHeader, 
   DialogTitle, 
   DialogDescription,
-  DialogFooter
+  DialogFooter,
+  DialogClose
 } from './ui/dialog';
 import { Badge } from './ui/badge';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
-import { Loader2, ShieldCheck, Zap, Star, Headphones, QrCode, Wallet, Smartphone, Landmark } from 'lucide-react';
+import { Loader2, ShieldCheck, Zap, Star, Headphones, QrCode, Wallet, Smartphone, Landmark, X } from 'lucide-react';
 
 const WHATSAPP_NUMBER = "+50944813185";
 
@@ -462,12 +463,17 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
 
       {/* Games Dialog */}
       <Dialog open={isGamesDialogOpen} onOpenChange={setIsGamesDialogOpen}>
-        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto relative">
           <DialogHeader>
-            <DialogTitle className="text-2xl flex items-center gap-2">
-              <Gamepad2 className="h-6 w-6 text-purple-600" />
-              Top-up Jeux
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-2xl flex items-center gap-2">
+                <Gamepad2 className="h-6 w-6 text-purple-600" />
+                Top-up Jeux
+              </DialogTitle>
+              <DialogClose className="rounded-full bg-gray-100 p-2 hover:bg-gray-200 transition-colors">
+                <LucideIcons.X className="h-5 w-5 text-gray-500" />
+              </DialogClose>
+            </div>
             <DialogDescription>
               Choisissez votre jeu préféré pour effectuer une recharge.
             </DialogDescription>
@@ -546,12 +552,17 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
       
       {/* Cards Dialog */}
       <Dialog open={isCardsDialogOpen} onOpenChange={setIsCardsDialogOpen}>
-        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto relative">
           <DialogHeader>
-            <DialogTitle className="text-2xl flex items-center gap-2">
-              <CreditCard className="h-6 w-6 text-emerald-600" />
-              Recharge Cartes
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-2xl flex items-center gap-2">
+                <CreditCard className="h-6 w-6 text-emerald-600" />
+                Recharge Cartes
+              </DialogTitle>
+              <DialogClose className="rounded-full bg-gray-100 p-2 hover:bg-gray-200 transition-colors">
+                <LucideIcons.X className="h-5 w-5 text-gray-500" />
+              </DialogClose>
+            </div>
             <DialogDescription>
               Choisissez une carte pour recharger votre compte.
             </DialogDescription>
@@ -606,7 +617,10 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
       </Dialog>
       {/* Product Detail Dialog */}
       <Dialog open={isProductDetailOpen} onOpenChange={setIsProductDetailOpen}>
-        <DialogContent className="w-[94%] sm:max-w-[500px] rounded-[1.5rem] sm:rounded-[2rem] overflow-y-auto max-h-[92vh] p-0 gap-0 border-0 shadow-2xl custom-scrollbar">
+        <DialogContent className="w-[94%] sm:max-w-[500px] rounded-[1.5rem] sm:rounded-[2rem] overflow-y-auto max-h-[92vh] p-0 gap-0 border-0 shadow-2xl custom-scrollbar relative">
+          <DialogClose className="absolute top-4 left-4 z-20 rounded-full bg-black/40 backdrop-blur-md p-2 hover:bg-black/60 transition-colors text-white">
+            <LucideIcons.X className="h-5 w-5" />
+          </DialogClose>
           {selectedProduct && (
             <div className="flex flex-col">
               <div className="relative aspect-video">
@@ -691,17 +705,22 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
 
       {/* Payment Modal */}
       <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-        <DialogContent className="w-[94%] sm:max-w-[450px] p-0 overflow-y-auto max-h-[92vh] border-0 bg-white rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl custom-scrollbar">
+        <DialogContent className="w-[94%] sm:max-w-[450px] p-0 overflow-y-auto max-h-[92vh] border-0 bg-white rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl custom-scrollbar relative">
           <div className="bg-primary p-6 text-white sticky top-0 z-10">
             <DialogHeader>
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-md">
-                   <ShieldCheck className="h-6 w-6 text-white" />
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-md">
+                     <ShieldCheck className="h-6 w-6 text-white" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-xl font-black uppercase tracking-tight">Finaliser Paiement</DialogTitle>
+                    <DialogDescription className="text-white/70 text-xs font-bold uppercase tracking-widest">Paiement Sécurisé Neopay</DialogDescription>
+                  </div>
                 </div>
-                <div>
-                  <DialogTitle className="text-xl font-black uppercase tracking-tight">Finaliser Paiement</DialogTitle>
-                  <DialogDescription className="text-white/70 text-xs font-bold uppercase tracking-widest">Paiement Sécurisé Neopay</DialogDescription>
-                </div>
+                <DialogClose className="rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
+                  <LucideIcons.X className="h-5 w-5 text-white" />
+                </DialogClose>
               </div>
             </DialogHeader>
 

@@ -30,6 +30,7 @@ import {
   Image as ImageIcon,
   Edit,
   PlusCircle,
+  X,
   Wallet,
   Users,
   Trophy,
@@ -64,7 +65,8 @@ import {
   DialogHeader, 
   DialogTitle, 
   DialogFooter,
-  DialogDescription
+  DialogDescription,
+  DialogClose
 } from './ui/dialog';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
@@ -7444,12 +7446,17 @@ const AffiliateEditForm = ({
 
       {/* Quick Credit Dialog */}
       <Dialog open={isQuickCreditDialogOpen} onOpenChange={setIsQuickCreditDialogOpen}>
-        <DialogContent className="w-[94%] sm:max-w-[400px] p-0 overflow-y-auto max-h-[92vh] rounded-[2rem] border-0 shadow-2xl custom-scrollbar">
+        <DialogContent className="w-[94%] sm:max-w-[400px] p-0 overflow-y-auto max-h-[92vh] rounded-[2rem] border-0 shadow-2xl custom-scrollbar relative">
           <DialogHeader className="p-6 bg-emerald-600 text-white rounded-t-[2rem] sticky top-0 z-10">
-            <DialogTitle className="flex items-center gap-2 text-2xl font-black">
-              <PlusCircle className="h-6 w-6" />
-              Ajout Rapide d'Argent
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2 text-2xl font-black">
+                <PlusCircle className="h-6 w-6" />
+                Ajout Rapide
+              </DialogTitle>
+              <DialogClose className="rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
+                <X className="h-5 w-5 text-white" />
+              </DialogClose>
+            </div>
             <DialogDescription className="text-emerald-100 opacity-90">
               Ajouter des Gouds au compte de {selectedAffiliateForCredit?.name}.
             </DialogDescription>
