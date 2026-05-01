@@ -589,23 +589,26 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
       
       {/* Cards Dialog */}
       <Dialog open={isCardsDialogOpen} onOpenChange={setIsCardsDialogOpen}>
-        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto relative">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-4xl" showCloseButton={false}>
+          <DialogHeader className="p-8 pb-4 bg-gray-50/50 border-b border-gray-100">
             <div className="flex items-center justify-between">
-              <DialogTitle className="text-2xl flex items-center gap-2">
-                <CreditCard className="h-6 w-6 text-emerald-600" />
+              <DialogTitle className="text-3xl font-black flex items-center gap-3">
+                <div className="h-12 w-12 rounded-2xl bg-emerald-100 flex items-center justify-center">
+                  <CreditCard className="h-7 w-7 text-emerald-600" />
+                </div>
                 Recharge Cartes
               </DialogTitle>
-              <DialogClose className="rounded-full bg-gray-100 p-2 hover:bg-gray-200 transition-colors">
-                <LucideIcons.X className="h-5 w-5 text-gray-500" />
+              <DialogClose className="rounded-full bg-black/5 p-2 hover:bg-black/10 transition-all group active:scale-90">
+                <LucideIcons.X className="h-5 w-5 text-gray-500 group-hover:text-gray-900" />
               </DialogClose>
             </div>
-            <DialogDescription>
-              Choisissez une carte pour recharger votre compte.
+            <DialogDescription className="text-xs font-bold uppercase tracking-widening text-emerald-600/60 pl-1">
+              Choisissez une carte pour recharger votre compte instantanément.
             </DialogDescription>
           </DialogHeader>
           
-          {cardsLoading ? (
+          <div className="p-8">
+            {cardsLoading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="h-10 w-10 animate-spin text-emerald-600" />
             </div>
@@ -650,13 +653,14 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
               <p>Aucune carte disponible pour le moment.</p>
             </div>
           )}
+          </div>
         </DialogContent>
       </Dialog>
       {/* Product Detail Dialog */}
       <Dialog open={isProductDetailOpen} onOpenChange={setIsProductDetailOpen}>
-        <DialogContent className="w-[94%] sm:max-w-[500px] rounded-[1.5rem] sm:rounded-[2rem] overflow-y-auto max-h-[92vh] p-0 gap-0 border-0 shadow-2xl custom-scrollbar relative">
-          <DialogClose className="absolute top-4 left-4 z-20 rounded-full bg-black/40 backdrop-blur-md p-2 hover:bg-black/60 transition-colors text-white">
-            <LucideIcons.X className="h-5 w-5" />
+        <DialogContent className="sm:max-w-3xl border-0 shadow-2xl relative" showCloseButton={false}>
+          <DialogClose className="absolute top-6 left-6 z-20 rounded-full bg-black/30 backdrop-blur-xl p-3 hover:bg-black/50 transition-all text-white group active:scale-90 border border-white/10 shadow-lg">
+            <LucideIcons.X className="h-6 w-6" />
           </DialogClose>
           {selectedProduct && (
             <div className="flex flex-col">
@@ -778,8 +782,8 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
 
       {/* Payment Modal */}
       <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-        <DialogContent className="w-[94%] sm:max-w-[450px] p-0 overflow-y-auto max-h-[92vh] border-0 bg-white rounded-[1.5rem] sm:rounded-[2.5rem] shadow-2xl custom-scrollbar relative">
-          <div className="bg-primary p-6 text-white sticky top-0 z-10">
+        <DialogContent className="sm:max-w-2xl" showCloseButton={false}>
+          <div className="bg-primary p-8 text-white sticky top-0 z-10 rounded-t-[2.5rem]">
             <DialogHeader>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -913,8 +917,8 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
 
       {/* Card Recharge - Step 1: Details */}
       <Dialog open={isRechargeDialogOpen} onOpenChange={setIsRechargeDialogOpen}>
-        <DialogContent className="w-[94%] sm:max-w-[450px] p-0 overflow-hidden border-0 bg-white rounded-[2rem] shadow-2xl relative">
-          <div className="bg-emerald-600 p-8 text-white relative overflow-hidden">
+        <DialogContent className="sm:max-w-2xl border-0 bg-white shadow-2xl relative" showCloseButton={false}>
+          <div className="bg-emerald-600 p-8 text-white relative overflow-hidden rounded-t-[2.5rem]">
             <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
             <DialogHeader>
               <div className="flex items-center justify-between mb-4">
@@ -1020,8 +1024,8 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
 
       {/* Card Recharge - Step 2: Payment Method */}
       <Dialog open={isPaymentMethodDialogOpen} onOpenChange={setIsPaymentMethodDialogOpen}>
-        <DialogContent className="w-[94%] sm:max-w-[450px] p-0 overflow-hidden border-0 bg-white rounded-[2rem] shadow-2xl relative">
-          <div className="bg-emerald-800 p-8 text-white">
+        <DialogContent className="sm:max-w-2xl border-0 bg-white shadow-2xl relative" showCloseButton={false}>
+          <div className="bg-emerald-800 p-8 text-white rounded-t-[2.5rem]">
             <DialogHeader>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">

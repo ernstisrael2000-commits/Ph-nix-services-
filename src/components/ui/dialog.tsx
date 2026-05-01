@@ -48,11 +48,11 @@ function DialogContent({
   return (
     <DialogPortal>
       <DialogOverlay />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 pointer-events-none">
         <DialogPrimitive.Popup
           data-slot="dialog-content"
           className={cn(
-            "pointer-events-auto relative w-full max-w-[calc(100%-2rem)] rounded-2xl bg-popover p-0 shadow-2xl ring-1 ring-foreground/5 duration-300 outline-none sm:max-w-md data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            "pointer-events-auto relative w-full max-w-[calc(100%-1rem)] sm:max-w-xl rounded-[2.5rem] bg-white p-0 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] ring-1 ring-black/5 duration-300 outline-none max-h-[94vh] overflow-y-auto data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 flex flex-col",
             className
           )}
           {...props}
@@ -61,9 +61,9 @@ function DialogContent({
           {showCloseButton && (
             <DialogPrimitive.Close
               data-slot="dialog-close"
-              className="absolute right-4 top-4 rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors z-50"
+              className="absolute right-6 top-6 rounded-full bg-black/5 p-2 hover:bg-black/10 transition-all z-50 group active:scale-90"
             >
-              <XIcon className="h-4 w-4" />
+              <XIcon className="h-5 w-5 text-gray-500 group-hover:text-gray-900" />
               <span className="sr-only">Fermer</span>
             </DialogPrimitive.Close>
           )}

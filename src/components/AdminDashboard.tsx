@@ -6199,7 +6199,7 @@ const AffiliateEditForm = ({
 
       {/* Affiliate Edit/Add Dialog */}
       <Dialog open={isAffiliateDialogOpen} onOpenChange={setIsAffiliateDialogOpen}>
-        <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-[2.5rem] border-0 shadow-2xl">
+        <DialogContent className="sm:max-w-4xl border-0 shadow-2xl">
           <div className="relative h-32 bg-gradient-to-r from-primary/20 via-accent-light to-primary/10 p-6 flex flex-col justify-end">
              <div className="absolute top-4 right-6 flex gap-2">
                {editingAffiliate && (
@@ -6739,8 +6739,8 @@ const AffiliateEditForm = ({
 
       {/* Product Edit/Add Dialog */}
       <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col p-4 overflow-hidden">
-          <DialogHeader className="pb-4 border-b -mx-4 -mt-4 p-4 px-6 bg-white z-20">
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader className="pb-4 border-b -mx-4 -mt-4 p-6 bg-white z-20">
             <DialogTitle className="text-xl font-black">{editingProduct ? 'Modifier le produit' : 'Nouveau produit'}</DialogTitle>
             <DialogDescription className="text-xs">Ajoutez un service ou un produit dynamique à votre plateforme.</DialogDescription>
           </DialogHeader>
@@ -6947,9 +6947,10 @@ const AffiliateEditForm = ({
         </DialogContent>
       </Dialog>
 
+      {/* Game Editor Dialog */}
       <Dialog open={isGameDialogOpen} onOpenChange={setIsGameDialogOpen}>
-        <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col p-4 overflow-hidden">
-          <DialogHeader className="pb-4 border-b -mx-4 -mt-4 p-4 px-6 bg-white z-20">
+        <DialogContent className="sm:max-w-4xl">
+          <DialogHeader className="pb-4 border-b -mx-4 -mt-4 p-6 bg-white z-20">
             <DialogTitle className="text-xl font-black">{editingGame ? 'Modifier le jeu' : 'Nouveau jeu'}</DialogTitle>
             <DialogDescription className="text-xs">Ajoutez un jeu pour le service de Top-up.</DialogDescription>
           </DialogHeader>
@@ -7195,9 +7196,9 @@ const AffiliateEditForm = ({
 
       {/* Card Editor Dialog */}
       <Dialog open={isCardDialogOpen} onOpenChange={setIsCardDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] h-[90vh] flex flex-col p-0 overflow-hidden">
-          <DialogHeader className="p-6 pb-2">
-            <DialogTitle className="text-2xl flex items-center gap-2">
+        <DialogContent className="sm:max-w-4xl">
+          <DialogHeader className="p-8 pb-4 bg-gray-50/50 border-b border-gray-100">
+            <DialogTitle className="text-3xl font-black flex items-center gap-3">
               <CreditCard className="h-6 w-6 text-primary" />
               {editingCard ? 'Modifier la carte' : 'Ajouter une carte'}
             </DialogTitle>
