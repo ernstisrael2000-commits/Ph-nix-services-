@@ -91,6 +91,18 @@ export const updateAgentBalance = async (agentId: string, amount: number) => {
   }
 };
 
+export const getAgentByEmail = async (email: string): Promise<Agent | null> => {
+  try {
+    const q = query(collection(db, 'agents'), where('email', '==', email));
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+    return { id: snap.docs[0].id, ...snap.docs[0].data() } as Agent;
+  } catch (error) {
+    handleFirestoreError(error, 'get', 'agents', auth);
+    return null;
+  }
+};
+
 export const getAgentByCode = async (agentCode: string): Promise<Agent | null> => {
   try {
     const q = query(collection(db, 'agents'), where('agentCode', '==', agentCode));

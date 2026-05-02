@@ -102,6 +102,8 @@
       "description": "Represents an affiliate user.",
       "type": "object",
       "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
         "username": { "type": "string" },
         "password": { "type": "string" },
         "name": { "type": "string" },
@@ -374,6 +376,8 @@
       "description": "Represents a physical deposit agent.",
       "type": "object",
       "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
         "agentCode": { "type": "string", "description": "8-digit unique code." },
         "name": { "type": "string" },
         "phone": { "type": "string" },

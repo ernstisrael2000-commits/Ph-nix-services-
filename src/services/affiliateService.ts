@@ -34,6 +34,26 @@ export const loginAffiliate = async (username: string, password: string): Promis
   return { id: docData.id, ...docData.data() } as Affiliate;
 };
 
+export const getAffiliateByEmail = async (email: string): Promise<Affiliate | null> => {
+  const q = query(
+    collection(db, 'affiliates'), 
+    where('email', '==', email)
+  );
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) {
+    // Try checking info object if email was stored there
+    const qInfo = query(
+      collection(db, 'affiliates'),
+      where('info.email', '==', email)
+    );
+    const snapInfo = await getDocs(qInfo);
+    if (snapInfo.empty) return null;
+    return { id: snapInfo.docs[0].id, ...snapInfo.docs[0].data() } as Affiliate;
+  }
+  const docData = snapshot.docs[0];
+  return { id: docData.id, ...docData.data() } as Affiliate;
+};
+
 export const useAffiliateData = (affiliateId: string | null) => {
   const [affiliate, setAffiliate] = useState<Affiliate | null>(null);
   const [loading, setLoading] = useState(true);

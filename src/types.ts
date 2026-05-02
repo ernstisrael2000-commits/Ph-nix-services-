@@ -56,6 +56,8 @@ export interface AdditionalSponsor {
 
 export interface Affiliate {
   id?: string;
+  uid?: string; // For social login
+  email?: string; // For social login
   username: string;
   password: string; 
   name: string;
@@ -99,7 +101,8 @@ export type TransactionStatus = 'pending' | 'completed' | 'approved' | 'rejected
 
 export interface Agent {
   id?: string;
-  uid?: string; // Optional: if agents login via email
+  uid?: string;
+  email?: string; // For social login
   agentCode: string; // 8 digits
   name: string;
   phone: string;
