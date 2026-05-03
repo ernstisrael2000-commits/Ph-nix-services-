@@ -206,10 +206,17 @@ export interface AffiliateRequest {
 
 export interface Client {
   id?: string;
+  uid?: string; // For social login
+  email?: string; // For social login
+  password?: string; // For manual login
   name: string;
   phone: string;
+  balance: number;
+  status: 'pending' | 'approved' | 'rejected';
+  photoURL?: string;
   directSponsorId?: string;
   indirectSponsorId?: string;
+  registrationData?: any;
   createdAt: any;
   updatedAt: any;
 }

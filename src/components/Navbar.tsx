@@ -1,7 +1,23 @@
-import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users, Truck, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
+import { 
+  Package, 
+  ShieldCheck, 
+  LogIn, 
+  LogOut, 
+  Search, 
+  Home, 
+  Users, 
+  Truck, 
+  ExternalLink, 
+  Loader2, 
+  AlertCircle,
+  Menu,
+  ChevronDown,
+  User,
+  Wallet as WalletIcon
+} from 'lucide-react';
 import { Button } from './ui/button';
 import { auth } from '@/lib/firebase';
-import { signInWithPopup, GoogleAuthProvider, signOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { signOut } from 'firebase/auth';
 import { useAuth } from '../hooks/useAuth';
 import { useSettings } from '../services/parcelService';
 import { usePendingCounts } from '../services/affiliateService';
@@ -15,8 +31,24 @@ import {
   DialogDescription,
   DialogFooter
 } from './ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
+} from './ui/dropdown-menu';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "./ui/sheet";
+import { Client } from '../types';
 
-export default function Navbar({ currentView, onViewChange }: { currentView: string, onViewChange: (view: any) => void }) {
+interface NavbarProps {
+  currentView: string;
+  onViewChange: (view: any) => void;
+  loggedClient: Client | null;
+  onLogoutClient: () => void;
+}
+
+export default function Navbar({ currentView, onViewChange, loggedClient, onLogoutClient }: NavbarProps) {
   const { user, isAdmin } = useAuth();
   const { settings } = useSettings();
   const { total: pendingCount } = usePendingCounts(isAdmin);
@@ -24,39 +56,11 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
   const [showLoginErrorDialog, setShowLoginErrorDialog] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
 
-  const handleLogin = async () => {
-    if (isLoggingIn) return;
-    
-    setIsLoggingIn(true);
-    const provider = new GoogleAuthProvider();
-    
-    try {
-      // Ensure persistence is set
-      await setPersistence(auth, browserLocalPersistence);
-      await signInWithPopup(auth, provider);
-      toast.success("Connexion réussie !");
-      setIsLoggingIn(false);
-    } catch (error: any) {
-      console.error("Login failed:", error);
-      setIsLoggingIn(false);
-      setLastError(error.code || error.message);
-
-      if (error.code === 'auth/popup-closed-by-user') {
-        toast.error("La fenêtre de connexion a été fermée.");
-      } else if (error.code === 'auth/cancelled-popup-request') {
-        // Just ignore this one silently or show a small toast, 
-        // as it usually means a second click happened.
-        console.warn("Popup request cancelled (usually due to multiple clicks)");
-      } else if (error.code === 'auth/network-request-failed' || error.message?.includes('INTERNAL ASSERTION FAILED')) {
-        setShowLoginErrorDialog(true);
-      } else {
-        toast.error(`Échec: ${error.message || 'Erreur inconnue'}`);
-      }
-    }
-  };
-
   const handleLogout = async () => {
     try {
+      if (loggedClient) {
+        onLogoutClient();
+      }
       await signOut(auth);
       onViewChange('home');
     } catch (error) {
@@ -64,66 +68,96 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
     }
   };
 
+  const menuItems = [
+    { id: 'home', label: 'Accueil', icon: Home },
+    { id: 'tracking', label: 'Suivi', icon: Search },
+    { id: 'shipping', label: 'Shipping', icon: Truck },
+    { id: 'affiliate', label: 'Affiliés', icon: Users },
+    { id: 'agent', label: 'Agent', icon: User },
+  ];
+
   return (
     <nav className="border-b bg-white/80 backdrop-blur-md fixed top-0 left-0 right-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
-          <div 
-            className="flex items-center gap-2 cursor-pointer group"
-            onClick={() => onViewChange('home')}
-          >
-            {settings?.logoUrl ? (
-              <img 
-                src={settings.logoUrl} 
-                alt="Neopay Logo" 
-                className="h-8 w-auto object-contain"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
-            ) : (
-              <div className="bg-primary p-2 rounded-lg group-hover:bg-[#D98A1E] transition-colors">
-                <Package className="h-6 w-6 text-white" />
-              </div>
-            )}
-            <span className="text-xl sm:text-2xl font-bold tracking-tight text-dark hidden xs:block">Neopay</span>
+          <div className="flex items-center gap-4">
+            <Sheet>
+              <SheetTrigger
+                className="bg-transparent hover:bg-muted/50 p-2 rounded-xl h-10 w-10 flex items-center justify-center md:hidden lg:flex cursor-pointer transition-colors outline-none border-none"
+              >
+                <Menu className="h-6 w-6 text-primary" />
+              </SheetTrigger>
+              <SheetContent side="left" className="w-[300px] sm:w-[400px] border-r-0 rounded-r-[2.5rem]">
+                <SheetHeader className="pb-8 border-b">
+                  <SheetTitle className="text-2xl font-black text-primary">Menu Neopay</SheetTitle>
+                </SheetHeader>
+                <div className="py-8 space-y-4">
+                  {menuItems.map((item) => (
+                    <Button
+                      key={item.id}
+                      variant={currentView === item.id ? 'secondary' : 'ghost'}
+                      onClick={() => {
+                        onViewChange(item.id);
+                      }}
+                      className={`w-full justify-start gap-4 h-14 rounded-2xl transition-all ${
+                        currentView === item.id ? 'bg-primary/10 text-primary' : 'text-subtext'
+                      }`}
+                    >
+                      <item.icon className="h-5 w-5" />
+                      <span className="font-black uppercase tracking-widest text-xs">{item.label}</span>
+                    </Button>
+                  ))}
+                </div>
+              </SheetContent>
+            </Sheet>
+
+            <div 
+              className="flex items-center gap-2 cursor-pointer group"
+              onClick={() => onViewChange('home')}
+            >
+              {settings?.logoUrl ? (
+                <img 
+                  src={settings.logoUrl} 
+                  alt="Neopay Logo" 
+                  className="h-8 w-auto object-contain"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div className="bg-primary p-2 rounded-lg group-hover:bg-[#D98A1E] transition-colors">
+                  <Package className="h-6 w-6 text-white" />
+                </div>
+              )}
+              <span className="text-xl font-bold tracking-tight text-dark hidden xs:block">Neopay</span>
+            </div>
+
+            <Button 
+              variant="ghost" 
+              onClick={() => onViewChange('affiliate')}
+              className="hidden sm:flex items-center gap-2 text-subtext hover:text-primary font-black h-10 px-4 rounded-xl transition-all hover:bg-accent-light/50"
+            >
+              <Users className="h-4 w-4" />
+              <span className="text-[10px] uppercase tracking-[0.2em]">Affilié</span>
+            </Button>
           </div>
 
           <div className="flex items-center gap-1 sm:gap-4">
-            <Button 
-              variant={currentView === 'home' ? 'secondary' : 'ghost'} 
-              onClick={() => onViewChange('home')} 
-              className={`hidden md:flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 group transition-all duration-300 rounded-xl ${currentView === 'home' ? 'bg-accent-light/80 shadow-sm' : 'hover:bg-accent-light/50'}`}
-            >
-              <Home className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'home' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`} />
-              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'home' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`}>Accueil</span>
-            </Button>
-            <Button 
-              variant={currentView === 'tracking' ? 'secondary' : 'ghost'} 
-              onClick={() => onViewChange('tracking')} 
-              className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 px-2 sm:px-4 group transition-all duration-300 rounded-xl ${currentView === 'tracking' ? 'bg-accent-light/80 shadow-sm' : 'hover:bg-accent-light/50'}`}
-            >
-              <Search className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'tracking' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`} />
-              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'tracking' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`}>Suivi</span>
-            </Button>
-
-            <Button 
-              variant={currentView === 'shipping' ? 'secondary' : 'ghost'} 
-              onClick={() => onViewChange('shipping')} 
-              className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 px-2 sm:px-4 group transition-all duration-300 rounded-xl ${currentView === 'shipping' ? 'bg-accent-light/80 shadow-sm' : 'hover:bg-accent-light/50'}`}
-            >
-              <Truck className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'shipping' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`} />
-              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'shipping' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`}>Shipping</span>
-            </Button>
-
-            <Button 
-              variant={currentView === 'affiliate' ? 'secondary' : 'ghost'} 
-              onClick={() => onViewChange('affiliate')} 
-              className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 px-2 sm:px-4 group transition-all duration-300 rounded-xl ${currentView === 'affiliate' ? 'bg-accent-light/80 shadow-sm' : 'hover:bg-accent-light/50'}`}
-            >
-              <Users className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'affiliate' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`} />
-              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'affiliate' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`}>Affiliés</span>
-            </Button>
+            {!loggedClient && (
+              <div className="hidden md:flex items-center gap-1">
+                {menuItems.map((item) => (
+                  <Button 
+                    key={item.id}
+                    variant={currentView === item.id ? 'secondary' : 'ghost'} 
+                    onClick={() => onViewChange(item.id)} 
+                    className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 px-4 group transition-all duration-300 rounded-xl ${currentView === item.id ? 'bg-accent-light/80 shadow-sm' : 'hover:bg-accent-light/50'}`}
+                  >
+                    <item.icon className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === item.id ? 'text-primary' : 'text-subtext group-hover:text-primary'}`} />
+                    <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === item.id ? 'text-primary' : 'text-subtext group-hover:text-primary'}`}>{item.label}</span>
+                  </Button>
+                ))}
+              </div>
+            )}
             
             {isAdmin && (
               <Button 
@@ -141,49 +175,97 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
               </Button>
             )}
 
-            {user ? (
+            {loggedClient || user ? (
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="flex flex-col items-end hidden sm:flex">
-                  <span className="text-xs font-bold text-dark truncate max-w-[120px]">{user.displayName}</span>
-                  <span className="text-[10px] text-subtext truncate max-w-[120px]">{user.email}</span>
+                  <span className="text-xs font-bold text-dark truncate max-w-[120px]">
+                    {loggedClient ? loggedClient.name : user?.displayName}
+                  </span>
+                  <span className="text-[10px] text-subtext truncate max-w-[120px]">
+                    {loggedClient ? loggedClient.email : user?.email}
+                  </span>
                 </div>
-                <img 
-                  src={user.photoURL || ''} 
-                  alt={user.displayName || ''} 
-                  className="h-8 w-8 rounded-full border hidden xs:block"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}`;
-                  }}
-                />
-                <Button variant="ghost" size="sm" onClick={handleLogout} className="text-subtext hover:text-red-600">
-                  <LogOut className="h-4 w-4" />
-                </Button>
+                {loggedClient?.photoURL || user?.photoURL ? (
+                  <img 
+                    src={loggedClient?.photoURL || user?.photoURL || ''} 
+                    alt="Profile" 
+                    className="h-8 w-8 rounded-full border border-primary/20 object-cover hidden xs:block"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(loggedClient?.name || user?.displayName || 'User')}`;
+                    }}
+                  />
+                ) : (
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 hidden xs:block">
+                    <User className="h-4 w-4 text-primary" />
+                  </div>
+                )}
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="px-1 text-subtext group cursor-pointer outline-none border-none bg-transparent hover:bg-muted/50 rounded-md transition-colors">
+                    <ChevronDown className="h-4 w-4 group-hover:text-primary transition-colors transition-transform data-[open]:rotate-180" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2 shadow-xl border-gray-100">
+                    {loggedClient && (
+                      <DropdownMenuItem 
+                        onClick={() => onViewChange('client_wallet')}
+                        className="h-10 rounded-xl cursor-pointer gap-3 font-bold text-xs uppercase tracking-widest text-primary"
+                      >
+                        <WalletIcon className="h-4 w-4" />
+                        Mon Wallet
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem 
+                      onClick={handleLogout}
+                      className="h-10 rounded-xl cursor-pointer gap-3 font-bold text-xs uppercase tracking-widest text-red-600 focus:text-red-600 focus:bg-red-50"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Déconnexion
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="hidden sm:flex text-subtext/60 hover:text-primary"
-                  onClick={() => window.open(window.location.href, '_blank')}
-                  title="Ouvrir dans un nouvel onglet"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </Button>
-                <Button 
-                  onClick={handleLogin} 
-                  disabled={isLoggingIn}
-                  className="bg-primary hover:bg-[#D98A1E] text-white flex items-center gap-2"
-                >
-                  {isLoggingIn ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    className="bg-primary hover:bg-[#D98A1E] text-white flex items-center gap-2 rounded-xl h-11 px-4 sm:px-6 font-black tracking-tight shadow-lg shadow-accent-light/40 transition-all hover:shadow-xl active:scale-95 cursor-pointer outline-none border-none"
+                  >
                     <LogIn className="h-4 w-4" />
-                  )}
-                  <span className="hidden xs:inline">
-                    {isLoggingIn ? 'Connexion...' : 'Connexion'}
-                  </span>
-                </Button>
+                    <span>Accès</span>
+                    <ChevronDown className="h-3 w-3 opacity-50 transition-transform data-[open]:rotate-180" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2 shadow-2xl border-gray-100 mt-2">
+                    <DropdownMenuItem 
+                      onClick={() => onViewChange('client')}
+                      className="h-12 rounded-xl cursor-pointer gap-3 font-black text-[10px] uppercase tracking-[0.15em] text-dark hover:bg-accent-light/30"
+                    >
+                      <User className="h-4 w-4 text-primary" />
+                      Client
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => onViewChange('affiliate')}
+                      className="h-12 rounded-xl cursor-pointer gap-3 font-black text-[10px] uppercase tracking-[0.15em] text-dark hover:bg-accent-light/30"
+                    >
+                      <Users className="h-4 w-4 text-primary" />
+                      Affilié
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => onViewChange('agent')}
+                      className="h-12 rounded-xl cursor-pointer gap-3 font-black text-[10px] uppercase tracking-[0.15em] text-dark hover:bg-accent-light/30"
+                    >
+                      <User className="h-4 w-4 text-primary" />
+                      Agent
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => onViewChange('admin')}
+                      className="h-12 rounded-xl cursor-pointer gap-3 font-black text-[10px] uppercase tracking-[0.15em] text-dark hover:bg-accent-light/30"
+                    >
+                      <ShieldCheck className="h-4 w-4 text-primary" />
+                      Administrateur
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             )}
           </div>

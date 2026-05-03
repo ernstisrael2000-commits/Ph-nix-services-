@@ -9,23 +9,24 @@ import AffiliateLogin from './components/AffiliateLogin';
 import AffiliateDashboard from './components/AffiliateDashboard';
 import AgentLogin from './components/AgentLogin';
 import AgentDashboard from './components/AgentDashboard';
+import ClientLogin from './components/ClientLogin';
+import Wallet from './components/Wallet';
+import { useClientData } from './services/clientService';
 import { Toaster } from './components/ui/sonner';
-import AccessChoice from './components/AccessChoice';
 import { useAuth } from './hooks/useAuth';
 import { useSettings } from './services/parcelService';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loader2, Package, ChevronLeft, Bell, X, WifiOff } from 'lucide-react';
 import { Button } from './components/ui/button';
-import { Affiliate, AdminAccount, Agent } from './types';
+import { Affiliate, AdminAccount, Agent, Client } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, getDocFromServer } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { toast } from 'sonner';
 
 export default function App() {
-  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent'>('home');
-  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent')[]>(['home']);
-  const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'admin' | 'agent' | null>(null);
+  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent' | 'client' | 'client_wallet'>('home');
+  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent' | 'client' | 'client_wallet')[]>(['home']);
   const { loading } = useAuth();
   const { settings } = useSettings();
   const [showAnnouncement, setShowAnnouncement] = useState(true);
@@ -99,11 +100,9 @@ export default function App() {
     if (newView === view) return;
     setHistory(prev => [...prev, newView]);
     setView(newView);
-    setAccessChoice(null); // Reset when switching
   };
 
   const handleBack = () => {
-    setAccessChoice(null); // Clear selection on back
     if (history.length > 1) {
       const newHistory = [...history];
       newHistory.pop(); // remove current
@@ -145,6 +144,36 @@ export default function App() {
     localStorage.removeItem('neopay_agent');
   };
 
+  const [loggedClient, setLoggedClient] = useState<Client | null>(() => {
+    const saved = localStorage.getItem('neopay_client');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const handleClientLogin = (client: Client) => {
+    setLoggedClient(client);
+    localStorage.setItem('neopay_client', JSON.stringify(client));
+    setView('home');
+  };
+
+  const handleClientLogout = () => {
+    setLoggedClient(null);
+    localStorage.removeItem('neopay_client');
+    setView('home');
+  };
+
+  // Real-time client data sync
+  useEffect(() => {
+    if (loggedClient?.id) {
+      const unsubscribe = useClientData(loggedClient.id, (updatedClient) => {
+        if (updatedClient) {
+          setLoggedClient(updatedClient);
+          localStorage.setItem('neopay_client', JSON.stringify(updatedClient));
+        }
+      });
+      return () => unsubscribe();
+    }
+  }, [loggedClient?.id]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -162,85 +191,89 @@ export default function App() {
         <Navbar 
           currentView={view}
           onViewChange={handleViewChange}
+          loggedClient={loggedClient}
+          onLogoutClient={handleClientLogout}
         />
 
-        <AnimatePresence>
-          {settings?.showGlobalAnnouncement && settings?.globalAnnouncement && showAnnouncement && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center px-4 p-6 pointer-events-none">
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                className="w-full max-w-lg bg-white/98 backdrop-blur-xl rounded-[2.5rem] shadow-[0_30px_70px_rgba(0,0,0,0.35)] border border-primary/20 pointer-events-auto overflow-hidden ring-1 ring-black/10"
-              >
-                <div className="relative">
-                  {/* Glass Header */}
-                  <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-primary/5">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-                        <Bell className="h-5 w-5 text-white animate-ring" />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-black text-dark tracking-tight leading-none">
-                          Annonce Spéciale
-                        </h3>
-                        <p className="text-[10px] uppercase font-black text-primary/60 tracking-widest mt-1">
-                          Neopay Intelligence
-                        </p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => setShowAnnouncement(false)}
-                      className="h-9 w-9 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-all active:scale-95 text-gray-400 hover:text-dark border border-gray-100"
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
-                  </div>
-
-                  {/* Scrollable Content Area */}
-                  <div className="p-6 sm:p-8 max-h-[40vh] overflow-y-auto no-scrollbar scroll-smooth">
-                    <div className="space-y-4">
-                      <p className="text-gray-600 font-bold leading-relaxed whitespace-pre-wrap text-sm sm:text-base">
-                        {settings.globalAnnouncement}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Action Footer */}
-                  <div className="p-6 pt-0 flex justify-center">
-                    <Button 
-                      onClick={() => setShowAnnouncement(false)}
-                      className="w-full h-12 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black text-sm shadow-xl shadow-accent-light/60 border-0 transition-all hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0 group"
-                    >
-                      J'AI COMPRIS
-                      <motion.span 
-                        animate={{ x: [0, 5, 0] }}
-                        transition={{ repeat: Infinity, duration: 1.5 }}
-                        className="ml-2"
-                      >
-                        →
-                      </motion.span>
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Bottom decorative bar */}
-                <div className="h-2 w-full bg-gradient-to-r from-transparent via-primary to-transparent opacity-30" />
-              </motion.div>
-
-              {/* Backdrop Blur/Dim */}
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/40 backdrop-blur-[2px] -z-10"
-                onClick={() => setShowAnnouncement(false)}
-              />
-            </div>
-          )}
-        </AnimatePresence>
-        
         <main className="animate-in fade-in duration-500 pt-20 flex-grow relative">
+          {!loggedClient && (
+            <AnimatePresence>
+              {settings?.showGlobalAnnouncement && settings?.globalAnnouncement && showAnnouncement && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center px-4 p-6 pointer-events-none">
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                    className="w-full max-w-lg bg-white/98 backdrop-blur-xl rounded-[2.5rem] shadow-[0_30px_70px_rgba(0,0,0,0.35)] border border-primary/20 pointer-events-auto overflow-hidden ring-1 ring-black/10"
+                  >
+                    <div className="relative">
+                      {/* Glass Header */}
+                      <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-primary/5">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
+                            <Bell className="h-5 w-5 text-white animate-ring" />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-black text-dark tracking-tight leading-none">
+                              Annonce Spéciale
+                            </h3>
+                            <p className="text-[10px] uppercase font-black text-primary/60 tracking-widest mt-1">
+                              Neopay Intelligence
+                            </p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => setShowAnnouncement(false)}
+                          className="h-9 w-9 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-all active:scale-95 text-gray-400 hover:text-dark border border-gray-100"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </div>
+
+                      {/* Scrollable Content Area */}
+                      <div className="p-6 sm:p-8 max-h-[40vh] overflow-y-auto no-scrollbar scroll-smooth">
+                        <div className="space-y-4">
+                          <p className="text-gray-600 font-bold leading-relaxed whitespace-pre-wrap text-sm sm:text-base">
+                            {settings.globalAnnouncement}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {/* Action Footer */}
+                      <div className="p-6 pt-0 flex justify-center">
+                        <Button 
+                          onClick={() => setShowAnnouncement(false)}
+                          className="w-full h-12 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black text-sm shadow-xl shadow-accent-light/60 border-0 transition-all hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0 group"
+                        >
+                          J'AI COMPRIS
+                          <motion.span 
+                            animate={{ x: [0, 5, 0] }}
+                            transition={{ repeat: Infinity, duration: 1.5 }}
+                            className="ml-2"
+                          >
+                            →
+                          </motion.span>
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Bottom decorative bar */}
+                    <div className="h-2 w-full bg-gradient-to-r from-transparent via-primary to-transparent opacity-30" />
+                  </motion.div>
+
+                  {/* Backdrop Blur/Dim */}
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 bg-black/40 backdrop-blur-[2px] -z-10"
+                    onClick={() => setShowAnnouncement(false)}
+                  />
+                </div>
+              )}
+            </AnimatePresence>
+          )}
+
           {view !== 'home' && (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
               <Button 
@@ -254,9 +287,20 @@ export default function App() {
               </Button>
             </div>
           )}
+
+          {loggedClient && view === 'home' && (
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+              <Wallet client={loggedClient} />
+              <div className="mt-8 h-px bg-gray-100" />
+            </div>
+          )}
           
           {view === 'home' && (
-            <HomeView onTrackingClick={() => handleViewChange('tracking')} onViewChange={handleViewChange} />
+            <HomeView 
+              onTrackingClick={() => handleViewChange('tracking')} 
+              onViewChange={handleViewChange} 
+              loggedClient={loggedClient}
+            />
           )}
           
           {view === 'tracking' && (
@@ -281,21 +325,8 @@ export default function App() {
                 affiliateId={loggedAffiliate.id!} 
                 onLogout={handleAffiliateLogout} 
               />
-            ) : loggedAgent ? (
-              <AgentDashboard 
-                agentUid={loggedAgent.id!} 
-                onLogout={handleAgentLogout} 
-              />
-            ) : loggedAdmin ? (
-              <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
-            ) : accessChoice === 'affiliate' ? (
-              <AffiliateLogin onLogin={handleAffiliateLogin} />
-            ) : accessChoice === 'agent' ? (
-              <AgentLogin onLogin={handleAgentLogin} />
-            ) : accessChoice === 'admin' ? (
-              <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => setAccessChoice(null)} />
             ) : (
-              <AccessChoice onChoice={(choice) => setAccessChoice(choice)} />
+              <AffiliateLogin onLogin={handleAffiliateLogin} />
             )
           )}
 
@@ -308,6 +339,20 @@ export default function App() {
             ) : (
               <AgentLogin onLogin={handleAgentLogin} />
             )
+          )}
+
+          {view === 'client' && (
+            loggedClient ? (
+              <Wallet client={loggedClient} />
+            ) : (
+              <ClientLogin onLogin={handleClientLogin} />
+            )
+          )}
+
+          {view === 'client_wallet' && loggedClient && (
+            <div className="py-8">
+              <Wallet client={loggedClient} />
+            </div>
           )}
         </main>
 

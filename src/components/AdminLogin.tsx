@@ -6,7 +6,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { toast } from 'sonner';
-import { checkAdminLogin } from '../services/adminService';
+import { checkAdminLogin, signInWithGoogleAdmin } from '../services/adminService';
 import { AdminAccount } from '../types';
 
 interface AdminLoginProps {
@@ -38,6 +38,23 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
       }
     } catch (error) {
       toast.error('Une erreur est survenue.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      const result = await signInWithGoogleAdmin();
+      if (result.success && result.admin) {
+        toast.success(`Bienvenue, ${result.admin.fullName} !`);
+        onLoginSuccess(result.admin);
+      } else {
+        toast.error(result.error || 'Erreur de connexion Google');
+      }
+    } catch (error) {
+      toast.error('Une erreur est survenue lors de la connexion Google.');
     } finally {
       setLoading(false);
     }
@@ -121,6 +138,26 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
                 ) : (
                   'Se connecter'
                 )}
+              </Button>
+
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-100"></div>
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white px-4 text-gray-400 font-bold tracking-widest">OU</span>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading}
+                onClick={handleGoogleLogin}
+                className="w-full h-14 rounded-2xl border-gray-100 font-bold flex items-center justify-center gap-3 hover:bg-gray-50 transition-all"
+              >
+                <img src="https://www.google.com/favicon.ico" alt="Google" className="h-5 w-5" />
+                Se connecter avec Google
               </Button>
 
               <button

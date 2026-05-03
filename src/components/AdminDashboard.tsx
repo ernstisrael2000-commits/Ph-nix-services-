@@ -10,6 +10,7 @@ import {
 } from './ui/dropdown-menu';
 import { 
   Smartphone,
+  CreditCard,
   Plus, 
   Search, 
   Edit2, 
@@ -40,7 +41,6 @@ import {
   ArrowUpDown,
   DollarSign,
   ArrowUp,
-  CreditCard,
   UserCheck,
   HelpCircle,
   Zap,
@@ -73,6 +73,7 @@ import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Checkbox } from './ui/checkbox';
+import { useAuth } from '../hooks/useAuth';
 import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage, useNavButtons, saveNavButton, deleteNavButton } from '../services/parcelService';
 import { 
   useAllAffiliates, 
@@ -98,6 +99,7 @@ import {
   approveTransfer,
   rejectTransfer
 } from '../services/affiliateService';
+import { useAllClientTransactions, updateClientTransactionStatus } from '../services/transactionService';
 import { useAdminAccounts, useAdminLogs, saveAdminAccount, deleteAdminAccount } from '../services/adminService';
 import { 
   useAllAgents,
@@ -585,6 +587,7 @@ const ClientsTableBody = React.memo(({
             </div>
           </TableCell>
           <TableCell className="font-bold text-primary">{client.phone}</TableCell>
+          <TableCell className="font-black text-emerald-600">{(client.balance || 0).toLocaleString()} HTG</TableCell>
           <TableCell>
             {client.directSponsorId ? (
                <div className="flex items-center gap-2">
@@ -909,7 +912,42 @@ const AffiliateSearchHeader = React.memo(({
 });
 
 export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps) {
+  const { isAdmin: isAuthAdmin, loading: authLoading } = useAuth();
   const [showScrollTop, setShowScrollTop] = useState(false);
+
+  // Consider as admin if EITHER Firebase Auth says so OR legacy login passed admin object
+  const isEffectiveAdmin = isAuthAdmin || !!admin;
+
+  if (authLoading && !admin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="text-subtext font-bold animate-pulse">Vérification des accès administrateur...</p>
+      </div>
+    );
+  }
+
+  if (!isEffectiveAdmin) {
+     return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center bg-white rounded-[2.5rem] shadow-xl border-2 border-red-50">
+        <div className="h-20 w-20 rounded-3xl bg-red-100 flex items-center justify-center mb-6">
+          <AlertTriangle className="h-10 w-10 text-red-600" />
+        </div>
+        <h2 className="text-2xl font-black text-dark mb-2">Accès Non Autorisé</h2>
+        <p className="text-gray-500 max-w-sm mb-8 font-medium">
+          Votre session a expiré ou vos privilèges n'ont pas encore été synchronisés. Veuillez rafraîchir la page ou vous reconnecter.
+        </p>
+        <div className="flex gap-4">
+          <Button onClick={() => window.location.reload()} variant="outline" className="rounded-xl border-gray-200">
+            Actualiser
+          </Button>
+          <Button onClick={onLogout} className="bg-red-600 hover:bg-red-700 text-white rounded-xl">
+            Se déconnecter
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     const handleScroll = () => {
@@ -923,7 +961,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const { stats, loading: analyticsLoading } = useAnalytics();
+  const { stats, loading: analyticsLoading } = useAnalytics(isEffectiveAdmin);
   const { parcels, loading: parcelsLoading } = useParcels();
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
@@ -931,11 +969,11 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const { sliderImages, loading: sliderLoading } = useSliderImages();
   const { buttons, loading: buttonsLoading } = useNavButtons();
   const { settings, loading: settingsLoading } = useSettings();
-  const { affiliates, loading: affiliatesLoading } = useAllAffiliates();
-  const { withdrawals: allWithdrawals, loading: allWithdrawalsLoading } = useAllWithdrawals();
-  const { requests: affiliateRequests, loading: affiliateRequestsLoading } = useAllAffiliateRequests();
-  const { admins, loading: adminsLoading } = useAdminAccounts();
-  const { logs, loading: logsLoading } = useAdminLogs(100);
+  const { affiliates, loading: affiliatesLoading } = useAllAffiliates(isEffectiveAdmin);
+  const { withdrawals: allWithdrawals, loading: allWithdrawalsLoading } = useAllWithdrawals(isEffectiveAdmin);
+  const { requests: affiliateRequests, loading: affiliateRequestsLoading } = useAllAffiliateRequests(isEffectiveAdmin);
+  const { admins, loading: adminsLoading } = useAdminAccounts(isEffectiveAdmin);
+  const { logs, loading: logsLoading } = useAdminLogs(100, isEffectiveAdmin);
   
   const [isAdminDialogOpen, setIsAdminDialogOpen] = useState(false);
   const [isAffiliateDialogOpen, setIsAffiliateDialogOpen] = useState(false);
@@ -1026,6 +1064,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const [isUnlockDialogOpen, setIsUnlockDialogOpen] = useState(false);
   const [isWithdrawalToggleConfirmOpen, setIsWithdrawalToggleConfirmOpen] = useState(false);
   const [isSponsorSelectorOpen, setIsSponsorSelectorOpen] = useState(false);
+
   const [selectingSponsorType, setSelectingSponsorType] = useState<'direct' | 'indirect' | 'extra'>('direct');
   const [sponsorSearchQuery, setSponsorSearchQuery] = useState('');
 
@@ -1039,7 +1078,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const [searchStatus, setSearchStatus] = useState<'idle' | 'searching' | 'found' | 'not_found'>('idle');
 
   // Client Management States
-  const { clients, loading: clientsLoading } = useAllClients();
+  const { clients, loading: clientsLoading } = useAllClients(isAuthAdmin);
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [isClientDeleteDialogOpen, setIsClientDeleteDialogOpen] = useState(false);
@@ -1762,9 +1801,8 @@ const AffiliateEditForm = ({
       title: "Gestion des Fonds",
       items: [
         { value: 'agents', label: 'Gestion des Agents', icon: UserCheck, permission: 'affiliates' },
-        { value: 'transfers', label: 'Transferts', icon: ArrowRightLeft, permission: 'affiliates' },
-        { value: 'withdrawals', label: 'Retraits', icon: ArrowUp, permission: 'affiliates' },
-        { value: 'wallet-tx', label: 'Dépôts & Flux', icon: CreditCard, permission: 'affiliates' },
+        { value: 'wallet-tx', label: 'Transactions Wallet', icon: Wallet, permission: 'affiliates' },
+        { value: 'withdrawals', label: 'Demandes de Retrait', icon: ArrowUp, permission: 'affiliates' },
       ]
     },
     {
@@ -1869,6 +1907,12 @@ const AffiliateEditForm = ({
   const deferredAffiliateSearch = useDeferredValue(affiliateSearch);
 
   const { transactions: walletTransactions, loading: walletTxLoading } = useAllWalletTransactions();
+  const [clientTransactions, setClientTransactions] = useState<any[]>([]);
+  
+  useEffect(() => {
+    const unsub = useAllClientTransactions((txs) => setClientTransactions(txs), isAuthAdmin);
+    return () => unsub();
+  }, [isAuthAdmin]);
 
   // Optimized Filtering for Affiliates
   const filteredAffiliatesList = React.useMemo(() => {
@@ -1931,13 +1975,23 @@ const AffiliateEditForm = ({
     walletTransactions.filter(tx => tx.type === 'deposit' && tx.status === 'pending'),
     [walletTransactions]
   );
+
+  const pendingClientRegistrations = React.useMemo(() => 
+    clients.filter(c => c.status === 'pending'),
+    [clients]
+  );
+
+  const pendingClientTransactions = React.useMemo(() => 
+    clientTransactions.filter(tx => tx.status === 'pending'),
+    [clientTransactions]
+  );
   
   const pendingTransfersCount = React.useMemo(() => 
     walletTransactions.filter(t => t.type === 'transfer' && t.status === 'pending').length,
     [walletTransactions]
   );
   
-  const totalPending = pendingRegistrations.length + pendingWithdrawals.length + pendingDeposits.length + pendingTransfersCount;
+  const totalPending = pendingRegistrations.length + pendingWithdrawals.length + pendingDeposits.length + pendingTransfersCount + pendingClientRegistrations.length + pendingClientTransactions.length;
 
   useEffect(() => {
     if (totalPending > 0) {
@@ -1958,21 +2012,32 @@ const AffiliateEditForm = ({
 
   const allPendingRequests = React.useMemo(() => {
     const registrations = pendingRegistrations.map(r => ({ ...r, type: 'registration' as const }));
+    const clientRegs = pendingClientRegistrations.map(c => ({ 
+      ...c, 
+      type: 'client_registration' as const,
+      email: (c as any).email || (c as any).phone 
+    }));
     const withdrawals = pendingWithdrawals.map(w => ({ ...w, type: 'withdrawal' as const, name: w.affiliateName }));
     const deposits = pendingDeposits.map(d => ({ 
       ...d, 
       type: 'deposit_request' as const, 
       name: affiliates.find(a => a.id === d.affiliateId)?.name || 'Affilié inconnu' 
     }));
+    const clientTxs = pendingClientTransactions.map(ctx => ({
+      ...ctx,
+      type: 'client_transaction' as const,
+      transactionType: ctx.type,
+      name: clients.find(c => c.id === ctx.clientId)?.name || 'Client inconnu'
+    }));
 
-    let combined = [...registrations, ...withdrawals, ...deposits];
+    let combined = [...registrations, ...clientRegs, ...withdrawals, ...deposits, ...clientTxs];
 
     if (notifFilter === 'registration') {
-      combined = combined.filter(r => r.type === 'registration');
+      combined = combined.filter(r => r.type === 'registration' || r.type === 'client_registration');
     } else if (notifFilter === 'withdrawal') {
       combined = combined.filter(r => r.type === 'withdrawal');
     } else if (notifFilter === 'deposit') {
-      combined = combined.filter(r => r.type === 'deposit_request');
+      combined = combined.filter(r => r.type === 'deposit_request' || r.type === 'client_transaction');
     }
 
     if (deferredNotifSearch) {
@@ -2004,16 +2069,30 @@ const AffiliateEditForm = ({
     );
   }, [parcels, deferredSearchTerm]);
 
-  const [walletTxFilter, setWalletTxFilter] = useState<'all' | 'deposit' | 'withdrawal' | 'transfer'>('all');
-  const [walletStatusFilter, setWalletStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [walletTxFilter, setWalletTxFilter] = useState<'all' | 'deposit' | 'withdrawal' | 'transfer' | 'purchase'>('all');
+  const [walletStatusFilter, setWalletStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'completed'>('all');
 
   const filteredWalletTransactions = React.useMemo(() => {
-    return walletTransactions.filter(tx => {
+    const combined = [
+      ...walletTransactions.map(tx => ({ ...tx, origin: 'affiliate' })),
+      ...clientTransactions.map(tx => ({ 
+        ...tx, 
+        origin: 'client', 
+        affiliateId: tx.clientId, // For compatibility with table rendering
+        type: tx.type === 'purchase' ? 'purchase' : tx.type 
+      }))
+    ];
+
+    return combined.filter(tx => {
       const matchesType = walletTxFilter === 'all' || tx.type === walletTxFilter;
       const matchesStatus = walletStatusFilter === 'all' || tx.status === walletStatusFilter;
       return matchesType && matchesStatus;
+    }).sort((a, b) => {
+      const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+      const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+      return dateB - dateA;
     });
-  }, [walletTransactions, walletTxFilter, walletStatusFilter]);
+  }, [walletTransactions, clientTransactions, walletTxFilter, walletStatusFilter]);
 
   const filteredAffiliates = React.useMemo(() => {
     if (!affiliateSearch.trim()) return affiliates;
@@ -3774,12 +3853,13 @@ const AffiliateEditForm = ({
                       id="slider-upload"
                       disabled={isSliderUploading}
                     />
-                    <Button asChild disabled={isSliderUploading} className="bg-primary hover:bg-[#D98A1E] h-10 w-full sm:w-auto border-0">
-                      <label htmlFor="slider-upload" className="cursor-pointer flex items-center justify-center gap-2">
-                        {isSliderUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                        Télécharger
-                      </label>
-                    </Button>
+                    <label 
+                      htmlFor="slider-upload" 
+                      className={`inline-flex items-center justify-center rounded-lg bg-primary hover:bg-[#D98A1E] h-10 w-full sm:w-auto px-4 text-sm font-bold text-white transition-all cursor-pointer gap-2 ${isSliderUploading ? 'opacity-50 pointer-events-none' : ''}`}
+                    >
+                      {isSliderUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                      Télécharger
+                    </label>
                   </div>
                 </div>
               </div>
@@ -3949,9 +4029,6 @@ const AffiliateEditForm = ({
           {renderAgents()}
         </TabsContent>
 
-        <TabsContent value="transfers" className="space-y-6 pt-6 px-6 pb-20 custom-scrollbar overflow-y-auto h-full">
-          {renderTransfers()}
-        </TabsContent>
 
         <TabsContent value="affiliates" className="space-y-0 h-full flex flex-col">
           <Tabs defaultValue="list" className="w-full h-full flex flex-col">
@@ -4608,6 +4685,7 @@ const AffiliateEditForm = ({
                       <SelectItem value="deposit">Dépôts</SelectItem>
                       <SelectItem value="withdrawal">Retraits</SelectItem>
                       <SelectItem value="transfer">Transferts</SelectItem>
+                      <SelectItem value="purchase">Achats</SelectItem>
                     </SelectContent>
                   </Select>
                   <Select value={walletStatusFilter} onValueChange={(v: any) => setWalletStatusFilter(v)}>
@@ -4618,6 +4696,7 @@ const AffiliateEditForm = ({
                       <SelectItem value="all">Tous statuts</SelectItem>
                       <SelectItem value="pending">En attente</SelectItem>
                       <SelectItem value="approved">Approuvé</SelectItem>
+                      <SelectItem value="completed">Terminé</SelectItem>
                       <SelectItem value="rejected">Rejeté</SelectItem>
                     </SelectContent>
                   </Select>
@@ -4636,7 +4715,7 @@ const AffiliateEditForm = ({
                     <TableHeader>
                       <TableRow className="bg-gray-50/50">
                         <TableHead>Type</TableHead>
-                        <TableHead>Affilié</TableHead>
+                        <TableHead>Utilisateur (Affilié/Client)</TableHead>
                         <TableHead>Montant</TableHead>
                         <TableHead>Détails</TableHead>
                         <TableHead>Statut</TableHead>
@@ -4645,51 +4724,67 @@ const AffiliateEditForm = ({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredWalletTransactions.map((tx) => (
+                      {filteredWalletTransactions.map((tx: any) => (
                         <TableRow key={tx.id}>
                           <TableCell>
                             <Badge variant="outline" className={`uppercase text-[10px] ${
                               tx.type === 'deposit' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                               tx.type === 'withdrawal' ? 'bg-red-50 text-red-600 border-red-100' :
+                              tx.type === 'purchase' ? 'bg-orange-50 text-orange-600 border-orange-100' :
                               'bg-blue-50 text-blue-600 border-blue-100'
                             }`}>
-                              {tx.type === 'deposit' ? 'Dépôt' : tx.type === 'withdrawal' ? 'Retrait' : 'Transfert'}
+                              {tx.type === 'deposit' ? 'Dépôt' : 
+                               tx.type === 'withdrawal' ? 'Retrait' : 
+                               tx.type === 'purchase' ? 'Achat' : 'Transfert'}
                             </Badge>
                           </TableCell>
                           <TableCell className="font-bold">
-                            {affiliates.find(a => a.id === tx.affiliateId)?.name || tx.affiliateId.slice(0,8)}
+                            <div className="flex flex-col">
+                              <span>
+                                {tx.origin === 'affiliate' 
+                                  ? (affiliates.find(a => a.id === tx.affiliateId)?.name || tx.affiliateId.slice(0,8))
+                                  : (clients.find(c => c.id === tx.clientId)?.name || tx.clientId?.slice(0,8) || 'Client')}
+                              </span>
+                              <span className="text-[9px] text-gray-400 font-normal uppercase tracking-widest">
+                                {tx.origin === 'affiliate' ? 'Affilié' : 'Client'}
+                              </span>
+                            </div>
                           </TableCell>
                           <TableCell className={`font-mono font-bold ${
                             tx.type === 'deposit' ? 'text-emerald-600' :
-                            tx.type === 'withdrawal' ? 'text-red-600' :
+                            (tx.type === 'withdrawal' || tx.type === 'purchase') ? 'text-red-600' :
                             'text-blue-600'
                           }`}>
-                            {tx.type === 'withdrawal' ? '-' : '+'}{tx.amount} G
+                            {(tx.type === 'withdrawal' || tx.type === 'purchase') ? '-' : '+'}{tx.amount} G
                           </TableCell>
                           <TableCell className="text-xs text-gray-500 max-w-[200px] truncate">
                             {tx.description}
                             {tx.recipientWalletId && ` -> Dest: ${tx.recipientWalletId}`}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={tx.status === 'approved' ? 'default' : tx.status === 'rejected' ? 'destructive' : 'outline'} className="uppercase text-[9px] font-black">
-                              {tx.status === 'pending' ? 'En attente' : tx.status === 'approved' ? 'Validé' : 'Refusé'}
+                            <Badge variant={tx.status === 'approved' || tx.status === 'completed' ? 'default' : tx.status === 'rejected' ? 'destructive' : 'outline'} className="uppercase text-[9px] font-black">
+                              {tx.status === 'pending' ? 'En attente' : (tx.status === 'approved' || tx.status === 'completed') ? 'Validé' : 'Refusé'}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-xs text-gray-400">
-                            {tx.createdAt ? format(tx.createdAt.toDate(), 'dd/MM/yy HH:mm') : '-'}
+                            {tx.createdAt?.toDate ? format(tx.createdAt.toDate(), 'dd/MM/yy HH:mm') : '-'}
                           </TableCell>
                           <TableCell className="text-right">
-                            {tx.type === 'deposit' && tx.status === 'pending' && (
+                            {tx.status === 'pending' && (
                               <div className="flex justify-end gap-2">
                                 <Button 
                                   size="sm" 
                                   className="bg-emerald-600 hover:bg-emerald-700 h-8 text-[10px] font-black uppercase px-3"
                                   onClick={async () => {
                                     try {
-                                      await updateWalletTransactionStatus(tx.id!, 'approved');
-                                      toast.success("Dépôt approuvé !");
+                                      if (tx.origin === 'client') {
+                                        await updateClientTransactionStatus(tx.id!, 'approved', tx.clientId, tx.amount, tx.type);
+                                      } else {
+                                        await updateWalletTransactionStatus(tx.id!, 'approved');
+                                      }
+                                      toast.success("Transaction approuvée !");
                                     } catch (e) {
-                                      toast.error("Erreur.");
+                                      toast.error("Erreur lors de l'approbation.");
                                     }
                                   }}
                                 >
@@ -4701,10 +4796,14 @@ const AffiliateEditForm = ({
                                   className="h-8 text-[10px] font-black uppercase px-3"
                                   onClick={async () => {
                                     try {
-                                      await updateWalletTransactionStatus(tx.id!, 'rejected');
-                                      toast.success("Dépôt rejeté !");
+                                      if (tx.origin === 'client') {
+                                        await updateClientTransactionStatus(tx.id!, 'rejected', tx.clientId, tx.amount, tx.type);
+                                      } else {
+                                        await updateWalletTransactionStatus(tx.id!, 'rejected');
+                                      }
+                                      toast.success("Transaction rejetée !");
                                     } catch (e) {
-                                      toast.error("Erreur.");
+                                      toast.error("Erreur lors du rejet.");
                                     }
                                   }}
                                 >
@@ -5217,6 +5316,7 @@ const AffiliateEditForm = ({
                   <TableRow className="hover:bg-transparent border-gray-50">
                     <TableHead className="font-black text-[10px] uppercase tracking-widest text-gray-400">Client</TableHead>
                     <TableHead className="font-black text-[10px] uppercase tracking-widest text-gray-400">Numéro</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest text-gray-400">Solde Wallet</TableHead>
                     <TableHead className="font-black text-[10px] uppercase tracking-widest text-gray-400">Parrain Direct</TableHead>
                     <TableHead className="font-black text-[10px] uppercase tracking-widest text-gray-400">Parrain Indirect</TableHead>
                     <TableHead className="font-black text-[10px] uppercase tracking-widest text-gray-400 text-right">Actions</TableHead>
@@ -5291,9 +5391,9 @@ const AffiliateEditForm = ({
                     <div key={req.id} className="p-4 hover:bg-gray-50 transition-colors flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                       <div className="flex items-start gap-4 min-w-0">
                         <div className={`p-2 rounded-lg shrink-0 ${
-                          req.type === 'registration' ? 'bg-accent-light text-primary' : 'bg-accent-light/50 text-dark'
+                          (req.type === 'registration' || req.type === 'client_registration') ? 'bg-accent-light text-primary' : 'bg-accent-light/50 text-dark'
                         }`}>
-                          {req.type === 'registration' ? <Users className="h-5 w-5" /> : 
+                          {(req.type === 'registration' || req.type === 'client_registration') ? <Users className="h-5 w-5" /> : 
                            req.type === 'withdrawal' ? <Wallet className="h-5 w-5" /> : 
                            <PlusCircle className="h-5 w-5" />}
                         </div>
@@ -5301,12 +5401,14 @@ const AffiliateEditForm = ({
                           <div className="flex items-center gap-2 mb-1">
                             <p className="font-bold text-dark truncate">{req.name}</p>
                             <Badge variant="outline" className={
-                              req.type === 'registration' ? 'bg-accent-light text-primary border-primary/20' : 
+                              (req.type === 'registration' || req.type === 'client_registration') ? 'bg-accent-light text-primary border-primary/20' : 
                               req.type === 'withdrawal' ? 'bg-red-50 text-red-600 border-red-100' :
                               'bg-emerald-50 text-emerald-600 border-emerald-100'
                             }>
-                              {req.type === 'registration' ? 'Inscription' : 
-                               req.type === 'withdrawal' ? 'Retrait' : 'Dépôt'}
+                              {req.type === 'registration' ? 'Inscr. Affilié' : 
+                               req.type === 'client_registration' ? 'Inscr. Client' : 
+                               req.type === 'withdrawal' ? 'Retrait' : 
+                               req.type === 'client_transaction' ? 'Achat/Solde' : 'Dépôt'}
                             </Badge>
                           </div>
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
@@ -5332,7 +5434,16 @@ const AffiliateEditForm = ({
                                 </div>
                               </div>
                             )}
-                            {req.type === 'registration' && (
+                            {req.type === 'client_transaction' && (
+                              <div className="flex flex-col gap-1 mt-1">
+                                <span className="font-black text-primary">{(req as any).amount} HTG</span>
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 rounded-lg w-fit border border-blue-100">
+                                  <CreditCard className="h-3 w-3 text-blue-500" />
+                                  <span className="font-black text-blue-500 text-[10px] uppercase">Achat: {(req as any).description}</span>
+                                </div>
+                              </div>
+                            )}
+                            {(req.type === 'registration' || req.type === 'client_registration') && (
                               <div className="flex flex-col gap-1 mt-1">
                                 <span className="text-gray-600">{(req as any).email}</span>
                                 {(req as any).phone && (
@@ -5353,8 +5464,14 @@ const AffiliateEditForm = ({
                           onClick={() => {
                             if (req.type === 'registration') {
                               handleAffiliateRequestAction(req as any, 'approved');
+                            } else if (req.type === 'client_registration') {
+                              saveClient({ status: 'approved' }, req.id);
+                              toast.success("Inscription client approuvée !");
                             } else if (req.type === 'withdrawal') {
                               handleWithdrawalAction(req as any, 'approved');
+                            } else if (req.type === 'client_transaction') {
+                              updateClientTransactionStatus(req.id!, 'approved', (req as any).clientId, (req as any).amount, (req as any).transactionType || (req as any).type);
+                              toast.success("Transaction client approuvée !");
                             } else {
                               updateWalletTransactionStatus(req.id!, 'approved');
                             }
@@ -5369,8 +5486,14 @@ const AffiliateEditForm = ({
                           onClick={() => {
                             if (req.type === 'registration') {
                               handleAffiliateRequestAction(req as any, 'rejected');
+                            } else if (req.type === 'client_registration') {
+                               saveClient({ status: 'rejected' }, req.id);
+                               toast.info("Inscription client rejetée.");
                             } else if (req.type === 'withdrawal') {
                               handleWithdrawalAction(req as any, 'rejected');
+                            } else if (req.type === 'client_transaction') {
+                              updateClientTransactionStatus(req.id!, 'rejected', (req as any).clientId, (req as any).amount, (req as any).transactionType || (req as any).type);
+                              toast.info("Transaction client rejetée.");
                             } else {
                               updateWalletTransactionStatus(req.id!, 'rejected');
                             }
@@ -5425,12 +5548,13 @@ const AffiliateEditForm = ({
                       className="hidden" 
                       id="logo-upload"
                     />
-                    <Button asChild variant="outline" disabled={uploading} className="w-full sm:w-auto">
-                      <label htmlFor="logo-upload" className="cursor-pointer flex items-center justify-center">
-                        {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                        Changer le logo
-                      </label>
-                    </Button>
+                    <label 
+                      htmlFor="logo-upload" 
+                      className={`inline-flex items-center justify-center rounded-lg border border-border bg-background h-8 px-3 text-sm font-medium transition-all hover:bg-muted cursor-pointer w-full sm:w-auto ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
+                    >
+                      {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                      Changer le logo
+                    </label>
                     {uploading && (
                       <div className="w-full bg-accent-light/30 rounded-full h-1.5 overflow-hidden">
                         <div 
@@ -6913,12 +7037,13 @@ const AffiliateEditForm = ({
                       className="hidden" 
                       id="product-image-upload"
                     />
-                    <Button asChild variant="outline" className="w-full cursor-pointer" disabled={uploading}>
-                      <label htmlFor="product-image-upload" className="flex items-center justify-center">
-                        {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                        Télécharger l'image
-                      </label>
-                    </Button>
+                    <label 
+                      htmlFor="product-image-upload" 
+                      className={`inline-flex items-center justify-center rounded-lg border border-border bg-background h-10 px-4 text-sm font-medium transition-all hover:bg-muted cursor-pointer w-full ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
+                    >
+                      {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                      Télécharger l'image
+                    </label>
                   </div>
                   {uploading && (
                     <div className="w-full bg-accent-light/30 rounded-full h-1.5 overflow-hidden">
@@ -7065,12 +7190,13 @@ const AffiliateEditForm = ({
                       className="hidden" 
                       id="game-image-upload"
                     />
-                    <Button asChild variant="outline" className="w-full cursor-pointer" disabled={uploading}>
-                      <label htmlFor="game-image-upload" className="flex items-center justify-center">
-                        {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                        Télécharger l'image
-                      </label>
-                    </Button>
+                    <label 
+                      htmlFor="game-image-upload" 
+                      className={`inline-flex items-center justify-center rounded-lg border border-border bg-background h-10 px-4 text-sm font-medium transition-all hover:bg-muted cursor-pointer w-full ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
+                    >
+                      {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                      Télécharger l'image
+                    </label>
                   </div>
                   {uploading && (
                     <div className="w-full bg-accent-light/30 rounded-full h-1.5 overflow-hidden">
@@ -7381,12 +7507,13 @@ const AffiliateEditForm = ({
                         className="hidden" 
                         id="card-image-upload"
                       />
-                      <Button asChild variant="outline" className="w-full cursor-pointer" disabled={uploading}>
-                        <label htmlFor="card-image-upload">
-                          {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                          {cardFormData.image ? 'Changer l\'image' : 'Télécharger une image'}
-                        </label>
-                      </Button>
+                      <label 
+                        htmlFor="card-image-upload" 
+                        className={`inline-flex items-center justify-center rounded-lg border border-border bg-background h-10 px-4 text-sm font-medium transition-all hover:bg-muted cursor-pointer w-full ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
+                      >
+                        {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                        {cardFormData.image ? 'Changer l\'image' : 'Télécharger une image'}
+                      </label>
                       {uploading && (
                         <div className="mt-2 w-full bg-accent-light/30 rounded-full h-1.5 overflow-hidden">
                           <div 
@@ -7575,17 +7702,13 @@ const AffiliateEditForm = ({
                       className="hidden" 
                       id="file-upload"
                     />
-                    <Button 
-                      asChild 
-                      variant="outline" 
-                      className="w-full cursor-pointer"
-                      disabled={uploading}
+                    <label 
+                      htmlFor="file-upload" 
+                      className={`inline-flex items-center justify-center rounded-lg border border-border bg-background h-10 px-4 text-sm font-medium transition-all hover:bg-muted cursor-pointer w-full ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
                     >
-                      <label htmlFor="file-upload" className="flex items-center justify-center">
-                        {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                        {formData.proofOfDelivery ? 'Changer l\'image' : 'Télécharger une preuve'}
-                      </label>
-                    </Button>
+                      {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                      {formData.proofOfDelivery ? 'Changer l\'image' : 'Télécharger une preuve'}
+                    </label>
                   </div>
                   {uploading && (
                     <div className="w-full bg-accent-light/30 rounded-full h-1.5 overflow-hidden">

@@ -388,9 +388,53 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["agentCode", "name", "phone", "balance", "status"]
+    },
+    "client": {
+      "title": "Client",
+      "description": "Represents a client user with a wallet.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "password": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "balance": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "photoURL": { "type": "string" },
+        "directSponsorId": { "type": "string" },
+        "indirectSponsorId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "phone", "balance", "status"]
+    },
+    "client_transaction": {
+      "title": "Client Transaction",
+      "description": "Wallet transactions for clients (deposit, withdrawal, transfer, purchase).",
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "type": { "type": "string", "enum": ["deposit", "withdrawal", "transfer", "purchase"] },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "completed"] },
+        "description": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "method": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "firestore": {
+    "/clients/{clientId}": {
+      "schema": "client",
+      "description": "Collection of client users."
+    },
+    "/client_transactions/{transactionId}": {
+      "schema": "client_transaction",
+      "description": "Collection of wallet transactions."
+    },
     "/parcels/{parcelId}": {
       "schema": "parcel",
       "description": "Collection of parcels."

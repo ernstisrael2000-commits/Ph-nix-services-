@@ -32,6 +32,11 @@ import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Loader2, ShieldCheck, Zap, Star, Headphones, QrCode, Wallet, Smartphone, Landmark, X } from 'lucide-react';
 
+import { toast } from 'sonner';
+
+import { Affiliate, AdminAccount, Agent, Client } from '../types';
+import { createTransactionRequest } from '../services/transactionService';
+
 const WHATSAPP_NUMBER = "+50944813185";
 
 const LucideIcon = ({ name, className, color }: { name: string, className?: string, color?: string }) => {
@@ -45,7 +50,7 @@ const SLIDER_IMAGES = [
   "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2070&auto=format&fit=crop", // Tech/Security
 ];
 
-export default function HomeView({ onTrackingClick, onViewChange }: { onTrackingClick: () => void, onViewChange: (view: any) => void }) {
+export default function HomeView({ onTrackingClick, onViewChange, loggedClient }: { onTrackingClick: () => void, onViewChange: (view: any) => void, loggedClient?: Client | null }) {
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
   const { cards, loading: cardsLoading } = useCardTopups();
@@ -69,8 +74,9 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
   // Payment Modal States
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentTarget, setPaymentTarget] = useState<{ name: string, price: string, type: string } | null>(null);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'moncash' | 'natcash' | 'admi' | null>('moncash');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'moncash' | 'natcash' | 'admi' | 'wallet' | null>('moncash');
   const [paymentTransactionInfo, setPaymentTransactionInfo] = useState('');
+  const [isProcessingWalletPayment, setIsProcessingWalletPayment] = useState(false);
 
   const handleProductClick = (product: any) => {
     setSelectedProduct(product);
@@ -90,8 +96,50 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
     setSelectedPaymentMethod('moncash');
   };
 
-  const handleFinalPaymentSubmit = () => {
+  const handleFinalPaymentSubmit = async () => {
     if (!paymentTarget || !selectedPaymentMethod) return;
+
+    if (selectedPaymentMethod === 'wallet') {
+      if (!loggedClient) {
+        toast.error("Vous devez être connecté pour payer avec votre compte.");
+        return;
+      }
+
+      // Basic price parsing (e.g., "1500 HTG" -> 1500)
+      const numericPrice = parseFloat(paymentTarget.price.replace(/[^0-9.]/g, ''));
+      const isHTG = paymentTarget.price.toUpperCase().includes('HTG');
+      
+      // Convert price to number - the wallet usually works in a base currency, 
+      // let's assume balance is in the same unit as the products for now or we use the exchange rate
+      // For this demo, let's just create a purchase transaction request
+      
+      try {
+        setIsProcessingWalletPayment(true);
+        await createTransactionRequest({
+          clientId: loggedClient.id!,
+          type: 'purchase',
+          amount: numericPrice,
+          status: 'pending',
+          description: `Achat de ${paymentTarget.name}`,
+          createdAt: new Date()
+        });
+        
+        toast.success("Demande transmise avec succès !", {
+          description: "Votre commande est en cours de traitement par l'administrateur."
+        });
+        
+        const message = `Bonjour Neopay,\n\nJ'ai effectué un achat via mon *Wallet Neopay* :\n📦 *${paymentTarget.name}*\n💰 Prix : *${paymentTarget.price}*\n👤 Client : *${loggedClient.name}*\n\nMerci de valider ma commande.`;
+        openWhatsApp(message);
+        
+        setIsPaymentModalOpen(false);
+        return;
+      } catch (error) {
+        toast.error("Erreur lors de la transaction. Veuillez réessayer.");
+      } finally {
+        setIsProcessingWalletPayment(false);
+      }
+      return;
+    }
 
     const methodLabel = selectedPaymentMethod === 'moncash' ? 'Mon Cash' : selectedPaymentMethod === 'natcash' ? 'Natcash' : 'Admi';
     const message = `Bonjour Neopay,\n\nJe souhaite commander :\n📦 *${paymentTarget.name}*\n💰 Prix : *${paymentTarget.price}*\n\n💳 Mode de paiement : *${methodLabel}*\n📝 Infos Transaction : *${paymentTransactionInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`;
@@ -251,83 +299,86 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
 
   return (
     <div className="max-w-7xl mx-auto px-4 pt-8 pb-12 space-y-8">
-      {/* Premium Hero Slider Section */}
-      <section className="relative w-full overflow-visible group px-2 md:px-0">
-        {/* Animated Glow Backdrop */}
-        <div className="absolute -inset-4 bg-primary/20 rounded-[50px] blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-        
-        <div className="relative h-[240px] md:h-[360px] w-full rounded-[40px] overflow-hidden bg-black shadow-[0_45px_70px_-15px_rgba(0,0,0,0.4)] border border-white/5">
-          {/* Border Beam Effect */}
-          <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden rounded-[40px]">
-            <motion.div
-              animate={{
-                rotate: [0, 360],
-              }}
-              transition={{
-                duration: 4,
-                repeat: Infinity,
-                ease: "linear",
-              }}
-              className="absolute -inset-[150%] opacity-20 group-hover:opacity-40 transition-opacity duration-1000"
-              style={{
-                background: "conic-gradient(from 0deg, transparent 0 340deg, var(--color-primary) 360deg)",
-                backgroundSize: "cover",
-              }}
-            />
-          </div>
-
-          {/* Slider Track */}
-          <div className="absolute inset-0 w-full h-full z-0">
-            <AnimatePresence mode="wait">
+      {/* Premium Hero Slider Section - Hidden if loggedClient is present */}
+      {!loggedClient && (
+        <section className="relative w-full overflow-visible group px-2 md:px-0">
+          {/* Animated Glow Backdrop */}
+          <div className="absolute -inset-4 bg-primary/20 rounded-[50px] blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+          
+          <div className="relative h-[240px] md:h-[360px] w-full rounded-[40px] overflow-hidden bg-black shadow-[0_45px_70px_-15px_rgba(0,0,0,0.4)] border border-white/5">
+            {/* Border Beam Effect */}
+            <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden rounded-[40px]">
               <motion.div
-                key={currentSlide}
-                initial={{ opacity: 0, scale: 1.1 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
-                className="absolute inset-0 w-full h-full will-change-transform overflow-hidden"
-              >
-                {/* Ken Burns Effect Image */}
-                <motion.div 
-                  initial={{ scale: 1.2, x: -20, y: -20 }}
-                  animate={{ 
-                    scale: 1,
-                    x: 0,
-                    y: 0
-                  }}
-                  transition={{ 
-                    duration: 10,
-                    ease: "linear",
-                    repeat: Infinity,
-                    repeatType: "reverse"
-                  }}
-                  className="absolute inset-0 bg-cover bg-center"
-                  style={{ backgroundImage: `url(${imagesToDisplay[currentSlide]?.url || ''})` }}
-                />
-                
-                {/* Enhanced Overlay Gradients */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-black via-black/40 to-transparent opacity-60" />
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40" />
-              </motion.div>
-            </AnimatePresence>
-          </div>
+                animate={{
+                  rotate: [0, 360],
+                }}
+                transition={{
+                  duration: 4,
+                  repeat: Infinity,
+                  ease: "linear",
+                }}
+                className="absolute -inset-[150%] opacity-20 group-hover:opacity-40 transition-opacity duration-1000"
+                style={{
+                  background: "conic-gradient(from 0deg, transparent 0 340deg, var(--color-primary) 360deg)",
+                  backgroundSize: "cover",
+                }}
+              />
+            </div>
 
-          {/* Slider Navigation Dots - Modern Glass feel */}
-          <div className="absolute bottom-8 right-8 z-30 flex gap-3 bg-black/20 backdrop-blur-md p-2 px-3 rounded-full border border-white/10">
-            {imagesToDisplay.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentSlide(i)}
-                  className="relative h-2 flex items-center justify-center transition-all duration-500"
+            {/* Slider Track */}
+            <div className="absolute inset-0 w-full h-full z-0">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={currentSlide}
+                  initial={{ opacity: 0, scale: 1.1 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+                  className="absolute inset-0 w-full h-full will-change-transform overflow-hidden"
                 >
-                  <div className={`h-full rounded-full transition-all duration-500 ${
-                    currentSlide === i ? 'bg-primary w-10' : 'bg-white/30 w-2 hover:bg-white/50'
-                  }`} />
-                </button>
-            ))}
+                  {/* Ken Burns Effect Image */}
+                  <motion.div 
+                    initial={{ scale: 1.2, x: -20, y: -20 }}
+                    animate={{ 
+                      scale: 1,
+                      x: 0,
+                      y: 0
+                    }}
+                    transition={{ 
+                      duration: 10,
+                      ease: "linear",
+                      repeat: Infinity,
+                      repeatType: "reverse"
+                    }}
+                    className="absolute inset-0 bg-cover bg-center"
+                    style={{ backgroundImage: `url(${imagesToDisplay[currentSlide]?.url || ''})` }}
+                  />
+                  
+                  {/* Enhanced Overlay Gradients */}
+                  <div className="absolute inset-0 bg-gradient-to-tr from-black via-black/40 to-transparent opacity-60" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40" />
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            {/* Slider Navigation Dots - Modern Glass feel */}
+            <div className="absolute bottom-8 right-8 z-30 flex gap-3 bg-black/20 backdrop-blur-md p-2 px-3 rounded-full border border-white/10">
+              {imagesToDisplay.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentSlide(i)}
+                    className="relative h-2 flex items-center justify-center transition-all duration-500"
+                  >
+                    <div className={`h-full rounded-full transition-all duration-500 ${
+                      currentSlide === i ? 'bg-primary w-10' : 'bg-white/30 w-2 hover:bg-white/50'
+                    }`} />
+                  </button>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
+
 
       {/* Quick Navigation Category Bar */}
       {!buttonsLoading && buttons.length > 0 ? (
@@ -803,11 +854,12 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
           <div className="p-6 space-y-6">
             <div className="space-y-3">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Choisir le mode de paiement</Label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {[
                   { id: 'moncash', label: 'Mon Cash', icon: Smartphone, color: 'text-rose-500', bg: 'bg-rose-50', border: 'border-rose-100' },
                   { id: 'natcash', label: 'Natcash', icon: Smartphone, color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-100' },
-                  { id: 'admi', label: 'Admi', icon: Landmark, color: 'text-indigo-500', bg: 'bg-indigo-50', border: 'border-indigo-100' }
+                  { id: 'admi', label: 'Admi', icon: Landmark, color: 'text-indigo-500', bg: 'bg-indigo-50', border: 'border-indigo-100' },
+                  ...(loggedClient ? [{ id: 'wallet', label: 'Compte Neopay', icon: Wallet, color: 'text-primary', bg: 'bg-accent-light', border: 'border-primary/20' }] : [])
                 ].map(method => (
                   <button
                     key={method.id}
@@ -819,7 +871,7 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                     }`}
                   >
                     <method.icon className={`h-6 w-6 ${method.color} mb-1`} />
-                    <span className="text-[10px] font-black uppercase text-dark">{method.label}</span>
+                    <span className="text-[10px] font-black uppercase text-dark text-center leading-tight">{method.label}</span>
                   </button>
                 ))}
               </div>
@@ -836,33 +888,50 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                 >
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] font-black text-primary uppercase tracking-widest">Infos de Paiement</p>
-                    <Badge variant="outline" className="text-[10px] font-black bg-white">{selectedPaymentMethod.toUpperCase()}</Badge>
+                    <Badge variant="outline" className="text-[10px] font-black bg-white">{selectedPaymentMethod.toUpperCase() === 'WALLET' ? 'SOLDE COMPTE' : selectedPaymentMethod.toUpperCase()}</Badge>
                   </div>
 
                   <div className="flex flex-col items-center text-center space-y-3">
-                    <div className="space-y-1">
-                      <p className="text-gray-400 text-[10px] font-bold uppercase">Numéro de réception</p>
-                      <p className="text-2xl font-black text-dark tracking-tighter">
-                        {selectedPaymentMethod === 'moncash' ? (settings?.moncashNumber || 'Précisé sur WhatsApp') : 
-                         selectedPaymentMethod === 'natcash' ? (settings?.natcashNumber || 'Précisé sur WhatsApp') : 
-                         (settings?.admiNumber || 'Précisé sur WhatsApp')}
-                      </p>
-                    </div>
-
-                    {(settings?.[`${selectedPaymentMethod}QR` as keyof typeof settings]) && (
-                      <div className="relative group">
-                        <div className="absolute inset-0 bg-primary/5 rounded-2xl blur-xl group-hover:bg-primary/10 transition-colors" />
-                        <Card className="relative p-2 rounded-2xl border-2 border-white shadow-xl bg-white">
-                          <img 
-                            src={settings[`${selectedPaymentMethod}QR` as keyof typeof settings] as string} 
-                            alt="QR Code" 
-                            className="h-24 w-24 object-contain"
-                          />
-                          <div className="absolute -bottom-2 -right-2 bg-primary text-white p-1 rounded-lg">
-                            <QrCode className="h-4 w-4" />
-                          </div>
-                        </Card>
+                    {selectedPaymentMethod === 'wallet' ? (
+                      <div className="space-y-2">
+                         <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+                            <Wallet className="h-6 w-6 text-primary" />
+                         </div>
+                         <p className="text-gray-600 text-sm font-bold">
+                           Vous allez être débité de votre solde Neopay après validation par l'administrateur.
+                         </p>
+                         <div className="p-3 bg-white rounded-2xl border border-gray-100">
+                           <p className="text-[10px] font-bold text-gray-400">SOLDE ACTUEL</p>
+                           <p className="text-xl font-black text-primary">{loggedClient?.balance || 0} HTG</p>
+                         </div>
                       </div>
+                    ) : (
+                      <>
+                        <div className="space-y-1">
+                          <p className="text-gray-400 text-[10px] font-bold uppercase">Numéro de réception</p>
+                          <p className="text-2xl font-black text-dark tracking-tighter">
+                            {selectedPaymentMethod === 'moncash' ? (settings?.moncashNumber || 'Précisé sur WhatsApp') : 
+                             selectedPaymentMethod === 'natcash' ? (settings?.natcashNumber || 'Précisé sur WhatsApp') : 
+                             (settings?.admiNumber || 'Précisé sur WhatsApp')}
+                          </p>
+                        </div>
+
+                        {(settings?.[`${selectedPaymentMethod}QR` as keyof typeof settings]) && (
+                          <div className="relative group">
+                            <div className="absolute inset-0 bg-primary/5 rounded-2xl blur-xl group-hover:bg-primary/10 transition-colors" />
+                            <Card className="relative p-2 rounded-2xl border-2 border-white shadow-xl bg-white">
+                              <img 
+                                src={settings[`${selectedPaymentMethod}QR` as keyof typeof settings] as string} 
+                                alt="QR Code" 
+                                className="h-24 w-24 object-contain"
+                              />
+                              <div className="absolute -bottom-2 -right-2 bg-primary text-white p-1 rounded-lg">
+                                <QrCode className="h-4 w-4" />
+                              </div>
+                            </Card>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </motion.div>
