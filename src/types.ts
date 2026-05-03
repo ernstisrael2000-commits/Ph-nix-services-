@@ -267,3 +267,23 @@ export interface Sale {
   affiliateName?: string;
   createdAt: any;
 }
+
+export type ClientTransactionType = 'deposit' | 'withdrawal' | 'purchase' | 'transfer_received' | 'refund';
+export type ClientTransactionStatus = 'pending' | 'approved' | 'rejected' | 'completed';
+
+export interface ClientTransaction {
+  id?: string;
+  clientId: string;
+  clientName?: string;
+  type: ClientTransactionType;
+  amount: number;
+  status: ClientTransactionStatus;
+  description?: string;
+  method?: string;
+  accountNumber?: string;
+  productName?: string;
+  productPrice?: string;
+  rejectionReason?: string;
+  createdAt: any;
+  updatedAt: any;
+}

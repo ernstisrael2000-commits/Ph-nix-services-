@@ -40,6 +40,7 @@ import {
   ArrowUpDown,
   DollarSign,
   ArrowUp,
+  ArrowDown,
   CreditCard,
   UserCheck,
   HelpCircle,
@@ -105,7 +106,8 @@ import {
   updateAgentBalance
 } from '../services/agentService';
 import { useAnalytics } from '../services/analyticsService';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton, AdminAccount, Client, Agent, WalletTransaction } from '../types';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton, AdminAccount, Client, Agent, WalletTransaction, ClientTransaction } from '../types';
+import { useAllClientTransactions, updateClientTransactionStatus } from '../services/clientService';
 import AdminShippingManager from './AdminShippingManager';
 import { 
   BarChart, 
@@ -1765,6 +1767,7 @@ const AffiliateEditForm = ({
         { value: 'transfers', label: 'Transferts', icon: ArrowRightLeft, permission: 'affiliates' },
         { value: 'withdrawals', label: 'Retraits', icon: ArrowUp, permission: 'affiliates' },
         { value: 'wallet-tx', label: 'Dépôts & Flux', icon: CreditCard, permission: 'affiliates' },
+        { value: 'clients-tx', label: 'Paiements Clients', icon: Wallet, permission: 'affiliates' },
       ]
     },
     {
@@ -1869,6 +1872,32 @@ const AffiliateEditForm = ({
   const deferredAffiliateSearch = useDeferredValue(affiliateSearch);
 
   const { transactions: walletTransactions, loading: walletTxLoading } = useAllWalletTransactions();
+  const { transactions: clientTransactions, loading: clientTxLoading } = useAllClientTransactions();
+  const [clientTxStatusFilter, setClientTxStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [clientTxTypeFilter, setClientTxTypeFilter] = useState<'all' | 'deposit' | 'withdrawal' | 'purchase'>('all');
+  const [clientTxActionLoading, setClientTxActionLoading] = useState<string | null>(null);
+
+  const handleClientTxAction = async (txId: string, status: 'approved' | 'rejected') => {
+    setClientTxActionLoading(txId);
+    try {
+      await updateClientTransactionStatus(txId, status);
+      toast.success(status === 'approved' ? 'Transaction approuvée !' : 'Transaction rejetée.');
+    } catch (err: any) {
+      toast.error(err.message || 'Erreur.');
+    } finally {
+      setClientTxActionLoading(null);
+    }
+  };
+
+  const filteredClientTransactions = React.useMemo(() => {
+    return clientTransactions.filter(tx => {
+      const matchStatus = clientTxStatusFilter === 'all' || tx.status === clientTxStatusFilter;
+      const matchType = clientTxTypeFilter === 'all' || tx.type === clientTxTypeFilter;
+      return matchStatus && matchType;
+    });
+  }, [clientTransactions, clientTxStatusFilter, clientTxTypeFilter]);
+
+  const pendingClientTxCount = React.useMemo(() => clientTransactions.filter(t => t.status === 'pending').length, [clientTransactions]);
 
   // Optimized Filtering for Affiliates
   const filteredAffiliatesList = React.useMemo(() => {
@@ -3312,6 +3341,11 @@ const AffiliateEditForm = ({
                                   {pendingDeposits.length}
                                 </span>
                               )}
+                              {item.value === 'clients-tx' && pendingClientTxCount > 0 && (
+                                <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-primary animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
+                                  {pendingClientTxCount}
+                                </span>
+                              )}
                               {item.value === 'transfers' && pendingTransfersCount > 0 && (
                                 <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-orange-500 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
                                   {pendingTransfersCount}
@@ -4728,6 +4762,140 @@ const AffiliateEditForm = ({
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="clients-tx" className="space-y-6 pt-6 px-6 pb-20">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-dark">Paiements & Transactions Clients</h2>
+              {pendingClientTxCount > 0 && (
+                <p className="text-sm text-amber-600 font-bold mt-1 flex items-center gap-1">
+                  <Clock className="h-4 w-4" />
+                  {pendingClientTxCount} transaction(s) en attente d'approbation
+                </p>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Select value={clientTxTypeFilter} onValueChange={(v: any) => setClientTxTypeFilter(v)}>
+                <SelectTrigger className="w-[140px] h-9 text-xs"><SelectValue placeholder="Type" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous types</SelectItem>
+                  <SelectItem value="deposit">Dépôts</SelectItem>
+                  <SelectItem value="withdrawal">Retraits</SelectItem>
+                  <SelectItem value="purchase">Achats</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={clientTxStatusFilter} onValueChange={(v: any) => setClientTxStatusFilter(v)}>
+                <SelectTrigger className="w-[140px] h-9 text-xs"><SelectValue placeholder="Statut" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous statuts</SelectItem>
+                  <SelectItem value="pending">En attente</SelectItem>
+                  <SelectItem value="approved">Approuvé</SelectItem>
+                  <SelectItem value="rejected">Rejeté</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {clientTxLoading ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+              <Loader2 className="h-8 w-8 animate-spin mb-2" />
+              <p>Chargement des transactions clients...</p>
+            </div>
+          ) : filteredClientTransactions.length === 0 ? (
+            <div className="text-center py-20 text-gray-400">
+              <Wallet className="h-12 w-12 mx-auto mb-3 opacity-30" />
+              <p className="font-medium">Aucune transaction trouvée.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredClientTransactions.map(tx => {
+                const isDeposit = tx.type === 'deposit';
+                const isWithdrawal = tx.type === 'withdrawal';
+                const isPurchase = tx.type === 'purchase';
+                const isPending = tx.status === 'pending';
+                const statusColors: Record<string, string> = {
+                  pending: 'bg-amber-100 text-amber-700',
+                  approved: 'bg-emerald-100 text-emerald-700',
+                  rejected: 'bg-red-100 text-red-700',
+                  completed: 'bg-blue-100 text-blue-700',
+                };
+                const typeColors: Record<string, string> = {
+                  deposit: 'bg-emerald-100',
+                  withdrawal: 'bg-red-100',
+                  purchase: 'bg-primary/10',
+                };
+                const typeIcons: Record<string, React.ReactNode> = {
+                  deposit: <ArrowDown className="h-5 w-5 text-emerald-600" />,
+                  withdrawal: <ArrowUp className="h-5 w-5 text-red-600" />,
+                  purchase: <DollarSign className="h-5 w-5 text-primary" />,
+                };
+                const typeLabels: Record<string, string> = {
+                  deposit: 'Dépôt',
+                  withdrawal: 'Retrait',
+                  purchase: 'Achat produit',
+                  transfer_received: 'Reçu',
+                  refund: 'Remboursement',
+                };
+                return (
+                  <Card key={tx.id} className={`overflow-hidden border ${isPending ? 'border-amber-200 bg-amber-50/20' : 'border-gray-100'}`}>
+                    <CardContent className="p-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                        <div className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 ${typeColors[tx.type] || 'bg-gray-100'}`}>
+                          {typeIcons[tx.type] || <DollarSign className="h-5 w-5 text-gray-500" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <p className="font-black text-dark">{tx.clientName || 'Client'}</p>
+                            <Badge className={`text-[10px] font-black ${statusColors[tx.status] || 'bg-gray-100 text-gray-500'}`}>
+                              {tx.status === 'pending' ? 'En attente' : tx.status === 'approved' ? 'Approuvé' : tx.status === 'rejected' ? 'Rejeté' : 'Complété'}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px]">{typeLabels[tx.type] || tx.type}</Badge>
+                          </div>
+                          <p className="text-sm text-subtext">{tx.description || (isPurchase && tx.productName ? `Achat: ${tx.productName}` : '')}</p>
+                          {tx.method && <p className="text-xs text-gray-400 mt-0.5">Via {tx.method}{tx.accountNumber ? ` → ${tx.accountNumber}` : ''}</p>}
+                          {tx.createdAt?.toDate && (
+                            <p className="text-[10px] text-gray-400 mt-1">
+                              {format(tx.createdAt.toDate(), 'dd MMM yyyy HH:mm', { locale: fr })}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-2 shrink-0">
+                          <p className={`text-xl font-black ${isDeposit ? 'text-emerald-600' : isWithdrawal || isPurchase ? 'text-red-600' : 'text-dark'}`}>
+                            {isDeposit ? '+' : '-'}{tx.amount.toLocaleString()} HTG
+                          </p>
+                          {isPending && (
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                className="h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black"
+                                disabled={clientTxActionLoading === tx.id}
+                                onClick={() => handleClientTxAction(tx.id!, 'approved')}
+                              >
+                                {clientTxActionLoading === tx.id ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Approuver'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="h-9 px-4 rounded-xl text-xs font-black"
+                                disabled={clientTxActionLoading === tx.id}
+                                onClick={() => handleClientTxAction(tx.id!, 'rejected')}
+                              >
+                                Refuser
+                              </Button>
+                            </div>
+                          )}
+                          {tx.rejectionReason && (
+                            <p className="text-xs text-red-500 italic">Motif: {tx.rejectionReason}</p>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="search" className="mt-0 h-full bg-white/50">

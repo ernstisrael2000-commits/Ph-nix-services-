@@ -31,6 +31,9 @@ import { Badge } from './ui/badge';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Loader2, ShieldCheck, Zap, Star, Headphones, QrCode, Wallet, Smartphone, Landmark, X } from 'lucide-react';
+import { submitClientPurchase } from '../services/clientService';
+import { Client } from '../types';
+import { toast } from 'sonner';
 
 const WHATSAPP_NUMBER = "+50944813185";
 
@@ -45,7 +48,7 @@ const SLIDER_IMAGES = [
   "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2070&auto=format&fit=crop", // Tech/Security
 ];
 
-export default function HomeView({ onTrackingClick, onViewChange }: { onTrackingClick: () => void, onViewChange: (view: any) => void }) {
+export default function HomeView({ onTrackingClick, onViewChange, loggedClient }: { onTrackingClick: () => void, onViewChange: (view: any) => void, loggedClient?: Client | null }) {
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
   const { cards, loading: cardsLoading } = useCardTopups();
@@ -732,8 +735,42 @@ export default function HomeView({ onTrackingClick, onViewChange }: { onTracking
                   className="w-full h-14 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-3 active:scale-95 transition-all"
                 >
                   <LucideIcons.ArrowRight className="h-6 w-6" />
-                  Continuer
+                  Continuer via WhatsApp
                 </Button>
+
+                {loggedClient && (() => {
+                  const price = selectedPlan ? selectedPlan.price : selectedProduct.price;
+                  const numericPrice = parseFloat(String(price).replace(/[^\d.]/g, ''));
+                  const hasBalance = !isNaN(numericPrice) && (loggedClient.balance || 0) >= numericPrice;
+                  return (
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        const productName = selectedPlan ? `${selectedProduct.name} (${selectedPlan.name})` : selectedProduct.name;
+                        const productPrice = selectedPlan ? selectedPlan.price : selectedProduct.price;
+                        const amount = parseFloat(String(productPrice).replace(/[^\d.]/g, ''));
+                        if (!hasBalance) { toast.error(`Solde insuffisant. Vous avez ${(loggedClient.balance || 0).toLocaleString()} HTG`); return; }
+                        try {
+                          await submitClientPurchase(loggedClient, productName, String(productPrice), amount);
+                          const whatsappMsg = `Bonjour Neopay,\n\nJ'ai soumis un *PAIEMENT PAR WALLET*:\n👤 Client: *${loggedClient.name}*\n🔑 Wallet ID: *${loggedClient.walletId}*\n🛒 Produit: *${productName}*\n💰 Montant: *${productPrice} HTG*\n\nMerci de valider et traiter ma commande.`;
+                          const num = settings?.whatsappAdminNumber || WHATSAPP_NUMBER;
+                          window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent(whatsappMsg)}`, '_blank');
+                          toast.success("Demande d'achat soumise ! En attente de validation admin.");
+                          setIsProductDetailOpen(false);
+                        } catch (err: any) {
+                          toast.error(err.message || "Erreur lors de la soumission.");
+                        }
+                      }}
+                      className={`w-full h-14 rounded-2xl font-black text-base flex items-center justify-center gap-3 active:scale-95 transition-all ${hasBalance ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-400' : 'border-red-200 text-red-400 cursor-not-allowed opacity-60'}`}
+                    >
+                      <Wallet className="h-5 w-5" />
+                      {hasBalance
+                        ? `Payer avec mon solde (${(loggedClient.balance || 0).toLocaleString()} HTG)`
+                        : `Solde insuffisant (${(loggedClient.balance || 0).toLocaleString()} HTG)`
+                      }
+                    </Button>
+                  );
+                })()}
                 
                 <p className="text-center text-[10px] text-gray-400 font-medium italic">
                   *Un agent vous répondra instantanément sur WhatsApp

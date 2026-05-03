@@ -22,7 +22,7 @@ A React + Vite + Express web application for parcel tracking and logistics manag
 │   ├── App.tsx         # Main app with view routing (home/tracking/admin/affiliate/shipping/agent)
 │   ├── main.tsx        # React entry point
 │   ├── components/     # UI components (AdminDashboard, AffiliateDashboard, etc.)
-│   ├── services/       # Firebase service layers (parcel, admin, affiliate, agent, analytics)
+│   ├── services/       # Firebase service layers (parcel, admin, affiliate, agent, analytics, clientService)
 │   ├── hooks/          # Custom hooks (useAuth)
 │   └── lib/            # Firebase init, utilities
 ```
@@ -36,6 +36,9 @@ A React + Vite + Express web application for parcel tracking and logistics manag
 - **Shipping**: Shipping request management
 - **Global Announcements**: Admin-controlled announcements shown on load
 - **Email Notifications**: SMTP via nodemailer for registration alerts
+- **Client Wallet System**: Client registration/login, wallet dashboard with deposit/withdrawal
+- **Product Payment with Balance**: "Pay with wallet balance" option in product detail modal
+- **Admin Transaction Approvals**: Admin can approve/reject client deposits, withdrawals, purchases
 
 ## Running the App
 

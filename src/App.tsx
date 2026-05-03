@@ -9,6 +9,7 @@ import AffiliateLogin from './components/AffiliateLogin';
 import AffiliateDashboard from './components/AffiliateDashboard';
 import AgentLogin from './components/AgentLogin';
 import AgentDashboard from './components/AgentDashboard';
+import ClientDashboard from './components/ClientDashboard';
 import { Toaster } from './components/ui/sonner';
 import AccessChoice from './components/AccessChoice';
 import { useAuth } from './hooks/useAuth';
@@ -16,7 +17,7 @@ import { useSettings } from './services/parcelService';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Loader2, Package, ChevronLeft, Bell, X, WifiOff } from 'lucide-react';
 import { Button } from './components/ui/button';
-import { Affiliate, AdminAccount, Agent } from './types';
+import { Affiliate, AdminAccount, Agent, Client } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, getDocFromServer } from 'firebase/firestore';
 import { db } from './lib/firebase';
@@ -30,6 +31,7 @@ export default function App() {
   const { settings } = useSettings();
   const [showAnnouncement, setShowAnnouncement] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
+  const [showClientDashboard, setShowClientDashboard] = useState(false);
   
   const [loggedAdmin, setLoggedAdmin] = useState<AdminAccount | null>(() => {
     const saved = localStorage.getItem('neopay_admin');
@@ -51,7 +53,6 @@ export default function App() {
   useEffect(() => {
     const testConnection = async () => {
       try {
-        // Attempt to reach the backend
         await getDocFromServer(doc(db, '_connection_test_', 'ping'));
         setIsOffline(false);
       } catch (error: any) {
@@ -72,7 +73,6 @@ export default function App() {
   // Bootstrap Super Admin
   useEffect(() => {
     const bootstrapAdmin = async () => {
-      // Check if Ernst exists
       const { checkAdminLogin, saveAdminAccount } = await import('./services/adminService');
       const { collection, getDocs, query, where } = await import('firebase/firestore');
       const { db } = await import('./lib/firebase');
@@ -84,7 +84,7 @@ export default function App() {
         await saveAdminAccount({
           fullName: 'Ernst israel',
           password: '$Ernst509@$',
-          loginCode: 'ER-2026', // Secret code for Ernst
+          loginCode: 'ER-2026',
           isSuperAdmin: true,
           permissions: ['all'],
           failedAttempts: 0
@@ -99,14 +99,14 @@ export default function App() {
     if (newView === view) return;
     setHistory(prev => [...prev, newView]);
     setView(newView);
-    setAccessChoice(null); // Reset when switching
+    setAccessChoice(null);
   };
 
   const handleBack = () => {
-    setAccessChoice(null); // Clear selection on back
+    setAccessChoice(null);
     if (history.length > 1) {
       const newHistory = [...history];
-      newHistory.pop(); // remove current
+      newHistory.pop();
       const prevView = newHistory[newHistory.length - 1];
       setHistory(newHistory);
       setView(prevView);
@@ -145,6 +145,22 @@ export default function App() {
     localStorage.removeItem('neopay_agent');
   };
 
+  const [loggedClient, setLoggedClient] = useState<Client | null>(() => {
+    const saved = localStorage.getItem('neopay_client');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const handleClientLogin = (client: Client) => {
+    setLoggedClient(client);
+    localStorage.setItem('neopay_client', JSON.stringify(client));
+  };
+
+  const handleClientLogout = () => {
+    setLoggedClient(null);
+    localStorage.removeItem('neopay_client');
+    setShowClientDashboard(false);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -162,6 +178,10 @@ export default function App() {
         <Navbar 
           currentView={view}
           onViewChange={handleViewChange}
+          loggedClient={loggedClient}
+          onClientLogin={handleClientLogin}
+          onClientLogout={handleClientLogout}
+          onOpenWallet={() => setShowClientDashboard(true)}
         />
 
         <AnimatePresence>
@@ -174,7 +194,6 @@ export default function App() {
                 className="w-full max-w-lg bg-white/98 backdrop-blur-xl rounded-[2.5rem] shadow-[0_30px_70px_rgba(0,0,0,0.35)] border border-primary/20 pointer-events-auto overflow-hidden ring-1 ring-black/10"
               >
                 <div className="relative">
-                  {/* Glass Header */}
                   <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-primary/5">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
@@ -197,7 +216,6 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* Scrollable Content Area */}
                   <div className="p-6 sm:p-8 max-h-[40vh] overflow-y-auto no-scrollbar scroll-smooth">
                     <div className="space-y-4">
                       <p className="text-gray-600 font-bold leading-relaxed whitespace-pre-wrap text-sm sm:text-base">
@@ -206,7 +224,6 @@ export default function App() {
                     </div>
                   </div>
                   
-                  {/* Action Footer */}
                   <div className="p-6 pt-0 flex justify-center">
                     <Button 
                       onClick={() => setShowAnnouncement(false)}
@@ -224,11 +241,9 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Bottom decorative bar */}
                 <div className="h-2 w-full bg-gradient-to-r from-transparent via-primary to-transparent opacity-30" />
               </motion.div>
 
-              {/* Backdrop Blur/Dim */}
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -256,7 +271,11 @@ export default function App() {
           )}
           
           {view === 'home' && (
-            <HomeView onTrackingClick={() => handleViewChange('tracking')} onViewChange={handleViewChange} />
+            <HomeView 
+              onTrackingClick={() => handleViewChange('tracking')} 
+              onViewChange={handleViewChange}
+              loggedClient={loggedClient}
+            />
           )}
           
           {view === 'tracking' && (
@@ -331,8 +350,19 @@ export default function App() {
         </footer>
 
         <Toaster position="top-right" />
+
+        {/* Client Wallet Dashboard Overlay */}
+        <AnimatePresence>
+          {showClientDashboard && loggedClient && (
+            <ClientDashboard
+              clientId={loggedClient.id!}
+              onLogout={handleClientLogout}
+              open={showClientDashboard}
+              onClose={() => setShowClientDashboard(false)}
+            />
+          )}
+        </AnimatePresence>
       </div>
     </ErrorBoundary>
   );
 }
-

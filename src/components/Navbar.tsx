@@ -1,10 +1,11 @@
-import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users, Truck, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
+import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users, Truck, ExternalLink, Loader2, AlertCircle, Wallet } from 'lucide-react';
 import { Button } from './ui/button';
 import { auth } from '@/lib/firebase';
-import { signInWithPopup, GoogleAuthProvider, signOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { signOut } from 'firebase/auth';
 import { useAuth } from '../hooks/useAuth';
 import { useSettings } from '../services/parcelService';
 import { usePendingCounts } from '../services/affiliateService';
+import { usePendingClientCount } from '../services/clientService';
 import { toast } from 'sonner';
 import React, { useState } from 'react';
 import { 
@@ -15,45 +16,27 @@ import {
   DialogDescription,
   DialogFooter
 } from './ui/dialog';
+import { Client } from '../types';
+import UserAuthModal from './UserAuthModal';
 
-export default function Navbar({ currentView, onViewChange }: { currentView: string, onViewChange: (view: any) => void }) {
+interface NavbarProps {
+  currentView: string;
+  onViewChange: (view: any) => void;
+  loggedClient: Client | null;
+  onClientLogin: (client: Client) => void;
+  onClientLogout: () => void;
+  onOpenWallet: () => void;
+}
+
+export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet }: NavbarProps) {
   const { user, isAdmin } = useAuth();
   const { settings } = useSettings();
-  const { total: pendingCount } = usePendingCounts(isAdmin);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const { total: pendingAffiliateCount } = usePendingCounts(isAdmin);
+  const pendingClientCount = usePendingClientCount();
+  const pendingCount = isAdmin ? pendingAffiliateCount + pendingClientCount : 0;
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [showLoginErrorDialog, setShowLoginErrorDialog] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
-
-  const handleLogin = async () => {
-    if (isLoggingIn) return;
-    
-    setIsLoggingIn(true);
-    const provider = new GoogleAuthProvider();
-    
-    try {
-      // Ensure persistence is set
-      await setPersistence(auth, browserLocalPersistence);
-      await signInWithPopup(auth, provider);
-      toast.success("Connexion réussie !");
-      setIsLoggingIn(false);
-    } catch (error: any) {
-      console.error("Login failed:", error);
-      setIsLoggingIn(false);
-      setLastError(error.code || error.message);
-
-      if (error.code === 'auth/popup-closed-by-user') {
-        toast.error("La fenêtre de connexion a été fermée.");
-      } else if (error.code === 'auth/cancelled-popup-request') {
-        // Just ignore this one silently or show a small toast, 
-        // as it usually means a second click happened.
-        console.warn("Popup request cancelled (usually due to multiple clicks)");
-      } else if (error.code === 'auth/network-request-failed' || error.message?.includes('INTERNAL ASSERTION FAILED')) {
-        setShowLoginErrorDialog(true);
-      } else {
-        toast.error(`Échec: ${error.message || 'Erreur inconnue'}`);
-      }
-    }
-  };
 
   const handleLogout = async () => {
     try {
@@ -62,6 +45,10 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
     } catch (error) {
       console.error("Logout failed:", error);
     }
+  };
+
+  const handleAdminAccess = () => {
+    onViewChange('affiliate');
   };
 
   return (
@@ -141,7 +128,18 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
               </Button>
             )}
 
-            {user ? (
+            {/* Client Wallet Button or Login */}
+            {loggedClient ? (
+              <button
+                onClick={onOpenWallet}
+                className="flex flex-col items-center justify-center h-14 py-1 gap-1 px-2 sm:px-4 rounded-xl bg-primary/10 hover:bg-primary/20 transition-all group relative"
+              >
+                <div className="h-7 w-7 rounded-full bg-primary flex items-center justify-center text-white font-black text-xs group-hover:scale-105 transition-transform">
+                  {loggedClient.name.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-[10px] uppercase tracking-tighter font-semibold text-primary">Wallet</span>
+              </button>
+            ) : user ? (
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="flex flex-col items-end hidden sm:flex">
                   <span className="text-xs font-bold text-dark truncate max-w-[120px]">{user.displayName}</span>
@@ -171,24 +169,27 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
                   <ExternalLink className="h-4 w-4" />
                 </Button>
                 <Button 
-                  onClick={handleLogin} 
-                  disabled={isLoggingIn}
+                  onClick={() => setShowAuthModal(true)} 
                   className="bg-primary hover:bg-[#D98A1E] text-white flex items-center gap-2"
                 >
-                  {isLoggingIn ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <LogIn className="h-4 w-4" />
-                  )}
-                  <span className="hidden xs:inline">
-                    {isLoggingIn ? 'Connexion...' : 'Connexion'}
-                  </span>
+                  <LogIn className="h-4 w-4" />
+                  <span className="hidden xs:inline">Connexion</span>
                 </Button>
               </div>
             )}
           </div>
         </div>
       </div>
+
+      <UserAuthModal
+        open={showAuthModal}
+        onOpenChange={setShowAuthModal}
+        onClientLogin={(client) => {
+          onClientLogin(client);
+          setShowAuthModal(false);
+        }}
+        onAdminAccess={handleAdminAccess}
+      />
 
       <Dialog open={showLoginErrorDialog} onOpenChange={setShowLoginErrorDialog}>
         <DialogContent className="max-w-md rounded-3xl p-6 sm:p-8">
@@ -197,22 +198,12 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
               <ShieldCheck className="h-8 w-8 text-red-500" />
             </div>
             <DialogTitle className="text-2xl font-black text-center text-dark">
-              Blocage de Sécurité Chrome
+              Problème de Connexion
             </DialogTitle>
             <DialogDescription className="pt-4 space-y-4 text-center">
               <p className="text-subtext text-sm leading-relaxed">
-                Google Chrome bloque la connexion car Neopay est actuellement affiché dans un cadre sécurisé.
+                Une erreur est survenue lors de la connexion. Veuillez réessayer.
               </p>
-              
-              <div className="bg-accent-light p-4 rounded-2xl border border-accent-light/50 text-left space-y-2">
-                <p className="text-xs font-bold text-primary">Comment fixer cela :</p>
-                <ol className="text-[11px] text-primary list-decimal pl-4 space-y-1">
-                  <li>Cliquez sur le bouton bleu ci-dessous.</li>
-                  <li>Une nouvelle fenêtre s'ouvrira avec Neopay.</li>
-                  <li>Connectez-vous à nouveau dans cette fenêtre.</li>
-                </ol>
-              </div>
-
               {lastError && (
                 <p className="text-[10px] text-subtext/60 font-mono bg-muted p-2 rounded border truncate">
                   Détail: {lastError}
@@ -229,7 +220,7 @@ export default function Navbar({ currentView, onViewChange }: { currentView: str
               }}
             >
               <ExternalLink className="h-5 w-5" />
-              Réparer & Se Connecter
+              Ouvrir dans un nouvel onglet
             </Button>
           </DialogFooter>
         </DialogContent>
