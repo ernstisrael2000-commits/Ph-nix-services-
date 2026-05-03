@@ -16,7 +16,7 @@ import {
   DialogDescription,
   DialogFooter
 } from './ui/dialog';
-import { Client } from '../types';
+import { Client, AdminAccount } from '../types';
 import UserAuthModal from './UserAuthModal';
 
 interface NavbarProps {
@@ -26,9 +26,10 @@ interface NavbarProps {
   onClientLogin: (client: Client) => void;
   onClientLogout: () => void;
   onOpenWallet: () => void;
+  onAdminLogin: (admin: AdminAccount) => void;
 }
 
-export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet }: NavbarProps) {
+export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet, onAdminLogin }: NavbarProps) {
   const { user, isAdmin } = useAuth();
   const { settings } = useSettings();
   const { total: pendingAffiliateCount } = usePendingCounts(isAdmin);
@@ -188,7 +189,12 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
           onClientLogin(client);
           setShowAuthModal(false);
         }}
-        onAdminAccess={handleAdminAccess}
+        onAdminLogin={(admin) => {
+          onAdminLogin(admin);
+          onViewChange('admin');
+          setShowAuthModal(false);
+        }}
+        onAffiliateAccess={() => onViewChange('affiliate')}
       />
 
       <Dialog open={showLoginErrorDialog} onOpenChange={setShowLoginErrorDialog}>

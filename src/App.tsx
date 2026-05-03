@@ -182,6 +182,10 @@ export default function App() {
           onClientLogin={handleClientLogin}
           onClientLogout={handleClientLogout}
           onOpenWallet={() => setShowClientDashboard(true)}
+          onAdminLogin={(admin) => {
+            handleAdminLogin(admin);
+            handleViewChange('admin');
+          }}
         />
 
         <AnimatePresence>

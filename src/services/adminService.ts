@@ -14,7 +14,7 @@ import {
   limit,
   Timestamp
 } from 'firebase/firestore';
-import { signInAnonymously } from 'firebase/auth';
+import { signInAnonymously, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { handleFirestoreError } from '../lib/firebase-errors';
 import { AdminAccount, AdminLog } from '../types';
@@ -225,5 +225,76 @@ export const checkAdminLogin = async (fullName: string, password: string, loginC
       // Return standard error msg
     }
     return { success: false, error: "Une erreur est survenue lors de la connexion." };
+  }
+};
+
+export const loginAdminWithGoogle = async (): Promise<{ success: boolean; admin?: AdminAccount; error?: string }> => {
+  try {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+
+    const result = await signInWithPopup(auth, provider);
+    const googleEmail = result.user.email?.toLowerCase() || '';
+    const googleUid = result.user.uid;
+
+    // Search by email first
+    let adminSnap = await getDocs(query(collection(db, ADMINS_COLLECTION), where('email', '==', googleEmail)));
+
+    // Fallback: search by uid
+    if (adminSnap.empty) {
+      adminSnap = await getDocs(query(collection(db, ADMINS_COLLECTION), where('uid', '==', googleUid)));
+    }
+
+    if (adminSnap.empty) {
+      // Not an authorized admin — sign out immediately
+      await signOut(auth);
+      return {
+        success: false,
+        error: `Accès refusé. L'adresse "${result.user.email}" n'est associée à aucun compte administrateur Neopay.`
+      };
+    }
+
+    const adminDoc = adminSnap.docs[0];
+    const adminData = { id: adminDoc.id, ...adminDoc.data() } as AdminAccount;
+
+    // Check lockout
+    if (adminData.lockUntil) {
+      const lockDate = adminData.lockUntil instanceof Timestamp
+        ? adminData.lockUntil.toDate()
+        : new Date(adminData.lockUntil);
+      if (lockDate > new Date()) {
+        await signOut(auth);
+        return { success: false, error: 'Compte bloqué temporairement. Réessayez plus tard.' };
+      }
+    }
+
+    // Store uid + email on admin account if missing
+    try {
+      const updates: any = { failedAttempts: 0, updatedAt: serverTimestamp() };
+      if (!adminData.uid) updates.uid = googleUid;
+      if (!adminData.email) updates.email = googleEmail;
+      await updateDoc(doc(db, ADMINS_COLLECTION, adminData.id!), updates);
+
+      await setDoc(doc(db, 'admin_uids', googleUid), {
+        adminId: adminData.id,
+        fullName: adminData.fullName,
+        updatedAt: serverTimestamp()
+      });
+    } catch (err) {
+      console.warn('Could not update admin uid/email:', err);
+    }
+
+    await logAdminAttempt(adminData.fullName, true);
+    adminData.uid = googleUid;
+    return { success: true, admin: adminData };
+  } catch (error: any) {
+    if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') {
+      return { success: false, error: 'Connexion annulée.' };
+    }
+    if (error?.code === 'auth/popup-blocked') {
+      return { success: false, error: 'Popup bloquée par le navigateur. Autorisez les popups pour ce site.' };
+    }
+    console.error('Google admin login error:', error);
+    return { success: false, error: "Erreur lors de la connexion Google. Réessayez." };
   }
 };
