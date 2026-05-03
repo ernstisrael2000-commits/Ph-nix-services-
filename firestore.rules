@@ -33,18 +33,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isEmailAuthorizedAdmin() {
-      return isAuthenticated() && 
-        request.auth.token.email != null && (
-          request.auth.token.email.lower() == "ernstisrael2000@gmail.com" ||
-          request.auth.token.email.lower() == "ernstisrael508@gmail.com" ||
-          request.auth.token.email.lower() == "admin@neopay.com"
-        );
-    }
-
     function isAdmin() {
-      return isEmailAuthorizedAdmin() || 
-             (isAuthenticated() && exists(/databases/$(database)/documents/admin_uids/$(request.auth.uid)));
+      return isAuthenticated() &&
+        (
+          (request.auth.token.email == "ernstisrael2000@gmail.com") ||
+          (request.auth.token.email == "ernstisrael508@gmail.com") ||
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+          exists(/databases/$(database)/documents/admin_uids/$(request.auth.uid))
+        );
     }
 
     function isAgent() {
@@ -53,12 +49,6 @@ service cloud.firestore {
           exists(/databases/$(database)/documents/agents/$(request.auth.uid)) ||
           (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "agent")
         );
-    }
-
-    function isValidClient(data) {
-      return data.keys().hasAll(['name', 'phone']) &&
-             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.phone is string && data.phone.size() > 0 && data.phone.size() < 30;
     }
 
     function isValidAgent(data) {
@@ -76,33 +66,74 @@ service cloud.firestore {
              data.username is string && data.username.size() > 0 && data.username.size() < 50 &&
              data.password is string && data.password.size() > 0 &&
              data.code is string && data.code.size() > 0 &&
-             data.level in ['Bronze', 'Silver', 'Gold', 'Elite', 'VIP'];
+             data.level in ['Bronze', 'Silver', 'Gold', 'Elite', 'VIP'] &&
+             (!('balance' in data) || data.balance is number) &&
+             (!('points' in data) || data.points is number);
     }
 
     function isValidParcel(data) {
       return data.keys().hasAll(['trackingNumber', 'status', 'currentLocation', 'paymentStatus']) &&
              data.trackingNumber is string && data.trackingNumber.size() > 0 && data.trackingNumber.size() < 100 &&
-             data.status in ['En route', 'En transit', 'Arrivé', 'Livré', 'En attente', 'Pickup'] &&
-             data.currentLocation is string && data.paymentStatus is string;
+             data.status in ['En route', 'En transit', 'Arrivé', 'Livré'] &&
+             data.currentLocation is string && data.currentLocation.size() < 200 &&
+             data.paymentStatus in ['Payé', 'Non payé'] &&
+             (!('proofOfDelivery' in data) || (data.proofOfDelivery is string && data.proofOfDelivery.size() < 1000)) &&
+             (!('estimatedArrival' in data) || (data.estimatedArrival is string));
     }
 
     function isValidProduct(data) {
       return data.keys().hasAll(['name', 'image', 'description']) && 
-             data.name is string && data.name.size() > 0 && data.image is string;
+             data.name is string && data.name.size() > 0 &&
+             (!('stock' in data) || data.stock is number);
     }
 
     function isValidGame(data) {
-      return data.keys().hasAll(['name', 'image', 'description']) && 
-             data.name is string && data.name.size() > 0 && data.image is string;
+      return data.keys().hasAll(['name', 'image', 'description']) &&
+             data.name is string && data.name.size() > 0 &&
+             (!('catalog' in data) || data.catalog is list);
     }
 
     function isValidCard(data) {
-      return data.keys().hasAll(['name', 'image', 'description', 'price']) && 
-             data.name is string && data.name.size() > 0 && data.price is string;
+      return data.keys().hasAll(['name', 'image', 'description', 'price']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.price is string && data.price.size() > 0 &&
+             (!('stock' in data) || data.stock is number);
     }
 
-    function isValidStatus(status) {
-      return status in ['pending', 'approved', 'rejected', 'completed'];
+    function isValidWithdrawal(data) {
+      return data.keys().hasAll(['affiliateId', 'amount', 'method', 'status']) &&
+             data.affiliateId is string &&
+             data.amount is number && data.amount >= 20 &&
+             data.method in ['MonCash', 'NatCash', 'Physical'] &&
+             data.status in ['pending', 'approved', 'rejected'];
+    }
+
+    function isValidClient(data) {
+      return data.keys().hasAll(['name', 'phone']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.phone is string && data.phone.size() > 0 && data.phone.size() < 30 &&
+             (!('directSponsorId' in data) || (data.directSponsorId is string && data.directSponsorId.size() < 128)) &&
+             (!('indirectSponsorId' in data) || (data.indirectSponsorId is string && data.indirectSponsorId.size() < 128)) &&
+             (!('createdAt' in data) || data.createdAt is timestamp) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidWalletTransaction(data) {
+      return data.keys().hasAll(['affiliateId', 'type', 'amount', 'status', 'createdAt']) &&
+             data.affiliateId is string &&
+             data.amount is number &&
+             data.type in ['deposit', 'withdrawal', 'transfer_sent', 'transfer_received', 'agent_deposit', 'transfer'] &&
+             data.status in ['pending', 'completed', 'approved', 'rejected', 'pending_agent'] &&
+             (!('agentId' in data) || data.agentId is string) &&
+             (!('agentCode' in data) || data.agentCode is string) &&
+             (!('relatedAffiliateId' in data) || data.relatedAffiliateId is string) &&
+             (!('relatedAffiliateName' in data) || data.relatedAffiliateName is string) &&
+             (!('recipientWalletId' in data) || data.recipientWalletId is string) &&
+             (!('method' in data) || data.method is string) &&
+             (!('accountNumber' in data) || data.accountNumber is string) &&
+             (!('description' in data) || data.description is string) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp) &&
+             (!('rejectionReason' in data) || data.rejectionReason is string);
     }
 
     // ===============================================================
@@ -118,15 +149,15 @@ service cloud.firestore {
 
     match /agents/{agentId} {
       allow read: if true;
-      allow create: if isAdmin();
-      allow update: if isAdmin() || (isAgent() && request.auth.uid == agentId);
+      allow create: if isAdmin() && isValidAgent(request.resource.data);
+      allow update: if isAdmin() || (isAgent() && request.auth.uid == agentId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'updatedAt']));
       allow delete: if isAdmin();
     }
 
     match /clients/{clientId} {
       allow read: if true;
-      allow create: if true; 
-      allow update: if true; // Allow client to self-update ID or status if needed during registration
+      allow create: if isAdmin() && isValidClient(request.resource.data);
+      allow update: if isAdmin() && isValidClient(request.resource.data);
       allow delete: if isAdmin();
     }
 
@@ -178,7 +209,7 @@ service cloud.firestore {
     }
 
     match /affiliate_requests/{requestId} {
-      allow read: if isAuthenticated();
+      allow read: if isAdmin();
       allow create: if true; 
       allow update: if isAdmin();
       allow delete: if isAdmin();
@@ -213,8 +244,7 @@ service cloud.firestore {
         (resource.data.uid == null || resource.data.uid == "" || resource.data.uid == request.auth.uid) &&
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'failedAttempts', 'lockUntil', 'updatedAt']))
       );
-      allow create: if isAdmin() || isEmailAuthorizedAdmin();
-      allow delete: if isAdmin();
+      allow create, delete: if isAdmin();
     }
 
     match /admin_uids/{uid} {
@@ -227,16 +257,9 @@ service cloud.firestore {
       allow read: if isAdmin();
     }
 
-    match /client_transactions/{transactionId} {
-      allow read: if true;
-      allow create: if true;
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
     match /users/{userId} {
       // Users can only read their own profile
-      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow read: if isAuthenticated() && request.auth.uid == userId;
       
       // Only admins can manage users (or the system bootstraps the first admin)
       allow write: if isAdmin();
@@ -246,10 +269,6 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if true; // Sales can be recorded via batch/client
       allow delete: if isAdmin();
-    }
-
-    match /_connection_test_/{docId} {
-      allow read: if true;
     }
 
     match /{document=**} {

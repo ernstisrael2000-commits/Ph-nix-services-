@@ -4,9 +4,9 @@ import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { loginAgent } from '../services/agentService';
-import { loginWithGoogle, loginWithEmail } from '../services/authService';
+import { loginWithGoogle } from '../services/authService';
 import { toast } from 'sonner';
-import { Loader2, UserCheck, ShieldCheck, Mail, Lock } from 'lucide-react';
+import { Loader2, UserCheck, ShieldCheck } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Agent } from '../types';
 
@@ -15,11 +15,6 @@ interface AgentLoginProps {
 }
 
 export default function AgentLogin({ onLogin }: AgentLoginProps) {
-  const [useEmail, setUseEmail] = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
   const [agentCode, setAgentCode] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
@@ -27,63 +22,19 @@ export default function AgentLogin({ onLogin }: AgentLoginProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!agentCode.trim() || !phone.trim()) {
+      toast.error("Veuillez remplir tous les champs.");
+      return;
+    }
+
     setLoading(true);
     try {
-      if (useEmail) {
-        if (isRegistering) {
-          if (!email.trim() || !password.trim() || !name.trim() || !phone.trim()) {
-            toast.error("Veuillez remplir tous les champs.");
-            setLoading(false);
-            return;
-          }
-          // Note: In authService.ts I need to implement agent registration
-          // For now I'll just use a placeholder or update authService
-          const result = await registerWithEmail(email.trim(), password.trim(), 'agent', {
-            name: name.trim(),
-            phone: phone.trim(),
-            status: 'pending'
-          });
-          if (result.error) {
-            toast.error(result.error);
-          } else {
-            toast.success("Demande d'inscription agent envoyée ! En attente de validation.");
-            setIsRegistering(false);
-          }
-        } else {
-          if (!email.trim() || !password.trim()) {
-            toast.error("Veuillez remplir tous les champs.");
-            setLoading(false);
-            return;
-          }
-          const result = await loginWithEmail(email.trim(), password.trim(), 'agent');
-          if (result.error) {
-            toast.error(result.error);
-          } else if (result.agent) {
-            if (result.agent.status !== 'approved') {
-              toast.error("Votre compte agent est en attente de validation.");
-            } else {
-              toast.success(`Bienvenue Agent ${result.agent.name} !`);
-              onLogin(result.agent);
-            }
-          }
-        }
+      const agent = await loginAgent(agentCode.trim(), phone.trim());
+      if (agent) {
+        toast.success(`Bienvenue Agent ${agent.name} !`);
+        onLogin(agent);
       } else {
-        if (!agentCode.trim() || !phone.trim()) {
-          toast.error("Veuillez remplir tous les champs.");
-          setLoading(false);
-          return;
-        }
-        const agent = await loginAgent(agentCode.trim(), phone.trim());
-        if (agent) {
-          if (agent.status !== 'approved') {
-            toast.error("Votre compte agent est en attente de validation.");
-          } else {
-            toast.success(`Bienvenue Agent ${agent.name} !`);
-            onLogin(agent);
-          }
-        } else {
-          toast.error("Code agent ou téléphone incorrect, ou agent inactif.");
-        }
+        toast.error("Code agent ou téléphone incorrect, ou agent inactif.");
       }
     } catch (error) {
       console.error(error);
@@ -125,131 +76,40 @@ export default function AgentLogin({ onLogin }: AgentLoginProps) {
           <div>
             <CardTitle className="text-3xl font-black text-dark tracking-tight">Accès Agent</CardTitle>
             <CardDescription className="text-gray-500 font-medium px-4">
-              {useEmail ? "Connectez-vous avec votre email professionnel." : "Connectez-vous pour valider les dépôts de vos clients."}
+              Connectez-vous pour valider les dépôts de vos clients.
             </CardDescription>
           </div>
         </CardHeader>
         <CardContent className="p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {useEmail ? (
-              <>
-                {isRegistering && (
-                  <div className="space-y-2">
-                    <Label htmlFor="reg-name" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Nom Complet</Label>
-                    <div className="relative">
-                      <UserCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                      <Input
-                        id="reg-name"
-                        placeholder="Ex: Jean Dupont"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="h-14 pl-10 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20 font-bold"
-                        required
-                      />
-                    </div>
-                  </div>
-                )}
-                
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Email Professionnel</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="agent@neopay.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="h-14 pl-10 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20 font-bold"
-                    />
-                  </div>
-                </div>
-
-                {isRegistering && (
-                  <div className="space-y-2">
-                    <Label htmlFor="reg-phone" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Téléphone</Label>
-                    <Input
-                      id="reg-phone"
-                      placeholder="Ex: +509..."
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="h-14 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20 font-bold"
-                      required
-                    />
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <Label htmlFor="pass" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Mot de passe</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                    <Input
-                      id="pass"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="h-14 pl-10 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20 font-bold"
-                    />
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="agentCode" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Code Agent Unique</Label>
-                  <Input
-                    id="agentCode"
-                    placeholder="Ex: 12345678"
-                    value={agentCode}
-                    onChange={(e) => setAgentCode(e.target.value)}
-                    className="h-14 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20 text-center text-xl font-black tracking-[0.2em]"
-                    maxLength={8}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Numéro de Téléphone associé</Label>
-                  <Input
-                    id="phone"
-                    placeholder="Ex: +509..."
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="h-14 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20 font-bold"
-                  />
-                </div>
-              </>
-            )}
-            
+            <div className="space-y-2">
+              <Label htmlFor="agentCode" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Code Agent Unique</Label>
+              <Input
+                id="agentCode"
+                placeholder="Ex: 12345678"
+                value={agentCode}
+                onChange={(e) => setAgentCode(e.target.value)}
+                className="h-14 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20 text-center text-xl font-black tracking-[0.2em]"
+                maxLength={8}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone" className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Numéro de Téléphone associé</Label>
+              <Input
+                id="phone"
+                placeholder="Ex: +509..."
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="h-14 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20 font-bold"
+              />
+            </div>
             <Button 
               type="submit" 
               className="w-full h-14 bg-primary hover:bg-[#D98A1E] text-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-xl shadow-primary/20 border-0 transition-all hover:shadow-2xl active:scale-95"
               disabled={loading}
             >
-              {loading ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : (isRegistering ? "S'inscrire comme Agent" : "Entrer dans l'espace agent")}
+              {loading ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : "Entrer dans l'espace agent"}
             </Button>
-
-            <div className="flex flex-col gap-2 text-center">
-              <button 
-                type="button"
-                onClick={() => {
-                  setUseEmail(!useEmail);
-                  setIsRegistering(false);
-                }}
-                className="text-xs font-black uppercase tracking-widest text-primary/60 hover:text-primary transition-colors"
-              >
-                {useEmail ? "Utiliser code agent" : "Se connecter par email"}
-              </button>
-              
-              {useEmail && (
-                <button 
-                  type="button"
-                  onClick={() => setIsRegistering(!isRegistering)}
-                  className="text-xs font-black uppercase tracking-widest text-gray-400 hover:text-primary transition-colors"
-                >
-                  {isRegistering ? "Déjà un compte ? Se connecter" : "Pas de compte ? S'inscrire"}
-                </button>
-              )}
-            </div>
 
             <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">

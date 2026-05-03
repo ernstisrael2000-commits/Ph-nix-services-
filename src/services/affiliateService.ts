@@ -227,15 +227,11 @@ export const deleteWithdrawalHistory = async (affiliateId: string) => {
 };
 
 // Admin Services
-export const useAllAffiliates = (enabled: boolean = false) => {
+export const useAllAffiliates = () => {
   const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!enabled || !auth.currentUser) {
-      setLoading(false);
-      return;
-    }
     const q = query(collection(db, 'affiliates'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
@@ -255,15 +251,11 @@ export const useAllAffiliates = (enabled: boolean = false) => {
   return { affiliates, loading };
 };
 
-export const useAllWithdrawals = (enabled: boolean = false) => {
+export const useAllWithdrawals = () => {
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!enabled || !auth.currentUser) {
-      setLoading(false);
-      return;
-    }
     const q = query(collection(db, 'withdrawals'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
@@ -278,7 +270,7 @@ export const useAllWithdrawals = (enabled: boolean = false) => {
     });
 
     return () => unsubscribe();
-  }, [enabled]);
+  }, []);
 
   return { withdrawals, loading };
 };
@@ -403,15 +395,11 @@ export const submitAffiliateRequest = async (requestData: Partial<AffiliateReque
   }
 };
 
-export const useAllAffiliateRequests = (enabled: boolean = false) => {
+export const useAllAffiliateRequests = () => {
   const [requests, setRequests] = useState<AffiliateRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!enabled || !auth.currentUser) {
-      setLoading(false);
-      return;
-    }
     const q = query(collection(db, 'affiliate_requests'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
@@ -426,7 +414,7 @@ export const useAllAffiliateRequests = (enabled: boolean = false) => {
     });
 
     return () => unsubscribe();
-  }, [enabled]);
+  }, []);
 
   return { requests, loading };
 };
@@ -492,55 +480,40 @@ export const usePendingCounts = (enabled: boolean = false) => {
   const [counts, setCounts] = useState({ registrations: 0, withdrawals: 0, deposits: 0, total: 0 });
 
   useEffect(() => {
-    // Only subscribe if enabled AND we have a current user authenticated in Firebase
-    if (!enabled || !auth.currentUser) {
+    if (!enabled) {
       setCounts({ registrations: 0, withdrawals: 0, deposits: 0, total: 0 });
       return;
     }
-
-    let regCount = 0;
-    let withCount = 0;
-    let depCount = 0;
 
     const qReg = query(collection(db, 'affiliate_requests'), where('status', '==', 'pending'));
     const qWith = query(collection(db, 'withdrawals'), where('status', '==', 'pending'));
     const qDep = query(collection(db, 'wallet_transactions'), where('type', '==', 'deposit'), where('status', '==', 'pending'));
 
-    const updateTotals = () => {
-      setCounts({
-        registrations: regCount,
-        withdrawals: withCount,
-        deposits: depCount,
-        total: regCount + withCount + depCount
+    const unsubReg = onSnapshot(qReg, (snapReg) => {
+      const regCount = snapReg.size;
+      const unsubWith = onSnapshot(qWith, (snapWith) => {
+        const withCount = snapWith.size;
+        const unsubDep = onSnapshot(qDep, (snapDep) => {
+          const depCount = snapDep.size;
+          setCounts({
+            registrations: regCount,
+            withdrawals: withCount,
+            deposits: depCount,
+            total: regCount + withCount + depCount
+          });
+        }, (error) => {
+          console.error("Error fetching pending deposits:", error);
+        });
+        return () => unsubDep();
+      }, (error) => {
+        console.error("Error fetching pending withdrawals:", error);
       });
-    };
-
-    const unsubReg = onSnapshot(qReg, (snap) => {
-      regCount = snap.size;
-      updateTotals();
+      return () => unsubWith();
     }, (error) => {
       console.error("Error fetching pending registrations:", error);
     });
 
-    const unsubWith = onSnapshot(qWith, (snap) => {
-      withCount = snap.size;
-      updateTotals();
-    }, (error) => {
-      console.error("Error fetching pending withdrawals:", error);
-    });
-
-    const unsubDep = onSnapshot(qDep, (snap) => {
-      depCount = snap.size;
-      updateTotals();
-    }, (error) => {
-      console.error("Error fetching pending deposits:", error);
-    });
-
-    return () => {
-      unsubReg();
-      unsubWith();
-      unsubDep();
-    };
+    return () => unsubReg();
   }, [enabled]);
 
   return counts;
@@ -989,15 +962,11 @@ export const searchClientsByPhone = async (phone: string): Promise<Client[]> => 
 /**
  * Hooks for managing clients.
  */
-export const useAllClients = (enabled: boolean = false) => {
+export const useAllClients = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!enabled || !auth.currentUser) {
-      setLoading(false);
-      return;
-    }
     const q = query(collection(db, 'clients'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
@@ -1012,7 +981,7 @@ export const useAllClients = (enabled: boolean = false) => {
     });
 
     return () => unsubscribe();
-  }, [enabled]);
+  }, []);
 
   return { clients, loading };
 };
@@ -1073,15 +1042,11 @@ export const getAffiliateReferrals = async (affiliateId: string) => {
 /**
  * Admin hook to see all unified wallet transactions
  */
-export const useAllWalletTransactions = (enabled: boolean = false) => {
+export const useAllWalletTransactions = () => {
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!enabled || !auth.currentUser) {
-      setLoading(false);
-      return;
-    }
     const q = query(collection(db, 'wallet_transactions'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const txList: WalletTransaction[] = [];

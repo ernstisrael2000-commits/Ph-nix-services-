@@ -4,7 +4,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { UserProfile } from '../types';
 
-const ADMIN_EMAILS = ['ernstisrael2000@gmail.com', 'ernstisrael508@gmail.com', 'admin@neopay.com'];
+const ADMIN_EMAILS = ['ernstisrael2000@gmail.com', 'ernstisrael508@gmail.com'];
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -15,40 +15,20 @@ export const useAuth = () => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
-        // 1. Check users collection
-        const userDocRef = doc(db, 'users', firebaseUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        
-        let foundProfile: UserProfile | null = null;
-        
-        if (userDocSnap.exists()) {
-          foundProfile = userDocSnap.data() as UserProfile;
-        }
-
-        // 2. Check hardcoded admins
-        if (ADMIN_EMAILS.includes(firebaseUser.email || '')) {
-          foundProfile = {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email || '',
-            role: 'admin',
-            ...(foundProfile || {})
-          };
-        }
-
-        // 3. Check admin_uids collection (for anonymous/custom admins)
-        if (!foundProfile || foundProfile.role !== 'admin') {
-          const adminUidRef = doc(db, 'admin_uids', firebaseUser.uid);
-          const adminUidSnap = await getDoc(adminUidRef);
-          if (adminUidSnap.exists()) {
-            foundProfile = {
+        const docRef = doc(db, 'users', firebaseUser.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setProfile(docSnap.data() as UserProfile);
+        } else {
+          // Check if it's the hardcoded admin
+          if (ADMIN_EMAILS.includes(firebaseUser.email || '')) {
+            setProfile({
               uid: firebaseUser.uid,
-              role: 'admin',
-              ...(foundProfile || {})
-            } as any;
+              email: firebaseUser.email || '',
+              role: 'admin'
+            });
           }
         }
-
-        setProfile(foundProfile);
       } else {
         setProfile(null);
       }

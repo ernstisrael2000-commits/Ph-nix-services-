@@ -206,17 +206,17 @@ export interface AffiliateRequest {
 
 export interface Client {
   id?: string;
-  uid?: string; // For social login
-  email?: string; // For social login
-  password?: string; // For manual login
+  uid?: string;
+  email?: string;
   name: string;
   phone: string;
+  password?: string;
   balance: number;
-  status: 'pending' | 'approved' | 'rejected';
-  photoURL?: string;
+  walletId: string;
+  status: 'pending' | 'active' | 'blocked';
   directSponsorId?: string;
   indirectSponsorId?: string;
-  registrationData?: any;
+  photoUrl?: string;
   createdAt: any;
   updatedAt: any;
 }

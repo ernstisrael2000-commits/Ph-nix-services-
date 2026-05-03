@@ -14,7 +14,7 @@ import {
   limit,
   Timestamp
 } from 'firebase/firestore';
-import { signInAnonymously, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { signInAnonymously } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { handleFirestoreError } from '../lib/firebase-errors';
 import { AdminAccount, AdminLog } from '../types';
@@ -23,15 +23,11 @@ import { useState, useEffect } from 'react';
 const ADMINS_COLLECTION = 'admin_accounts';
 const LOGS_COLLECTION = 'admin_login_logs';
 
-export const useAdminAccounts = (enabled: boolean = false) => {
+export const useAdminAccounts = () => {
   const [admins, setAdmins] = useState<AdminAccount[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!enabled || !auth.currentUser) {
-      setLoading(false);
-      return;
-    }
     const q = query(collection(db, ADMINS_COLLECTION), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
@@ -51,7 +47,7 @@ export const useAdminAccounts = (enabled: boolean = false) => {
     });
 
     return () => unsubscribe();
-  }, [enabled]);
+  }, []);
 
   return { admins, loading };
 };
@@ -99,15 +95,11 @@ export const logAdminAttempt = async (adminName: string, success: boolean) => {
   }
 };
 
-export const useAdminLogs = (max: number = 50, enabled: boolean = false) => {
+export const useAdminLogs = (max: number = 50) => {
   const [logs, setLogs] = useState<AdminLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!enabled || !auth.currentUser) {
-      setLoading(false);
-      return;
-    }
     const q = query(collection(db, LOGS_COLLECTION), orderBy('timestamp', 'desc'), limit(max));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
@@ -125,7 +117,7 @@ export const useAdminLogs = (max: number = 50, enabled: boolean = false) => {
     });
 
     return () => unsubscribe();
-  }, [max, enabled]);
+  }, [max]);
 
   return { logs, loading };
 };
@@ -233,100 +225,5 @@ export const checkAdminLogin = async (fullName: string, password: string, loginC
       // Return standard error msg
     }
     return { success: false, error: "Une erreur est survenue lors de la connexion." };
-  }
-};
-
-export const signInWithGoogleAdmin = async (): Promise<{ success: boolean; admin?: AdminAccount; error?: string }> => {
-  try {
-    const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
-    const user = result.user;
-
-    if (!user.email) {
-      return { success: false, error: "Email non trouvé dans votre compte Google." };
-    }
-
-    const authorizedEmails = [
-      "ernstisrael2000@gmail.com",
-      "ernstisrael508@gmail.com",
-      "admin@neopay.com"
-    ];
-
-    const isAuthorizedEmail = authorizedEmails.includes(user.email);
-
-    // Query by UID
-    const qUid = query(collection(db, ADMINS_COLLECTION), where('uid', '==', user.uid));
-    const snapshotUid = await getDocs(qUid);
-
-    let adminData: AdminAccount | null = null;
-
-    if (!snapshotUid.empty) {
-      adminData = { id: snapshotUid.docs[0].id, ...snapshotUid.docs[0].data() } as AdminAccount;
-    } else {
-      // Try by name or create if authorized by email
-      const qName = query(collection(db, ADMINS_COLLECTION), where('fullName', '==', user.displayName || user.email));
-      const snapshotName = await getDocs(qName);
-      
-      if (!snapshotName.empty) {
-        adminData = { id: snapshotName.docs[0].id, ...snapshotName.docs[0].data() } as AdminAccount;
-      } else if (isAuthorizedEmail) {
-        // Auto-bootstrap authorized admins
-        const newAdmin: Partial<AdminAccount> = {
-          fullName: user.displayName || user.email,
-          isSuperAdmin: user.email === "ernstisrael2000@gmail.com",
-          permissions: ['all'],
-          uid: user.uid,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          failedAttempts: 0
-        };
-        const docRef = await addDoc(collection(db, ADMINS_COLLECTION), newAdmin);
-        adminData = { id: docRef.id, ...newAdmin } as AdminAccount;
-      }
-    }
-
-    if (!adminData) {
-      return { success: false, error: "Accès refusé. Vous n'êtes pas enregistré comme administrateur." };
-    }
-
-    // Ensure UID linkage
-    if (user.uid) {
-      try {
-        await setDoc(doc(db, 'admin_uids', user.uid), {
-          adminId: adminData.id,
-          fullName: adminData.fullName,
-          email: user.email,
-          updatedAt: serverTimestamp()
-        });
-        
-        if (adminData.uid !== user.uid) {
-          await updateDoc(doc(db, ADMINS_COLLECTION, adminData.id!), {
-            uid: user.uid,
-            updatedAt: serverTimestamp()
-          });
-          adminData.uid = user.uid;
-        }
-      } catch (linkError) {
-        console.warn("Could not link admin UID (may be already linked or insufficient perms):", linkError);
-      }
-    }
-
-    await logAdminAttempt(adminData.fullName, true);
-
-    return { success: true, admin: adminData };
-  } catch (error: any) {
-    console.error("Google Login Error:", error);
-    
-    if (error.code === 'permission-denied' || error.message?.includes('insufficient permissions')) {
-      return { 
-        success: false, 
-        error: "Accès refusé. Vérifiez que votre email est autorisé ou contactez l'administrateur principal." 
-      };
-    }
-    
-    if (error.code === 'auth/popup-blocked') {
-      return { success: false, error: "La fenêtre de connexion a été bloquée par votre navigateur." };
-    }
-    return { success: false, error: "Erreur lors de la connexion Google." };
   }
 };

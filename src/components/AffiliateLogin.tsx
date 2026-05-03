@@ -4,9 +4,9 @@ import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { loginAffiliate, submitAffiliateRequest } from '../services/affiliateService';
-import { loginWithGoogle, loginWithEmail } from '../services/authService';
+import { loginWithGoogle } from '../services/authService';
 import { toast } from 'sonner';
-import { Loader2, Lock, UserPlus, CheckCircle2, Mail } from 'lucide-react';
+import { Loader2, Lock, UserPlus, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Affiliate } from '../types';
 import { 
@@ -25,13 +25,8 @@ interface AffiliateLoginProps {
 }
 
 export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
-  const [useEmail, setUseEmail] = useState(false);
-  const [isEmailRegistering, setIsEmailRegistering] = useState(false);
-  const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [registerLoading, setRegisterLoading] = useState(false);
@@ -84,62 +79,23 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Trim whitespace from credentials
+    const cleanUsername = username.trim();
+    const cleanPassword = password.trim();
+
+    if (!cleanUsername || !cleanPassword) {
+      toast.error("Veuillez remplir tous les champs.");
+      return;
+    }
+
     setLoading(true);
     try {
-      if (useEmail) {
-        if (isEmailRegistering) {
-          if (!email.trim() || !password.trim() || !name.trim() || !phone.trim()) {
-            toast.error("Veuillez remplir tous les champs.");
-            setLoading(false);
-            return;
-          }
-          const result = await registerWithEmail(email.trim(), password.trim(), 'affiliate', {
-            name: name.trim(),
-            phone: phone.trim(),
-            status: 'pending'
-          });
-          if (result.error) {
-            toast.error(result.error);
-          } else {
-            toast.success("Demande d'inscription affilié envoyée !");
-            setIsEmailRegistering(false);
-          }
-        } else {
-          const cleanEmail = email.trim();
-          const cleanPassword = password.trim();
-
-          if (!cleanEmail || !cleanPassword) {
-            toast.error("Veuillez remplir tous les champs.");
-            setLoading(false);
-            return;
-          }
-
-          const result = await loginWithEmail(cleanEmail, cleanPassword, 'affiliate');
-          if (result.error) {
-            toast.error(result.error);
-          } else if (result.affiliate) {
-            toast.success(`Bienvenue, ${result.affiliate.name} !`);
-            onLogin(result.affiliate);
-          }
-        }
+      const affiliate = await loginAffiliate(cleanUsername, cleanPassword);
+      if (affiliate) {
+        toast.success(`Bienvenue, ${affiliate.name} !`);
+        onLogin(affiliate);
       } else {
-        // Trim whitespace from credentials
-        const cleanUsername = username.trim();
-        const cleanPassword = password.trim();
-
-        if (!cleanUsername || !cleanPassword) {
-          toast.error("Veuillez remplir tous les champs.");
-          setLoading(false);
-          return;
-        }
-
-        const affiliate = await loginAffiliate(cleanUsername, cleanPassword);
-        if (affiliate) {
-          toast.success(`Bienvenue, ${affiliate.name} !`);
-          onLogin(affiliate);
-        } else {
-          toast.error("Identifiants incorrects.");
-        }
+        toast.error("Identifiants incorrects.");
       }
     } catch (error) {
       console.error(error);
@@ -181,61 +137,16 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {useEmail ? (
-              <>
-                {isEmailRegistering && (
-                  <div className="space-y-2">
-                    <Label htmlFor="reg-name">Nom Complet</Label>
-                    <Input
-                      id="reg-name"
-                      placeholder="Jean Dupont"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="h-12"
-                      required
-                    />
-                  </div>
-                )}
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="votre@email.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="h-12 pl-10"
-                    />
-                  </div>
-                </div>
-                {isEmailRegistering && (
-                  <div className="space-y-2">
-                    <Label htmlFor="reg-phone">Téléphone</Label>
-                    <Input
-                      id="reg-phone"
-                      placeholder="+509..."
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="h-12"
-                      required
-                    />
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="username">Nom d'utilisateur</Label>
-                <Input
-                  id="username"
-                  placeholder="Votre nom d'utilisateur"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="h-12"
-                />
-              </div>
-            )}
+            <div className="space-y-2">
+              <Label htmlFor="username">Nom d'utilisateur</Label>
+              <Input
+                id="username"
+                placeholder="Votre nom d'utilisateur"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="h-12"
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="password">Mot de passe</Label>
               <Input
@@ -252,31 +163,8 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
               className="w-full h-12 bg-primary hover:bg-[#D98A1E] text-lg font-semibold border-0"
               disabled={loading}
             >
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (isEmailRegistering ? "S'inscrire" : "Se connecter")}
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Se connecter"}
             </Button>
-
-            <div className="flex flex-col gap-2 text-center">
-              <button 
-                type="button"
-                onClick={() => {
-                  setUseEmail(!useEmail);
-                  setIsEmailRegistering(false);
-                }}
-                className="text-xs font-bold text-primary/60 hover:text-primary transition-colors"
-              >
-                {useEmail ? "Utiliser nom d'utilisateur" : "Se connecter par email"}
-              </button>
-
-              {useEmail && (
-                <button 
-                  type="button"
-                  onClick={() => setIsEmailRegistering(!isEmailRegistering)}
-                  className="text-xs font-bold text-gray-400 hover:text-primary transition-colors"
-                >
-                  {isEmailRegistering ? "Déjà un compte ? Se connecter" : "Pas de compte ? S'inscrire"}
-                </button>
-              )}
-            </div>
             <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t" />
