@@ -30,8 +30,8 @@ import {
 import { Badge } from './ui/badge';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
-import { Loader2, ShieldCheck, Zap, Star, Headphones, QrCode, Wallet, Smartphone, Landmark, X } from 'lucide-react';
-import { submitClientPurchase } from '../services/clientService';
+import { Loader2, ShieldCheck, Zap, Star, Headphones, QrCode, Wallet, Smartphone, Landmark, X, ArrowDownToLine, ArrowUpFromLine, TrendingUp, Copy, CheckCircle, ChevronRight, Clock, DollarSign } from 'lucide-react';
+import { submitClientPurchase, useClientData, useClientTransactions, submitClientDeposit, submitClientWithdrawal } from '../services/clientService';
 import { Client } from '../types';
 import { toast } from 'sonner';
 
@@ -48,7 +48,15 @@ const SLIDER_IMAGES = [
   "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2070&auto=format&fit=crop", // Tech/Security
 ];
 
-export default function HomeView({ onTrackingClick, onViewChange, loggedClient }: { onTrackingClick: () => void, onViewChange: (view: any) => void, loggedClient?: Client | null }) {
+const typeLabel: Record<string, string> = {
+  deposit: 'Dépôt',
+  withdrawal: 'Retrait',
+  purchase: 'Achat',
+  transfer_received: 'Reçu',
+  refund: 'Remboursement',
+};
+
+export default function HomeView({ onTrackingClick, onViewChange, loggedClient, onOpenWallet }: { onTrackingClick: () => void, onViewChange: (view: any) => void, loggedClient?: Client | null, onOpenWallet?: () => void }) {
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
   const { cards, loading: cardsLoading } = useCardTopups();
@@ -61,6 +69,75 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient }
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [isProductDetailOpen, setIsProductDetailOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+
+  // Live client wallet data
+  const { client: liveClient } = useClientData(loggedClient?.id || null);
+  const { transactions: clientTx } = useClientTransactions(loggedClient?.id || null);
+  const recentTx = clientTx.slice(0, 3);
+  const effectiveClient = liveClient || loggedClient;
+  const exchangeRate = settings?.exchangeRate || 146;
+  const balanceHTG = effectiveClient?.balance ?? 0;
+  const balanceUSD = (balanceHTG / exchangeRate).toFixed(2);
+
+  // Inline wallet deposit/withdraw state
+  const [isWalletDepositOpen, setIsWalletDepositOpen] = useState(false);
+  const [isWalletWithdrawOpen, setIsWalletWithdrawOpen] = useState(false);
+  const [walletDepositAmount, setWalletDepositAmount] = useState('');
+  const [walletDepositMethod, setWalletDepositMethod] = useState('MonCash');
+  const [walletDepositTxId, setWalletDepositTxId] = useState('');
+  const [walletWithdrawAmount, setWalletWithdrawAmount] = useState('');
+  const [walletWithdrawMethod, setWalletWithdrawMethod] = useState('MonCash');
+  const [walletWithdrawAccount, setWalletWithdrawAccount] = useState('');
+  const [walletActionLoading, setWalletActionLoading] = useState(false);
+  const [copiedWalletId, setCopiedWalletId] = useState(false);
+
+  const depositMethodInfo = {
+    MonCash: { number: settings?.moncashNumber, qr: settings?.moncashQR, color: 'rose', label: 'MonCash' },
+    NatCash: { number: settings?.natcashNumber, qr: settings?.natcashQR, color: 'amber', label: 'NatCash' },
+    Admi: { number: settings?.admiNumber, qr: settings?.admiQR, color: 'indigo', label: 'Admi' },
+  } as Record<string, { number?: string; qr?: string; color: string; label: string }>;
+
+  const handleWalletDeposit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = parseFloat(walletDepositAmount);
+    if (isNaN(amount) || amount <= 0) { toast.error("Montant invalide."); return; }
+    if (!effectiveClient) return;
+    setWalletActionLoading(true);
+    try {
+      await submitClientDeposit(effectiveClient, amount, walletDepositMethod);
+      const info = depositMethodInfo[walletDepositMethod];
+      const waNum = settings?.whatsappAdminNumber || WHATSAPP_NUMBER;
+      const msg = `Bonjour Neopay,\n\nJe souhaite effectuer un *DÉPÔT*:\n👤 Nom: *${effectiveClient.name}*\n🔑 ID Wallet: *${effectiveClient.walletId}*\n💰 Montant: *${amount.toLocaleString()} HTG*\n≈ *$${(amount / exchangeRate).toFixed(2)} USD*\n💳 Via: *${walletDepositMethod}*${info?.number ? `\n📞 Numéro: *${info.number}*` : ''}${walletDepositTxId ? `\n🔖 ID Transaction: *${walletDepositTxId}*` : ''}\n\nMerci de valider mon dépôt.`;
+      window.open(`https://wa.me/${waNum.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+      toast.success("Demande de dépôt envoyée ! En attente de validation admin.");
+      setIsWalletDepositOpen(false);
+      setWalletDepositAmount(''); setWalletDepositTxId('');
+    } catch (err: any) {
+      toast.error(err.message || "Erreur.");
+    } finally {
+      setWalletActionLoading(false);
+    }
+  };
+
+  const handleWalletWithdraw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = parseFloat(walletWithdrawAmount);
+    if (isNaN(amount) || amount <= 0) { toast.error("Montant invalide."); return; }
+    if (!effectiveClient) return;
+    if (amount > balanceHTG) { toast.error(`Solde insuffisant. Vous avez ${balanceHTG.toLocaleString()} HTG.`); return; }
+    if (!walletWithdrawAccount) { toast.error("Numéro de compte requis."); return; }
+    setWalletActionLoading(true);
+    try {
+      await submitClientWithdrawal(effectiveClient, amount, walletWithdrawMethod, walletWithdrawAccount);
+      toast.success("Demande de retrait soumise ! En attente de validation admin.");
+      setIsWalletWithdrawOpen(false);
+      setWalletWithdrawAmount(''); setWalletWithdrawAccount('');
+    } catch (err: any) {
+      toast.error(err.message || "Erreur.");
+    } finally {
+      setWalletActionLoading(false);
+    }
+  };
 
   // Card Recharge States
   const [isRechargeDialogOpen, setIsRechargeDialogOpen] = useState(false);
@@ -254,83 +331,170 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient }
 
   return (
     <div className="max-w-7xl mx-auto px-4 pt-8 pb-12 space-y-8">
-      {/* Premium Hero Slider Section */}
-      <section className="relative w-full overflow-visible group px-2 md:px-0">
-        {/* Animated Glow Backdrop */}
-        <div className="absolute -inset-4 bg-primary/20 rounded-[50px] blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-        
-        <div className="relative h-[240px] md:h-[360px] w-full rounded-[40px] overflow-hidden bg-black shadow-[0_45px_70px_-15px_rgba(0,0,0,0.4)] border border-white/5">
-          {/* Border Beam Effect */}
-          <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden rounded-[40px]">
-            <motion.div
-              animate={{
-                rotate: [0, 360],
-              }}
-              transition={{
-                duration: 4,
-                repeat: Infinity,
-                ease: "linear",
-              }}
-              className="absolute -inset-[150%] opacity-20 group-hover:opacity-40 transition-opacity duration-1000"
-              style={{
-                background: "conic-gradient(from 0deg, transparent 0 340deg, var(--color-primary) 360deg)",
-                backgroundSize: "cover",
-              }}
-            />
-          </div>
 
-          {/* Slider Track */}
-          <div className="absolute inset-0 w-full h-full z-0">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentSlide}
-                initial={{ opacity: 0, scale: 1.1 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
-                className="absolute inset-0 w-full h-full will-change-transform overflow-hidden"
-              >
-                {/* Ken Burns Effect Image */}
-                <motion.div 
-                  initial={{ scale: 1.2, x: -20, y: -20 }}
-                  animate={{ 
-                    scale: 1,
-                    x: 0,
-                    y: 0
-                  }}
-                  transition={{ 
-                    duration: 10,
-                    ease: "linear",
-                    repeat: Infinity,
-                    repeatType: "reverse"
-                  }}
-                  className="absolute inset-0 bg-cover bg-center"
-                  style={{ backgroundImage: `url(${imagesToDisplay[currentSlide]?.url || ''})` }}
-                />
-                
-                {/* Enhanced Overlay Gradients */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-black via-black/40 to-transparent opacity-60" />
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40" />
-              </motion.div>
-            </AnimatePresence>
-          </div>
+      {/* Hero: Wallet (if logged in) or Image Slider */}
+      <AnimatePresence mode="wait">
+        {loggedClient ? (
+          /* ── WALLET HERO ── */
+          <motion.section
+            key="wallet-hero"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className="relative w-full px-2 md:px-0"
+          >
+            <div className="relative w-full rounded-[40px] bg-gradient-to-br from-[#1a1f3c] via-[#1e2547] to-[#0f1429] p-6 md:p-8 shadow-[0_45px_70px_-15px_rgba(0,0,0,0.4)] border border-white/5 overflow-hidden">
+              {/* Background glows */}
+              <div className="absolute top-0 right-0 w-72 h-72 bg-primary/15 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-56 h-56 bg-emerald-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4 pointer-events-none" />
+              <div className="absolute inset-0 rounded-[40px] pointer-events-none overflow-hidden">
+                <motion.div animate={{ rotate: [0, 360] }} transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+                  className="absolute -inset-[150%] opacity-5"
+                  style={{ background: "conic-gradient(from 0deg, transparent 0 340deg, var(--color-primary) 360deg)" }} />
+              </div>
 
-          {/* Slider Navigation Dots - Modern Glass feel */}
-          <div className="absolute bottom-8 right-8 z-30 flex gap-3 bg-black/20 backdrop-blur-md p-2 px-3 rounded-full border border-white/10">
-            {imagesToDisplay.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentSlide(i)}
-                  className="relative h-2 flex items-center justify-center transition-all duration-500"
-                >
-                  <div className={`h-full rounded-full transition-all duration-500 ${
-                    currentSlide === i ? 'bg-primary w-10' : 'bg-white/30 w-2 hover:bg-white/50'
-                  }`} />
-                </button>
-            ))}
-          </div>
-        </div>
-      </section>
+              <div className="relative z-10 flex flex-col lg:flex-row gap-6 lg:gap-10 items-start lg:items-stretch">
+                {/* Left: Identity + Balance + Actions */}
+                <div className="flex-1 space-y-5">
+                  {/* User row */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center text-xl font-black text-primary shrink-0">
+                        {(effectiveClient?.name || '?').charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-white font-black text-base leading-tight">{effectiveClient?.name || loggedClient.name}</p>
+                        <button
+                          onClick={() => {
+                            if (effectiveClient?.walletId) {
+                              navigator.clipboard.writeText(effectiveClient.walletId);
+                              setCopiedWalletId(true);
+                              setTimeout(() => setCopiedWalletId(false), 2000);
+                              toast.success("ID copié !");
+                            }
+                          }}
+                          className="flex items-center gap-1.5 mt-0.5 text-white/40 hover:text-white/70 text-xs font-mono transition-colors group"
+                        >
+                          <span>ID: {effectiveClient?.walletId || '—'}</span>
+                          {copiedWalletId ? <CheckCircle className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                        </button>
+                      </div>
+                    </div>
+                    <button onClick={onOpenWallet}
+                      className="flex items-center gap-1 text-white/40 hover:text-white/70 text-xs transition-colors">
+                      Tout voir <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Balance */}
+                  <div className="bg-white/5 border border-white/10 rounded-3xl p-5">
+                    <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-2">Solde Disponible</p>
+                    <p className="text-4xl md:text-5xl font-black text-white leading-none tabular-nums">
+                      {balanceHTG.toLocaleString()}
+                      <span className="text-xl font-bold text-white/30 ml-2">HTG</span>
+                    </p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <DollarSign className="h-4 w-4 text-primary" />
+                      <p className="text-primary font-bold text-base">${balanceUSD} <span className="text-primary/60 font-normal text-xs">USD</span></p>
+                      <span className="text-white/20 text-xs ml-1">• taux {exchangeRate} HTG/$</span>
+                    </div>
+                  </div>
+
+                  {/* Quick actions */}
+                  <div className="flex gap-3">
+                    <button onClick={() => setIsWalletDepositOpen(true)}
+                      className="flex-1 flex items-center justify-center gap-2 h-12 rounded-2xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-bold text-sm transition-all shadow-lg shadow-emerald-900/30">
+                      <ArrowDownToLine className="h-4 w-4" /> Déposer
+                    </button>
+                    <button onClick={() => setIsWalletWithdrawOpen(true)}
+                      className="flex-1 flex items-center justify-center gap-2 h-12 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 text-white font-bold text-sm transition-all border border-white/10">
+                      <ArrowUpFromLine className="h-4 w-4" /> Retirer
+                    </button>
+                    <button onClick={onOpenWallet}
+                      className="h-12 px-4 rounded-2xl bg-primary/20 hover:bg-primary/30 active:scale-95 text-primary font-bold text-sm transition-all border border-primary/20">
+                      <TrendingUp className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Right: Recent transactions */}
+                <div className="w-full lg:w-72 space-y-2">
+                  <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-3">Dernières transactions</p>
+                  {recentTx.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-32 rounded-2xl bg-white/5 border border-white/5">
+                      <Clock className="h-8 w-8 text-white/20 mb-2" />
+                      <p className="text-white/30 text-xs">Aucune transaction</p>
+                    </div>
+                  ) : (
+                    recentTx.map(tx => {
+                      const isCredit = tx.type === 'deposit' || tx.type === 'transfer_received' || tx.type === 'refund';
+                      return (
+                        <div key={tx.id} className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/8 transition-colors">
+                          <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${isCredit ? 'bg-emerald-500/20' : 'bg-red-500/20'}`}>
+                            {isCredit ? <ArrowDownToLine className="h-4 w-4 text-emerald-400" /> : <ArrowUpFromLine className="h-4 w-4 text-red-400" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white/80 text-xs font-bold truncate">{typeLabel[tx.type] || tx.type}</p>
+                            <p className="text-white/30 text-[10px] truncate">{tx.method || tx.description?.slice(0, 24) || ''}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className={`text-sm font-black tabular-nums ${isCredit ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {isCredit ? '+' : '-'}{tx.amount.toLocaleString()}
+                            </p>
+                            <p className="text-white/25 text-[10px]">
+                              {tx.status === 'pending' ? '⏳' : tx.status === 'approved' || tx.status === 'completed' ? '✅' : '❌'}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.section>
+        ) : (
+          /* ── SLIDER ── */
+          <motion.section
+            key="slider"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="relative w-full overflow-visible group px-2 md:px-0"
+          >
+            <div className="absolute -inset-4 bg-primary/20 rounded-[50px] blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+            <div className="relative h-[240px] md:h-[360px] w-full rounded-[40px] overflow-hidden bg-black shadow-[0_45px_70px_-15px_rgba(0,0,0,0.4)] border border-white/5">
+              <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden rounded-[40px]">
+                <motion.div animate={{ rotate: [0, 360] }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                  className="absolute -inset-[150%] opacity-20 group-hover:opacity-40 transition-opacity duration-1000"
+                  style={{ background: "conic-gradient(from 0deg, transparent 0 340deg, var(--color-primary) 360deg)", backgroundSize: "cover" }} />
+              </div>
+              <div className="absolute inset-0 w-full h-full z-0">
+                <AnimatePresence mode="wait">
+                  <motion.div key={currentSlide} initial={{ opacity: 0, scale: 1.1 }} animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+                    className="absolute inset-0 w-full h-full will-change-transform overflow-hidden">
+                    <motion.div initial={{ scale: 1.2, x: -20, y: -20 }} animate={{ scale: 1, x: 0, y: 0 }}
+                      transition={{ duration: 10, ease: "linear", repeat: Infinity, repeatType: "reverse" }}
+                      className="absolute inset-0 bg-cover bg-center"
+                      style={{ backgroundImage: `url(${imagesToDisplay[currentSlide]?.url || ''})` }} />
+                    <div className="absolute inset-0 bg-gradient-to-tr from-black via-black/40 to-transparent opacity-60" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40" />
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+              <div className="absolute bottom-8 right-8 z-30 flex gap-3 bg-black/20 backdrop-blur-md p-2 px-3 rounded-full border border-white/10">
+                {imagesToDisplay.map((_, i) => (
+                  <button key={i} onClick={() => setCurrentSlide(i)} className="relative h-2 flex items-center justify-center transition-all duration-500">
+                    <div className={`h-full rounded-full transition-all duration-500 ${currentSlide === i ? 'bg-primary w-10' : 'bg-white/30 w-2 hover:bg-white/50'}`} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </motion.section>
+        )}
+      </AnimatePresence>
 
       {/* Quick Navigation Category Bar */}
       {!buttonsLoading && buttons.length > 0 ? (
@@ -778,6 +942,135 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient }
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── WALLET DEPOSIT MODAL ── */}
+      <Dialog open={isWalletDepositOpen} onOpenChange={(v) => { setIsWalletDepositOpen(v); if (!v) { setWalletDepositAmount(''); setWalletDepositTxId(''); } }}>
+        <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl p-0 overflow-hidden">
+          <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 p-6 text-white">
+            <div className="flex items-center gap-3">
+              <div className="h-11 w-11 rounded-2xl bg-white/20 flex items-center justify-center">
+                <ArrowDownToLine className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-black text-white">Faire un dépôt</DialogTitle>
+                <DialogDescription className="text-emerald-100/70 text-xs">Rechargez votre wallet Neopay</DialogDescription>
+              </div>
+            </div>
+          </div>
+          <form onSubmit={handleWalletDeposit} className="p-5 space-y-4 bg-white">
+            {/* Method selector */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Méthode de paiement</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'MonCash', icon: '💰', color: 'border-rose-300 bg-rose-50 text-rose-700', sel: 'ring-rose-400' },
+                  { id: 'NatCash', icon: '💳', color: 'border-amber-300 bg-amber-50 text-amber-700', sel: 'ring-amber-400' },
+                  { id: 'Admi', icon: '🏦', color: 'border-indigo-300 bg-indigo-50 text-indigo-700', sel: 'ring-indigo-400' },
+                ].map(m => (
+                  <button key={m.id} type="button" onClick={() => setWalletDepositMethod(m.id)}
+                    className={`flex flex-col items-center gap-1 p-3 rounded-2xl border-2 transition-all text-center ${walletDepositMethod === m.id ? `${m.color} ring-2 ${m.sel} shadow-sm` : 'border-gray-100 bg-white text-gray-500 hover:border-gray-200'}`}>
+                    <span className="text-xl">{m.icon}</span>
+                    <span className="text-[10px] font-black">{m.id}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Method info: number + QR */}
+            {depositMethodInfo[walletDepositMethod]?.number && (
+              <div className="flex items-start gap-3 p-3 rounded-2xl bg-gray-50 border border-gray-100">
+                <Smartphone className="h-4 w-4 text-subtext shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-[10px] font-black text-subtext uppercase tracking-wider">Envoyez au numéro</p>
+                  <p className="font-black text-dark text-base font-mono">{depositMethodInfo[walletDepositMethod].number}</p>
+                </div>
+                {depositMethodInfo[walletDepositMethod]?.qr && (
+                  <img src={depositMethodInfo[walletDepositMethod].qr} alt="QR" className="h-14 w-14 rounded-xl object-cover border border-gray-200" onError={e => (e.currentTarget.style.display = 'none')} />
+                )}
+              </div>
+            )}
+
+            {/* Amount */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Montant (HTG)</Label>
+              <Input type="number" value={walletDepositAmount} onChange={e => setWalletDepositAmount(e.target.value)}
+                placeholder="Ex: 1 500" className="h-12 rounded-xl text-lg font-black" min="1" required />
+              {walletDepositAmount && !isNaN(parseFloat(walletDepositAmount)) && (
+                <p className="text-[11px] text-primary font-bold">≈ ${(parseFloat(walletDepositAmount) / exchangeRate).toFixed(2)} USD</p>
+              )}
+            </div>
+
+            {/* Transaction ID */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">ID / Référence de transaction</Label>
+              <Input value={walletDepositTxId} onChange={e => setWalletDepositTxId(e.target.value)}
+                placeholder="Ex: TX-1234567890" className="h-11 rounded-xl font-mono" />
+              <p className="text-[10px] text-gray-400">Copiez l'ID de confirmation reçu lors du paiement.</p>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-700">
+              <strong>Étape suivante :</strong> Après soumission, vous serez redirigé sur WhatsApp pour envoyer votre preuve de paiement.
+            </div>
+
+            <Button type="submit" disabled={walletActionLoading}
+              className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black">
+              {walletActionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Confirmer et envoyer preuve →'}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── WALLET WITHDRAW MODAL ── */}
+      <Dialog open={isWalletWithdrawOpen} onOpenChange={(v) => { setIsWalletWithdrawOpen(v); if (!v) { setWalletWithdrawAmount(''); setWalletWithdrawAccount(''); } }}>
+        <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl p-0 overflow-hidden">
+          <div className="bg-gradient-to-br from-slate-700 to-slate-900 p-6 text-white">
+            <div className="flex items-center gap-3">
+              <div className="h-11 w-11 rounded-2xl bg-white/20 flex items-center justify-center">
+                <ArrowUpFromLine className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-black text-white">Retirer des fonds</DialogTitle>
+                <DialogDescription className="text-white/60 text-xs">Solde: <strong className="text-white">{balanceHTG.toLocaleString()} HTG</strong> · <strong className="text-primary">${balanceUSD}</strong></DialogDescription>
+              </div>
+            </div>
+          </div>
+          <form onSubmit={handleWalletWithdraw} className="p-5 space-y-4 bg-white">
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Méthode de retrait</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'MonCash', icon: '💰', color: 'border-rose-300 bg-rose-50 text-rose-700', sel: 'ring-rose-400' },
+                  { id: 'NatCash', icon: '💳', color: 'border-amber-300 bg-amber-50 text-amber-700', sel: 'ring-amber-400' },
+                  { id: 'Admi', icon: '🏦', color: 'border-indigo-300 bg-indigo-50 text-indigo-700', sel: 'ring-indigo-400' },
+                ].map(m => (
+                  <button key={m.id} type="button" onClick={() => setWalletWithdrawMethod(m.id)}
+                    className={`flex flex-col items-center gap-1 p-3 rounded-2xl border-2 transition-all text-center ${walletWithdrawMethod === m.id ? `${m.color} ring-2 ${m.sel} shadow-sm` : 'border-gray-100 bg-white text-gray-500 hover:border-gray-200'}`}>
+                    <span className="text-xl">{m.icon}</span>
+                    <span className="text-[10px] font-black">{m.id}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Montant (HTG)</Label>
+              <Input type="number" value={walletWithdrawAmount} onChange={e => setWalletWithdrawAmount(e.target.value)}
+                placeholder="Ex: 500" className="h-12 rounded-xl text-lg font-black" min="1" max={balanceHTG} required />
+              {walletWithdrawAmount && !isNaN(parseFloat(walletWithdrawAmount)) && (
+                <p className="text-[11px] text-primary font-bold">≈ ${(parseFloat(walletWithdrawAmount) / exchangeRate).toFixed(2)} USD</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Numéro de réception</Label>
+              <Input value={walletWithdrawAccount} onChange={e => setWalletWithdrawAccount(e.target.value)}
+                placeholder="Votre numéro {walletWithdrawMethod}" className="h-11 rounded-xl" required />
+            </div>
+            <Button type="submit" disabled={walletActionLoading}
+              className="w-full h-12 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-black">
+              {walletActionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Soumettre la demande'}
+            </Button>
+          </form>
         </DialogContent>
       </Dialog>
 

@@ -279,6 +279,7 @@ export default function App() {
               onTrackingClick={() => handleViewChange('tracking')} 
               onViewChange={handleViewChange}
               loggedClient={loggedClient}
+              onOpenWallet={() => setShowClientDashboard(true)}
             />
           )}
           

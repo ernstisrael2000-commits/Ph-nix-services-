@@ -56,10 +56,18 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
 
   const [depositAmount, setDepositAmount] = useState('');
   const [depositMethod, setDepositMethod] = useState<string>('MonCash');
+  const [depositTxId, setDepositTxId] = useState('');
 
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawMethod, setWithdrawMethod] = useState<string>('MonCash');
   const [withdrawAccount, setWithdrawAccount] = useState('');
+
+  const exchangeRate = settings?.exchangeRate || 146;
+  const methodInfo = {
+    MonCash: { number: settings?.moncashNumber, qr: settings?.moncashQR },
+    NatCash: { number: settings?.natcashNumber, qr: settings?.natcashQR },
+    Admi:    { number: settings?.admiNumber,    qr: settings?.admiQR    },
+  } as Record<string, { number?: string; qr?: string }>;
 
   const copyWalletId = () => {
     if (client?.walletId) {
@@ -82,13 +90,14 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     setActionLoading(true);
     try {
       await submitClientDeposit(client!, amount, depositMethod);
-      const methodNumber = depositMethod === 'MonCash' ? settings?.moncashNumber : 
-                           depositMethod === 'NatCash' ? settings?.natcashNumber : settings?.admiNumber;
-      const msg = `Bonjour Neopay,\n\nJe souhaite effectuer un *DÉPÔT*:\n👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n💰 Montant: *${amount} HTG*\n💳 Via: *${depositMethod}*${methodNumber ? `\n📞 Votre numéro: *${methodNumber}*` : ''}\n\nMerci de valider mon dépôt.`;
+      const info = methodInfo[depositMethod];
+      const usdEquiv = (amount / exchangeRate).toFixed(2);
+      const msg = `Bonjour Neopay,\n\nJe souhaite effectuer un *DÉPÔT*:\n👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n💰 Montant: *${amount.toLocaleString()} HTG*\n≈ *$${usdEquiv} USD*\n💳 Via: *${depositMethod}*${info?.number ? `\n📞 Numéro: *${info.number}*` : ''}${depositTxId ? `\n🔖 ID Transaction: *${depositTxId}*` : ''}\n\nMerci de valider mon dépôt.`;
       openWhatsApp(msg);
       toast.success("Demande de dépôt envoyée ! En attente de validation admin.");
       setIsDepositOpen(false);
       setDepositAmount('');
+      setDepositTxId('');
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -153,6 +162,10 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               <div className="bg-white/15 rounded-2xl p-4 border border-white/20">
                 <p className="text-white/60 text-xs font-bold uppercase tracking-widest mb-1">Solde disponible</p>
                 <p className="text-4xl font-black">{(client.balance || 0).toLocaleString()} <span className="text-xl font-bold opacity-70">HTG</span></p>
+                <p className="text-primary text-sm font-bold mt-1">
+                  ≈ ${((client.balance || 0) / (settings?.exchangeRate || 146)).toFixed(2)} <span className="text-white/40 text-xs font-normal">USD</span>
+                  <span className="text-white/30 text-xs font-normal ml-2">· taux {settings?.exchangeRate || 146} HTG/$</span>
+                </p>
                 <button onClick={copyWalletId} className="flex items-center gap-2 mt-3 text-white/60 hover:text-white text-xs transition-colors group">
                   <span className="font-mono bg-white/10 px-2 py-1 rounded-lg">ID: {client.walletId}</span>
                   {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5 group-hover:scale-110 transition-transform" />}
@@ -293,42 +306,77 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
       </motion.div>
 
       {/* Deposit Modal */}
-      <Dialog open={isDepositOpen} onOpenChange={setIsDepositOpen}>
-        <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl">
-          <DialogHeader>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="h-10 w-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-                <ArrowDownToLine className="h-5 w-5 text-emerald-600" />
+      <Dialog open={isDepositOpen} onOpenChange={(v) => { setIsDepositOpen(v); if (!v) { setDepositAmount(''); setDepositTxId(''); } }}>
+        <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl p-0 overflow-hidden">
+          <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 p-5 text-white">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                <ArrowDownToLine className="h-5 w-5 text-white" />
               </div>
               <div>
-                <DialogTitle className="text-lg font-black text-dark">Faire un dépôt</DialogTitle>
-                <DialogDescription className="text-xs text-subtext">Rechargez votre wallet Neopay</DialogDescription>
+                <DialogTitle className="text-lg font-black text-white">Faire un dépôt</DialogTitle>
+                <DialogDescription className="text-emerald-100/70 text-xs">Rechargez votre wallet Neopay</DialogDescription>
               </div>
             </div>
-          </DialogHeader>
-          <form onSubmit={handleDeposit} className="space-y-4">
+          </div>
+          <form onSubmit={handleDeposit} className="p-5 space-y-4 bg-white">
+            {/* Method picker */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Montant (HTG)</Label>
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Méthode de paiement</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'MonCash', icon: '💰', active: 'border-rose-300 bg-rose-50 text-rose-700 ring-2 ring-rose-400' },
+                  { id: 'NatCash', icon: '💳', active: 'border-amber-300 bg-amber-50 text-amber-700 ring-2 ring-amber-400' },
+                  { id: 'Admi',    icon: '🏦', active: 'border-indigo-300 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-400' },
+                ].map(m => (
+                  <button key={m.id} type="button" onClick={() => setDepositMethod(m.id)}
+                    className={`flex flex-col items-center gap-1 p-3 rounded-2xl border-2 transition-all text-center ${depositMethod === m.id ? m.active : 'border-gray-100 bg-white text-gray-500 hover:border-gray-200'}`}>
+                    <span className="text-xl">{m.icon}</span>
+                    <span className="text-[10px] font-black">{m.id}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Method info: number + QR */}
+            {methodInfo[depositMethod]?.number && (
+              <div className="flex items-start gap-3 p-3 rounded-2xl bg-gray-50 border border-gray-100">
+                <Smartphone className="h-4 w-4 text-subtext shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-[10px] font-black text-subtext uppercase tracking-wider">Envoyez au numéro</p>
+                  <p className="font-black text-dark text-base font-mono">{methodInfo[depositMethod].number}</p>
+                </div>
+                {methodInfo[depositMethod]?.qr && (
+                  <img src={methodInfo[depositMethod].qr} alt="QR Code" className="h-14 w-14 rounded-xl object-cover border border-gray-200" onError={e => (e.currentTarget.style.display = 'none')} />
+                )}
+              </div>
+            )}
+
+            {/* Amount */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Montant (HTG)</Label>
               <Input type="number" value={depositAmount} onChange={e => setDepositAmount(e.target.value)}
-                placeholder="Ex: 500" className="h-12 rounded-xl text-lg font-bold" min="1" required />
+                placeholder="Ex: 1 500" className="h-12 rounded-xl text-lg font-black" min="1" required />
+              {depositAmount && !isNaN(parseFloat(depositAmount)) && (
+                <p className="text-[11px] text-primary font-bold">≈ ${(parseFloat(depositAmount) / exchangeRate).toFixed(2)} USD</p>
+              )}
             </div>
+
+            {/* Transaction ID */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Moyen de paiement</Label>
-              <Select value={depositMethod} onValueChange={setDepositMethod}>
-                <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="MonCash">💰 MonCash{settings?.moncashNumber ? ` — ${settings.moncashNumber}` : ''}</SelectItem>
-                  <SelectItem value="NatCash">💳 NatCash{settings?.natcashNumber ? ` — ${settings.natcashNumber}` : ''}</SelectItem>
-                  <SelectItem value="Admi">🏦 Admi{settings?.admiNumber ? ` — ${settings.admiNumber}` : ''}</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">ID / Référence de transaction</Label>
+              <Input value={depositTxId} onChange={e => setDepositTxId(e.target.value)}
+                placeholder="Ex: TX-1234567890" className="h-11 rounded-xl font-mono" />
+              <p className="text-[10px] text-gray-400">Copiez l'ID de confirmation reçu lors du paiement.</p>
             </div>
-            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-700">
-              <strong>Important:</strong> Après la soumission, vous serez redirigé vers WhatsApp pour envoyer votre preuve de paiement.
+
+            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-700 leading-relaxed">
+              <strong>Étape suivante :</strong> Après soumission, vous serez redirigé sur WhatsApp pour envoyer votre preuve de paiement à l'équipe Neopay.
             </div>
+
             <Button type="submit" disabled={actionLoading}
               className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black">
-              {actionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Confirmer et envoyer preuve'}
+              {actionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Confirmer et envoyer preuve →'}
             </Button>
           </form>
         </DialogContent>
