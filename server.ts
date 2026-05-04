@@ -70,6 +70,12 @@ async function startServer() {
   // ── Health check ────────────────────────────────────────────────────────────
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
+  // ── Request logger (API only) ─────────────────────────────────────────────
+  app.use('/api', (req, _res, next) => {
+    console.log(`[API] ${req.method} ${req.path}`);
+    next();
+  });
+
   // ── reCAPTCHA verification helper ───────────────────────────────────────────
   async function verifyRecaptcha(token: string): Promise<boolean> {
     const secret = process.env.RECAPTCHA_SECRET_KEY;
@@ -736,6 +742,17 @@ async function startServer() {
     }
     return out;
   }
+
+  // ── GET /api/admin/formations — list all ──────────────────────────────────
+  app.get('/api/admin/formations', async (_req, res) => {
+    try {
+      const snap = await adminDb.collection('formations').orderBy('createdAt', 'desc').get();
+      res.json({ formations: snap.docs.map(serializeDoc) });
+    } catch (e: any) {
+      console.error('[formations GET]', e);
+      res.status(500).json({ error: e.message || 'Erreur.' });
+    }
+  });
 
   // ── POST /api/admin/formations — create ────────────────────────────────────
   app.post('/api/admin/formations', async (req, res) => {
