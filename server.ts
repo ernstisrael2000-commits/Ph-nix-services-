@@ -1,4 +1,5 @@
 import express from "express";
+import { createServer as createHttpServer } from "http";
 import { createServer as createViteServer } from "vite";
 import nodemailer from "nodemailer";
 import path from "path";
@@ -502,6 +503,8 @@ async function startServer() {
     }
   });
 
+  const httpServer = createHttpServer(app);
+
   // ── Vite / Static ────────────────────────────────────────────────────────────
   if (process.env.NODE_ENV !== "production") {
     const hmrConfig = process.env.REPLIT_DEV_DOMAIN
@@ -509,8 +512,9 @@ async function startServer() {
           clientPort: 443,
           protocol: "wss" as const,
           host: process.env.REPLIT_DEV_DOMAIN,
+          server: httpServer,
         }
-      : true;
+      : { server: httpServer };
 
     const vite = await createViteServer({
       server: {
@@ -524,12 +528,12 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
