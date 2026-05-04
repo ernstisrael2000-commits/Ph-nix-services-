@@ -26,7 +26,7 @@ export default function FormationDetail({ formation, userId, userEmail, userName
   const purchased = purchases.some(p => p.formationId === formation.id && p.status === 'active');
   const pendingRequest = purchases.some(p => p.formationId === formation.id && p.status === 'pending');
 
-  const { progress } = useFormationProgress(userId, formation.id || null);
+  const { progress, refresh: refreshProgress } = useFormationProgress(userId, formation.id || null);
   const [activeModuleIdx, setActiveModuleIdx] = useState(0);
   const [completingModule, setCompletingModule] = useState<string | null>(null);
   const [showBuyModal, setShowBuyModal] = useState(false);
@@ -42,7 +42,8 @@ export default function FormationDetail({ formation, userId, userEmail, userName
     if (!userId || !activeModule) return;
     setCompletingModule(activeModule.id);
     try {
-      await markModuleCompleted(userId, userEmail, formation.id!, activeModule.id, sortedModules.length, progress?.id);
+      await markModuleCompleted(userId, userEmail, formation.id!, activeModule.id, sortedModules.length);
+      refreshProgress();
       toast.success('✅ Leçon marquée comme terminée !');
       if (activeModuleIdx < sortedModules.length - 1) {
         setTimeout(() => setActiveModuleIdx(i => i + 1), 600);

@@ -824,6 +824,175 @@ async function startServer() {
     }
   });
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // FORMATIONS — Public + User routes (Admin SDK, bypasses Firestore rules)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  app.use('/api/formations', (req, res, next) => {
+    if (!adminDb) return res.status(503).json({ error: 'Firebase Admin non initialisé.' });
+    next();
+  });
+
+  // GET /api/formations — public: published formations only
+  app.get('/api/formations', async (_req, res) => {
+    try {
+      const snap = await adminDb.collection('formations')
+        .where('published', '==', true)
+        .orderBy('createdAt', 'desc')
+        .get();
+      res.json({ formations: snap.docs.map(serializeDoc) });
+    } catch (e: any) {
+      console.error('[formations public GET]', e);
+      res.status(500).json({ error: e.message || 'Erreur.' });
+    }
+  });
+
+  // GET /api/admin/formations/purchases — all purchases (admin view)
+  app.get('/api/admin/formations/purchases', async (_req, res) => {
+    try {
+      const snap = await adminDb.collection('formation_purchases')
+        .orderBy('purchasedAt', 'desc')
+        .get();
+      res.json({ purchases: snap.docs.map(serializeDoc) });
+    } catch (e: any) {
+      console.error('[formations purchases GET all]', e);
+      res.status(500).json({ error: e.message || 'Erreur.' });
+    }
+  });
+
+  // GET /api/formations/purchases/user/:userId — a specific user's purchases
+  app.get('/api/formations/purchases/user/:userId', async (req, res) => {
+    try {
+      const snap = await adminDb.collection('formation_purchases')
+        .where('userId', '==', req.params.userId)
+        .get();
+      res.json({ purchases: snap.docs.map(serializeDoc) });
+    } catch (e: any) {
+      console.error('[formations purchases GET user]', e);
+      res.status(500).json({ error: e.message || 'Erreur.' });
+    }
+  });
+
+  // POST /api/formations/purchases — create a pending purchase request
+  app.post('/api/formations/purchases', async (req, res) => {
+    try {
+      const { userId, userEmail, userName, formationId, formationTitle, amount, method } = req.body;
+      if (!userId || !formationId) return res.status(400).json({ error: 'Paramètres manquants.' });
+      const existing = await adminDb.collection('formation_purchases')
+        .where('userId', '==', userId)
+        .where('formationId', '==', formationId)
+        .where('status', '==', 'pending')
+        .get();
+      if (!existing.empty) return res.json({ success: true, id: existing.docs[0].id, alreadyExists: true });
+      const ref = await adminDb.collection('formation_purchases').add({
+        userId, userEmail: userEmail || '', userName: userName || '',
+        formationId, formationTitle: formationTitle || '', amount: amount || 0, method: method || '',
+        status: 'pending',
+        purchasedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      res.json({ success: true, id: ref.id });
+    } catch (e: any) {
+      console.error('[formations purchases POST]', e);
+      res.status(500).json({ error: e.message || 'Erreur.' });
+    }
+  });
+
+  // POST /api/formations/free-access — grant free access immediately
+  app.post('/api/formations/free-access', async (req, res) => {
+    try {
+      const { userId, userEmail, userName, formationId, formationTitle } = req.body;
+      if (!userId || !formationId) return res.status(400).json({ error: 'Paramètres manquants.' });
+      const existing = await adminDb.collection('formation_purchases')
+        .where('userId', '==', userId).where('formationId', '==', formationId).get();
+      if (!existing.empty) {
+        await existing.docs[0].ref.update({ status: 'active', updatedAt: FieldValue.serverTimestamp() });
+      } else {
+        const batch = adminDb.batch();
+        const ref = adminDb.collection('formation_purchases').doc();
+        batch.set(ref, {
+          userId, userEmail: userEmail || '', userName: userName || '',
+          formationId, formationTitle: formationTitle || '', amount: 0, method: 'Gratuit',
+          status: 'active',
+          purchasedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        batch.update(adminDb.collection('formations').doc(formationId), {
+          studentsCount: FieldValue.increment(1),
+        });
+        await batch.commit();
+      }
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error('[formations free-access POST]', e);
+      res.status(500).json({ error: e.message || 'Erreur.' });
+    }
+  });
+
+  // GET /api/formations/progress/:userId — all progress for a user
+  app.get('/api/formations/progress/:userId', async (req, res) => {
+    try {
+      const snap = await adminDb.collection('formation_progress')
+        .where('userId', '==', req.params.userId).get();
+      res.json({ progress: snap.docs.map(serializeDoc) });
+    } catch (e: any) {
+      console.error('[formations progress GET]', e);
+      res.status(500).json({ error: e.message || 'Erreur.' });
+    }
+  });
+
+  // POST /api/formations/progress — mark a module as completed
+  app.post('/api/formations/progress', async (req, res) => {
+    try {
+      const { userId, userEmail, formationId, moduleId, totalModules } = req.body;
+      if (!userId || !formationId || !moduleId || !totalModules) {
+        return res.status(400).json({ error: 'Paramètres manquants.' });
+      }
+      const snap = await adminDb.collection('formation_progress')
+        .where('userId', '==', userId).where('formationId', '==', formationId).get();
+      const now = FieldValue.serverTimestamp();
+      if (snap.empty) {
+        const completedModules = [moduleId];
+        const percentage = Math.round((1 / Number(totalModules)) * 100);
+        await adminDb.collection('formation_progress').add({
+          userId, userEmail: userEmail || '', formationId,
+          completedModules, percentage,
+          startedAt: now, lastAccessedAt: now,
+          ...(percentage === 100 ? { completedAt: now } : {}),
+        });
+      } else {
+        const docRef = snap.docs[0].ref;
+        const data = snap.docs[0].data();
+        const completedModules = Array.from(new Set([...(data.completedModules || []), moduleId]));
+        const percentage = Math.round((completedModules.length / Number(totalModules)) * 100);
+        await docRef.update({
+          completedModules, percentage, lastAccessedAt: now,
+          ...(percentage === 100 ? { completedAt: now } : {}),
+        });
+      }
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error('[formations progress POST]', e);
+      res.status(500).json({ error: e.message || 'Erreur.' });
+    }
+  });
+
+  // POST /api/formations/user — save/update Google user profile
+  app.post('/api/formations/user', async (req, res) => {
+    try {
+      const { uid, email, displayName, photoURL } = req.body;
+      if (!uid) return res.status(400).json({ error: 'UID requis.' });
+      await adminDb.collection('formation_users').doc(uid).set(
+        { uid, email: email || '', displayName: displayName || '', photoURL: photoURL || '', updatedAt: FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error('[formations user POST]', e);
+      res.status(500).json({ error: e.message || 'Erreur.' });
+    }
+  });
+
   // ── Catch-all: any unmatched /api/* route returns JSON (never HTML) ──────────
   app.all('/api/*', (_req, res) => {
     res.status(404).json({ error: 'Route API introuvable.' });

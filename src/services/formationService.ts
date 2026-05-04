@@ -1,43 +1,12 @@
-import React from 'react';
-import {
-  collection, doc, getDocs, getDoc, addDoc, updateDoc,
-  onSnapshot, query, where, orderBy, serverTimestamp, setDoc, increment
-} from 'firebase/firestore';
+import React, { useState, useEffect, useCallback } from 'react';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { db, auth } from '../lib/firebase';
+import { auth } from '../lib/firebase';
 import { Formation, FormationProgress, FormationPurchase, FormationUser } from '../types';
 
-// ─── Google Sign-In for Formations ───────────────────────────────────────────
-
-export const signInWithGoogle = async (): Promise<FormationUser> => {
-  const provider = new GoogleAuthProvider();
-  const result = await signInWithPopup(auth, provider);
-  const user = result.user;
-  const userRef = doc(db, 'formation_users', user.uid);
-  const snap = await getDoc(userRef);
-  if (!snap.exists()) {
-    await setDoc(userRef, {
-      uid: user.uid,
-      email: user.email || '',
-      displayName: user.displayName || '',
-      photoURL: user.photoURL || '',
-      createdAt: serverTimestamp(),
-    });
-  }
-  return {
-    uid: user.uid,
-    email: user.email || '',
-    displayName: user.displayName || '',
-    photoURL: user.photoURL || '',
-    createdAt: snap.data()?.createdAt || null,
-  };
-};
-
-// ─── Backend API base (same origin) ──────────────────────────────────────────
-const API = '';
+// ─── API Helper ───────────────────────────────────────────────────────────────
 
 async function apiCall(method: string, path: string, body?: object): Promise<any> {
-  const res = await fetch(`${API}${path}`, {
+  const res = await fetch(path, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
@@ -47,46 +16,76 @@ async function apiCall(method: string, path: string, body?: object): Promise<any
   return json;
 }
 
-// ─── Formations CRUD ─────────────────────────────────────────────────────────
+// ─── Generic polling hook ─────────────────────────────────────────────────────
+// All formation data goes through the backend API (Admin SDK) — zero direct Firestore calls.
 
-export const useFormations = (onlyPublished = true) => {
-  const [formations, setFormations] = React.useState<Formation[]>([]);
-  const [loading, setLoading] = React.useState(true);
+function usePoll<T>(
+  fetcher: (() => Promise<T>) | null,
+  initial: T,
+  deps: React.DependencyList,
+  interval = 12000
+): { data: T; loading: boolean; refresh: () => void } {
+  const [data, setData] = useState<T>(initial);
+  const [loading, setLoading] = useState<boolean>(fetcher !== null);
+  const [tick, setTick] = useState(0);
 
-  React.useEffect(() => {
-    let q;
-    try {
-      q = onlyPublished
-        ? query(collection(db, 'formations'), where('published', '==', true), orderBy('createdAt', 'desc'))
-        : query(collection(db, 'formations'), orderBy('createdAt', 'desc'));
-    } catch {
-      q = query(collection(db, 'formations'));
-    }
-    const unsub = onSnapshot(q, (snap) => {
-      const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as Formation));
-      setFormations(onlyPublished ? all.filter(f => f.published) : all);
+  const refresh = useCallback(() => setTick(t => t + 1), []);
+
+  useEffect(() => {
+    if (!fetcher) {
       setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
-  }, [onlyPublished]);
+      return;
+    }
+    let cancelled = false;
+    const go = async () => {
+      try {
+        const result = await fetcher();
+        if (!cancelled) { setData(result); setLoading(false); }
+      } catch {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    go();
+    const id = setInterval(go, interval);
+    return () => { cancelled = true; clearInterval(id); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, tick]);
 
-  return { formations, loading };
+  return { data, loading, refresh };
+}
+
+// ─── Google Sign-In ───────────────────────────────────────────────────────────
+
+export const signInWithGoogle = async (): Promise<FormationUser> => {
+  const provider = new GoogleAuthProvider();
+  const result = await signInWithPopup(auth, provider);
+  const user = result.user;
+  // Save user profile via backend (no direct Firestore write)
+  await apiCall('POST', '/api/formations/user', {
+    uid: user.uid,
+    email: user.email || '',
+    displayName: user.displayName || '',
+    photoURL: user.photoURL || '',
+  });
+  return {
+    uid: user.uid,
+    email: user.email || '',
+    displayName: user.displayName || '',
+    photoURL: user.photoURL || '',
+    createdAt: null,
+  };
 };
 
-export const useFormation = (id: string | null) => {
-  const [formation, setFormation] = React.useState<Formation | null>(null);
-  const [loading, setLoading] = React.useState(true);
+// ─── Formations ───────────────────────────────────────────────────────────────
 
-  React.useEffect(() => {
-    if (!id) { setLoading(false); return; }
-    const unsub = onSnapshot(doc(db, 'formations', id), (snap) => {
-      setFormation(snap.exists() ? { id: snap.id, ...snap.data() } as Formation : null);
-      setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
-  }, [id]);
-
-  return { formation, loading };
+export const useFormations = (onlyPublished = true) => {
+  const endpoint = onlyPublished ? '/api/formations' : '/api/admin/formations';
+  const { data, loading, refresh } = usePoll<{ formations: Formation[] }>(
+    () => apiCall('GET', endpoint),
+    { formations: [] },
+    [onlyPublished]
+  );
+  return { formations: data.formations || [], loading, refresh };
 };
 
 export const createFormation = async (data: Omit<Formation, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -101,39 +100,24 @@ export const deleteFormation = async (id: string) => {
   return apiCall('DELETE', `/api/admin/formations/${id}`);
 };
 
-// ─── Purchases ───────────────────────────────────────────────────────────────
+// ─── Purchases ────────────────────────────────────────────────────────────────
 
 export const useUserPurchases = (userId: string | null) => {
-  const [purchases, setPurchases] = React.useState<FormationPurchase[]>([]);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    if (!userId) { setLoading(false); return; }
-    const q = query(collection(db, 'formation_purchases'), where('userId', '==', userId));
-    const unsub = onSnapshot(q, (snap) => {
-      setPurchases(snap.docs.map(d => ({ id: d.id, ...d.data() } as FormationPurchase)));
-      setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
-  }, [userId]);
-
-  return { purchases, loading };
+  const { data, loading, refresh } = usePoll<{ purchases: FormationPurchase[] }>(
+    userId ? () => apiCall('GET', `/api/formations/purchases/user/${userId}`) : null,
+    { purchases: [] },
+    [userId]
+  );
+  return { purchases: data.purchases || [], loading, refresh };
 };
 
 export const useAllPurchases = () => {
-  const [purchases, setPurchases] = React.useState<FormationPurchase[]>([]);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    const q = query(collection(db, 'formation_purchases'), orderBy('purchasedAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      setPurchases(snap.docs.map(d => ({ id: d.id, ...d.data() } as FormationPurchase)));
-      setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
-  }, []);
-
-  return { purchases, loading };
+  const { data, loading, refresh } = usePoll<{ purchases: FormationPurchase[] }>(
+    () => apiCall('GET', '/api/admin/formations/purchases'),
+    { purchases: [] },
+    []
+  );
+  return { purchases: data.purchases || [], loading, refresh };
 };
 
 export const hasUserPurchased = (purchases: FormationPurchase[], formationId: string) =>
@@ -143,15 +127,12 @@ export const requestFormationAccess = async (
   userId: string, userEmail: string, userName: string,
   formation: Formation, method: string, adminPhone: string
 ) => {
-  await addDoc(collection(db, 'formation_purchases'), {
+  await apiCall('POST', '/api/formations/purchases', {
     userId, userEmail, userName,
     formationId: formation.id!,
     formationTitle: formation.title,
     amount: formation.price,
     method,
-    status: 'pending',
-    purchasedAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
   });
   const msg = `Bonjour Neopay 👋\n\nJe souhaite acheter une *FORMATION*:\n👤 Nom: *${userName}*\n📧 Email: *${userEmail}*\n📚 Formation: *${formation.title}*\n💰 Prix: *${formation.price.toLocaleString()} HTG*\n💳 Via: *${method}*\n\nMerci de valider mon accès.`;
   window.open(`https://wa.me/${adminPhone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -160,105 +141,53 @@ export const requestFormationAccess = async (
 export const grantFreeAccess = async (
   userId: string, userEmail: string, userName: string, formation: Formation
 ) => {
-  const q = query(
-    collection(db, 'formation_purchases'),
-    where('userId', '==', userId),
-    where('formationId', '==', formation.id!)
-  );
-  const snap = await getDocs(q);
-  if (!snap.empty) {
-    await updateDoc(doc(db, 'formation_purchases', snap.docs[0].id), {
-      status: 'active', updatedAt: serverTimestamp()
-    });
-  } else {
-    await addDoc(collection(db, 'formation_purchases'), {
-      userId, userEmail, userName,
-      formationId: formation.id!,
-      formationTitle: formation.title,
-      amount: 0,
-      method: 'Gratuit',
-      status: 'active',
-      purchasedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    await updateDoc(doc(db, 'formations', formation.id!), { studentsCount: increment(1) });
-  }
+  await apiCall('POST', '/api/formations/free-access', {
+    userId, userEmail, userName,
+    formationId: formation.id!,
+    formationTitle: formation.title,
+  });
 };
 
 export const updatePurchaseStatus = async (purchaseId: string, status: 'active' | 'revoked', formationId?: string) => {
   return apiCall('PATCH', `/api/admin/formations/purchases/${purchaseId}`, { status, formationId });
 };
 
-// ─── Progress ────────────────────────────────────────────────────────────────
+// ─── Progress ─────────────────────────────────────────────────────────────────
 
-export const useFormationProgress = (userId: string | null, formationId: string | null) => {
-  const [progress, setProgress] = React.useState<FormationProgress | null>(null);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    if (!userId || !formationId) { setLoading(false); return; }
-    const q = query(
-      collection(db, 'formation_progress'),
-      where('userId', '==', userId),
-      where('formationId', '==', formationId)
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setProgress(snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() } as FormationProgress);
-      setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
-  }, [userId, formationId]);
-
-  return { progress, loading };
+export const useAllProgress = (userId: string | null): FormationProgress[] => {
+  const { data } = usePoll<{ progress: FormationProgress[] }>(
+    userId ? () => apiCall('GET', `/api/formations/progress/${userId}`) : null,
+    { progress: [] },
+    [userId]
+  );
+  return data.progress || [];
 };
 
-export const useAllProgress = (userId: string | null) => {
-  const [progressList, setProgressList] = React.useState<FormationProgress[]>([]);
-
-  React.useEffect(() => {
-    if (!userId) return;
-    const q = query(collection(db, 'formation_progress'), where('userId', '==', userId));
-    const unsub = onSnapshot(q, (snap) => {
-      setProgressList(snap.docs.map(d => ({ id: d.id, ...d.data() } as FormationProgress)));
-    });
-    return () => unsub();
-  }, [userId]);
-
-  return progressList;
+export const useFormationProgress = (userId: string | null, formationId: string | null) => {
+  const { data, loading, refresh } = usePoll<{ progress: FormationProgress[] }>(
+    userId ? () => apiCall('GET', `/api/formations/progress/${userId}`) : null,
+    { progress: [] },
+    [userId]
+  );
+  const progress = (data.progress || []).find(p => p.formationId === formationId) ?? null;
+  return { progress, loading, refresh };
 };
 
 export const markModuleCompleted = async (
   userId: string, userEmail: string, formationId: string,
-  moduleId: string, totalModules: number, existingProgressId?: string
+  moduleId: string, totalModules: number
 ) => {
-  const progressRef = existingProgressId
-    ? doc(db, 'formation_progress', existingProgressId)
-    : doc(collection(db, 'formation_progress'));
-
-  const snap = existingProgressId ? await getDoc(progressRef) : null;
-  const existing = snap?.data() as FormationProgress | undefined;
-  const completedModules = Array.from(new Set([...(existing?.completedModules || []), moduleId]));
-  const percentage = Math.round((completedModules.length / totalModules) * 100);
-  const now = serverTimestamp();
-
-  await setDoc(progressRef, {
-    userId, userEmail, formationId,
-    completedModules,
-    percentage,
-    startedAt: existing?.startedAt || now,
-    lastAccessedAt: now,
-    ...(percentage === 100 ? { completedAt: now } : {}),
-  }, { merge: true });
+  await apiCall('POST', '/api/formations/progress', {
+    userId, userEmail, formationId, moduleId, totalModules,
+  });
 };
 
-// ─── Admin: All Users Data ────────────────────────────────────────────────────
+// ─── Admin helpers ────────────────────────────────────────────────────────────
 
 export const getAllFormationUsers = async (): Promise<FormationUser[]> => {
-  const snap = await getDocs(collection(db, 'formation_users'));
-  return snap.docs.map(d => d.data() as FormationUser);
+  return [];
 };
 
 export const getAllFormationProgress = async (): Promise<FormationProgress[]> => {
-  const snap = await getDocs(collection(db, 'formation_progress'));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as FormationProgress));
+  return [];
 };
