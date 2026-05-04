@@ -304,7 +304,10 @@ export interface AdminClientNotification {
   txId?: string;
   productName?: string;
   productPrice?: string;
+  directSponsorId?: string | null;
+  status?: 'pending' | 'approved' | 'declined';
   servicesRendus?: boolean;
   read: boolean;
   createdAt: any;
+  resolvedAt?: any;
 }

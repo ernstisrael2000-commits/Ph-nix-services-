@@ -20,7 +20,7 @@ import { Badge } from './ui/badge';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Loader as Loader2, ShieldCheck, Zap, Star, Headphones, QrCode, Wallet, Smartphone, Landmark, X, ArrowDownToLine, ArrowUpFromLine, TrendingUp, Copy, CircleCheck as CheckCircle, ChevronRight, Clock, DollarSign } from 'lucide-react';
-import { submitClientPurchase, useClientData, useClientTransactions, submitClientDeposit, submitClientWithdrawal } from '../services/clientService';
+import { submitClientPurchase, useClientData, useClientTransactions, submitClientDeposit, submitClientWithdrawal, useClientPendingPurchase } from '../services/clientService';
 import { Client } from '../types';
 import { toast } from 'sonner';
 
@@ -58,12 +58,14 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [isProductDetailOpen, setIsProductDetailOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
 
   // Live client wallet data
   const { client: liveClient } = useClientData(loggedClient?.id || null);
   const { transactions: clientTx } = useClientTransactions(loggedClient?.id || null);
   const recentTx = clientTx.slice(0, 3);
   const effectiveClient = liveClient || loggedClient;
+  const hasPendingPurchase = useClientPendingPurchase(loggedClient?.id || null);
   const exchangeRate = settings?.exchangeRate || 146;
   const balanceHTG = effectiveClient?.balance ?? 0;
   const balanceUSD = (balanceHTG / exchangeRate).toFixed(2);
@@ -894,29 +896,49 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                 {loggedClient && (() => {
                   const price = selectedPlan ? selectedPlan.price : selectedProduct.price;
                   const numericPrice = parseFloat(String(price).replace(/[^\d.]/g, ''));
-                  const hasBalance = !isNaN(numericPrice) && (loggedClient.balance || 0) >= numericPrice;
+                  const currentBalance = effectiveClient?.balance ?? loggedClient.balance ?? 0;
+                  const hasBalance = !isNaN(numericPrice) && currentBalance >= numericPrice;
+
+                  if (hasPendingPurchase) {
+                    return (
+                      <div className="w-full h-14 rounded-2xl border-2 border-amber-200 bg-amber-50 flex items-center justify-center gap-3 px-4">
+                        <Clock className="h-5 w-5 text-amber-500 shrink-0" />
+                        <span className="font-black text-amber-700 text-sm text-center leading-tight">
+                          Demande en cours — en attente de l'approbation admin
+                        </span>
+                      </div>
+                    );
+                  }
+
                   return (
                     <Button
                       variant="outline"
+                      disabled={purchaseLoading || !hasBalance}
                       onClick={async () => {
                         const productName = selectedPlan ? `${selectedProduct.name} (${selectedPlan.name})` : selectedProduct.name;
                         const productPrice = selectedPlan ? selectedPlan.price : selectedProduct.price;
                         const amount = parseFloat(String(productPrice).replace(/[^\d.]/g, ''));
-                        if (!hasBalance) { toast.error(`Solde insuffisant. Vous avez ${(loggedClient.balance || 0).toLocaleString()} HTG`); return; }
+                        if (!hasBalance) { toast.error(`Solde insuffisant. Vous avez ${currentBalance.toLocaleString()} HTG`); return; }
+                        setPurchaseLoading(true);
                         try {
-                          await submitClientPurchase(loggedClient, productName, String(productPrice), amount);
-                          toast.success(`Achat confirme ! ${amount.toLocaleString()} HTG debite de votre solde.`);
+                          await submitClientPurchase(effectiveClient || loggedClient, productName, String(productPrice), amount);
+                          toast.success(`Demande envoyée ! L'admin validera votre achat sous peu.`);
                           setIsProductDetailOpen(false);
                         } catch (err: any) {
                           toast.error(err.message || "Erreur lors de la soumission.");
+                        } finally {
+                          setPurchaseLoading(false);
                         }
                       }}
                       className={`w-full h-14 rounded-2xl font-black text-base flex items-center justify-center gap-3 active:scale-95 transition-all ${hasBalance ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-400' : 'border-red-200 text-red-400 cursor-not-allowed opacity-60'}`}
                     >
-                      <Wallet className="h-5 w-5" />
+                      {purchaseLoading
+                        ? <Loader2 className="h-5 w-5 animate-spin" />
+                        : <Wallet className="h-5 w-5" />
+                      }
                       {hasBalance
-                        ? `Payer avec mon solde (${(loggedClient.balance || 0).toLocaleString()} HTG)`
-                        : `Solde insuffisant (${(loggedClient.balance || 0).toLocaleString()} HTG)`
+                        ? `Payer avec mon solde (${currentBalance.toLocaleString()} HTG)`
+                        : `Solde insuffisant (${currentBalance.toLocaleString()} HTG)`
                       }
                     </Button>
                   );

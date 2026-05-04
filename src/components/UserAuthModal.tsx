@@ -108,36 +108,40 @@ export default function UserAuthModal({ open, onOpenChange, onClientLogin, onAdm
     }
   };
 
-  const handleGoogleClientLogin = async () => {
+  const handleGoogleClientLogin = () => {
     setGoogleError(null);
     setLoading(true);
-    try {
-      const result = await loginClientWithGoogle();
-      if (result.error) {
-        if (result.error) toast.error(result.error);
-        return;
+    // Use setTimeout to break out of the current React/Framer Motion render cycle.
+    // This prevents the "removeChild" DOM conflict caused by Firebase Auth popup
+    // interacting with Radix Dialog portals while animations are in flight.
+    setTimeout(async () => {
+      try {
+        const result = await loginClientWithGoogle();
+        if (result.error) {
+          if (result.error) toast.error(result.error);
+          return;
+        }
+        if (result.noAccount) {
+          setGoogleUser({
+            uid: result.googleUid!,
+            email: result.googleEmail!,
+            name: result.googleName!,
+            photoUrl: result.googlePhotoUrl
+          });
+          setView('google-register');
+          return;
+        }
+        if (result.client) {
+          toast.success(`Bienvenue, ${result.client.name} !`);
+          onClientLogin(result.client);
+          handleClose(false);
+        }
+      } catch (err: any) {
+        toast.error(err.message || "Erreur de connexion Google.");
+      } finally {
+        setLoading(false);
       }
-      if (result.noAccount) {
-        // No account found — redirect to Google registration
-        setGoogleUser({
-          uid: result.googleUid!,
-          email: result.googleEmail!,
-          name: result.googleName!,
-          photoUrl: result.googlePhotoUrl
-        });
-        setView('google-register');
-        return;
-      }
-      if (result.client) {
-        toast.success(`Bienvenue, ${result.client.name} !`);
-        onClientLogin(result.client);
-        handleClose(false);
-      }
-    } catch (err: any) {
-      toast.error(err.message || "Erreur de connexion Google.");
-    } finally {
-      setLoading(false);
-    }
+    }, 50);
   };
 
   const handleGoogleRegister = async (e: React.FormEvent) => {

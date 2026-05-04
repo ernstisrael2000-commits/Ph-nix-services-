@@ -12,12 +12,13 @@ import {
   orderBy,
   onSnapshot,
   writeBatch,
-  setDoc
+  deleteDoc
 } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
-import { handleFirestoreError } from '../lib/firebase-errors';
 import { Client, ClientTransaction, AdminClientNotification } from '../types';
+
+// ─── Register / Login ───────────────────────────────────────────────────────
 
 export const registerClient = async (data: {
   name: string;
@@ -30,30 +31,8 @@ export const registerClient = async (data: {
   const snap = await getDocs(emailQ);
   if (!snap.empty) throw new Error("Un compte avec cet email existe déjà.");
 
-  let walletId = '';
-  let isUnique = false;
-  while (!isUnique) {
-    walletId = Math.floor(10000000 + Math.random() * 90000000).toString();
-    const wQ = query(collection(db, 'clients'), where('walletId', '==', walletId));
-    const wSnap = await getDocs(wQ);
-    if (wSnap.empty) isUnique = true;
-  }
-
-  let directSponsorId: string | undefined;
-  let indirectSponsorId: string | undefined;
-
-  if (data.sponsorCode) {
-    const affQ = query(collection(db, 'affiliates'), where('code', '==', data.sponsorCode));
-    const affSnap = await getDocs(affQ);
-    if (!affSnap.empty) {
-      const aff = affSnap.docs[0];
-      directSponsorId = aff.id;
-      const affData = aff.data();
-      if (affData.parentAffiliateId) {
-        indirectSponsorId = affData.parentAffiliateId;
-      }
-    }
-  }
+  const walletId = await generateUniqueWalletId();
+  const { directSponsorId, indirectSponsorId } = await resolveSponsor(data.sponsorCode);
 
   const clientData: any = {
     name: data.name,
@@ -82,30 +61,8 @@ export const registerClientWithGoogle = async (data: {
   const snap = await getDocs(emailQ);
   if (!snap.empty) throw new Error("Un compte avec cet email existe déjà.");
 
-  let walletId = '';
-  let isUnique = false;
-  while (!isUnique) {
-    walletId = Math.floor(10000000 + Math.random() * 90000000).toString();
-    const wQ = query(collection(db, 'clients'), where('walletId', '==', walletId));
-    const wSnap = await getDocs(wQ);
-    if (wSnap.empty) isUnique = true;
-  }
-
-  let directSponsorId: string | undefined;
-  let indirectSponsorId: string | undefined;
-
-  if (data.sponsorCode) {
-    const affQ = query(collection(db, 'affiliates'), where('code', '==', data.sponsorCode));
-    const affSnap = await getDocs(affQ);
-    if (!affSnap.empty) {
-      const aff = affSnap.docs[0];
-      directSponsorId = aff.id;
-      const affData = aff.data();
-      if (affData.parentAffiliateId) {
-        indirectSponsorId = affData.parentAffiliateId;
-      }
-    }
-  }
+  const walletId = await generateUniqueWalletId();
+  const { directSponsorId, indirectSponsorId } = await resolveSponsor(data.sponsorCode);
 
   const clientData: any = {
     name: data.googleUser.name,
@@ -154,9 +111,7 @@ export const loginClientWithGoogle = async (): Promise<GoogleClientLoginResult> 
     const user = result.user;
     const email = user.email;
 
-    if (!email) {
-      return { client: null, error: "L'email Google est requis." };
-    }
+    if (!email) return { client: null, error: "L'email Google est requis." };
 
     const q = query(collection(db, 'clients'), where('email', '==', email));
     const snap = await getDocs(q);
@@ -187,13 +142,43 @@ export const loginClientWithGoogle = async (): Promise<GoogleClientLoginResult> 
 
     return { client: { id: clientDoc.id, ...clientData, uid: user.uid } };
   } catch (error: any) {
-    if (error.code === 'auth/popup-closed-by-user') {
-      return { client: null, error: '' };
-    }
+    if (error.code === 'auth/popup-closed-by-user') return { client: null, error: '' };
     console.error("Google client login error:", error);
     return { client: null, error: error.message || "Erreur de connexion Google." };
   }
 };
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+async function generateUniqueWalletId(): Promise<string> {
+  let walletId = '';
+  let isUnique = false;
+  while (!isUnique) {
+    walletId = Math.floor(10000000 + Math.random() * 90000000).toString();
+    const wQ = query(collection(db, 'clients'), where('walletId', '==', walletId));
+    const wSnap = await getDocs(wQ);
+    if (wSnap.empty) isUnique = true;
+  }
+  return walletId;
+}
+
+async function resolveSponsor(sponsorCode?: string) {
+  let directSponsorId: string | undefined;
+  let indirectSponsorId: string | undefined;
+  if (sponsorCode) {
+    const affQ = query(collection(db, 'affiliates'), where('code', '==', sponsorCode));
+    const affSnap = await getDocs(affQ);
+    if (!affSnap.empty) {
+      const aff = affSnap.docs[0];
+      directSponsorId = aff.id;
+      const affData = aff.data();
+      if (affData.parentAffiliateId) indirectSponsorId = affData.parentAffiliateId;
+    }
+  }
+  return { directSponsorId, indirectSponsorId };
+}
+
+// ─── Client Data Hook ────────────────────────────────────────────────────────
 
 export const useClientData = (clientId: string | null) => {
   const [client, setClient] = useState<Client | null>(null);
@@ -211,6 +196,8 @@ export const useClientData = (clientId: string | null) => {
   return { client, loading };
 };
 
+// ─── Deposit ─────────────────────────────────────────────────────────────────
+
 export const submitClientDeposit = async (
   client: Client,
   amount: number,
@@ -218,6 +205,7 @@ export const submitClientDeposit = async (
   txId?: string
 ) => {
   if (amount <= 0) throw new Error("Montant invalide.");
+
   const txRef = await addDoc(collection(db, 'client_transactions'), {
     clientId: client.id,
     clientName: client.name,
@@ -235,7 +223,7 @@ export const submitClientDeposit = async (
     type: 'client_deposit',
     clientId: client.id,
     clientName: client.name,
-    clientWalletId: client.walletId,
+    clientWalletId: client.walletId || '',
     transactionId: txRef.id,
     amount,
     method,
@@ -244,6 +232,8 @@ export const submitClientDeposit = async (
     createdAt: serverTimestamp()
   });
 };
+
+// ─── Withdrawal ──────────────────────────────────────────────────────────────
 
 export const submitClientWithdrawal = async (
   client: Client,
@@ -272,7 +262,7 @@ export const submitClientWithdrawal = async (
     type: 'client_withdrawal',
     clientId: client.id,
     clientName: client.name,
-    clientWalletId: client.walletId,
+    clientWalletId: client.walletId || '',
     transactionId: txRef.id,
     amount,
     method,
@@ -281,6 +271,8 @@ export const submitClientWithdrawal = async (
     createdAt: serverTimestamp()
   });
 };
+
+// ─── Purchase (pending — requires admin approval) ─────────────────────────────
 
 export const submitClientPurchase = async (
   client: Client,
@@ -291,18 +283,82 @@ export const submitClientPurchase = async (
   if (amount <= 0) throw new Error("Montant invalide.");
   if (amount > client.balance) throw new Error("Solde insuffisant pour cet achat.");
 
+  // Check if client already has a pending purchase
+  const existingQ = query(
+    collection(db, 'client_transactions'),
+    where('clientId', '==', client.id),
+    where('type', '==', 'purchase'),
+    where('status', '==', 'pending')
+  );
+  const existingSnap = await getDocs(existingQ);
+  if (!existingSnap.empty) {
+    throw new Error("Vous avez déjà une demande d'achat en cours. Veuillez attendre la décision de l'administrateur.");
+  }
+
   const batch = writeBatch(db);
 
-  // Deduct balance immediately from client
-  const clientRef = doc(db, 'clients', client.id!);
-  batch.update(clientRef, {
-    balance: Math.max(0, (client.balance || 0) - amount),
+  // Create transaction in PENDING state — balance NOT yet deducted
+  const txRef = doc(collection(db, 'client_transactions'));
+  batch.set(txRef, {
+    clientId: client.id,
+    clientName: client.name,
+    type: 'purchase',
+    amount,
+    status: 'pending',
+    productName,
+    productPrice,
+    directSponsorId: client.directSponsorId || null,
+    description: `Demande d'achat: ${productName} - ${productPrice}`,
+    createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   });
 
-  // Auto-credit the affiliate sponsor's balance if client has one
-  if (client.directSponsorId) {
-    const affiliateRef = doc(db, 'affiliates', client.directSponsorId);
+  // Notify admin — shown in "Alertes Système" with Approve / Decline buttons
+  const notifRef = doc(collection(db, 'admin_notifications'));
+  batch.set(notifRef, {
+    type: 'client_purchase',
+    clientId: client.id,
+    clientName: client.name,
+    clientWalletId: client.walletId || '',
+    transactionId: txRef.id,
+    amount,
+    productName,
+    productPrice,
+    directSponsorId: client.directSponsorId || null,
+    status: 'pending',
+    read: false,
+    createdAt: serverTimestamp()
+  });
+
+  await batch.commit();
+};
+
+// ─── Admin: approve a pending purchase ───────────────────────────────────────
+
+export const approvePurchaseRequest = async (
+  notifId: string,
+  transactionId: string,
+  clientId: string,
+  amount: number,
+  directSponsorId?: string | null
+) => {
+  const batch = writeBatch(db);
+
+  // Deduct client balance
+  const clientRef = doc(db, 'clients', clientId);
+  const clientSnap = await getDoc(clientRef);
+  if (!clientSnap.exists()) throw new Error("Client introuvable.");
+  const clientData = clientSnap.data() as Client;
+  if ((clientData.balance || 0) < amount) throw new Error("Solde client insuffisant.");
+
+  batch.update(clientRef, {
+    balance: Math.max(0, (clientData.balance || 0) - amount),
+    updatedAt: serverTimestamp()
+  });
+
+  // Credit affiliate sponsor if applicable
+  if (directSponsorId) {
+    const affiliateRef = doc(db, 'affiliates', directSponsorId);
     const affiliateSnap = await getDoc(affiliateRef);
     if (affiliateSnap.exists()) {
       const aff = affiliateSnap.data();
@@ -315,40 +371,72 @@ export const submitClientPurchase = async (
     }
   }
 
-  // Record transaction as completed
-  const txRef = doc(collection(db, 'client_transactions'));
-  batch.set(txRef, {
-    clientId: client.id,
-    clientName: client.name,
-    type: 'purchase',
-    amount,
+  // Mark transaction as completed
+  const txRef = doc(db, 'client_transactions', transactionId);
+  batch.update(txRef, {
     status: 'completed',
-    productName,
-    productPrice,
-    description: `Achat: ${productName} - ${productPrice}`,
-    createdAt: serverTimestamp(),
+    affiliateCredited: !!directSponsorId,
     updatedAt: serverTimestamp()
   });
 
-  // Notify admin — shown in "Alertes Système" with single "Services Rendus" button
-  const notifRef = doc(collection(db, 'admin_notifications'));
-  batch.set(notifRef, {
-    type: 'client_purchase',
-    clientId: client.id,
-    clientName: client.name,
-    clientWalletId: client.walletId,
-    transactionId: txRef.id,
-    amount,
-    productName,
-    productPrice,
-    affiliateCredited: !!client.directSponsorId,
-    read: false,
-    servicesRendus: false,
-    createdAt: serverTimestamp()
+  // Mark notification as handled (approved)
+  const notifRef = doc(db, 'admin_notifications', notifId);
+  batch.update(notifRef, {
+    status: 'approved',
+    read: true,
+    resolvedAt: serverTimestamp()
   });
 
   await batch.commit();
 };
+
+// ─── Admin: decline a pending purchase ───────────────────────────────────────
+
+export const declinePurchaseRequest = async (
+  notifId: string,
+  transactionId: string
+) => {
+  const batch = writeBatch(db);
+
+  // Mark transaction as rejected (balance was never touched)
+  const txRef = doc(db, 'client_transactions', transactionId);
+  batch.update(txRef, {
+    status: 'rejected',
+    updatedAt: serverTimestamp()
+  });
+
+  // Mark notification as handled (declined)
+  const notifRef = doc(db, 'admin_notifications', notifId);
+  batch.update(notifRef, {
+    status: 'declined',
+    read: true,
+    resolvedAt: serverTimestamp()
+  });
+
+  await batch.commit();
+};
+
+// ─── Hook: does this client have a pending purchase? ────────────────────────
+
+export const useClientPendingPurchase = (clientId: string | null) => {
+  const [hasPending, setHasPending] = useState(false);
+
+  useEffect(() => {
+    if (!clientId) { setHasPending(false); return; }
+    const q = query(
+      collection(db, 'client_transactions'),
+      where('clientId', '==', clientId),
+      where('type', '==', 'purchase'),
+      where('status', '==', 'pending')
+    );
+    const unsub = onSnapshot(q, (snap) => setHasPending(!snap.empty), () => {});
+    return () => unsub();
+  }, [clientId]);
+
+  return hasPending;
+};
+
+// ─── Transaction Hooks ───────────────────────────────────────────────────────
 
 export const useClientTransactions = (clientId: string | null) => {
   const [transactions, setTransactions] = useState<ClientTransaction[]>([]);
@@ -403,6 +491,8 @@ export const useAllClients = () => {
   return { clients, loading };
 };
 
+// ─── Update transaction status (deposits & withdrawals) ──────────────────────
+
 export const updateClientTransactionStatus = async (
   txId: string,
   status: 'approved' | 'rejected',
@@ -431,7 +521,7 @@ export const updateClientTransactionStatus = async (
           balance: (clientData.balance || 0) + txData.amount,
           updatedAt: serverTimestamp()
         });
-      } else if (txData.type === 'withdrawal' || txData.type === 'purchase') {
+      } else if (txData.type === 'withdrawal') {
         batch.update(clientRef, {
           balance: Math.max(0, (clientData.balance || 0) - txData.amount),
           updatedAt: serverTimestamp()
@@ -442,6 +532,8 @@ export const updateClientTransactionStatus = async (
 
   await batch.commit();
 };
+
+// ─── Misc Hooks & Utils ──────────────────────────────────────────────────────
 
 export const usePendingClientCount = () => {
   const [count, setCount] = useState(0);
@@ -458,10 +550,7 @@ export const useAdminClientNotifications = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'admin_notifications'),
-      orderBy('createdAt', 'desc')
-    );
+    const q = query(collection(db, 'admin_notifications'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snap) => {
       setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() } as AdminClientNotification)));
       setLoading(false);
@@ -482,11 +571,4 @@ export const markAllAdminNotificationsRead = async () => {
   const batch = writeBatch(db);
   snap.docs.forEach(d => batch.update(d.ref, { read: true }));
   await batch.commit();
-};
-
-export const markPurchaseServicesRendus = async (notifId: string) => {
-  await updateDoc(doc(db, 'admin_notifications', notifId), {
-    servicesRendus: true,
-    read: true
-  });
 };
