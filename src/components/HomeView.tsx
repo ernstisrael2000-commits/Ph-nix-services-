@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Package, CreditCard, Gamepad2, Truck, MessageCircle, ArrowRight, CircleCheck as CheckCircle2, Info, ArrowUp, Circle as HelpCircle } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import ReCAPTCHA from 'react-google-recaptcha';
+import { CaptchaWidget } from './CaptchaWidget';
 import { Button } from './ui/button';
 import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
@@ -1121,9 +1122,12 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
 
             {RECAPTCHA_SITE_KEY && (
               <div className="flex flex-col items-center gap-1">
-                <ReCAPTCHA ref={walletDepositCaptchaRef} sitekey={RECAPTCHA_SITE_KEY}
+                <CaptchaWidget
+                  sitekey={RECAPTCHA_SITE_KEY}
+                  captchaRef={walletDepositCaptchaRef}
                   onChange={(token) => setWalletDepositCaptcha(token)}
-                  onExpired={() => setWalletDepositCaptcha(null)} />
+                  onExpired={() => setWalletDepositCaptcha(null)}
+                />
               </div>
             )}
 
@@ -1182,9 +1186,12 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
 
             {RECAPTCHA_SITE_KEY && (
               <div className="flex flex-col items-center gap-1">
-                <ReCAPTCHA ref={walletWithdrawCaptchaRef} sitekey={RECAPTCHA_SITE_KEY}
+                <CaptchaWidget
+                  sitekey={RECAPTCHA_SITE_KEY}
+                  captchaRef={walletWithdrawCaptchaRef}
                   onChange={(token) => setWalletWithdrawCaptcha(token)}
-                  onExpired={() => setWalletWithdrawCaptcha(null)} />
+                  onExpired={() => setWalletWithdrawCaptcha(null)}
+                />
               </div>
             )}
 

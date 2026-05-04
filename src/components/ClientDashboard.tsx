@@ -6,6 +6,7 @@ import {
   ChevronRight, Banknote, CreditCard, Smartphone, Trash2
 } from 'lucide-react';
 import ReCAPTCHA from 'react-google-recaptcha';
+import { CaptchaWidget } from './CaptchaWidget';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -430,15 +431,12 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
             {/* reCAPTCHA */}
             {RECAPTCHA_SITE_KEY && (
               <div className="flex flex-col items-center gap-1">
-                <ReCAPTCHA
-                  ref={depositCaptchaRef}
+                <CaptchaWidget
                   sitekey={RECAPTCHA_SITE_KEY}
+                  captchaRef={depositCaptchaRef}
                   onChange={(token) => setDepositCaptchaToken(token)}
                   onExpired={() => setDepositCaptchaToken(null)}
                 />
-                {!depositCaptchaToken && (
-                  <p className="text-[10px] text-red-500 font-bold">Veuillez cocher la case "Je ne suis pas un robot"</p>
-                )}
               </div>
             )}
 
@@ -490,15 +488,12 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
             {/* reCAPTCHA */}
             {RECAPTCHA_SITE_KEY && (
               <div className="flex flex-col items-center gap-1">
-                <ReCAPTCHA
-                  ref={withdrawCaptchaRef}
+                <CaptchaWidget
                   sitekey={RECAPTCHA_SITE_KEY}
+                  captchaRef={withdrawCaptchaRef}
                   onChange={(token) => setWithdrawCaptchaToken(token)}
                   onExpired={() => setWithdrawCaptchaToken(null)}
                 />
-                {!withdrawCaptchaToken && (
-                  <p className="text-[10px] text-red-500 font-bold">Veuillez cocher la case "Je ne suis pas un robot"</p>
-                )}
               </div>
             )}
 

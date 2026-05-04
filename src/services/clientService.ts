@@ -184,7 +184,7 @@ export const submitClientDeposit = async (
     amount,
     method,
     ...(txId && { txId }),
-    ...(captchaToken && { captchaToken })
+    ...(captchaToken && captchaToken !== 'bypass' && { captchaToken })
   });
 };
 
@@ -208,7 +208,7 @@ export const submitClientWithdrawal = async (
     amount,
     method,
     accountNumber,
-    ...(captchaToken && { captchaToken })
+    ...(captchaToken && captchaToken !== 'bypass' && { captchaToken })
   });
 };
 
