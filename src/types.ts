@@ -296,6 +296,7 @@ export interface AdminClientNotification {
   type: AdminClientNotifType;
   clientId: string;
   clientName: string;
+  clientPhone?: string;
   clientWalletId?: string;
   transactionId: string;
   amount: number;

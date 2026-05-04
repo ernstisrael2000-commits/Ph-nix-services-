@@ -112,9 +112,13 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     setActionLoading(true);
     try {
       await submitClientWithdrawal(client!, amount, withdrawMethod, withdrawAccount);
-      toast.success("Demande de retrait soumise ! En attente de validation admin.");
+      toast.success(`Demande envoyée, ${client!.name} ! Vous recevrez votre argent tout à l'heure. ✅`);
       setIsWithdrawOpen(false);
       setWithdrawAmount(''); setWithdrawAccount('');
+      const num = settings?.whatsappAdminNumber || WHATSAPP_NUMBER;
+      const usdEquiv = (amount / (settings?.exchangeRate || 146)).toFixed(2);
+      const msg = `Bonjour Neopay 👋,\n\nJe viens de soumettre une demande de *RETRAIT* :\n\n👤 Nom : *${client!.name}*\n🔑 ID Wallet : *${client!.walletId}*\n💰 Montant : *${amount.toLocaleString()} HTG* (~$${usdEquiv} USD)\n💳 Via : *${withdrawMethod}*\n📞 Compte : *${withdrawAccount}*\n\nMerci de traiter ma demande. 🙏`;
+      window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
     } catch (err: any) {
       toast.error(err.message);
     } finally {

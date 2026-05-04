@@ -879,35 +879,49 @@ function PurchaseNotifCard({
   const [declining, setDeclining] = React.useState(false);
   const busy = approving || declining;
 
+  const openWhatsApp = (phone: string, msg: string) => {
+    window.open(`https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
   return (
-    <div className="rounded-2xl border border-blue-100 bg-white shadow-sm overflow-hidden flex flex-col">
-      <div className="bg-blue-600 px-4 py-3 flex items-center gap-3">
+    <div className="rounded-2xl border border-emerald-200 bg-white shadow-sm overflow-hidden flex flex-col">
+      <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 px-4 py-3 flex items-center gap-3">
         <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
           <ShoppingBag className="h-5 w-5 text-white" />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
+          <p className="font-black text-white text-xs uppercase tracking-widest">Services payée</p>
           <p className="font-black text-white text-sm truncate">{notif.clientName}</p>
-          <p className="text-blue-100 text-[10px] font-mono">#{(notif as any).clientWalletId}</p>
+          <p className="text-emerald-100 text-[10px] font-mono">#{(notif as any).clientWalletId}</p>
         </div>
+        <span className="shrink-0 text-[9px] font-black px-2 py-0.5 rounded-full bg-amber-400 text-amber-900 animate-pulse">
+          EN ATTENTE
+        </span>
       </div>
-      <div className="px-4 py-3 flex-1 space-y-1.5">
-        <p className="font-black text-dark text-sm truncate">{(notif as any).productName}</p>
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] text-subtext">Montant</span>
-          <span className="font-black text-blue-700 text-sm">{notif.amount.toLocaleString()} HTG</span>
+      <div className="px-4 py-3 flex-1 space-y-2">
+        <div className="flex items-center gap-2 p-2 rounded-xl bg-gray-50 border border-gray-100">
+          <ShoppingBag className="h-4 w-4 text-gray-400 shrink-0" />
+          <p className="font-black text-dark text-sm truncate">{(notif as any).productName || 'Service'}</p>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] text-subtext">Date</span>
-          <span className="text-[11px] text-gray-400">
-            {notif.createdAt?.toDate ? format(notif.createdAt.toDate(), 'dd MMM, HH:mm', { locale: fr }) : ''}
-          </span>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-100">
+            <p className="text-emerald-600 font-bold text-[10px] uppercase">Montant</p>
+            <p className="font-black text-emerald-700 text-sm">{notif.amount.toLocaleString()} HTG</p>
+          </div>
+          <div className="p-2 rounded-xl bg-blue-50 border border-blue-100">
+            <p className="text-blue-600 font-bold text-[10px] uppercase">Prix affiché</p>
+            <p className="font-black text-blue-700 text-sm truncate">{(notif as any).productPrice || '—'}</p>
+          </div>
         </div>
-        <div className="pt-1 flex flex-wrap gap-1">
-          <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-            ⏳ En attente d'approbation
-          </span>
+        {(notif as any).clientPhone && (
+          <div className="flex items-center gap-2 text-[11px] text-gray-500">
+            <span className="font-mono bg-gray-50 px-2 py-0.5 rounded-lg border">{(notif as any).clientPhone}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-between text-[10px] text-gray-400">
+          <span>{notif.createdAt?.toDate ? format(notif.createdAt.toDate(), 'dd MMM yyyy, HH:mm', { locale: fr }) : ''}</span>
           {(notif as any).directSponsorId && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
+            <span className="inline-flex items-center gap-1 font-black px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
               Affilié à créditer
             </span>
           )}
@@ -918,7 +932,16 @@ function PurchaseNotifCard({
           size="sm"
           disabled={busy}
           className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs border-0 flex items-center justify-center gap-1.5 shadow-md shadow-emerald-100 transition-all active:scale-95"
-          onClick={async () => { setApproving(true); await onApprove(); setApproving(false); }}
+          onClick={async () => {
+            setApproving(true);
+            await onApprove();
+            setApproving(false);
+            const phone = (notif as any).clientPhone;
+            if (phone) {
+              const msg = `✅ Bonjour ${notif.clientName},\n\nVotre service *${(notif as any).productName || 'Service'}* au prix de *${notif.amount.toLocaleString()} HTG* a été *approuvé* et sera traité immédiatement.\n\nMerci de votre confiance — Équipe Neopay 🙏`;
+              openWhatsApp(phone, msg);
+            }
+          }}
         >
           {approving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckSquare className="h-3.5 w-3.5" />}
           Approuver
@@ -5717,12 +5740,12 @@ const AffiliateEditForm = ({
             );
             if (purchaseNotifs.length === 0) return null;
             return (
-              <Card className="shadow-sm border-blue-200 overflow-hidden">
-                <CardHeader className="border-b bg-blue-50 py-3 px-4">
-                  <CardTitle className="text-base font-black text-blue-800 flex items-center gap-2">
-                    <ShoppingBag className="h-4 w-4 text-blue-600" />
-                    Demandes d'achat par solde
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-500 text-white animate-pulse">
+              <Card className="shadow-sm border-emerald-200 overflow-hidden">
+                <CardHeader className="border-b bg-gradient-to-r from-emerald-600 to-emerald-700 py-3 px-4">
+                  <CardTitle className="text-base font-black text-white flex items-center gap-2">
+                    <ShoppingBag className="h-4 w-4 text-white" />
+                    Services payée
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-400 text-amber-900 animate-pulse">
                       {purchaseNotifs.length} en attente
                     </span>
                   </CardTitle>
