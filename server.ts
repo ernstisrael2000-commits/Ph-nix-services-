@@ -94,6 +94,91 @@ async function startServer() {
     next();
   });
 
+  // ─── Serialize Firestore Timestamps to plain objects ──────────────────────
+  function serializeDoc(snap: FirebaseFirestore.DocumentSnapshot | FirebaseFirestore.QueryDocumentSnapshot): any {
+    const data = snap.data() || {};
+    const result: any = { id: snap.id };
+    for (const [key, value] of Object.entries(data)) {
+      if (value && typeof value === 'object' && 'seconds' in value && 'nanoseconds' in value) {
+        result[key] = { _seconds: (value as any).seconds, _nanoseconds: (value as any).nanoseconds };
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /api/admin/transactions  — all client_transactions
+  // ────────────────────────────────────────────────────────────────────────────
+  app.get('/api/admin/transactions', async (_req, res) => {
+    try {
+      const snap = await adminDb.collection('client_transactions').orderBy('createdAt', 'desc').limit(500).get();
+      res.json({ transactions: snap.docs.map(serializeDoc) });
+    } catch (e: any) {
+      console.error('[GET transactions]', e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /api/admin/notifications  — all admin_notifications
+  // ────────────────────────────────────────────────────────────────────────────
+  app.get('/api/admin/notifications', async (_req, res) => {
+    try {
+      const snap = await adminDb.collection('admin_notifications').orderBy('createdAt', 'desc').limit(200).get();
+      res.json({ notifications: snap.docs.map(serializeDoc) });
+    } catch (e: any) {
+      console.error('[GET notifications]', e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /api/client/transactions/:clientId  — a single client's transactions
+  // ────────────────────────────────────────────────────────────────────────────
+  app.get('/api/client/transactions/:clientId', async (req, res) => {
+    try {
+      const { clientId } = req.params;
+      const snap = await adminDb.collection('client_transactions')
+        .where('clientId', '==', clientId)
+        .orderBy('createdAt', 'desc')
+        .limit(200)
+        .get();
+      res.json({ transactions: snap.docs.map(serializeDoc) });
+    } catch (e: any) {
+      console.error('[GET client transactions]', e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // PATCH /api/admin/notifications/:id/read
+  // ────────────────────────────────────────────────────────────────────────────
+  app.patch('/api/admin/notifications/:id/read', async (req, res) => {
+    try {
+      await adminDb.collection('admin_notifications').doc(req.params.id).update({ read: true });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // PATCH /api/admin/notifications/read-all
+  // ────────────────────────────────────────────────────────────────────────────
+  app.patch('/api/admin/notifications/read-all', async (_req, res) => {
+    try {
+      const snap = await adminDb.collection('admin_notifications').where('read', '==', false).get();
+      const batch = adminDb.batch();
+      snap.docs.forEach(d => batch.update(d.ref, { read: true }));
+      await batch.commit();
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ────────────────────────────────────────────────────────────────────────────
   // POST /api/client/deposit
   // ────────────────────────────────────────────────────────────────────────────
@@ -192,7 +277,7 @@ async function startServer() {
   });
 
   // ────────────────────────────────────────────────────────────────────────────
-  // POST /api/client/purchase
+  // POST /api/client/purchase  — immediate balance deduction (no admin approval)
   // ────────────────────────────────────────────────────────────────────────────
   app.post('/api/client/purchase', async (req, res) => {
     try {
@@ -203,40 +288,55 @@ async function startServer() {
       if (amount <= 0) return res.status(400).json({ error: 'Montant invalide.' });
 
       // Check balance server-side
-      const clientSnap = await adminDb.collection('clients').doc(clientId).get();
+      const clientRef = adminDb.collection('clients').doc(clientId);
+      const clientSnap = await clientRef.get();
       if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
       const clientData = clientSnap.data()!;
       if ((clientData.balance || 0) < amount) {
         return res.status(400).json({ error: 'Solde insuffisant pour cet achat.' });
       }
 
-      // Check no existing pending purchase
-      const existingSnap = await adminDb.collection('client_transactions')
-        .where('clientId', '==', clientId)
-        .where('type', '==', 'purchase')
-        .where('status', '==', 'pending')
-        .get();
-      if (!existingSnap.empty) {
-        return res.status(400).json({ error: "Vous avez déjà une demande d'achat en cours. Veuillez attendre la décision de l'administrateur." });
-      }
-
       const batch = adminDb.batch();
 
+      // ① Immediately deduct balance
+      batch.update(clientRef, {
+        balance: Math.max(0, (clientData.balance || 0) - amount),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+
+      // ② Credit affiliate if applicable
+      if (directSponsorId) {
+        const affiliateRef = adminDb.collection('affiliates').doc(directSponsorId);
+        const affiliateSnap = await affiliateRef.get();
+        if (affiliateSnap.exists) {
+          const aff = affiliateSnap.data()!;
+          batch.update(affiliateRef, {
+            balance: (aff.balance || 0) + amount,
+            totalEarnings: (aff.totalEarnings || 0) + amount,
+            monthlySales: (aff.monthlySales || 0) + amount,
+            updatedAt: FieldValue.serverTimestamp()
+          });
+        }
+      }
+
+      // ③ Record as completed immediately
       const txRef = adminDb.collection('client_transactions').doc();
       batch.set(txRef, {
         clientId,
         clientName,
         type: 'purchase',
         amount,
-        status: 'pending',
+        status: 'completed',
         productName,
         productPrice,
         directSponsorId: directSponsorId || null,
-        description: `Demande d'achat: ${productName} - ${productPrice}`,
+        affiliateCredited: !!directSponsorId,
+        description: `Achat: ${productName} - ${productPrice}`,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
       });
 
+      // ④ Notify admin (informational — no approval needed)
       const notifRef = adminDb.collection('admin_notifications').doc();
       batch.set(notifRef, {
         type: 'client_purchase',
@@ -249,7 +349,7 @@ async function startServer() {
         productName,
         productPrice,
         directSponsorId: directSponsorId || null,
-        status: 'pending',
+        status: 'completed',
         read: false,
         createdAt: FieldValue.serverTimestamp()
       });

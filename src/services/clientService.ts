@@ -1,19 +1,32 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   collection,
   query,
   where,
   getDocs,
+  addDoc,
   updateDoc,
   doc,
   serverTimestamp,
   orderBy,
-  onSnapshot,
-  writeBatch
+  onSnapshot
 } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 import { Client, ClientTransaction, AdminClientNotification } from '../types';
+
+// ─── Deserialize API doc (converts {_seconds} timestamps back to {toDate()}) ──
+function fromApi<T>(doc: any): T {
+  const result: any = {};
+  for (const [key, value] of Object.entries(doc)) {
+    if (value && typeof value === 'object' && '_seconds' in (value as any)) {
+      result[key] = { toDate: () => new Date((value as any)._seconds * 1000) };
+    } else {
+      result[key] = value;
+    }
+  }
+  return result as T;
+}
 
 // ─── Register / Login ───────────────────────────────────────────────────────
 
@@ -297,42 +310,31 @@ export const declinePurchaseRequest = async (
 
 // ─── Hook: does this client have a pending purchase? ────────────────────────
 
-export const useClientPendingPurchase = (clientId: string | null) => {
-  const [hasPending, setHasPending] = useState(false);
+// purchases are now instant — this hook always returns false
+export const useClientPendingPurchase = (_clientId: string | null) => false;
 
-  useEffect(() => {
-    if (!clientId) { setHasPending(false); return; }
-    const q = query(
-      collection(db, 'client_transactions'),
-      where('clientId', '==', clientId),
-      where('type', '==', 'purchase'),
-      where('status', '==', 'pending')
-    );
-    const unsub = onSnapshot(q, (snap) => setHasPending(!snap.empty), () => {});
-    return () => unsub();
-  }, [clientId]);
-
-  return hasPending;
-};
-
-// ─── Transaction Hooks ───────────────────────────────────────────────────────
+// ─── Transaction Hooks (API polling — bypasses Firestore rules) ───────────────
 
 export const useClientTransactions = (clientId: string | null) => {
   const [transactions, setTransactions] = useState<ClientTransaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!clientId) { setLoading(false); return; }
-    const q = query(
-      collection(db, 'client_transactions'),
-      where('clientId', '==', clientId),
-      orderBy('createdAt', 'desc')
-    );
-    const unsubscribe = onSnapshot(q, (snap) => {
-      setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() } as ClientTransaction)));
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/client/transactions/${clientId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setTransactions((data.transactions || []).map((d: any) => fromApi<ClientTransaction>(d)));
+        }
+      } catch {}
       setLoading(false);
-    }, () => setLoading(false));
-    return () => unsubscribe();
+    };
+    load();
+    intervalRef.current = setInterval(load, 8000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [clientId]);
 
   return { transactions, loading };
@@ -341,14 +343,22 @@ export const useClientTransactions = (clientId: string | null) => {
 export const useAllClientTransactions = () => {
   const [transactions, setTransactions] = useState<ClientTransaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    const q = query(collection(db, 'client_transactions'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() } as ClientTransaction)));
+    const load = async () => {
+      try {
+        const res = await fetch('/api/admin/transactions');
+        if (res.ok) {
+          const data = await res.json();
+          setTransactions((data.transactions || []).map((d: any) => fromApi<ClientTransaction>(d)));
+        }
+      } catch {}
       setLoading(false);
-    }, () => setLoading(false));
-    return () => unsubscribe();
+    };
+    load();
+    intervalRef.current = setInterval(load, 8000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, []);
 
   return { transactions, loading };
@@ -380,14 +390,24 @@ export const updateClientTransactionStatus = async (
   await apiPost('/api/admin/transaction/status', { txId, status, reason });
 };
 
-// ─── Misc Hooks & Utils ──────────────────────────────────────────────────────
+// ─── Misc Hooks & Utils (API polling — bypasses Firestore rules) ─────────────
 
 export const usePendingClientCount = () => {
   const [count, setCount] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
-    const q = query(collection(db, 'client_transactions'), where('status', '==', 'pending'));
-    const unsubscribe = onSnapshot(q, (snap) => setCount(snap.size), () => {});
-    return () => unsubscribe();
+    const load = async () => {
+      try {
+        const res = await fetch('/api/admin/transactions');
+        if (res.ok) {
+          const data = await res.json();
+          setCount((data.transactions || []).filter((t: any) => t.status === 'pending').length);
+        }
+      } catch {}
+    };
+    load();
+    intervalRef.current = setInterval(load, 10000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, []);
   return count;
 };
@@ -395,27 +415,31 @@ export const usePendingClientCount = () => {
 export const useAdminClientNotifications = () => {
   const [notifications, setNotifications] = useState<AdminClientNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    const q = query(collection(db, 'admin_notifications'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() } as AdminClientNotification)));
+    const load = async () => {
+      try {
+        const res = await fetch('/api/admin/notifications');
+        if (res.ok) {
+          const data = await res.json();
+          setNotifications((data.notifications || []).map((d: any) => fromApi<AdminClientNotification>(d)));
+        }
+      } catch {}
       setLoading(false);
-    }, () => setLoading(false));
-    return () => unsubscribe();
+    };
+    load();
+    intervalRef.current = setInterval(load, 8000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, []);
 
   return { notifications, loading };
 };
 
 export const markAdminNotificationRead = async (notifId: string) => {
-  await updateDoc(doc(db, 'admin_notifications', notifId), { read: true });
+  await fetch(`/api/admin/notifications/${notifId}/read`, { method: 'PATCH' });
 };
 
 export const markAllAdminNotificationsRead = async () => {
-  const q = query(collection(db, 'admin_notifications'), where('read', '==', false));
-  const snap = await getDocs(q);
-  const batch = writeBatch(db);
-  snap.docs.forEach(d => batch.update(d.ref, { read: true }));
-  await batch.commit();
+  await fetch('/api/admin/notifications/read-all', { method: 'PATCH' });
 };

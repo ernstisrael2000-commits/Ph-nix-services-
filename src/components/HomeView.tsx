@@ -47,41 +47,47 @@ const WalletPayButton = ({
   const hasBalance = !isNaN(numericPrice) && numericPrice > 0 && currentBalance >= numericPrice;
 
   const handlePay = async () => {
-    if (hasPendingPurchase || purchaseLoading) return;
+    if (purchaseLoading) return;
     if (!hasBalance) { toast.error(`Solde insuffisant. Vous avez ${currentBalance.toLocaleString()} HTG`); return; }
     setPurchaseLoading(true);
     try {
       await submitClientPurchase(client, productName ?? '', String(price ?? ''), numericPrice);
-      toast.success(`Demande envoyée ! L'admin validera votre achat sous peu.`);
+      toast.success(`✅ Achat effectué ! ${numericPrice.toLocaleString()} HTG débité de votre compte.`);
       onSuccess();
+
+      // Open WhatsApp to notify admin
+      const adminNum = (window as any).__neopayAdminPhone || WHATSAPP_NUMBER;
+      const now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const msg =
+        `🛍️ *ACHAT EFFECTUÉ — Neopay*\n\n` +
+        `👤 Client: *${client.name}*\n` +
+        `🔑 ID Wallet: *#${client.walletId || '—'}*\n` +
+        `📱 Téléphone: *${client.phone || '—'}*\n` +
+        `🛒 Service: *${productName || '—'}*\n` +
+        `💰 Montant payé: *${numericPrice.toLocaleString()} HTG*\n` +
+        `💳 Méthode: *Solde Wallet*\n` +
+        `📅 Date: *${now}*\n\n` +
+        `✅ Paiement traité automatiquement. Veuillez activer le service.`;
+      window.open(`https://wa.me/${adminNum.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
     } catch (err: any) {
-      toast.error(err.message || "Erreur lors de la soumission.");
+      toast.error(err.message || "Erreur lors de l'achat.");
     } finally {
       setPurchaseLoading(false);
     }
   };
 
-  // Always render the same <button> element — only classes/content change.
-  // Never switch element type (div ↔ button) mid-render to avoid "insertBefore" DOM errors.
   return (
     <button
       type="button"
-      disabled={hasPendingPurchase || purchaseLoading || !hasBalance}
+      disabled={purchaseLoading || !hasBalance}
       onClick={handlePay}
       className={`w-full h-14 rounded-2xl border-2 font-black text-base flex items-center justify-center gap-3 transition-all
-        ${hasPendingPurchase
-          ? 'border-amber-200 bg-amber-50 text-amber-700 cursor-not-allowed'
-          : hasBalance
-            ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-400 active:scale-95'
-            : 'border-red-200 text-red-400 cursor-not-allowed opacity-60'
+        ${hasBalance
+          ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-400 active:scale-95'
+          : 'border-red-200 text-red-400 cursor-not-allowed opacity-60'
         }`}
     >
-      {hasPendingPurchase ? (
-        <>
-          <Clock className="h-5 w-5 text-amber-500 shrink-0" />
-          <span className="text-sm text-center leading-tight">Demande en cours — en attente de l'admin</span>
-        </>
-      ) : purchaseLoading ? (
+      {purchaseLoading ? (
         <Loader2 className="h-5 w-5 animate-spin" />
       ) : (
         <>
@@ -122,6 +128,12 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const { sliderImages, loading: sliderLoading } = useSliderImages();
   const { buttons, loading: buttonsLoading } = useNavButtons();
   const { settings } = useSettings();
+  // Expose admin phone globally so WalletPayButton can use it
+  React.useEffect(() => {
+    if (settings?.whatsappAdminNumber) {
+      (window as any).__neopayAdminPhone = settings.whatsappAdminNumber;
+    }
+  }, [settings?.whatsappAdminNumber]);
   const [isGamesDialogOpen, setIsGamesDialogOpen] = React.useState(false);
   const [isCardsDialogOpen, setIsCardsDialogOpen] = React.useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);

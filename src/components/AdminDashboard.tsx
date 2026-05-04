@@ -1917,7 +1917,7 @@ const AffiliateEditForm = ({
 
   const [tempGameImageUrl, setTempGameImageUrl] = useState('');
 
-  const [notifFilter, setNotifFilter] = useState<'all' | 'registration' | 'withdrawal' | 'deposit'>('all');
+  const [notifFilter, setNotifFilter] = useState<'all' | 'registration' | 'withdrawal' | 'deposit' | 'client_tx'>('all');
   const [notifSearch, setNotifSearch] = useState('');
   const deferredNotifSearch = useDeferredValue(notifSearch);
   const [affiliateSearch, setAffiliateSearch] = useState('');
@@ -5007,19 +5007,26 @@ const AffiliateEditForm = ({
                 </button>
               </div>
               <div className="divide-y divide-amber-100 max-h-72 overflow-y-auto">
-                {adminClientNotifs.filter(n => !n.read).map(notif => (
+                {adminClientNotifs.filter(n => !n.read).map(notif => {
+                  const isDeposit = notif.type === 'client_deposit';
+                  const isWithdrawal = notif.type === 'client_withdrawal';
+                  const isPurchase = notif.type === 'client_purchase';
+                  return (
                   <div key={notif.id} className="flex items-start gap-3 px-4 py-3 hover:bg-amber-50/80 transition-colors">
-                    <div className={`mt-0.5 h-8 w-8 rounded-xl flex items-center justify-center shrink-0 ${notif.type === 'client_deposit' ? 'bg-emerald-100' : 'bg-red-100'}`}>
-                      {notif.type === 'client_deposit'
-                        ? <ArrowDown className="h-4 w-4 text-emerald-600" />
-                        : <ArrowUp className="h-4 w-4 text-red-600" />}
+                    <div className={`mt-0.5 h-8 w-8 rounded-xl flex items-center justify-center shrink-0 ${isDeposit ? 'bg-emerald-100' : isWithdrawal ? 'bg-red-100' : 'bg-primary/10'}`}>
+                      {isDeposit ? <ArrowDown className="h-4 w-4 text-emerald-600" />
+                        : isWithdrawal ? <ArrowUp className="h-4 w-4 text-red-600" />
+                        : <ShoppingBag className="h-4 w-4 text-primary" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-black text-dark text-sm">{notif.clientName}</p>
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${notif.type === 'client_deposit' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                          {notif.type === 'client_deposit' ? '↓ DÉPÔT' : '↑ RETRAIT'}
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isDeposit ? 'bg-emerald-100 text-emerald-700' : isWithdrawal ? 'bg-red-100 text-red-700' : 'bg-primary/10 text-primary'}`}>
+                          {isDeposit ? '↓ DÉPÔT' : isWithdrawal ? '↑ RETRAIT' : '🛍️ ACHAT'}
                         </span>
+                        {isPurchase && (notif as any).productName && (
+                          <span className="text-[10px] font-bold text-gray-500">{(notif as any).productName}</span>
+                        )}
                         {notif.clientWalletId && (
                           <span className="text-[10px] font-mono text-gray-400">#{notif.clientWalletId}</span>
                         )}
@@ -5048,7 +5055,8 @@ const AffiliateEditForm = ({
                       ✓ Lu
                     </button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -5733,127 +5741,96 @@ const AffiliateEditForm = ({
             </div>
           </div>
 
-          {/* Client purchase notifications — Approve / Decline */}
-          {(() => {
-            const purchaseNotifs = adminClientNotifs.filter(
-              n => n.type === 'client_purchase' && (!n.status || n.status === 'pending')
-            );
-            if (purchaseNotifs.length === 0) return null;
-            return (
-              <Card className="shadow-sm border-emerald-200 overflow-hidden">
-                <CardHeader className="border-b bg-gradient-to-r from-emerald-600 to-emerald-700 py-3 px-4">
-                  <CardTitle className="text-base font-black text-white flex items-center gap-2">
-                    <ShoppingBag className="h-4 w-4 text-white" />
-                    Services payée
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-400 text-amber-900 animate-pulse">
-                      {purchaseNotifs.length} en attente
-                    </span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {purchaseNotifs.map(notif => (
-                    <PurchaseNotifCard
-                      key={notif.id}
-                      notif={notif}
-                      onApprove={async () => {
-                        try {
-                          await approvePurchaseRequest(
-                            notif.id!,
-                            (notif as any).transactionId,
-                            (notif as any).clientId,
-                            notif.amount,
-                            (notif as any).directSponsorId
-                          );
-                          toast.success(`Achat approuvé pour ${notif.clientName} !`);
-                        } catch (err: any) {
-                          toast.error(err.message || "Erreur lors de l'approbation.");
-                        }
-                      }}
-                      onDecline={async () => {
-                        try {
-                          await declinePurchaseRequest(
-                            notif.id!,
-                            (notif as any).transactionId
-                          );
-                          toast.success(`Demande refusée pour ${notif.clientName}.`);
-                        } catch {
-                          toast.error("Erreur lors du refus.");
-                        }
-                      }}
-                    />
-                  ))}
-                </CardContent>
-              </Card>
-            );
-          })()}
-
-          {/* Client deposit / withdrawal notifications */}
+          {/* ── Toutes les activités clients (dépôts, retraits, achats) ── */}
           {adminClientNotifs.length > 0 && (
-            <Card className="shadow-sm border-amber-200 overflow-hidden">
-              <CardHeader className="border-b bg-amber-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 py-3 px-4">
-                <CardTitle className="text-base font-black text-amber-800 flex items-center gap-2">
-                  <Wallet className="h-4 w-4 text-amber-600" />
-                  Demandes Clients — Dépôts & Retraits
+            <Card className="shadow-sm border-gray-200 overflow-hidden">
+              <CardHeader className="border-b bg-gradient-to-r from-gray-800 to-gray-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 py-3 px-4">
+                <CardTitle className="text-base font-black text-white flex items-center gap-2">
+                  <Bell className="h-4 w-4 text-white" />
+                  Activités Clients — Dépôts, Retraits &amp; Achats
                   {unreadClientNotifCount > 0 && (
-                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500 text-white animate-pulse">{unreadClientNotifCount} non lu{unreadClientNotifCount > 1 ? 's' : ''}</span>
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-400 text-amber-900 animate-pulse">
+                      {unreadClientNotifCount} nouveau{unreadClientNotifCount > 1 ? 'x' : ''}
+                    </span>
                   )}
                 </CardTitle>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   {unreadClientNotifCount > 0 && (
                     <button onClick={() => markAllAdminNotificationsRead()}
-                      className="text-[11px] font-bold text-amber-600 hover:text-amber-800 underline underline-offset-2 transition-colors">
+                      className="text-[11px] font-bold text-gray-300 hover:text-white underline underline-offset-2 transition-colors">
                       Tout marquer lu
                     </button>
                   )}
                   <button onClick={() => setActiveTab('clients-tx')}
-                    className="text-[11px] font-bold text-primary hover:underline transition-colors">
-                    Voir les transactions →
+                    className="text-[11px] font-bold text-amber-400 hover:text-amber-300 transition-colors">
+                    Voir transactions →
                   </button>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="divide-y divide-amber-50 max-h-80 overflow-y-auto">
-                  {adminClientNotifs.slice(0, 20).map(notif => (
-                    <div key={notif.id} className={`flex items-start gap-3 px-4 py-3 transition-colors ${notif.read ? 'bg-white hover:bg-gray-50' : 'bg-amber-50/60 hover:bg-amber-50'}`}>
-                      <div className={`mt-0.5 h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${notif.type === 'client_deposit' ? 'bg-emerald-100' : 'bg-red-100'}`}>
-                        {notif.type === 'client_deposit'
-                          ? <ArrowDown className="h-4 w-4 text-emerald-600" />
-                          : <ArrowUp className="h-4 w-4 text-red-600" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-black text-dark text-sm">{notif.clientName}</span>
-                          <Badge className={`text-[10px] font-black px-2 py-0 ${notif.type === 'client_deposit' ? 'bg-emerald-100 text-emerald-700 border-0' : 'bg-red-100 text-red-700 border-0'}`}>
-                            {notif.type === 'client_deposit' ? '↓ DÉPÔT' : '↑ RETRAIT'}
-                          </Badge>
-                          {!notif.read && (
-                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-primary text-white">NOUVEAU</span>
-                          )}
+                <div className="divide-y divide-gray-100 max-h-[480px] overflow-y-auto">
+                  {adminClientNotifs.slice(0, 50).map(notif => {
+                    const isDeposit = notif.type === 'client_deposit';
+                    const isWithdrawal = notif.type === 'client_withdrawal';
+                    const isPurchase = notif.type === 'client_purchase';
+                    const iconBg = isDeposit ? 'bg-emerald-100' : isWithdrawal ? 'bg-red-100' : 'bg-primary/10';
+                    const badgeCls = isDeposit
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : isWithdrawal
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-primary/10 text-primary';
+                    const label = isDeposit ? '↓ DÉPÔT' : isWithdrawal ? '↑ RETRAIT' : '🛍️ ACHAT';
+                    return (
+                      <div key={notif.id} className={`flex items-start gap-3 px-4 py-3 transition-colors ${notif.read ? 'bg-white hover:bg-gray-50' : 'bg-amber-50/60 hover:bg-amber-50'}`}>
+                        <div className={`mt-0.5 h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
+                          {isDeposit ? <ArrowDown className="h-4 w-4 text-emerald-600" />
+                            : isWithdrawal ? <ArrowUp className="h-4 w-4 text-red-600" />
+                            : <ShoppingBag className="h-4 w-4 text-primary" />}
                         </div>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
-                          <span className="font-black text-dark text-sm">{notif.amount.toLocaleString()} HTG</span>
-                          {notif.method && <span className="text-[11px] text-gray-500">via {notif.method}</span>}
-                          {notif.accountNumber && <span className="text-[11px] font-mono text-gray-500">{notif.accountNumber}</span>}
-                          {notif.txId && (
-                            <span className="text-[11px] font-mono text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Réf: {notif.txId}</span>
-                          )}
-                          {notif.clientWalletId && (
-                            <span className="text-[10px] font-mono text-gray-400">Wallet #{notif.clientWalletId}</span>
-                          )}
-                          <span className="text-[10px] text-gray-400">
-                            {notif.createdAt?.toDate ? format(notif.createdAt.toDate(), 'dd MMM, HH:mm', { locale: fr }) : ''}
-                          </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-black text-dark text-sm">{notif.clientName}</span>
+                            <Badge className={`text-[10px] font-black px-2 py-0 border-0 ${badgeCls}`}>{label}</Badge>
+                            {(notif as any).clientWalletId && (
+                              <span className="text-[10px] font-mono text-gray-400">#{(notif as any).clientWalletId}</span>
+                            )}
+                            {!notif.read && (
+                              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-primary text-white">NOUVEAU</span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
+                            <span className="font-black text-dark text-sm">{notif.amount?.toLocaleString()} HTG</span>
+                            {isPurchase && (notif as any).productName && (
+                              <span className="text-[11px] font-bold text-primary">{(notif as any).productName}</span>
+                            )}
+                            {isPurchase && (notif as any).productPrice && (
+                              <span className="text-[11px] text-gray-500">Prix: {(notif as any).productPrice}</span>
+                            )}
+                            {!isPurchase && notif.method && (
+                              <span className="text-[11px] text-gray-500">via {notif.method}</span>
+                            )}
+                            {(notif as any).accountNumber && (
+                              <span className="text-[11px] font-mono text-gray-500">{(notif as any).accountNumber}</span>
+                            )}
+                            {(notif as any).txId && (
+                              <span className="text-[11px] font-mono text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Réf: {(notif as any).txId}</span>
+                            )}
+                            {(notif as any).clientPhone && (
+                              <span className="text-[10px] text-gray-400">📱 {(notif as any).clientPhone}</span>
+                            )}
+                            <span className="text-[10px] text-gray-400">
+                              {notif.createdAt?.toDate ? format(notif.createdAt.toDate(), 'dd MMM, HH:mm', { locale: fr }) : ''}
+                            </span>
+                          </div>
                         </div>
+                        {!notif.read && (
+                          <button onClick={() => markAdminNotificationRead(notif.id!)}
+                            className="shrink-0 text-[10px] font-bold text-gray-400 hover:text-gray-600 mt-1 transition-colors"
+                            title="Marquer comme lu">✓ Lu</button>
+                        )}
                       </div>
-                      {!notif.read && (
-                        <button onClick={() => markAdminNotificationRead(notif.id!)}
-                          className="shrink-0 text-[10px] font-bold text-gray-400 hover:text-gray-600 mt-1 transition-colors"
-                          title="Marquer comme lu">
-                          ✓ Lu
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>

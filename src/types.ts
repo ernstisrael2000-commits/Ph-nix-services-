@@ -236,10 +236,11 @@ export interface NavButton {
 export interface AdminAccount {
   id?: string;
   uid?: string;
+  email?: string;
   fullName: string;
   password: string;
   photoUrl?: string;
-  loginCode?: string; // Only for super admin
+  loginCode?: string;
   isSuperAdmin: boolean;
   permissions: string[];
   failedAttempts: number;
