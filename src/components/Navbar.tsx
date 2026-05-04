@@ -1,4 +1,4 @@
-import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users, Truck, ExternalLink, Loader2, AlertCircle, Wallet } from 'lucide-react';
+import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users, Truck, ExternalLink, Loader2, AlertCircle, Wallet, GraduationCap } from 'lucide-react';
 import { Button } from './ui/button';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -102,6 +102,15 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
             >
               <Truck className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'shipping' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`} />
               <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'shipping' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`}>Shipping</span>
+            </Button>
+
+            <Button 
+              variant={currentView === 'formations' ? 'secondary' : 'ghost'} 
+              onClick={() => onViewChange('formations')} 
+              className={`flex flex-col items-center justify-center h-14 h-auto py-1 gap-1 px-2 sm:px-4 group transition-all duration-300 rounded-xl ${currentView === 'formations' ? 'bg-accent-light/80 shadow-sm' : 'hover:bg-accent-light/50'}`}
+            >
+              <GraduationCap className={`h-4 w-4 transition-transform group-hover:scale-110 ${currentView === 'formations' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`} />
+              <span className={`text-[10px] uppercase tracking-tighter font-semibold transition-colors ${currentView === 'formations' ? 'text-primary' : 'text-subtext group-hover:text-primary'}`}>Formations</span>
             </Button>
 
             <Button 

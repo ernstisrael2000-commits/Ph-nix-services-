@@ -271,6 +271,82 @@ export interface Sale {
   createdAt: any;
 }
 
+// ─── Formations ──────────────────────────────────────────────────────────────
+
+export type FormationLevel = 'debutant' | 'intermediaire' | 'avance';
+export type FormationStatus = 'pending' | 'active' | 'revoked';
+export type ModuleStatus = 'not_started' | 'in_progress' | 'completed';
+
+export interface FormationModule {
+  id: string;
+  title: string;
+  videoUrl: string;
+  duration: string;
+  order: number;
+  description?: string;
+}
+
+export interface FormationResource {
+  id: string;
+  name: string;
+  url: string;
+  type: 'pdf' | 'link' | 'file';
+}
+
+export interface Formation {
+  id?: string;
+  title: string;
+  description: string;
+  shortDescription: string;
+  coverImage: string;
+  price: number;
+  level: FormationLevel;
+  rating: number;
+  studentsCount: number;
+  modules: FormationModule[];
+  pdfUrl?: string;
+  resources?: FormationResource[];
+  published: boolean;
+  createdAt: any;
+  updatedAt: any;
+}
+
+export interface FormationProgress {
+  id?: string;
+  userId: string;
+  userEmail: string;
+  formationId: string;
+  completedModules: string[];
+  percentage: number;
+  startedAt: any;
+  lastAccessedAt: any;
+  completedAt?: any;
+}
+
+export interface FormationPurchase {
+  id?: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  formationId: string;
+  formationTitle: string;
+  amount: number;
+  method: string;
+  status: FormationStatus;
+  purchasedAt: any;
+  updatedAt?: any;
+}
+
+export interface FormationUser {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL?: string;
+  createdAt: any;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export type ClientTransactionType = 'deposit' | 'withdrawal' | 'purchase' | 'transfer_received' | 'refund';
 export type ClientTransactionStatus = 'pending' | 'approved' | 'rejected' | 'completed';
 

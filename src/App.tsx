@@ -10,6 +10,7 @@ import AffiliateDashboard from './components/AffiliateDashboard';
 import AgentLogin from './components/AgentLogin';
 import AgentDashboard from './components/AgentDashboard';
 import ClientDashboard from './components/ClientDashboard';
+import FormationsView from './components/formations/FormationsView';
 import { Toaster } from './components/ui/sonner';
 import AccessChoice from './components/AccessChoice';
 import { useAuth } from './hooks/useAuth';
@@ -24,8 +25,8 @@ import { db } from './lib/firebase';
 import { toast } from 'sonner';
 
 export default function App() {
-  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent'>('home');
-  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent')[]>(['home']);
+  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent' | 'formations'>('home');
+  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent' | 'formations')[]>(['home']);
   const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'admin' | 'agent' | null>(null);
   const { loading } = useAuth();
   const { settings } = useSettings();
@@ -347,6 +348,10 @@ export default function App() {
             ) : (
               <AgentLogin onLogin={handleAgentLogin} />
             )
+          )}
+
+          {view === 'formations' && (
+            <FormationsView />
           )}
         </main>
 

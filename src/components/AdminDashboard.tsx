@@ -88,7 +88,8 @@ import { Timestamp, serverTimestamp, collection, addDoc } from 'firebase/firesto
 import { db } from '../lib/firebase';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, Shield, ShieldAlert as ShieldAlertIcon, History, ShoppingBag, SquareCheck as CheckSquare } from 'lucide-react';
+import { LogOut, Shield, ShieldAlert as ShieldAlertIcon, History, ShoppingBag, SquareCheck as CheckSquare, GraduationCap } from 'lucide-react';
+import FormationsAdminPanel from './formations/FormationsAdminPanel';
 
 // Helper for image compression
 const compressImage = (file: File): Promise<Blob> => {
@@ -1820,6 +1821,12 @@ const AffiliateEditForm = ({
         { value: 'withdrawals', label: 'Retraits', icon: ArrowUp, permission: 'affiliates' },
         { value: 'wallet-tx', label: 'Dépôts & Flux', icon: CreditCard, permission: 'affiliates' },
         { value: 'clients-tx', label: 'Paiements Clients', icon: Wallet, permission: 'affiliates' },
+      ]
+    },
+    {
+      title: "E-Learning",
+      items: [
+        { value: 'formations', label: 'Formations', icon: GraduationCap, permission: 'products' },
       ]
     },
     {
@@ -6561,6 +6568,11 @@ const AffiliateEditForm = ({
             ))}
           </div>
         </TabsContent>
+
+        <TabsContent value="formations" className="focus-visible:outline-none focus-visible:ring-0 mt-0 h-full overflow-y-auto">
+          <FormationsAdminPanel />
+        </TabsContent>
+
           </Tabs>
         </div>
       </div>
