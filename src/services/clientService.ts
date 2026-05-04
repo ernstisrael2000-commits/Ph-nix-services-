@@ -9,6 +9,7 @@ import {
   doc,
   serverTimestamp,
   orderBy,
+  limit,
   onSnapshot
 } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
@@ -208,14 +209,22 @@ export const useClientData = (clientId: string | null) => {
 
 // ─── API helper ──────────────────────────────────────────────────────────────
 
-async function apiPost(path: string, body: object): Promise<void> {
+async function apiPost(path: string, body: object): Promise<any> {
   const res = await fetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
-  const data = await res.json();
+  let data: any = {};
+  try {
+    const text = await res.text();
+    data = JSON.parse(text);
+  } catch {
+    if (!res.ok) throw new Error(`Erreur serveur (${res.status}). Veuillez réessayer.`);
+    return;
+  }
   if (!res.ok) throw new Error(data.error || `Erreur serveur (${res.status})`);
+  return data;
 }
 
 // ─── Deposit ─────────────────────────────────────────────────────────────────
@@ -313,28 +322,25 @@ export const declinePurchaseRequest = async (
 // purchases are now instant — this hook always returns false
 export const useClientPendingPurchase = (_clientId: string | null) => false;
 
-// ─── Transaction Hooks (API polling — bypasses Firestore rules) ───────────────
+// ─── Transaction Hooks (real-time via onSnapshot) ────────────────────────────
 
 export const useClientTransactions = (clientId: string | null) => {
   const [transactions, setTransactions] = useState<ClientTransaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!clientId) { setLoading(false); return; }
-    const load = async () => {
-      try {
-        const res = await fetch(`/api/client/transactions/${clientId}`);
-        if (res.ok) {
-          const data = await res.json();
-          setTransactions((data.transactions || []).map((d: any) => fromApi<ClientTransaction>(d)));
-        }
-      } catch {}
+    const q = query(
+      collection(db, 'client_transactions'),
+      where('clientId', '==', clientId),
+      orderBy('createdAt', 'desc'),
+      limit(100)
+    );
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() } as ClientTransaction)));
       setLoading(false);
-    };
-    load();
-    intervalRef.current = setInterval(load, 8000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    }, () => setLoading(false));
+    return () => unsubscribe();
   }, [clientId]);
 
   return { transactions, loading };
@@ -343,22 +349,18 @@ export const useClientTransactions = (clientId: string | null) => {
 export const useAllClientTransactions = () => {
   const [transactions, setTransactions] = useState<ClientTransaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch('/api/admin/transactions');
-        if (res.ok) {
-          const data = await res.json();
-          setTransactions((data.transactions || []).map((d: any) => fromApi<ClientTransaction>(d)));
-        }
-      } catch {}
+    const q = query(
+      collection(db, 'client_transactions'),
+      orderBy('createdAt', 'desc'),
+      limit(500)
+    );
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() } as ClientTransaction)));
       setLoading(false);
-    };
-    load();
-    intervalRef.current = setInterval(load, 8000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    }, () => setLoading(false));
+    return () => unsubscribe();
   }, []);
 
   return { transactions, loading };
@@ -390,24 +392,19 @@ export const updateClientTransactionStatus = async (
   await apiPost('/api/admin/transaction/status', { txId, status, reason });
 };
 
-// ─── Misc Hooks & Utils (API polling — bypasses Firestore rules) ─────────────
+// ─── Misc Hooks & Utils (real-time via onSnapshot) ───────────────────────────
 
 export const usePendingClientCount = () => {
   const [count, setCount] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch('/api/admin/transactions');
-        if (res.ok) {
-          const data = await res.json();
-          setCount((data.transactions || []).filter((t: any) => t.status === 'pending').length);
-        }
-      } catch {}
-    };
-    load();
-    intervalRef.current = setInterval(load, 10000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    const q = query(
+      collection(db, 'client_transactions'),
+      where('status', '==', 'pending')
+    );
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setCount(snap.size);
+    }, () => {});
+    return () => unsubscribe();
   }, []);
   return count;
 };
@@ -415,22 +412,18 @@ export const usePendingClientCount = () => {
 export const useAdminClientNotifications = () => {
   const [notifications, setNotifications] = useState<AdminClientNotification[]>([]);
   const [loading, setLoading] = useState(true);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch('/api/admin/notifications');
-        if (res.ok) {
-          const data = await res.json();
-          setNotifications((data.notifications || []).map((d: any) => fromApi<AdminClientNotification>(d)));
-        }
-      } catch {}
+    const q = query(
+      collection(db, 'admin_notifications'),
+      orderBy('createdAt', 'desc'),
+      limit(200)
+    );
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() } as AdminClientNotification)));
       setLoading(false);
-    };
-    load();
-    intervalRef.current = setInterval(load, 8000);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    }, () => setLoading(false));
+    return () => unsubscribe();
   }, []);
 
   return { notifications, loading };

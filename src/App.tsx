@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Navbar from './components/Navbar';
 import TrackingView from './components/TrackingView';
 import AdminDashboard from './components/AdminDashboard';
@@ -19,7 +19,7 @@ import { Loader2, Package, ChevronLeft, Bell, X, WifiOff } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Affiliate, AdminAccount, Agent, Client } from './types';
 import { motion, AnimatePresence } from 'motion/react';
-import { doc, getDocFromServer } from 'firebase/firestore';
+import { doc, getDocFromServer, onSnapshot } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { toast } from 'sonner';
 
@@ -160,6 +160,21 @@ export default function App() {
     localStorage.removeItem('neopay_client');
     setShowClientDashboard(false);
   };
+
+  // Sync loggedClient with Firestore in real-time so balance stays up-to-date
+  const clientUnsub = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (clientUnsub.current) { clientUnsub.current(); clientUnsub.current = null; }
+    if (!loggedClient?.id) return;
+    clientUnsub.current = onSnapshot(doc(db, 'clients', loggedClient.id), (snap) => {
+      if (snap.exists()) {
+        const updated = { id: snap.id, ...snap.data() } as Client;
+        setLoggedClient(updated);
+        localStorage.setItem('neopay_client', JSON.stringify(updated));
+      }
+    });
+    return () => { if (clientUnsub.current) clientUnsub.current(); };
+  }, [loggedClient?.id]);
 
   if (loading) {
     return (
