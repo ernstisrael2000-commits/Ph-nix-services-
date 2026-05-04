@@ -16,7 +16,13 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
-      hmr: process.env.DISABLE_HMR !== 'true',
+      hmr: process.env.REPLIT_DEV_DOMAIN
+        ? {
+            clientPort: 443,
+            protocol: 'wss',
+            host: process.env.REPLIT_DEV_DOMAIN,
+          }
+        : true,
       host: '0.0.0.0',
       allowedHosts: true,
     },

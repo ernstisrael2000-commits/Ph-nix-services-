@@ -60,7 +60,14 @@ See `.env.example`:
 
 Configured for autoscale deployment:
 - Build: `npm run build`
-- Run: `node --loader tsx/esm server.ts`
+- Run: `npx tsx server.ts`
+
+## Replit Migration Notes
+
+- HMR configured via `vite.config.ts` to use `wss://` on port 443 with the `REPLIT_DEV_DOMAIN` env var
+- Firebase Auth (Google Sign-In) is kept as-is — it's the user's own Firebase project
+- SMTP email notifications gracefully skip if `SMTP_USER`/`SMTP_PASS` are not set
+- `GEMINI_API_KEY` is optional — AI features won't work without it
 
 ## Super Admin
 

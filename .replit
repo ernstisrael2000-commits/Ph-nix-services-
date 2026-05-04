@@ -22,23 +22,23 @@ args = "Start application"
 name = "Start application"
 author = "agent"
 
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
 
-[workflows.workflow.metadata]
-outputType = "webview"
-
 [[ports]]
 localPort = 5000
-externalPort = 5000
+externalPort = 80
 
 [[ports]]
 localPort = 24678
-externalPort = 80
+externalPort = 3000
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["node", "--loader", "tsx/esm", "server.ts"]
+run = ["npx", "tsx", "server.ts"]
 build = ["npm", "run", "build"]

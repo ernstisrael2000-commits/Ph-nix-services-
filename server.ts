@@ -55,9 +55,6 @@ async function startServer() {
 
       await transporter.sendMail(mailOptions);
 
-      // 2. WhatsApp Notification (Simulated)
-      // Note: Real WhatsApp automation requires a paid API like Twilio or a gateway.
-      // We log the intent here.
       console.log(`[WhatsApp Notification] To Admin: Nouvelle inscription de ${name} (${phone})`);
 
       res.status(200).json({ success: true });
