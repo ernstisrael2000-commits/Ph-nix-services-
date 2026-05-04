@@ -4,15 +4,12 @@ import {
   query,
   where,
   getDocs,
-  getDoc,
-  addDoc,
   updateDoc,
   doc,
   serverTimestamp,
   orderBy,
   onSnapshot,
-  writeBatch,
-  deleteDoc
+  writeBatch
 } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
@@ -196,6 +193,18 @@ export const useClientData = (clientId: string | null) => {
   return { client, loading };
 };
 
+// ─── API helper ──────────────────────────────────────────────────────────────
+
+async function apiPost(path: string, body: object): Promise<void> {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `Erreur serveur (${res.status})`);
+}
+
 // ─── Deposit ─────────────────────────────────────────────────────────────────
 
 export const submitClientDeposit = async (
@@ -205,31 +214,13 @@ export const submitClientDeposit = async (
   txId?: string
 ) => {
   if (amount <= 0) throw new Error("Montant invalide.");
-
-  const txRef = await addDoc(collection(db, 'client_transactions'), {
-    clientId: client.id,
-    clientName: client.name,
-    type: 'deposit',
-    amount,
-    status: 'pending',
-    method,
-    ...(txId && { txId }),
-    description: `Demande de dépôt via ${method}`,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  });
-
-  await addDoc(collection(db, 'admin_notifications'), {
-    type: 'client_deposit',
+  await apiPost('/api/client/deposit', {
     clientId: client.id,
     clientName: client.name,
     clientWalletId: client.walletId || '',
-    transactionId: txRef.id,
     amount,
     method,
-    ...(txId && { txId }),
-    read: false,
-    createdAt: serverTimestamp()
+    ...(txId && { txId })
   });
 };
 
@@ -244,32 +235,14 @@ export const submitClientWithdrawal = async (
   if (amount <= 0) throw new Error("Montant invalide.");
   if (amount > client.balance) throw new Error("Solde insuffisant.");
   if (!accountNumber) throw new Error("Numéro de compte requis.");
-
-  const txRef = await addDoc(collection(db, 'client_transactions'), {
-    clientId: client.id,
-    clientName: client.name,
-    type: 'withdrawal',
-    amount,
-    status: 'pending',
-    method,
-    accountNumber,
-    description: `Demande de retrait via ${method}`,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  });
-
-  await addDoc(collection(db, 'admin_notifications'), {
-    type: 'client_withdrawal',
+  await apiPost('/api/client/withdrawal', {
     clientId: client.id,
     clientName: client.name,
     clientPhone: client.phone || '',
     clientWalletId: client.walletId || '',
-    transactionId: txRef.id,
     amount,
     method,
-    accountNumber,
-    read: false,
-    createdAt: serverTimestamp()
+    accountNumber
   });
 };
 
@@ -283,56 +256,16 @@ export const submitClientPurchase = async (
 ) => {
   if (amount <= 0) throw new Error("Montant invalide.");
   if (amount > client.balance) throw new Error("Solde insuffisant pour cet achat.");
-
-  // Check if client already has a pending purchase
-  const existingQ = query(
-    collection(db, 'client_transactions'),
-    where('clientId', '==', client.id),
-    where('type', '==', 'purchase'),
-    where('status', '==', 'pending')
-  );
-  const existingSnap = await getDocs(existingQ);
-  if (!existingSnap.empty) {
-    throw new Error("Vous avez déjà une demande d'achat en cours. Veuillez attendre la décision de l'administrateur.");
-  }
-
-  const batch = writeBatch(db);
-
-  // Create transaction in PENDING state — balance NOT yet deducted
-  const txRef = doc(collection(db, 'client_transactions'));
-  batch.set(txRef, {
-    clientId: client.id,
-    clientName: client.name,
-    type: 'purchase',
-    amount,
-    status: 'pending',
-    productName,
-    productPrice,
-    directSponsorId: client.directSponsorId || null,
-    description: `Demande d'achat: ${productName} - ${productPrice}`,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  });
-
-  // Notify admin — shown in "Alertes Système" with Approve / Decline buttons
-  const notifRef = doc(collection(db, 'admin_notifications'));
-  batch.set(notifRef, {
-    type: 'client_purchase',
+  await apiPost('/api/client/purchase', {
     clientId: client.id,
     clientName: client.name,
     clientPhone: client.phone || '',
     clientWalletId: client.walletId || '',
-    transactionId: txRef.id,
     amount,
     productName,
     productPrice,
-    directSponsorId: client.directSponsorId || null,
-    status: 'pending',
-    read: false,
-    createdAt: serverTimestamp()
+    directSponsorId: client.directSponsorId || null
   });
-
-  await batch.commit();
 };
 
 // ─── Admin: approve a pending purchase ───────────────────────────────────────
@@ -344,52 +277,13 @@ export const approvePurchaseRequest = async (
   amount: number,
   directSponsorId?: string | null
 ) => {
-  const batch = writeBatch(db);
-
-  // Deduct client balance
-  const clientRef = doc(db, 'clients', clientId);
-  const clientSnap = await getDoc(clientRef);
-  if (!clientSnap.exists()) throw new Error("Client introuvable.");
-  const clientData = clientSnap.data() as Client;
-  if ((clientData.balance || 0) < amount) throw new Error("Solde client insuffisant.");
-
-  batch.update(clientRef, {
-    balance: Math.max(0, (clientData.balance || 0) - amount),
-    updatedAt: serverTimestamp()
+  await apiPost('/api/admin/purchase/approve', {
+    notifId,
+    transactionId,
+    clientId,
+    amount,
+    directSponsorId: directSponsorId || null
   });
-
-  // Credit affiliate sponsor if applicable
-  if (directSponsorId) {
-    const affiliateRef = doc(db, 'affiliates', directSponsorId);
-    const affiliateSnap = await getDoc(affiliateRef);
-    if (affiliateSnap.exists()) {
-      const aff = affiliateSnap.data();
-      batch.update(affiliateRef, {
-        balance: (aff.balance || 0) + amount,
-        totalEarnings: (aff.totalEarnings || 0) + amount,
-        monthlySales: (aff.monthlySales || 0) + amount,
-        updatedAt: serverTimestamp()
-      });
-    }
-  }
-
-  // Mark transaction as completed
-  const txRef = doc(db, 'client_transactions', transactionId);
-  batch.update(txRef, {
-    status: 'completed',
-    affiliateCredited: !!directSponsorId,
-    updatedAt: serverTimestamp()
-  });
-
-  // Mark notification as handled (approved)
-  const notifRef = doc(db, 'admin_notifications', notifId);
-  batch.update(notifRef, {
-    status: 'approved',
-    read: true,
-    resolvedAt: serverTimestamp()
-  });
-
-  await batch.commit();
 };
 
 // ─── Admin: decline a pending purchase ───────────────────────────────────────
@@ -398,24 +292,7 @@ export const declinePurchaseRequest = async (
   notifId: string,
   transactionId: string
 ) => {
-  const batch = writeBatch(db);
-
-  // Mark transaction as rejected (balance was never touched)
-  const txRef = doc(db, 'client_transactions', transactionId);
-  batch.update(txRef, {
-    status: 'rejected',
-    updatedAt: serverTimestamp()
-  });
-
-  // Mark notification as handled (declined)
-  const notifRef = doc(db, 'admin_notifications', notifId);
-  batch.update(notifRef, {
-    status: 'declined',
-    read: true,
-    resolvedAt: serverTimestamp()
-  });
-
-  await batch.commit();
+  await apiPost('/api/admin/purchase/decline', { notifId, transactionId });
 };
 
 // ─── Hook: does this client have a pending purchase? ────────────────────────
@@ -500,39 +377,7 @@ export const updateClientTransactionStatus = async (
   status: 'approved' | 'rejected',
   reason?: string
 ) => {
-  const txRef = doc(db, 'client_transactions', txId);
-  const txSnap = await getDoc(txRef);
-  if (!txSnap.exists()) throw new Error("Transaction introuvable.");
-  const txData = txSnap.data() as ClientTransaction;
-  if (txData.status !== 'pending') throw new Error("Transaction déjà traitée.");
-
-  const batch = writeBatch(db);
-  batch.update(txRef, {
-    status,
-    ...(reason && { rejectionReason: reason }),
-    updatedAt: serverTimestamp()
-  });
-
-  if (status === 'approved') {
-    const clientRef = doc(db, 'clients', txData.clientId);
-    const clientSnap = await getDoc(clientRef);
-    if (clientSnap.exists()) {
-      const clientData = clientSnap.data() as Client;
-      if (txData.type === 'deposit') {
-        batch.update(clientRef, {
-          balance: (clientData.balance || 0) + txData.amount,
-          updatedAt: serverTimestamp()
-        });
-      } else if (txData.type === 'withdrawal') {
-        batch.update(clientRef, {
-          balance: Math.max(0, (clientData.balance || 0) - txData.amount),
-          updatedAt: serverTimestamp()
-        });
-      }
-    }
-  }
-
-  await batch.commit();
+  await apiPost('/api/admin/transaction/status', { txId, status, reason });
 };
 
 // ─── Misc Hooks & Utils ──────────────────────────────────────────────────────
