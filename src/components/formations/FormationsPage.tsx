@@ -54,7 +54,7 @@ export default function FormationsPage({ formations, loading, purchases, progres
       </div>
 
       {/* Search & Filters */}
-      <div className="bg-white border-b sticky top-16 z-20 shadow-sm">
+      <div className="bg-white border-b sticky top-[104px] z-10 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />

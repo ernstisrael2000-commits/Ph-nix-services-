@@ -275,7 +275,7 @@ export default function App() {
           )}
         </AnimatePresence>
         
-        <main className="animate-in fade-in duration-500 pt-20 flex-grow relative">
+        <main className="animate-in fade-in duration-500 pt-14 flex-grow relative">
           {view !== 'home' && (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
               <Button 
@@ -351,7 +351,7 @@ export default function App() {
           )}
 
           {view === 'formations' && (
-            <FormationsView />
+            <FormationsView onGoHome={() => handleViewChange('home')} />
           )}
         </main>
 

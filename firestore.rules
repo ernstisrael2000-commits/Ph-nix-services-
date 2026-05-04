@@ -1,34 +1,6 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: parcels
-    // Document ID: auto-generated
-    // Fields:
-    //   - trackingNumber: string (required) - Unique tracking number
-    //   - status: string (required, enum) - En route, En transit, Arrivé, Livré
-    //   - currentLocation: string (required) - Current location
-    //   - estimatedArrival: string (optional, ISO8601) - Estimated arrival date
-    //   - proofOfDelivery: string (optional, URL) - Image URL
-    //   - paymentStatus: string (required, enum) - Payé, Non payé
-    //   - createdAt: timestamp (required)
-    //   - updatedAt: timestamp (required)
-    //
-    // Collection: users
-    // Document ID: userId (auth.uid)
-    // Fields:
-    //   - email: string (required)
-    //   - role: string (required, enum) - admin
-    //
-    // ===============================================================
-
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
-    
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -135,10 +107,6 @@ service cloud.firestore {
              (!('updatedAt' in data) || data.updatedAt is timestamp) &&
              (!('rejectionReason' in data) || data.rejectionReason is string);
     }
-
-    // ===============================================================
-    // Rules
-    // ===============================================================
 
     match /wallet_transactions/{transactionId} {
       allow read: if true;
@@ -258,10 +226,7 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      // Users can only read their own profile
       allow read: if isAuthenticated() && request.auth.uid == userId;
-      
-      // Only admins can manage users (or the system bootstraps the first admin)
       allow write: if isAdmin();
     }
 
@@ -282,6 +247,35 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if true;
       allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Formations ───────────────────────────────────────────────────────────
+    match /formations/{formationId} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['studentsCount']));
+      allow delete: if isAdmin();
+    }
+
+    match /formation_purchases/{purchaseId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /formation_progress/{progressId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    match /formation_users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && request.auth.uid == userId;
       allow delete: if isAdmin();
     }
 
