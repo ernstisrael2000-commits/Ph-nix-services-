@@ -289,7 +289,7 @@ export interface ClientTransaction {
   updatedAt: any;
 }
 
-export type AdminClientNotifType = 'client_deposit' | 'client_withdrawal';
+export type AdminClientNotifType = 'client_deposit' | 'client_withdrawal' | 'client_purchase';
 
 export interface AdminClientNotification {
   id?: string;
@@ -302,6 +302,9 @@ export interface AdminClientNotification {
   method?: string;
   accountNumber?: string;
   txId?: string;
+  productName?: string;
+  productPrice?: string;
+  servicesRendus?: boolean;
   read: boolean;
   createdAt: any;
 }

@@ -1,17 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { 
-  Package, 
-  CreditCard, 
-  Gamepad2, 
-  Truck, 
-  MessageCircle, 
-  ArrowRight,
-  CheckCircle2,
-  Info,
-  ArrowUp,
-  HelpCircle
-} from 'lucide-react';
+import { Package, CreditCard, Gamepad2, Truck, MessageCircle, ArrowRight, CircleCheck as CheckCircle2, Info, ArrowUp, Circle as HelpCircle } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Button } from './ui/button';
 import { useState, useEffect, useRef } from 'react';
@@ -30,7 +19,7 @@ import {
 import { Badge } from './ui/badge';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
-import { Loader2, ShieldCheck, Zap, Star, Headphones, QrCode, Wallet, Smartphone, Landmark, X, ArrowDownToLine, ArrowUpFromLine, TrendingUp, Copy, CheckCircle, ChevronRight, Clock, DollarSign } from 'lucide-react';
+import { Loader as Loader2, ShieldCheck, Zap, Star, Headphones, QrCode, Wallet, Smartphone, Landmark, X, ArrowDownToLine, ArrowUpFromLine, TrendingUp, Copy, CircleCheck as CheckCircle, ChevronRight, Clock, DollarSign } from 'lucide-react';
 import { submitClientPurchase, useClientData, useClientTransactions, submitClientDeposit, submitClientWithdrawal } from '../services/clientService';
 import { Client } from '../types';
 import { toast } from 'sonner';
@@ -916,10 +905,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                         if (!hasBalance) { toast.error(`Solde insuffisant. Vous avez ${(loggedClient.balance || 0).toLocaleString()} HTG`); return; }
                         try {
                           await submitClientPurchase(loggedClient, productName, String(productPrice), amount);
-                          const whatsappMsg = `Bonjour Neopay,\n\nJ'ai soumis un *PAIEMENT PAR WALLET*:\n👤 Client: *${loggedClient.name}*\n🔑 Wallet ID: *${loggedClient.walletId}*\n🛒 Produit: *${productName}*\n💰 Montant: *${productPrice} HTG*\n\nMerci de valider et traiter ma commande.`;
-                          const num = settings?.whatsappAdminNumber || WHATSAPP_NUMBER;
-                          window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent(whatsappMsg)}`, '_blank');
-                          toast.success("Demande d'achat soumise ! En attente de validation admin.");
+                          toast.success(`Achat confirme ! ${amount.toLocaleString()} HTG debite de votre solde.`);
                           setIsProductDetailOpen(false);
                         } catch (err: any) {
                           toast.error(err.message || "Erreur lors de la soumission.");

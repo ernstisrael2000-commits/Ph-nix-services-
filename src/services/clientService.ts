@@ -179,18 +179,47 @@ export const submitClientPurchase = async (
   if (amount <= 0) throw new Error("Montant invalide.");
   if (amount > client.balance) throw new Error("Solde insuffisant pour cet achat.");
 
-  await addDoc(collection(db, 'client_transactions'), {
+  const batch = writeBatch(db);
+
+  // Deduct balance immediately
+  const clientRef = doc(db, 'clients', client.id!);
+  batch.update(clientRef, {
+    balance: Math.max(0, (client.balance || 0) - amount),
+    updatedAt: serverTimestamp()
+  });
+
+  // Record transaction as completed
+  const txRef = doc(collection(db, 'client_transactions'));
+  batch.set(txRef, {
     clientId: client.id,
     clientName: client.name,
     type: 'purchase',
     amount,
-    status: 'pending',
+    status: 'completed',
     productName,
     productPrice,
     description: `Achat: ${productName} - ${productPrice}`,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   });
+
+  // Notify admin (shown in "Alertes Systeme" with "Services Rendus" button)
+  const notifRef = doc(collection(db, 'admin_notifications'));
+  batch.set(notifRef, {
+    type: 'client_purchase',
+    clientId: client.id,
+    clientName: client.name,
+    clientWalletId: client.walletId,
+    transactionId: txRef.id,
+    amount,
+    productName,
+    productPrice,
+    read: false,
+    servicesRendus: false,
+    createdAt: serverTimestamp()
+  });
+
+  await batch.commit();
 };
 
 export const useClientTransactions = (clientId: string | null) => {
@@ -325,4 +354,11 @@ export const markAllAdminNotificationsRead = async () => {
   const batch = writeBatch(db);
   snap.docs.forEach(d => batch.update(d.ref, { read: true }));
   await batch.commit();
+};
+
+export const markPurchaseServicesRendus = async (notifId: string) => {
+  await updateDoc(doc(db, 'admin_notifications', notifId), {
+    servicesRendus: true,
+    read: true
+  });
 };

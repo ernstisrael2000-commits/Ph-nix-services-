@@ -8,53 +8,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuSeparator
 } from './ui/dropdown-menu';
-import { 
-  Smartphone,
-  Plus, 
-  Search, 
-  Edit2, 
-  Trash2, 
-  Package, 
-  MoreVertical, 
-  CheckCircle2, 
-  Truck, 
-  Clock, 
-  AlertCircle,
-  AlertTriangle,
-  Loader2,
-  Upload,
-  Trash,
-  Settings as SettingsIcon,
-  LayoutGrid,
-  Landmark,
-  Image as ImageIcon,
-  Edit,
-  PlusCircle,
-  X,
-  Wallet,
-  Users,
-  Trophy,
-  Gamepad2,
-  Bell,
-  Filter,
-  ArrowUpDown,
-  DollarSign,
-  ArrowUp,
-  ArrowDown,
-  CreditCard,
-  UserCheck,
-  HelpCircle,
-  Zap,
-  Star,
-  ChevronRight,
-  ChevronLeft,
-  ArrowRight,
-  ArrowRightLeft,
-  Network,
-  TrendingUp,
-  LayoutDashboard,
-  XCircle
-} from 'lucide-react';
+import { Smartphone, Plus, Search, CreditCard as Edit2, Trash2, Package, MoveVertical as MoreVertical, CircleCheck as CheckCircle2, Truck, Clock, CircleAlert as AlertCircle, TriangleAlert as AlertTriangle, Loader as Loader2, Upload, Trash, Settings as SettingsIcon, LayoutGrid, Landmark, Image as ImageIcon, CreditCard as Edit, CirclePlus as PlusCircle, X, Wallet, Users, Trophy, Gamepad2, Bell, ListFilter as Filter, ArrowUpDown, DollarSign, ArrowUp, ArrowDown, CreditCard, UserCheck, Circle as HelpCircle, Zap, Star, ChevronRight, ChevronLeft, ArrowRight, ArrowRightLeft, Network, TrendingUp, LayoutDashboard, Circle as XCircle } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -108,7 +62,7 @@ import {
 } from '../services/agentService';
 import { useAnalytics } from '../services/analyticsService';
 import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton, AdminAccount, Client, Agent, WalletTransaction, ClientTransaction, AdminClientNotification } from '../types';
-import { useAllClientTransactions, updateClientTransactionStatus, useAdminClientNotifications, markAdminNotificationRead, markAllAdminNotificationsRead } from '../services/clientService';
+import { useAllClientTransactions, updateClientTransactionStatus, useAdminClientNotifications, markAdminNotificationRead, markAllAdminNotificationsRead, markPurchaseServicesRendus } from '../services/clientService';
 import AdminShippingManager from './AdminShippingManager';
 import { 
   BarChart, 
@@ -134,7 +88,7 @@ import { Timestamp, serverTimestamp, collection, addDoc } from 'firebase/firesto
 import { db } from '../lib/firebase';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
-import { LogOut, Shield, ShieldAlert as ShieldAlertIcon, History } from 'lucide-react';
+import { LogOut, Shield, ShieldAlert as ShieldAlertIcon, History, ShoppingBag, SquareCheck as CheckSquare } from 'lucide-react';
 
 // Helper for image compression
 const compressImage = (file: File): Promise<Blob> => {
@@ -5682,6 +5636,75 @@ const AffiliateEditForm = ({
               </Select>
             </div>
           </div>
+
+          {/* Client purchase notifications — "Services Rendus" */}
+          {(() => {
+            const purchaseNotifs = adminClientNotifs.filter(n => n.type === 'client_purchase' && !n.servicesRendus);
+            if (purchaseNotifs.length === 0) return null;
+            return (
+              <Card className="shadow-sm border-blue-200 overflow-hidden">
+                <CardHeader className="border-b bg-blue-50 py-3 px-4">
+                  <CardTitle className="text-base font-black text-blue-800 flex items-center gap-2">
+                    <ShoppingBag className="h-4 w-4 text-blue-600" />
+                    Achats par Solde — Services a Rendre
+                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-500 text-white animate-pulse">
+                      {purchaseNotifs.length} en attente
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {purchaseNotifs.map(notif => (
+                    <div key={notif.id} className="rounded-2xl border border-blue-100 bg-white shadow-sm overflow-hidden flex flex-col">
+                      <div className="bg-blue-600 px-4 py-3 flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                          <ShoppingBag className="h-5 w-5 text-white" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-black text-white text-sm truncate">{notif.clientName}</p>
+                          <p className="text-blue-100 text-[10px] font-mono">#{notif.clientWalletId}</p>
+                        </div>
+                      </div>
+                      <div className="px-4 py-3 flex-1 space-y-1.5">
+                        <p className="font-black text-dark text-sm truncate">{notif.productName}</p>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-subtext">Prix</span>
+                          <span className="font-black text-blue-700 text-sm">{notif.amount.toLocaleString()} HTG</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-subtext">Date</span>
+                          <span className="text-[11px] text-gray-400">
+                            {notif.createdAt?.toDate ? format(notif.createdAt.toDate(), 'dd MMM, HH:mm', { locale: fr }) : ''}
+                          </span>
+                        </div>
+                        <div className="pt-1">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                            Paye — Solde debite automatiquement
+                          </span>
+                        </div>
+                      </div>
+                      <div className="px-4 pb-4">
+                        <Button
+                          size="sm"
+                          className="w-full h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs border-0 flex items-center justify-center gap-2 shadow-md shadow-blue-200 transition-all active:scale-95"
+                          onClick={async () => {
+                            try {
+                              await markPurchaseServicesRendus(notif.id!);
+                              toast.success(`Services rendus pour ${notif.clientName} !`);
+                            } catch {
+                              toast.error("Erreur.");
+                            }
+                          }}
+                        >
+                          <CheckSquare className="h-4 w-4" />
+                          Services Rendus
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Client deposit / withdrawal notifications */}
           {adminClientNotifs.length > 0 && (
