@@ -9,12 +9,12 @@ import {
   AlertCircle, Users
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { registerClient, loginClient } from '../services/clientService';
+import { registerClient, loginClient, loginClientWithGoogle, registerClientWithGoogle } from '../services/clientService';
 import { loginAdminWithGoogle } from '../services/adminService';
 import { Client, AdminAccount } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
-type ModalView = 'choice' | 'client-login' | 'client-register' | 'admin-access';
+type ModalView = 'choice' | 'client-login' | 'client-register' | 'admin-access' | 'google-register';
 
 interface UserAuthModalProps {
   open: boolean;
@@ -48,9 +48,15 @@ export default function UserAuthModal({ open, onOpenChange, onClientLogin, onAdm
   const [regPassword, setRegPassword] = useState('');
   const [regSponsor, setRegSponsor] = useState('');
 
+  // Google registration state
+  const [googleUser, setGoogleUser] = useState<{ uid: string; email: string; name: string; photoUrl?: string } | null>(null);
+  const [googleRegPhone, setGoogleRegPhone] = useState('');
+  const [googleRegSponsor, setGoogleRegSponsor] = useState('');
+
   const resetForms = () => {
     setLoginEmail(''); setLoginPassword('');
     setRegName(''); setRegPhone(''); setRegEmail(''); setRegPassword(''); setRegSponsor('');
+    setGoogleUser(null); setGoogleRegPhone(''); setGoogleRegSponsor('');
     setShowPassword(false);
     setGoogleError(null);
     setView('choice');
@@ -102,6 +108,59 @@ export default function UserAuthModal({ open, onOpenChange, onClientLogin, onAdm
     }
   };
 
+  const handleGoogleClientLogin = async () => {
+    setGoogleError(null);
+    setLoading(true);
+    try {
+      const result = await loginClientWithGoogle();
+      if (result.error) {
+        if (result.error) toast.error(result.error);
+        return;
+      }
+      if (result.noAccount) {
+        // No account found — redirect to Google registration
+        setGoogleUser({
+          uid: result.googleUid!,
+          email: result.googleEmail!,
+          name: result.googleName!,
+          photoUrl: result.googlePhotoUrl
+        });
+        setView('google-register');
+        return;
+      }
+      if (result.client) {
+        toast.success(`Bienvenue, ${result.client.name} !`);
+        onClientLogin(result.client);
+        handleClose(false);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erreur de connexion Google.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!googleUser) return;
+    if (!googleRegPhone.trim()) { toast.error("Le numéro de téléphone est requis."); return; }
+    setLoading(true);
+    try {
+      const client = await registerClientWithGoogle({
+        phone: googleRegPhone.trim(),
+        sponsorCode: googleRegSponsor.trim() || undefined,
+        googleUser
+      });
+      toast.success(`Compte créé ! Bienvenue, ${client.name} !`);
+      onClientLogin(client);
+      handleClose(false);
+    } catch (err: any) {
+      toast.error(err.message || "Erreur lors de la création du compte.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleGoogleAdminLogin = async () => {
     setGoogleError(null);
     setLoading(true);
@@ -120,6 +179,24 @@ export default function UserAuthModal({ open, onOpenChange, onClientLogin, onAdm
       setLoading(false);
     }
   };
+
+  const GoogleButton = ({ onClick, label }: { onClick: () => void; label: string }) => (
+    <motion.button
+      type="button"
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.97 }}
+      onClick={onClick}
+      disabled={loading}
+      className="w-full flex items-center justify-center gap-3 h-12 rounded-xl border-2 border-gray-200 hover:border-blue-300 hover:bg-blue-50/40 transition-all disabled:opacity-60 disabled:cursor-not-allowed bg-white shadow-sm"
+    >
+      {loading ? <Loader2 className="h-5 w-5 animate-spin text-gray-400" /> : (
+        <>
+          <GoogleIcon />
+          <span className="font-bold text-sm text-gray-700">{label}</span>
+        </>
+      )}
+    </motion.button>
+  );
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -197,7 +274,6 @@ export default function UserAuthModal({ open, onOpenChange, onClientLogin, onAdm
               </div>
 
               <div className="p-6 space-y-4 bg-white">
-                {/* Google Admin Login */}
                 <div className="space-y-2">
                   <p className="text-[10px] font-black text-subtext uppercase tracking-widest">Connexion Administrateur</p>
                   <button
@@ -217,7 +293,6 @@ export default function UserAuthModal({ open, onOpenChange, onClientLogin, onAdm
                     )}
                   </button>
 
-                  {/* Error message */}
                   <AnimatePresence>
                     {googleError && (
                       <motion.div
@@ -237,14 +312,12 @@ export default function UserAuthModal({ open, onOpenChange, onClientLogin, onAdm
                   </p>
                 </div>
 
-                {/* Divider */}
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-px bg-gray-100" />
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">ou</span>
                   <div className="flex-1 h-px bg-gray-100" />
                 </div>
 
-                {/* Affiliate Access */}
                 <div className="space-y-2">
                   <p className="text-[10px] font-black text-subtext uppercase tracking-widest">Espace Affilié / Agent</p>
                   <button
@@ -274,38 +347,50 @@ export default function UserAuthModal({ open, onOpenChange, onClientLogin, onAdm
                 <DialogTitle className="text-xl font-black text-white">Connexion Client</DialogTitle>
                 <DialogDescription className="text-white/70 text-xs mt-1">Accédez à votre wallet Neopay</DialogDescription>
               </div>
-              <form onSubmit={handleLogin} className="p-6 space-y-4 bg-white">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />
-                    <Input type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)}
-                      placeholder="votre@email.com" className="pl-10 h-11 rounded-xl border-gray-200" required />
-                  </div>
+              <div className="p-6 space-y-4 bg-white">
+                {/* Google Login */}
+                <GoogleButton onClick={handleGoogleClientLogin} label="Se connecter avec Google" />
+
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-gray-100" />
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">ou</span>
+                  <div className="flex-1 h-px bg-gray-100" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Mot de passe</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />
-                    <Input type={showPassword ? 'text' : 'password'} value={loginPassword} onChange={e => setLoginPassword(e.target.value)}
-                      placeholder="••••••••" className="pl-10 pr-10 h-11 rounded-xl border-gray-200" required />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-subtext hover:text-dark transition-colors">
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />
+                      <Input type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)}
+                        placeholder="votre@email.com" className="pl-10 h-11 rounded-xl border-gray-200" required />
+                    </div>
                   </div>
-                </div>
-                <Button type="submit" disabled={loading}
-                  className="w-full h-12 rounded-xl bg-primary hover:bg-[#D98A1E] text-white font-black shadow-lg shadow-primary/30">
-                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <><LogIn className="h-5 w-5 mr-2" /> Connexion</>}
-                </Button>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Mot de passe</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />
+                      <Input type={showPassword ? 'text' : 'password'} value={loginPassword} onChange={e => setLoginPassword(e.target.value)}
+                        placeholder="••••••••" className="pl-10 pr-10 h-11 rounded-xl border-gray-200" required />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-subtext hover:text-dark transition-colors">
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <Button type="submit" disabled={loading}
+                    className="w-full h-12 rounded-xl bg-primary hover:bg-[#D98A1E] text-white font-black shadow-lg shadow-primary/30">
+                    {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <><LogIn className="h-5 w-5 mr-2" /> Connexion</>}
+                  </Button>
+                </form>
+
                 <p className="text-center text-sm text-subtext">
                   Pas encore de compte ?{' '}
                   <button type="button" onClick={() => setView('client-register')} className="text-primary font-bold hover:underline">
                     S'inscrire
                   </button>
                 </p>
-              </form>
+              </div>
             </motion.div>
           )}
 
@@ -319,61 +404,138 @@ export default function UserAuthModal({ open, onOpenChange, onClientLogin, onAdm
                 <DialogTitle className="text-xl font-black text-white">Créer un compte</DialogTitle>
                 <DialogDescription className="text-white/70 text-xs mt-1">Rejoignez Neopay gratuitement</DialogDescription>
               </div>
-              <form onSubmit={handleRegister} className="p-6 space-y-3 bg-white max-h-[60vh] overflow-y-auto no-scrollbar">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Nom complet *</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />
-                    <Input value={regName} onChange={e => setRegName(e.target.value)}
-                      placeholder="Jean Dupont" className="pl-10 h-11 rounded-xl border-gray-200" required />
-                  </div>
+              <div className="p-6 space-y-4 bg-white">
+                {/* Google Register */}
+                <GoogleButton onClick={handleGoogleClientLogin} label="S'inscrire avec Google" />
+
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-gray-100" />
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">ou manuellement</span>
+                  <div className="flex-1 h-px bg-gray-100" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Téléphone *</Label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />
-                    <Input value={regPhone} onChange={e => setRegPhone(e.target.value)}
-                      placeholder="+509 XXXX XXXX" className="pl-10 h-11 rounded-xl border-gray-200" required />
+
+                <form onSubmit={handleRegister} className="space-y-3 max-h-[45vh] overflow-y-auto no-scrollbar">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Nom complet *</Label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />
+                      <Input value={regName} onChange={e => setRegName(e.target.value)}
+                        placeholder="Jean Dupont" className="pl-10 h-11 rounded-xl border-gray-200" required />
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Email *</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />
-                    <Input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)}
-                      placeholder="votre@email.com" className="pl-10 h-11 rounded-xl border-gray-200" required />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Téléphone *</Label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />
+                      <Input value={regPhone} onChange={e => setRegPhone(e.target.value)}
+                        placeholder="+509 XXXX XXXX" className="pl-10 h-11 rounded-xl border-gray-200" required />
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Mot de passe *</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />
-                    <Input type={showPassword ? 'text' : 'password'} value={regPassword} onChange={e => setRegPassword(e.target.value)}
-                      placeholder="6 caractères minimum" className="pl-10 pr-10 h-11 rounded-xl border-gray-200" required />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-subtext hover:text-dark transition-colors">
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Email *</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />
+                      <Input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)}
+                        placeholder="votre@email.com" className="pl-10 h-11 rounded-xl border-gray-200" required />
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Code parrain (optionnel)</Label>
-                  <div className="relative">
-                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />
-                    <Input value={regSponsor} onChange={e => setRegSponsor(e.target.value)}
-                      placeholder="Code affilié parrain" className="pl-10 h-11 rounded-xl border-gray-200" />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Mot de passe *</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />
+                      <Input type={showPassword ? 'text' : 'password'} value={regPassword} onChange={e => setRegPassword(e.target.value)}
+                        placeholder="6 caractères minimum" className="pl-10 pr-10 h-11 rounded-xl border-gray-200" required />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-subtext hover:text-dark transition-colors">
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <Button type="submit" disabled={loading}
-                  className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-lg">
-                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <><UserPlus className="h-5 w-5 mr-2" /> Créer mon compte</>}
-                </Button>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Code parrain (optionnel)</Label>
+                    <div className="relative">
+                      <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />
+                      <Input value={regSponsor} onChange={e => setRegSponsor(e.target.value)}
+                        placeholder="Code affilié parrain" className="pl-10 h-11 rounded-xl border-gray-200" />
+                    </div>
+                  </div>
+                  <Button type="submit" disabled={loading}
+                    className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-lg">
+                    {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <><UserPlus className="h-5 w-5 mr-2" /> Créer mon compte</>}
+                  </Button>
+                </form>
+
                 <p className="text-center text-sm text-subtext">
                   Déjà un compte ?{' '}
                   <button type="button" onClick={() => setView('client-login')} className="text-primary font-bold hover:underline">
                     Se connecter
                   </button>
                 </p>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── GOOGLE REGISTER (complete profile) ── */}
+          {view === 'google-register' && googleUser && (
+            <motion.div key="google-register" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+              <div className="bg-gradient-to-br from-blue-500 to-blue-700 p-6 text-white">
+                <button onClick={() => setView('client-register')} className="flex items-center gap-1 text-white/70 hover:text-white text-sm mb-4 transition-colors">
+                  <ArrowLeft className="h-4 w-4" /> Retour
+                </button>
+                <DialogTitle className="text-xl font-black text-white">Compléter votre profil</DialogTitle>
+                <DialogDescription className="text-white/70 text-xs mt-1">Un dernier détail pour finaliser l'inscription</DialogDescription>
+              </div>
+              <form onSubmit={handleGoogleRegister} className="p-6 space-y-4 bg-white">
+                {/* Google user info display */}
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-blue-50 border border-blue-100">
+                  {googleUser.photoUrl ? (
+                    <img src={googleUser.photoUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
+                  ) : (
+                    <div className="h-10 w-10 rounded-full bg-blue-200 flex items-center justify-center">
+                      <User className="h-5 w-5 text-blue-600" />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="font-black text-sm text-dark truncate">{googleUser.name}</p>
+                    <p className="text-xs text-subtext truncate">{googleUser.email}</p>
+                  </div>
+                  <div className="shrink-0">
+                    <GoogleIcon />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Téléphone *</Label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />
+                    <Input
+                      value={googleRegPhone}
+                      onChange={e => setGoogleRegPhone(e.target.value)}
+                      placeholder="+509 XXXX XXXX"
+                      className="pl-10 h-11 rounded-xl border-gray-200"
+                      required
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Code parrain (optionnel)</Label>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-subtext" />
+                    <Input
+                      value={googleRegSponsor}
+                      onChange={e => setGoogleRegSponsor(e.target.value)}
+                      placeholder="Code affilié parrain"
+                      className="pl-10 h-11 rounded-xl border-gray-200"
+                    />
+                  </div>
+                </div>
+
+                <Button type="submit" disabled={loading}
+                  className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black shadow-lg">
+                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <><UserPlus className="h-5 w-5 mr-2" /> Créer mon compte</>}
+                </Button>
               </form>
             </motion.div>
           )}

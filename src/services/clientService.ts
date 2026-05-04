@@ -14,6 +14,7 @@ import {
   writeBatch,
   setDoc
 } from 'firebase/firestore';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 import { handleFirestoreError } from '../lib/firebase-errors';
 import { Client, ClientTransaction, AdminClientNotification } from '../types';
@@ -72,6 +73,59 @@ export const registerClient = async (data: {
   return { id: ref.id, ...clientData } as Client;
 };
 
+export const registerClientWithGoogle = async (data: {
+  phone: string;
+  sponsorCode?: string;
+  googleUser: { uid: string; email: string; name: string; photoUrl?: string };
+}): Promise<Client> => {
+  const emailQ = query(collection(db, 'clients'), where('email', '==', data.googleUser.email));
+  const snap = await getDocs(emailQ);
+  if (!snap.empty) throw new Error("Un compte avec cet email existe déjà.");
+
+  let walletId = '';
+  let isUnique = false;
+  while (!isUnique) {
+    walletId = Math.floor(10000000 + Math.random() * 90000000).toString();
+    const wQ = query(collection(db, 'clients'), where('walletId', '==', walletId));
+    const wSnap = await getDocs(wQ);
+    if (wSnap.empty) isUnique = true;
+  }
+
+  let directSponsorId: string | undefined;
+  let indirectSponsorId: string | undefined;
+
+  if (data.sponsorCode) {
+    const affQ = query(collection(db, 'affiliates'), where('code', '==', data.sponsorCode));
+    const affSnap = await getDocs(affQ);
+    if (!affSnap.empty) {
+      const aff = affSnap.docs[0];
+      directSponsorId = aff.id;
+      const affData = aff.data();
+      if (affData.parentAffiliateId) {
+        indirectSponsorId = affData.parentAffiliateId;
+      }
+    }
+  }
+
+  const clientData: any = {
+    name: data.googleUser.name,
+    phone: data.phone,
+    email: data.googleUser.email,
+    uid: data.googleUser.uid,
+    photoUrl: data.googleUser.photoUrl || '',
+    balance: 0,
+    walletId,
+    status: 'active',
+    ...(directSponsorId && { directSponsorId }),
+    ...(indirectSponsorId && { indirectSponsorId }),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
+
+  const ref = await addDoc(collection(db, 'clients'), clientData);
+  return { id: ref.id, ...clientData } as Client;
+};
+
 export const loginClient = async (email: string, password: string): Promise<Client | null> => {
   const q = query(
     collection(db, 'clients'),
@@ -81,6 +135,64 @@ export const loginClient = async (email: string, password: string): Promise<Clie
   const snap = await getDocs(q);
   if (snap.empty) return null;
   return { id: snap.docs[0].id, ...snap.docs[0].data() } as Client;
+};
+
+export interface GoogleClientLoginResult {
+  client: Client | null;
+  googleEmail?: string;
+  googleName?: string;
+  googlePhotoUrl?: string;
+  googleUid?: string;
+  noAccount?: boolean;
+  error?: string;
+}
+
+export const loginClientWithGoogle = async (): Promise<GoogleClientLoginResult> => {
+  const provider = new GoogleAuthProvider();
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+    const email = user.email;
+
+    if (!email) {
+      return { client: null, error: "L'email Google est requis." };
+    }
+
+    const q = query(collection(db, 'clients'), where('email', '==', email));
+    const snap = await getDocs(q);
+
+    if (snap.empty) {
+      return {
+        client: null,
+        noAccount: true,
+        googleEmail: email,
+        googleName: user.displayName || '',
+        googlePhotoUrl: user.photoURL || '',
+        googleUid: user.uid
+      };
+    }
+
+    const clientDoc = snap.docs[0];
+    const clientData = clientDoc.data() as Client;
+
+    if (clientData.status === 'blocked') {
+      return { client: null, error: "Votre compte est bloqué. Contactez le support." };
+    }
+
+    await updateDoc(doc(db, 'clients', clientDoc.id), {
+      uid: user.uid,
+      ...(user.photoURL && { photoUrl: user.photoURL }),
+      updatedAt: serverTimestamp()
+    });
+
+    return { client: { id: clientDoc.id, ...clientData, uid: user.uid } };
+  } catch (error: any) {
+    if (error.code === 'auth/popup-closed-by-user') {
+      return { client: null, error: '' };
+    }
+    console.error("Google client login error:", error);
+    return { client: null, error: error.message || "Erreur de connexion Google." };
+  }
 };
 
 export const useClientData = (clientId: string | null) => {
@@ -181,12 +293,27 @@ export const submitClientPurchase = async (
 
   const batch = writeBatch(db);
 
-  // Deduct balance immediately
+  // Deduct balance immediately from client
   const clientRef = doc(db, 'clients', client.id!);
   batch.update(clientRef, {
     balance: Math.max(0, (client.balance || 0) - amount),
     updatedAt: serverTimestamp()
   });
+
+  // Auto-credit the affiliate sponsor's balance if client has one
+  if (client.directSponsorId) {
+    const affiliateRef = doc(db, 'affiliates', client.directSponsorId);
+    const affiliateSnap = await getDoc(affiliateRef);
+    if (affiliateSnap.exists()) {
+      const aff = affiliateSnap.data();
+      batch.update(affiliateRef, {
+        balance: (aff.balance || 0) + amount,
+        totalEarnings: (aff.totalEarnings || 0) + amount,
+        monthlySales: (aff.monthlySales || 0) + amount,
+        updatedAt: serverTimestamp()
+      });
+    }
+  }
 
   // Record transaction as completed
   const txRef = doc(collection(db, 'client_transactions'));
@@ -203,7 +330,7 @@ export const submitClientPurchase = async (
     updatedAt: serverTimestamp()
   });
 
-  // Notify admin (shown in "Alertes Systeme" with "Services Rendus" button)
+  // Notify admin — shown in "Alertes Système" with single "Services Rendus" button
   const notifRef = doc(collection(db, 'admin_notifications'));
   batch.set(notifRef, {
     type: 'client_purchase',
@@ -214,6 +341,7 @@ export const submitClientPurchase = async (
     amount,
     productName,
     productPrice,
+    affiliateCredited: !!client.directSponsorId,
     read: false,
     servicesRendus: false,
     createdAt: serverTimestamp()

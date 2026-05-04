@@ -5676,10 +5676,15 @@ const AffiliateEditForm = ({
                             {notif.createdAt?.toDate ? format(notif.createdAt.toDate(), 'dd MMM, HH:mm', { locale: fr }) : ''}
                           </span>
                         </div>
-                        <div className="pt-1">
+                        <div className="pt-1 flex flex-wrap gap-1">
                           <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                            Paye — Solde debite automatiquement
+                            ✓ Payé — Solde débité automatiquement
                           </span>
+                          {(notif as any).affiliateCredited && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
+                              ✓ Affilié crédité
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="px-4 pb-4">
