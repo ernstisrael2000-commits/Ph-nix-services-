@@ -89,7 +89,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     if (isNaN(amount) || amount <= 0) { toast.error("Montant invalide."); return; }
     setActionLoading(true);
     try {
-      await submitClientDeposit(client!, amount, depositMethod);
+      await submitClientDeposit(client!, amount, depositMethod, depositTxId || undefined);
       const info = methodInfo[depositMethod];
       const usdEquiv = (amount / exchangeRate).toFixed(2);
       const msg = `Bonjour Neopay,\n\nJe souhaite effectuer un *DÉPÔT*:\n👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n💰 Montant: *${amount.toLocaleString()} HTG*\n≈ *$${usdEquiv} USD*\n💳 Via: *${depositMethod}*${info?.number ? `\n📞 Numéro: *${info.number}*` : ''}${depositTxId ? `\n🔖 ID Transaction: *${depositTxId}*` : ''}\n\nMerci de valider mon dépôt.`;

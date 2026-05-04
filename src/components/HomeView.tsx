@@ -104,7 +104,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
     if (!effectiveClient) return;
     setWalletActionLoading(true);
     try {
-      await submitClientDeposit(effectiveClient, amount, walletDepositMethod);
+      await submitClientDeposit(effectiveClient, amount, walletDepositMethod, walletDepositTxId || undefined);
       const info = depositMethodInfo[walletDepositMethod];
       const waNum = settings?.whatsappAdminNumber || WHATSAPP_NUMBER;
       const msg = `Bonjour Neopay,\n\nJe souhaite effectuer un *DÉPÔT*:\n👤 Nom: *${effectiveClient.name}*\n🔑 ID Wallet: *${effectiveClient.walletId}*\n💰 Montant: *${amount.toLocaleString()} HTG*\n≈ *$${(amount / exchangeRate).toFixed(2)} USD*\n💳 Via: *${walletDepositMethod}*${info?.number ? `\n📞 Numéro: *${info.number}*` : ''}${walletDepositTxId ? `\n🔖 ID Transaction: *${walletDepositTxId}*` : ''}\n\nMerci de valider mon dépôt.`;

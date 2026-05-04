@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { handleFirestoreError } from '../lib/firebase-errors';
-import { Client, ClientTransaction } from '../types';
+import { Client, ClientTransaction, AdminClientNotification } from '../types';
 
 export const registerClient = async (data: {
   name: string;
@@ -99,18 +99,37 @@ export const useClientData = (clientId: string | null) => {
   return { client, loading };
 };
 
-export const submitClientDeposit = async (client: Client, amount: number, method: string) => {
+export const submitClientDeposit = async (
+  client: Client,
+  amount: number,
+  method: string,
+  txId?: string
+) => {
   if (amount <= 0) throw new Error("Montant invalide.");
-  await addDoc(collection(db, 'client_transactions'), {
+  const txRef = await addDoc(collection(db, 'client_transactions'), {
     clientId: client.id,
     clientName: client.name,
     type: 'deposit',
     amount,
     status: 'pending',
     method,
+    ...(txId && { txId }),
     description: `Demande de dépôt via ${method}`,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
+  });
+
+  await addDoc(collection(db, 'admin_notifications'), {
+    type: 'client_deposit',
+    clientId: client.id,
+    clientName: client.name,
+    clientWalletId: client.walletId,
+    transactionId: txRef.id,
+    amount,
+    method,
+    ...(txId && { txId }),
+    read: false,
+    createdAt: serverTimestamp()
   });
 };
 
@@ -124,7 +143,7 @@ export const submitClientWithdrawal = async (
   if (amount > client.balance) throw new Error("Solde insuffisant.");
   if (!accountNumber) throw new Error("Numéro de compte requis.");
 
-  await addDoc(collection(db, 'client_transactions'), {
+  const txRef = await addDoc(collection(db, 'client_transactions'), {
     clientId: client.id,
     clientName: client.name,
     type: 'withdrawal',
@@ -135,6 +154,19 @@ export const submitClientWithdrawal = async (
     description: `Demande de retrait via ${method}`,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
+  });
+
+  await addDoc(collection(db, 'admin_notifications'), {
+    type: 'client_withdrawal',
+    clientId: client.id,
+    clientName: client.name,
+    clientWalletId: client.walletId,
+    transactionId: txRef.id,
+    amount,
+    method,
+    accountNumber,
+    read: false,
+    createdAt: serverTimestamp()
   });
 };
 
@@ -262,4 +294,35 @@ export const usePendingClientCount = () => {
     return () => unsubscribe();
   }, []);
   return count;
+};
+
+export const useAdminClientNotifications = () => {
+  const [notifications, setNotifications] = useState<AdminClientNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(
+      collection(db, 'admin_notifications'),
+      orderBy('createdAt', 'desc')
+    );
+    const unsubscribe = onSnapshot(q, (snap) => {
+      setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() } as AdminClientNotification)));
+      setLoading(false);
+    }, () => setLoading(false));
+    return () => unsubscribe();
+  }, []);
+
+  return { notifications, loading };
+};
+
+export const markAdminNotificationRead = async (notifId: string) => {
+  await updateDoc(doc(db, 'admin_notifications', notifId), { read: true });
+};
+
+export const markAllAdminNotificationsRead = async () => {
+  const q = query(collection(db, 'admin_notifications'), where('read', '==', false));
+  const snap = await getDocs(q);
+  const batch = writeBatch(db);
+  snap.docs.forEach(d => batch.update(d.ref, { read: true }));
+  await batch.commit();
 };

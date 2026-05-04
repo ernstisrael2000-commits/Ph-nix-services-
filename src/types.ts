@@ -281,9 +281,27 @@ export interface ClientTransaction {
   description?: string;
   method?: string;
   accountNumber?: string;
+  txId?: string;
   productName?: string;
   productPrice?: string;
   rejectionReason?: string;
   createdAt: any;
   updatedAt: any;
+}
+
+export type AdminClientNotifType = 'client_deposit' | 'client_withdrawal';
+
+export interface AdminClientNotification {
+  id?: string;
+  type: AdminClientNotifType;
+  clientId: string;
+  clientName: string;
+  clientWalletId?: string;
+  transactionId: string;
+  amount: number;
+  method?: string;
+  accountNumber?: string;
+  txId?: string;
+  read: boolean;
+  createdAt: any;
 }
