@@ -26,6 +26,76 @@ import { toast } from 'sonner';
 
 const WHATSAPP_NUMBER = "+50944813185";
 
+// ── WalletPayButton — extracted as a proper React component to avoid DOM reconciliation
+// errors that occur when an IIFE returns different element types (div vs button) during
+// simultaneous state transitions while a Dialog is closing.
+interface WalletPayButtonProps {
+  client: Client;
+  price: string | number | undefined;
+  productName: string | undefined;
+  hasPendingPurchase: boolean;
+  purchaseLoading: boolean;
+  setPurchaseLoading: (v: boolean) => void;
+  onSuccess: () => void;
+}
+
+const WalletPayButton = ({
+  client, price, productName, hasPendingPurchase, purchaseLoading, setPurchaseLoading, onSuccess
+}: WalletPayButtonProps) => {
+  const numericPrice = parseFloat(String(price ?? '0').replace(/[^\d.]/g, ''));
+  const currentBalance = client.balance ?? 0;
+  const hasBalance = !isNaN(numericPrice) && numericPrice > 0 && currentBalance >= numericPrice;
+
+  const handlePay = async () => {
+    if (hasPendingPurchase || purchaseLoading) return;
+    if (!hasBalance) { toast.error(`Solde insuffisant. Vous avez ${currentBalance.toLocaleString()} HTG`); return; }
+    setPurchaseLoading(true);
+    try {
+      await submitClientPurchase(client, productName ?? '', String(price ?? ''), numericPrice);
+      toast.success(`Demande envoyée ! L'admin validera votre achat sous peu.`);
+      onSuccess();
+    } catch (err: any) {
+      toast.error(err.message || "Erreur lors de la soumission.");
+    } finally {
+      setPurchaseLoading(false);
+    }
+  };
+
+  // Always render the same <button> element — only classes/content change.
+  // Never switch element type (div ↔ button) mid-render to avoid "insertBefore" DOM errors.
+  return (
+    <button
+      type="button"
+      disabled={hasPendingPurchase || purchaseLoading || !hasBalance}
+      onClick={handlePay}
+      className={`w-full h-14 rounded-2xl border-2 font-black text-base flex items-center justify-center gap-3 transition-all
+        ${hasPendingPurchase
+          ? 'border-amber-200 bg-amber-50 text-amber-700 cursor-not-allowed'
+          : hasBalance
+            ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-400 active:scale-95'
+            : 'border-red-200 text-red-400 cursor-not-allowed opacity-60'
+        }`}
+    >
+      {hasPendingPurchase ? (
+        <>
+          <Clock className="h-5 w-5 text-amber-500 shrink-0" />
+          <span className="text-sm text-center leading-tight">Demande en cours — en attente de l'admin</span>
+        </>
+      ) : purchaseLoading ? (
+        <Loader2 className="h-5 w-5 animate-spin" />
+      ) : (
+        <>
+          <Wallet className="h-5 w-5" />
+          {hasBalance
+            ? `Payer avec mon solde (${currentBalance.toLocaleString()} HTG)`
+            : `Solde insuffisant (${currentBalance.toLocaleString()} HTG)`
+          }
+        </>
+      )}
+    </button>
+  );
+};
+
 const LucideIcon = ({ name, className, color }: { name: string, className?: string, color?: string }) => {
   const Icon = (LucideIcons as any)[name] || HelpCircle;
   return <Icon className={className} style={{ color }} />;
@@ -893,56 +963,17 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                   Continuer via WhatsApp
                 </Button>
 
-                {loggedClient && (() => {
-                  const price = selectedPlan ? selectedPlan.price : selectedProduct.price;
-                  const numericPrice = parseFloat(String(price).replace(/[^\d.]/g, ''));
-                  const currentBalance = effectiveClient?.balance ?? loggedClient.balance ?? 0;
-                  const hasBalance = !isNaN(numericPrice) && currentBalance >= numericPrice;
-
-                  if (hasPendingPurchase) {
-                    return (
-                      <div className="w-full h-14 rounded-2xl border-2 border-amber-200 bg-amber-50 flex items-center justify-center gap-3 px-4">
-                        <Clock className="h-5 w-5 text-amber-500 shrink-0" />
-                        <span className="font-black text-amber-700 text-sm text-center leading-tight">
-                          Demande en cours — en attente de l'approbation admin
-                        </span>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <Button
-                      variant="outline"
-                      disabled={purchaseLoading || !hasBalance}
-                      onClick={async () => {
-                        const productName = selectedPlan ? `${selectedProduct.name} (${selectedPlan.name})` : selectedProduct.name;
-                        const productPrice = selectedPlan ? selectedPlan.price : selectedProduct.price;
-                        const amount = parseFloat(String(productPrice).replace(/[^\d.]/g, ''));
-                        if (!hasBalance) { toast.error(`Solde insuffisant. Vous avez ${currentBalance.toLocaleString()} HTG`); return; }
-                        setPurchaseLoading(true);
-                        try {
-                          await submitClientPurchase(effectiveClient || loggedClient, productName, String(productPrice), amount);
-                          toast.success(`Demande envoyée ! L'admin validera votre achat sous peu.`);
-                          setIsProductDetailOpen(false);
-                        } catch (err: any) {
-                          toast.error(err.message || "Erreur lors de la soumission.");
-                        } finally {
-                          setPurchaseLoading(false);
-                        }
-                      }}
-                      className={`w-full h-14 rounded-2xl font-black text-base flex items-center justify-center gap-3 active:scale-95 transition-all ${hasBalance ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-400' : 'border-red-200 text-red-400 cursor-not-allowed opacity-60'}`}
-                    >
-                      {purchaseLoading
-                        ? <Loader2 className="h-5 w-5 animate-spin" />
-                        : <Wallet className="h-5 w-5" />
-                      }
-                      {hasBalance
-                        ? `Payer avec mon solde (${currentBalance.toLocaleString()} HTG)`
-                        : `Solde insuffisant (${currentBalance.toLocaleString()} HTG)`
-                      }
-                    </Button>
-                  );
-                })()}
+                {loggedClient && (
+                  <WalletPayButton
+                    client={effectiveClient || loggedClient}
+                    price={selectedPlan ? selectedPlan.price : selectedProduct?.price}
+                    productName={selectedPlan ? `${selectedProduct?.name} (${selectedPlan.name})` : selectedProduct?.name}
+                    hasPendingPurchase={hasPendingPurchase}
+                    purchaseLoading={purchaseLoading}
+                    setPurchaseLoading={setPurchaseLoading}
+                    onSuccess={() => setIsProductDetailOpen(false)}
+                  />
+                )}
                 
                 <p className="text-center text-[10px] text-gray-400 font-medium italic">
                   *Un agent vous répondra instantanément sur WhatsApp
