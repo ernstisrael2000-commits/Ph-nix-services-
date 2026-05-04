@@ -152,10 +152,21 @@ app.patch('/api/admin/notifications/:id/read', requireDb, async (req, res) => {
 
 app.post('/api/client/deposit', requireDb, async (req, res) => {
   try {
-    const { clientId, clientName, clientWalletId, amount, method, txId } = req.body;
+    const { clientId, clientName, clientWalletId, amount, method, txId, captchaToken } = req.body;
     if (!clientId || !clientName || !amount || !method)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     if (amount <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+    if (captchaToken) {
+      const secret = process.env.RECAPTCHA_SECRET_KEY;
+      if (secret) {
+        const gr = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `secret=${encodeURIComponent(secret)}&response=${encodeURIComponent(captchaToken)}`
+        });
+        const gd: any = await gr.json();
+        if (!gd.success) return res.status(400).json({ error: 'Vérification reCAPTCHA échouée. Veuillez réessayer.' });
+      }
+    }
 
     const txRef = await adminDb.collection('client_transactions').add({
       clientId, clientName, type: 'deposit', amount, status: 'pending', method,
@@ -179,10 +190,21 @@ app.post('/api/client/deposit', requireDb, async (req, res) => {
 
 app.post('/api/client/withdrawal', requireDb, async (req, res) => {
   try {
-    const { clientId, clientName, clientPhone, clientWalletId, amount, method, accountNumber } = req.body;
+    const { clientId, clientName, clientPhone, clientWalletId, amount, method, accountNumber, captchaToken } = req.body;
     if (!clientId || !clientName || !amount || !method || !accountNumber)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     if (amount <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+    if (captchaToken) {
+      const secret = process.env.RECAPTCHA_SECRET_KEY;
+      if (secret) {
+        const gr = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `secret=${encodeURIComponent(secret)}&response=${encodeURIComponent(captchaToken)}`
+        });
+        const gd: any = await gr.json();
+        if (!gd.success) return res.status(400).json({ error: 'Vérification reCAPTCHA échouée. Veuillez réessayer.' });
+      }
+    }
 
     const clientSnap = await adminDb.collection('clients').doc(clientId).get();
     if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });

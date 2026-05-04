@@ -70,6 +70,24 @@ async function startServer() {
   // ── Health check ────────────────────────────────────────────────────────────
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
+  // ── reCAPTCHA verification helper ───────────────────────────────────────────
+  async function verifyRecaptcha(token: string): Promise<boolean> {
+    const secret = process.env.RECAPTCHA_SECRET_KEY;
+    if (!secret) { console.warn('[reCAPTCHA] RECAPTCHA_SECRET_KEY not set — skipping verification'); return true; }
+    try {
+      const resp = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `secret=${encodeURIComponent(secret)}&response=${encodeURIComponent(token)}`
+      });
+      const data: any = await resp.json();
+      return data.success === true;
+    } catch (e) {
+      console.error('[reCAPTCHA] verification error:', e);
+      return false;
+    }
+  }
+
   // ── Registration email notification ────────────────────────────────────────
   app.post("/api/notify-registration", async (req, res) => {
     const { name, email, phone, message, date } = req.body;
@@ -195,11 +213,14 @@ async function startServer() {
   // ────────────────────────────────────────────────────────────────────────────
   app.post('/api/client/deposit', async (req, res) => {
     try {
-      const { clientId, clientName, clientWalletId, amount, method, txId } = req.body;
+      const { clientId, clientName, clientWalletId, amount, method, txId, captchaToken } = req.body;
       if (!clientId || !clientName || !amount || !method) {
         return res.status(400).json({ error: 'Paramètres manquants.' });
       }
       if (amount <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+      if (captchaToken && !(await verifyRecaptcha(captchaToken))) {
+        return res.status(400).json({ error: 'Vérification reCAPTCHA échouée. Veuillez réessayer.' });
+      }
 
       const txRef = await adminDb.collection('client_transactions').add({
         clientId,
@@ -239,11 +260,14 @@ async function startServer() {
   // ────────────────────────────────────────────────────────────────────────────
   app.post('/api/client/withdrawal', async (req, res) => {
     try {
-      const { clientId, clientName, clientPhone, clientWalletId, amount, method, accountNumber } = req.body;
+      const { clientId, clientName, clientPhone, clientWalletId, amount, method, accountNumber, captchaToken } = req.body;
       if (!clientId || !clientName || !amount || !method || !accountNumber) {
         return res.status(400).json({ error: 'Paramètres manquants.' });
       }
       if (amount <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+      if (captchaToken && !(await verifyRecaptcha(captchaToken))) {
+        return res.status(400).json({ error: 'Vérification reCAPTCHA échouée. Veuillez réessayer.' });
+      }
 
       // Check balance server-side and immediately deduct
       const clientRef = adminDb.collection('clients').doc(clientId);

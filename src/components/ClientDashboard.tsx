@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Wallet, ArrowDownToLine, ArrowUpFromLine, History, 
   LogOut, Loader2, X, Copy, CheckCircle2, AlertCircle,
   ArrowRightLeft, Clock, XCircle, TrendingUp, Shield,
   ChevronRight, Banknote, CreditCard, Smartphone, Trash2
 } from 'lucide-react';
+import ReCAPTCHA from 'react-google-recaptcha';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -43,6 +44,8 @@ const typeLabel = {
   refund: 'Remboursement',
 };
 
+const RECAPTCHA_SITE_KEY = process.env.RECAPTCHA_SITE_KEY || '';
+
 export default function ClientDashboard({ clientId, onLogout, open, onClose }: ClientDashboardProps) {
   const { client, loading } = useClientData(clientId);
   const { transactions, loading: txLoading } = useClientTransactions(clientId);
@@ -57,10 +60,14 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   const [depositAmount, setDepositAmount] = useState('');
   const [depositMethod, setDepositMethod] = useState<string>('MonCash');
   const [depositTxId, setDepositTxId] = useState('');
+  const [depositCaptchaToken, setDepositCaptchaToken] = useState<string | null>(null);
+  const depositCaptchaRef = useRef<ReCAPTCHA>(null);
 
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawMethod, setWithdrawMethod] = useState<string>('MonCash');
   const [withdrawAccount, setWithdrawAccount] = useState('');
+  const [withdrawCaptchaToken, setWithdrawCaptchaToken] = useState<string | null>(null);
+  const withdrawCaptchaRef = useRef<ReCAPTCHA>(null);
 
   const exchangeRate = settings?.exchangeRate || 146;
   const methodInfo = {
@@ -87,9 +94,13 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     e.preventDefault();
     const amount = parseFloat(depositAmount);
     if (isNaN(amount) || amount <= 0) { toast.error("Montant invalide."); return; }
+    if (RECAPTCHA_SITE_KEY && !depositCaptchaToken) {
+      toast.error("Veuillez valider le captcha avant de continuer.");
+      return;
+    }
     setActionLoading(true);
     try {
-      await submitClientDeposit(client!, amount, depositMethod, depositTxId || undefined);
+      await submitClientDeposit(client!, amount, depositMethod, depositTxId || undefined, depositCaptchaToken || undefined);
       const info = methodInfo[depositMethod];
       const usdEquiv = (amount / exchangeRate).toFixed(2);
       const msg = `Bonjour Neopay,\n\nJe souhaite effectuer un *DÉPÔT*:\n👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n💰 Montant: *${amount.toLocaleString()} HTG*\n≈ *$${usdEquiv} USD*\n💳 Via: *${depositMethod}*${info?.number ? `\n📞 Numéro: *${info.number}*` : ''}${depositTxId ? `\n🔖 ID Transaction: *${depositTxId}*` : ''}\n\nMerci de valider mon dépôt.`;
@@ -98,8 +109,12 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
       setIsDepositOpen(false);
       setDepositAmount('');
       setDepositTxId('');
+      setDepositCaptchaToken(null);
+      depositCaptchaRef.current?.reset();
     } catch (err: any) {
       toast.error(err.message);
+      depositCaptchaRef.current?.reset();
+      setDepositCaptchaToken(null);
     } finally {
       setActionLoading(false);
     }
@@ -109,18 +124,26 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     e.preventDefault();
     const amount = parseFloat(withdrawAmount);
     if (isNaN(amount) || amount <= 0) { toast.error("Montant invalide."); return; }
+    if (RECAPTCHA_SITE_KEY && !withdrawCaptchaToken) {
+      toast.error("Veuillez valider le captcha avant de continuer.");
+      return;
+    }
     setActionLoading(true);
     try {
-      await submitClientWithdrawal(client!, amount, withdrawMethod, withdrawAccount);
+      await submitClientWithdrawal(client!, amount, withdrawMethod, withdrawAccount, withdrawCaptchaToken || undefined);
       toast.success(`Demande envoyée, ${client!.name} ! Vous recevrez votre argent tout à l'heure. ✅`);
       setIsWithdrawOpen(false);
       setWithdrawAmount(''); setWithdrawAccount('');
+      setWithdrawCaptchaToken(null);
+      withdrawCaptchaRef.current?.reset();
       const num = settings?.whatsappAdminNumber || WHATSAPP_NUMBER;
       const usdEquiv = (amount / (settings?.exchangeRate || 146)).toFixed(2);
       const msg = `Bonjour Neopay 👋,\n\nJe viens de soumettre une demande de *RETRAIT* :\n\n👤 Nom : *${client!.name}*\n🔑 ID Wallet : *${client!.walletId}*\n💰 Montant : *${amount.toLocaleString()} HTG* (~$${usdEquiv} USD)\n💳 Via : *${withdrawMethod}*\n📞 Compte : *${withdrawAccount}*\n\nMerci de traiter ma demande. 🙏`;
       window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
     } catch (err: any) {
       toast.error(err.message);
+      withdrawCaptchaRef.current?.reset();
+      setWithdrawCaptchaToken(null);
     } finally {
       setActionLoading(false);
     }
@@ -336,7 +359,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
       </motion.div>
 
       {/* Deposit Modal */}
-      <Dialog open={isDepositOpen} onOpenChange={(v) => { setIsDepositOpen(v); if (!v) { setDepositAmount(''); setDepositTxId(''); } }}>
+      <Dialog open={isDepositOpen} onOpenChange={(v) => { setIsDepositOpen(v); if (!v) { setDepositAmount(''); setDepositTxId(''); setDepositCaptchaToken(null); depositCaptchaRef.current?.reset(); } }}>
         <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl p-0 overflow-hidden">
           <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 p-5 text-white">
             <div className="flex items-center gap-3">
@@ -404,7 +427,22 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               <strong>Étape suivante :</strong> Après soumission, vous serez redirigé sur WhatsApp pour envoyer votre preuve de paiement à l'équipe Neopay.
             </div>
 
-            <Button type="submit" disabled={actionLoading}
+            {/* reCAPTCHA */}
+            {RECAPTCHA_SITE_KEY && (
+              <div className="flex flex-col items-center gap-1">
+                <ReCAPTCHA
+                  ref={depositCaptchaRef}
+                  sitekey={RECAPTCHA_SITE_KEY}
+                  onChange={(token) => setDepositCaptchaToken(token)}
+                  onExpired={() => setDepositCaptchaToken(null)}
+                />
+                {!depositCaptchaToken && (
+                  <p className="text-[10px] text-red-500 font-bold">Veuillez cocher la case "Je ne suis pas un robot"</p>
+                )}
+              </div>
+            )}
+
+            <Button type="submit" disabled={actionLoading || (!!RECAPTCHA_SITE_KEY && !depositCaptchaToken)}
               className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black">
               {actionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Confirmer et envoyer preuve →'}
             </Button>
@@ -413,7 +451,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
       </Dialog>
 
       {/* Withdraw Modal */}
-      <Dialog open={isWithdrawOpen} onOpenChange={setIsWithdrawOpen}>
+      <Dialog open={isWithdrawOpen} onOpenChange={(v) => { setIsWithdrawOpen(v); if (!v) { setWithdrawCaptchaToken(null); withdrawCaptchaRef.current?.reset(); } }}>
         <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl">
           <DialogHeader>
             <div className="flex items-center gap-3 mb-2">
@@ -448,7 +486,23 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               <Input value={withdrawAccount} onChange={e => setWithdrawAccount(e.target.value)}
                 placeholder="Votre numéro de réception" className="h-12 rounded-xl" required />
             </div>
-            <Button type="submit" disabled={actionLoading}
+
+            {/* reCAPTCHA */}
+            {RECAPTCHA_SITE_KEY && (
+              <div className="flex flex-col items-center gap-1">
+                <ReCAPTCHA
+                  ref={withdrawCaptchaRef}
+                  sitekey={RECAPTCHA_SITE_KEY}
+                  onChange={(token) => setWithdrawCaptchaToken(token)}
+                  onExpired={() => setWithdrawCaptchaToken(null)}
+                />
+                {!withdrawCaptchaToken && (
+                  <p className="text-[10px] text-red-500 font-bold">Veuillez cocher la case "Je ne suis pas un robot"</p>
+                )}
+              </div>
+            )}
+
+            <Button type="submit" disabled={actionLoading || (!!RECAPTCHA_SITE_KEY && !withdrawCaptchaToken)}
               className="w-full h-12 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black">
               {actionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Soumettre la demande'}
             </Button>

@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Package, CreditCard, Gamepad2, Truck, MessageCircle, ArrowRight, CircleCheck as CheckCircle2, Info, ArrowUp, Circle as HelpCircle } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
+import ReCAPTCHA from 'react-google-recaptcha';
 import { Button } from './ui/button';
 import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
@@ -25,6 +26,7 @@ import { Client } from '../types';
 import { toast } from 'sonner';
 
 const WHATSAPP_NUMBER = "+50944813185";
+const RECAPTCHA_SITE_KEY = process.env.RECAPTCHA_SITE_KEY || '';
 
 // ── WalletPayButton — extracted as a proper React component to avoid DOM reconciliation
 // errors that occur when an IIFE returns different element types (div vs button) during
@@ -164,6 +166,10 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const [walletWithdrawAccount, setWalletWithdrawAccount] = useState('');
   const [walletActionLoading, setWalletActionLoading] = useState(false);
   const [copiedWalletId, setCopiedWalletId] = useState(false);
+  const [walletDepositCaptcha, setWalletDepositCaptcha] = useState<string | null>(null);
+  const [walletWithdrawCaptcha, setWalletWithdrawCaptcha] = useState<string | null>(null);
+  const walletDepositCaptchaRef = useRef<ReCAPTCHA>(null);
+  const walletWithdrawCaptchaRef = useRef<ReCAPTCHA>(null);
 
   const depositMethodInfo = {
     MonCash: { number: settings?.moncashNumber, qr: settings?.moncashQR, color: 'rose', label: 'MonCash' },
@@ -176,9 +182,10 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
     const amount = parseFloat(walletDepositAmount);
     if (isNaN(amount) || amount <= 0) { toast.error("Montant invalide."); return; }
     if (!effectiveClient) return;
+    if (RECAPTCHA_SITE_KEY && !walletDepositCaptcha) { toast.error("Veuillez valider le captcha."); return; }
     setWalletActionLoading(true);
     try {
-      await submitClientDeposit(effectiveClient, amount, walletDepositMethod, walletDepositTxId || undefined);
+      await submitClientDeposit(effectiveClient, amount, walletDepositMethod, walletDepositTxId || undefined, walletDepositCaptcha || undefined);
       const info = depositMethodInfo[walletDepositMethod];
       const waNum = settings?.whatsappAdminNumber || WHATSAPP_NUMBER;
       const msg = `Bonjour Neopay,\n\nJe souhaite effectuer un *DÉPÔT*:\n👤 Nom: *${effectiveClient.name}*\n🔑 ID Wallet: *${effectiveClient.walletId}*\n💰 Montant: *${amount.toLocaleString()} HTG*\n≈ *$${(amount / exchangeRate).toFixed(2)} USD*\n💳 Via: *${walletDepositMethod}*${info?.number ? `\n📞 Numéro: *${info.number}*` : ''}${walletDepositTxId ? `\n🔖 ID Transaction: *${walletDepositTxId}*` : ''}\n\nMerci de valider mon dépôt.`;
@@ -186,8 +193,10 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
       toast.success("Demande de dépôt envoyée ! En attente de validation admin.");
       setIsWalletDepositOpen(false);
       setWalletDepositAmount(''); setWalletDepositTxId('');
+      setWalletDepositCaptcha(null); walletDepositCaptchaRef.current?.reset();
     } catch (err: any) {
       toast.error(err.message || "Erreur.");
+      walletDepositCaptchaRef.current?.reset(); setWalletDepositCaptcha(null);
     } finally {
       setWalletActionLoading(false);
     }
@@ -200,14 +209,17 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
     if (!effectiveClient) return;
     if (amount > balanceHTG) { toast.error(`Solde insuffisant. Vous avez ${balanceHTG.toLocaleString()} HTG.`); return; }
     if (!walletWithdrawAccount) { toast.error("Numéro de compte requis."); return; }
+    if (RECAPTCHA_SITE_KEY && !walletWithdrawCaptcha) { toast.error("Veuillez valider le captcha."); return; }
     setWalletActionLoading(true);
     try {
-      await submitClientWithdrawal(effectiveClient, amount, walletWithdrawMethod, walletWithdrawAccount);
+      await submitClientWithdrawal(effectiveClient, amount, walletWithdrawMethod, walletWithdrawAccount, walletWithdrawCaptcha || undefined);
       toast.success("Demande de retrait soumise ! En attente de validation admin.");
       setIsWalletWithdrawOpen(false);
       setWalletWithdrawAmount(''); setWalletWithdrawAccount('');
+      setWalletWithdrawCaptcha(null); walletWithdrawCaptchaRef.current?.reset();
     } catch (err: any) {
       toast.error(err.message || "Erreur.");
+      walletWithdrawCaptchaRef.current?.reset(); setWalletWithdrawCaptcha(null);
     } finally {
       setWalletActionLoading(false);
     }
@@ -1107,7 +1119,15 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
               <strong>Étape suivante :</strong> Après soumission, vous serez redirigé sur WhatsApp pour envoyer votre preuve de paiement.
             </div>
 
-            <Button type="submit" disabled={walletActionLoading}
+            {RECAPTCHA_SITE_KEY && (
+              <div className="flex flex-col items-center gap-1">
+                <ReCAPTCHA ref={walletDepositCaptchaRef} sitekey={RECAPTCHA_SITE_KEY}
+                  onChange={(token) => setWalletDepositCaptcha(token)}
+                  onExpired={() => setWalletDepositCaptcha(null)} />
+              </div>
+            )}
+
+            <Button type="submit" disabled={walletActionLoading || (!!RECAPTCHA_SITE_KEY && !walletDepositCaptcha)}
               className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black">
               {walletActionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Confirmer et envoyer preuve →'}
             </Button>
@@ -1116,7 +1136,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
       </Dialog>
 
       {/* ── WALLET WITHDRAW MODAL ── */}
-      <Dialog open={isWalletWithdrawOpen} onOpenChange={(v) => { setIsWalletWithdrawOpen(v); if (!v) { setWalletWithdrawAmount(''); setWalletWithdrawAccount(''); } }}>
+      <Dialog open={isWalletWithdrawOpen} onOpenChange={(v) => { setIsWalletWithdrawOpen(v); if (!v) { setWalletWithdrawAmount(''); setWalletWithdrawAccount(''); setWalletWithdrawCaptcha(null); walletWithdrawCaptchaRef.current?.reset(); } }}>
         <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl p-0 overflow-hidden">
           <div className="bg-gradient-to-br from-slate-700 to-slate-900 p-6 text-white">
             <div className="flex items-center gap-3">
@@ -1159,7 +1179,16 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
               <Input value={walletWithdrawAccount} onChange={e => setWalletWithdrawAccount(e.target.value)}
                 placeholder="Votre numéro {walletWithdrawMethod}" className="h-11 rounded-xl" required />
             </div>
-            <Button type="submit" disabled={walletActionLoading}
+
+            {RECAPTCHA_SITE_KEY && (
+              <div className="flex flex-col items-center gap-1">
+                <ReCAPTCHA ref={walletWithdrawCaptchaRef} sitekey={RECAPTCHA_SITE_KEY}
+                  onChange={(token) => setWalletWithdrawCaptcha(token)}
+                  onExpired={() => setWalletWithdrawCaptcha(null)} />
+              </div>
+            )}
+
+            <Button type="submit" disabled={walletActionLoading || (!!RECAPTCHA_SITE_KEY && !walletWithdrawCaptcha)}
               className="w-full h-12 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-black">
               {walletActionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Soumettre la demande'}
             </Button>
@@ -1493,6 +1522,38 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                   </div>
                 </button>
               ))}
+
+              {/* Wallet pay option */}
+              {effectiveClient && (() => {
+                const usd = parseFloat(rechargeAmountUSD || '0');
+                const costHTG = usd * (settings?.exchangeRate || 146);
+                const bal = effectiveClient.balance ?? 0;
+                const canPay = bal >= costHTG && costHTG > 0;
+                return (
+                  <button
+                    onClick={() => {
+                      if (!canPay) { toast.error(`Solde insuffisant. Vous avez ${bal.toLocaleString()} HTG.`); return; }
+                      handleFinalRechargePayment('Solde Wallet');
+                    }}
+                    className={`group flex items-center justify-between p-6 rounded-[1.5rem] border-2 transition-all hover:scale-[1.02] active:scale-[0.98] ${canPay ? 'bg-emerald-50 border-emerald-100 hover:shadow-lg' : 'bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed'}`}
+                  >
+                    <div className="flex items-center gap-5">
+                      <div className={`h-14 w-14 rounded-2xl bg-white shadow-sm flex items-center justify-center transition-transform ${canPay ? 'group-hover:scale-110 text-emerald-600' : 'text-gray-400'}`}>
+                        <Wallet className="h-7 w-7" />
+                      </div>
+                      <div className="text-left">
+                        <span className="block text-xl font-black text-dark uppercase tracking-tight">Mon Compte</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">
+                          Solde: {bal.toLocaleString()} HTG {canPay ? `· Suffisant ✓` : `· Insuffisant`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className={`h-10 w-10 rounded-full flex items-center justify-center ${canPay ? 'text-emerald-600 group-hover:bg-white' : 'text-gray-300'}`}>
+                      <ArrowRight className="h-6 w-6" />
+                    </div>
+                  </button>
+                );
+              })()}
             </div>
             
             <div className="text-center p-4 bg-gray-50 rounded-2xl mt-4">
