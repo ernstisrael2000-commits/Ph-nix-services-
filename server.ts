@@ -711,6 +711,102 @@ async function startServer() {
     }
   });
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // FORMATIONS — Admin CRUD (uses Admin SDK → bypasses Firestore rules)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // Guard for all /api/admin/formations routes
+  app.use('/api/admin/formations', (req, res, next) => {
+    if (!adminDb) return res.status(503).json({ error: 'Firebase Admin non initialisé.' });
+    next();
+  });
+
+  // ── Helper: strip undefined/null → use '' or 0 ───────────────────────────
+  function sanitizeFormation(data: any): any {
+    const out: any = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (v === undefined) continue;
+      if (Array.isArray(v)) {
+        out[k] = v.map((item: any) =>
+          item && typeof item === 'object' ? sanitizeFormation(item) : (item ?? null)
+        );
+      } else {
+        out[k] = v ?? null;
+      }
+    }
+    return out;
+  }
+
+  // ── POST /api/admin/formations — create ────────────────────────────────────
+  app.post('/api/admin/formations', async (req, res) => {
+    try {
+      const data = sanitizeFormation(req.body);
+      if (!data.title) return res.status(400).json({ error: 'Le titre est requis.' });
+      const ref = await adminDb.collection('formations').add({
+        ...data,
+        studentsCount: data.studentsCount ?? 0,
+        rating: data.rating ?? 0,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      res.json({ success: true, id: ref.id });
+    } catch (e: any) {
+      console.error('[formations POST]', e);
+      res.status(500).json({ error: e.message || 'Erreur lors de la création.' });
+    }
+  });
+
+  // ── PUT /api/admin/formations/:id — update ─────────────────────────────────
+  app.put('/api/admin/formations/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const data = sanitizeFormation(req.body);
+      await adminDb.collection('formations').doc(id).update({
+        ...data,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error('[formations PUT]', e);
+      res.status(500).json({ error: e.message || 'Erreur lors de la mise à jour.' });
+    }
+  });
+
+  // ── DELETE /api/admin/formations/:id — delete ──────────────────────────────
+  app.delete('/api/admin/formations/:id', async (req, res) => {
+    try {
+      await adminDb.collection('formations').doc(req.params.id).delete();
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error('[formations DELETE]', e);
+      res.status(500).json({ error: e.message || 'Erreur lors de la suppression.' });
+    }
+  });
+
+  // ── PATCH /api/admin/formations/purchases/:id — approve/revoke access ──────
+  app.patch('/api/admin/formations/purchases/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, formationId } = req.body;
+      if (!status) return res.status(400).json({ error: 'Statut requis.' });
+      const batch = adminDb.batch();
+      batch.update(adminDb.collection('formation_purchases').doc(id), {
+        status,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      if (status === 'active' && formationId) {
+        batch.update(adminDb.collection('formations').doc(formationId), {
+          studentsCount: FieldValue.increment(1),
+        });
+      }
+      await batch.commit();
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error('[formations purchases PATCH]', e);
+      res.status(500).json({ error: e.message || 'Erreur.' });
+    }
+  });
+
   // ── Catch-all: any unmatched /api/* route returns JSON (never HTML) ──────────
   app.all('/api/*', (_req, res) => {
     res.status(404).json({ error: 'Route API introuvable.' });

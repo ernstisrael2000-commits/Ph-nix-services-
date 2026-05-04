@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc,
+  collection, doc, getDocs, getDoc, addDoc, updateDoc,
   onSnapshot, query, where, orderBy, serverTimestamp, setDoc, increment
 } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
@@ -33,9 +33,18 @@ export const signInWithGoogle = async (): Promise<FormationUser> => {
   };
 };
 
-// ─── Utility: strip undefined values from any object before Firestore writes ──
-function stripUndefined<T extends object>(obj: T): T {
-  return JSON.parse(JSON.stringify(obj, (_key, value) => (value === undefined ? null : value)));
+// ─── Backend API base (same origin) ──────────────────────────────────────────
+const API = '';
+
+async function apiCall(method: string, path: string, body?: object): Promise<any> {
+  const res = await fetch(`${API}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || `Erreur ${res.status}`);
+  return json;
 }
 
 // ─── Formations CRUD ─────────────────────────────────────────────────────────
@@ -81,25 +90,15 @@ export const useFormation = (id: string | null) => {
 };
 
 export const createFormation = async (data: Omit<Formation, 'id' | 'createdAt' | 'updatedAt'>) => {
-  const clean = stripUndefined({
-    ...data,
-    studentsCount: 0,
-    rating: 0,
-  });
-  return addDoc(collection(db, 'formations'), {
-    ...clean,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
+  return apiCall('POST', '/api/admin/formations', data);
 };
 
 export const updateFormation = async (id: string, data: Partial<Formation>) => {
-  const clean = stripUndefined(data);
-  return updateDoc(doc(db, 'formations', id), { ...clean, updatedAt: serverTimestamp() });
+  return apiCall('PUT', `/api/admin/formations/${id}`, data);
 };
 
 export const deleteFormation = async (id: string) => {
-  return deleteDoc(doc(db, 'formations', id));
+  return apiCall('DELETE', `/api/admin/formations/${id}`);
 };
 
 // ─── Purchases ───────────────────────────────────────────────────────────────
@@ -187,13 +186,7 @@ export const grantFreeAccess = async (
 };
 
 export const updatePurchaseStatus = async (purchaseId: string, status: 'active' | 'revoked', formationId?: string) => {
-  await updateDoc(doc(db, 'formation_purchases', purchaseId), {
-    status,
-    updatedAt: serverTimestamp(),
-  });
-  if (status === 'active' && formationId) {
-    await updateDoc(doc(db, 'formations', formationId), { studentsCount: increment(1) });
-  }
+  return apiCall('PATCH', `/api/admin/formations/purchases/${purchaseId}`, { status, formationId });
 };
 
 // ─── Progress ────────────────────────────────────────────────────────────────
