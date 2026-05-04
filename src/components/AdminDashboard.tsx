@@ -52,7 +52,8 @@ import {
   ArrowRightLeft,
   Network,
   TrendingUp,
-  LayoutDashboard
+  LayoutDashboard,
+  XCircle
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Button } from './ui/button';
@@ -1763,6 +1764,7 @@ const AffiliateEditForm = ({
     {
       title: "Gestion des Fonds",
       items: [
+        { value: 'client-requests', label: 'Demandes Clients', icon: Bell, permission: 'affiliates' },
         { value: 'agents', label: 'Gestion des Agents', icon: UserCheck, permission: 'affiliates' },
         { value: 'transfers', label: 'Transferts', icon: ArrowRightLeft, permission: 'affiliates' },
         { value: 'withdrawals', label: 'Retraits', icon: ArrowUp, permission: 'affiliates' },
@@ -1900,6 +1902,11 @@ const AffiliateEditForm = ({
 
   const pendingClientTxCount = React.useMemo(() => clientTransactions.filter(t => t.status === 'pending').length, [clientTransactions]);
 
+  const pendingClientRequests = React.useMemo(() =>
+    clientTransactions.filter(t => t.status === 'pending' && (t.type === 'deposit' || t.type === 'withdrawal')),
+    [clientTransactions]
+  );
+
   // Optimized Filtering for Affiliates
   const filteredAffiliatesList = React.useMemo(() => {
     return affiliates.filter(aff => 
@@ -1995,8 +2002,14 @@ const AffiliateEditForm = ({
       type: 'deposit_request' as const, 
       name: affiliates.find(a => a.id === d.affiliateId)?.name || 'Affilié inconnu' 
     }));
+    const clientDeposits = pendingClientRequests
+      .filter(t => t.type === 'deposit')
+      .map(t => ({ ...t, type: 'client_deposit_req' as const, name: t.clientName || 'Client' }));
+    const clientWithdrawals = pendingClientRequests
+      .filter(t => t.type === 'withdrawal')
+      .map(t => ({ ...t, type: 'client_withdrawal_req' as const, name: t.clientName || 'Client' }));
 
-    let combined = [...registrations, ...withdrawals, ...deposits];
+    let combined = [...registrations, ...withdrawals, ...deposits, ...clientDeposits, ...clientWithdrawals];
 
     if (notifFilter === 'registration') {
       combined = combined.filter(r => r.type === 'registration');
@@ -2004,6 +2017,8 @@ const AffiliateEditForm = ({
       combined = combined.filter(r => r.type === 'withdrawal');
     } else if (notifFilter === 'deposit') {
       combined = combined.filter(r => r.type === 'deposit_request');
+    } else if (notifFilter === 'client_tx') {
+      combined = combined.filter(r => r.type === 'client_deposit_req' || r.type === 'client_withdrawal_req');
     }
 
     if (deferredNotifSearch) {
@@ -2018,7 +2033,7 @@ const AffiliateEditForm = ({
       const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
       return dateB - dateA;
     });
-  }, [pendingRegistrations, pendingWithdrawals, pendingDeposits, affiliates, notifFilter, notifSearch]);
+  }, [pendingRegistrations, pendingWithdrawals, pendingDeposits, pendingClientRequests, affiliates, notifFilter, notifSearch]);
 
   // Memoize filtered and sorted lists for performance
   const winnersQueue = React.useMemo(() => {
@@ -3341,6 +3356,11 @@ const AffiliateEditForm = ({
                               {item.value === 'wallet-tx' && pendingDeposits.length > 0 && (
                                 <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-emerald-600 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
                                   {pendingDeposits.length}
+                                </span>
+                              )}
+                              {item.value === 'client-requests' && pendingClientRequests.length > 0 && (
+                                <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-red-500 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
+                                  {pendingClientRequests.length}
                                 </span>
                               )}
                               {item.value === 'clients-tx' && pendingClientTxCount > 0 && (
@@ -4766,6 +4786,159 @@ const AffiliateEditForm = ({
           </Card>
         </TabsContent>
 
+        {/* ===== DEMANDES CLIENTS TAB ===== */}
+        <TabsContent value="client-requests" className="space-y-6 pt-6 px-6 pb-20">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-dark flex items-center gap-2">
+                <Bell className="h-5 w-5 text-primary" />
+                Demandes Clients
+              </h2>
+              <p className="text-sm text-subtext mt-0.5">
+                {pendingClientRequests.length > 0
+                  ? <span className="text-amber-600 font-bold flex items-center gap-1 mt-1"><Clock className="h-4 w-4" />{pendingClientRequests.length} demande{pendingClientRequests.length > 1 ? 's' : ''} en attente d'approbation</span>
+                  : 'Toutes les demandes ont été traitées.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {pendingClientRequests.length > 0 && (
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white text-sm font-black animate-pulse">
+                  {pendingClientRequests.length}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Stats bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-4">
+              <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Dépôts en attente</p>
+              <p className="text-3xl font-black text-emerald-700 mt-1">
+                {pendingClientRequests.filter(t => t.type === 'deposit').length}
+              </p>
+              <p className="text-xs text-emerald-600 mt-0.5">
+                {pendingClientRequests.filter(t => t.type === 'deposit').reduce((s, t) => s + t.amount, 0).toLocaleString()} HTG total
+              </p>
+            </div>
+            <div className="rounded-2xl bg-red-50 border border-red-100 p-4">
+              <p className="text-[10px] font-black text-red-700 uppercase tracking-widest">Retraits en attente</p>
+              <p className="text-3xl font-black text-red-700 mt-1">
+                {pendingClientRequests.filter(t => t.type === 'withdrawal').length}
+              </p>
+              <p className="text-xs text-red-600 mt-0.5">
+                {pendingClientRequests.filter(t => t.type === 'withdrawal').reduce((s, t) => s + t.amount, 0).toLocaleString()} HTG total
+              </p>
+            </div>
+            <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4 col-span-2 sm:col-span-1">
+              <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Taux en cours</p>
+              <p className="text-3xl font-black text-dark mt-1">{settings?.exchangeRate || 146}</p>
+              <p className="text-xs text-gray-400 mt-0.5">HTG par 1 USD</p>
+            </div>
+          </div>
+
+          {/* Request cards */}
+          {clientTxLoading ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+              <Loader2 className="h-8 w-8 animate-spin mb-2" />
+              <p>Chargement des demandes...</p>
+            </div>
+          ) : pendingClientRequests.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 text-gray-400">
+              <CheckCircle2 className="h-14 w-14 mb-4 text-emerald-300" />
+              <p className="text-lg font-bold text-gray-500">Aucune demande en attente</p>
+              <p className="text-sm mt-1">Toutes les demandes de dépôt et retrait ont été traitées.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {pendingClientRequests.map(tx => {
+                const isDeposit = tx.type === 'deposit';
+                const usdAmt = ((tx.amount) / (settings?.exchangeRate || 146)).toFixed(2);
+                const isLoading = clientTxActionLoading === tx.id;
+                return (
+                  <Card key={tx.id} className={`overflow-hidden border-2 shadow-sm ${isDeposit ? 'border-emerald-200' : 'border-red-200'}`}>
+                    <div className={`h-1.5 w-full ${isDeposit ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                    <CardContent className="p-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+
+                        {/* Icon */}
+                        <div className={`h-14 w-14 rounded-2xl flex items-center justify-center shrink-0 ${isDeposit ? 'bg-emerald-100' : 'bg-red-100'}`}>
+                          {isDeposit
+                            ? <ArrowDown className="h-7 w-7 text-emerald-600" />
+                            : <ArrowUp className="h-7 w-7 text-red-600" />}
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <p className="font-black text-dark text-base">{tx.clientName || 'Client'}</p>
+                            <Badge className={`text-[11px] font-black ${isDeposit ? 'bg-emerald-100 text-emerald-700 border-0' : 'bg-red-100 text-red-700 border-0'}`}>
+                              {isDeposit ? '↓ DÉPÔT' : '↑ RETRAIT'}
+                            </Badge>
+                            <Badge className="bg-amber-100 text-amber-700 border-0 text-[11px] font-black">EN ATTENTE</Badge>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-sm">
+                            <div>
+                              <p className="text-[10px] text-gray-400 uppercase font-black tracking-wider">Montant</p>
+                              <p className={`font-black text-lg ${isDeposit ? 'text-emerald-600' : 'text-red-600'}`}>
+                                {isDeposit ? '+' : '-'}{tx.amount.toLocaleString()} HTG
+                              </p>
+                              <p className="text-xs text-gray-400">≈ ${usdAmt} USD</p>
+                            </div>
+                            {tx.method && (
+                              <div>
+                                <p className="text-[10px] text-gray-400 uppercase font-black tracking-wider">Méthode</p>
+                                <p className="font-bold text-dark">{tx.method}</p>
+                                {tx.accountNumber && <p className="text-xs text-gray-500 font-mono">{tx.accountNumber}</p>}
+                              </div>
+                            )}
+                            {tx.txId && (
+                              <div>
+                                <p className="text-[10px] text-gray-400 uppercase font-black tracking-wider">Réf. Transaction</p>
+                                <p className="font-mono text-indigo-600 text-sm">{tx.txId}</p>
+                              </div>
+                            )}
+                            <div>
+                              <p className="text-[10px] text-gray-400 uppercase font-black tracking-wider">Date</p>
+                              <p className="text-xs text-gray-600">
+                                {tx.createdAt?.toDate ? format(tx.createdAt.toDate(), 'dd MMM yyyy, HH:mm', { locale: fr }) : '—'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex flex-col sm:flex-row gap-3 shrink-0 sm:min-w-[200px]">
+                          <Button
+                            className="flex-1 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm gap-2"
+                            disabled={isLoading}
+                            onClick={() => handleClientTxAction(tx.id!, 'approved')}
+                          >
+                            {isLoading
+                              ? <Loader2 className="h-5 w-5 animate-spin" />
+                              : <><CheckCircle2 className="h-5 w-5" /> Approuver</>}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="flex-1 h-12 rounded-2xl border-2 border-red-200 text-red-600 hover:bg-red-50 font-black text-sm gap-2"
+                            disabled={isLoading}
+                            onClick={() => handleClientTxAction(tx.id!, 'rejected')}
+                          >
+                            <XCircle className="h-5 w-5" /> Rejeter
+                          </Button>
+                        </div>
+
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ===== PAIEMENTS CLIENTS (history) TAB ===== */}
         <TabsContent value="clients-tx" className="space-y-6 pt-6 px-6 pb-20">
 
           {/* Real-time notification banner */}
@@ -5504,6 +5677,7 @@ const AffiliateEditForm = ({
                   <SelectItem value="registration">Inscriptions</SelectItem>
                   <SelectItem value="withdrawal">Retraits</SelectItem>
                   <SelectItem value="deposit">Dépôts</SelectItem>
+                  <SelectItem value="client_tx">Demandes Clients</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -5600,23 +5774,32 @@ const AffiliateEditForm = ({
                   allPendingRequests.map((req) => (
                     <div key={req.id} className="p-4 hover:bg-gray-50 transition-colors flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                       <div className="flex items-start gap-4 min-w-0">
-                        <div className={`p-2 rounded-lg shrink-0 ${
-                          req.type === 'registration' ? 'bg-accent-light text-primary' : 'bg-accent-light/50 text-dark'
+                        <div className={`p-2 rounded-xl shrink-0 ${
+                          req.type === 'registration' ? 'bg-accent-light text-primary' :
+                          req.type === 'withdrawal' || req.type === 'client_withdrawal_req' ? 'bg-red-100 text-red-600' :
+                          req.type === 'client_deposit_req' ? 'bg-emerald-100 text-emerald-600' :
+                          'bg-accent-light/50 text-dark'
                         }`}>
-                          {req.type === 'registration' ? <Users className="h-5 w-5" /> : 
-                           req.type === 'withdrawal' ? <Wallet className="h-5 w-5" /> : 
+                          {req.type === 'registration' ? <Users className="h-5 w-5" /> :
+                           req.type === 'withdrawal' ? <Wallet className="h-5 w-5" /> :
+                           req.type === 'client_withdrawal_req' ? <ArrowUp className="h-5 w-5" /> :
+                           req.type === 'client_deposit_req' ? <ArrowDown className="h-5 w-5" /> :
                            <PlusCircle className="h-5 w-5" />}
                         </div>
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <p className="font-bold text-dark truncate">{req.name}</p>
                             <Badge variant="outline" className={
-                              req.type === 'registration' ? 'bg-accent-light text-primary border-primary/20' : 
+                              req.type === 'registration' ? 'bg-accent-light text-primary border-primary/20' :
                               req.type === 'withdrawal' ? 'bg-red-50 text-red-600 border-red-100' :
+                              req.type === 'client_withdrawal_req' ? 'bg-red-50 text-red-700 border-red-200' :
+                              req.type === 'client_deposit_req' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                               'bg-emerald-50 text-emerald-600 border-emerald-100'
                             }>
-                              {req.type === 'registration' ? 'Inscription' : 
-                               req.type === 'withdrawal' ? 'Retrait' : 'Dépôt'}
+                              {req.type === 'registration' ? 'Inscription' :
+                               req.type === 'withdrawal' ? 'Retrait affilié' :
+                               req.type === 'client_withdrawal_req' ? '↑ Retrait client' :
+                               req.type === 'client_deposit_req' ? '↓ Dépôt client' : 'Dépôt'}
                             </Badge>
                           </div>
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
@@ -5653,40 +5836,66 @@ const AffiliateEditForm = ({
                                 )}
                               </div>
                             )}
+                            {(req.type === 'client_deposit_req' || req.type === 'client_withdrawal_req') && (
+                              <div className="flex flex-wrap items-center gap-2 mt-1">
+                                <span className={`font-black text-base ${req.type === 'client_deposit_req' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                  {(req as any).amount?.toLocaleString()} HTG
+                                </span>
+                                {(req as any).method && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                                    via {(req as any).method}
+                                  </span>
+                                )}
+                                {(req as any).accountNumber && (
+                                  <span className="font-mono text-[10px] text-gray-500">{(req as any).accountNumber}</span>
+                                )}
+                                {(req as any).txId && (
+                                  <span className="font-mono text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                                    Réf: {(req as any).txId}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 w-full sm:w-auto">
                         <Button 
                           size="sm" 
-                          className="flex-1 sm:flex-none bg-primary hover:bg-[#D98A1E] border-0"
+                          className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 border-0 text-white font-black"
+                          disabled={clientTxActionLoading === (req as any).id}
                           onClick={() => {
                             if (req.type === 'registration') {
                               handleAffiliateRequestAction(req as any, 'approved');
                             } else if (req.type === 'withdrawal') {
                               handleWithdrawalAction(req as any, 'approved');
+                            } else if (req.type === 'client_deposit_req' || req.type === 'client_withdrawal_req') {
+                              handleClientTxAction(req.id!, 'approved');
                             } else {
                               updateWalletTransactionStatus(req.id!, 'approved');
                             }
                           }}
                         >
-                          Approuver
+                          {clientTxActionLoading === (req as any).id ? <Loader2 className="h-4 w-4 animate-spin" /> : '✓ Approuver'}
                         </Button>
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          className="flex-1 sm:flex-none border-red-200 text-red-600 hover:bg-red-50"
+                          className="flex-1 sm:flex-none border-red-200 text-red-600 hover:bg-red-50 font-black"
+                          disabled={clientTxActionLoading === (req as any).id}
                           onClick={() => {
                             if (req.type === 'registration') {
                               handleAffiliateRequestAction(req as any, 'rejected');
                             } else if (req.type === 'withdrawal') {
                               handleWithdrawalAction(req as any, 'rejected');
+                            } else if (req.type === 'client_deposit_req' || req.type === 'client_withdrawal_req') {
+                              handleClientTxAction(req.id!, 'rejected');
                             } else {
                               updateWalletTransactionStatus(req.id!, 'rejected');
                             }
                           }}
                         >
-                          Rejeter
+                          ✕ Rejeter
                         </Button>
                       </div>
                     </div>
