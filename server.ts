@@ -245,15 +245,25 @@ async function startServer() {
       }
       if (amount <= 0) return res.status(400).json({ error: 'Montant invalide.' });
 
-      // Check balance server-side
-      const clientSnap = await adminDb.collection('clients').doc(clientId).get();
+      // Check balance server-side and immediately deduct
+      const clientRef = adminDb.collection('clients').doc(clientId);
+      const clientSnap = await clientRef.get();
       if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
       const clientData = clientSnap.data()!;
       if ((clientData.balance || 0) < amount) {
         return res.status(400).json({ error: 'Solde insuffisant.' });
       }
 
-      const txRef = await adminDb.collection('client_transactions').add({
+      const batch = adminDb.batch();
+
+      // Immediately deduct balance
+      batch.update(clientRef, {
+        balance: Math.max(0, (clientData.balance || 0) - amount),
+        updatedAt: FieldValue.serverTimestamp()
+      });
+
+      const txRef = adminDb.collection('client_transactions').doc();
+      batch.set(txRef, {
         clientId,
         clientName,
         type: 'withdrawal',
@@ -266,7 +276,8 @@ async function startServer() {
         updatedAt: FieldValue.serverTimestamp()
       });
 
-      await adminDb.collection('admin_notifications').add({
+      const notifRef = adminDb.collection('admin_notifications').doc();
+      batch.set(notifRef, {
         type: 'client_withdrawal',
         clientId,
         clientName,
@@ -279,6 +290,8 @@ async function startServer() {
         read: false,
         createdAt: FieldValue.serverTimestamp()
       });
+
+      await batch.commit();
 
       res.json({ success: true, transactionId: txRef.id });
     } catch (e: any) {
@@ -486,19 +499,24 @@ async function startServer() {
         updatedAt: FieldValue.serverTimestamp()
       });
 
-      if (status === 'approved') {
-        const clientRef = adminDb.collection('clients').doc(txData.clientId);
-        const clientSnap = await clientRef.get();
-        if (clientSnap.exists) {
-          const clientData = clientSnap.data()!;
+      const clientRef2 = adminDb.collection('clients').doc(txData.clientId);
+      const clientSnap2 = await clientRef2.get();
+      if (clientSnap2.exists) {
+        const clientData2 = clientSnap2.data()!;
+        if (status === 'approved') {
           if (txData.type === 'deposit') {
-            batch.update(clientRef, {
-              balance: (clientData.balance || 0) + txData.amount,
+            // Deposit approved: credit balance
+            batch.update(clientRef2, {
+              balance: (clientData2.balance || 0) + txData.amount,
               updatedAt: FieldValue.serverTimestamp()
             });
-          } else if (txData.type === 'withdrawal') {
-            batch.update(clientRef, {
-              balance: Math.max(0, (clientData.balance || 0) - txData.amount),
+          }
+          // Withdrawal approved: balance already deducted on submission, no change needed
+        } else if (status === 'rejected') {
+          if (txData.type === 'withdrawal') {
+            // Withdrawal rejected: refund the amount that was deducted on submission
+            batch.update(clientRef2, {
+              balance: (clientData2.balance || 0) + txData.amount,
               updatedAt: FieldValue.serverTimestamp()
             });
           }
@@ -509,6 +527,26 @@ async function startServer() {
       res.json({ success: true });
     } catch (e: any) {
       console.error('[transaction/status]', e);
+      res.status(500).json({ error: e.message || 'Erreur serveur.' });
+    }
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // DELETE /api/client/transactions/:clientId  — clear a client's tx history
+  // ────────────────────────────────────────────────────────────────────────────
+  app.delete('/api/client/transactions/:clientId', async (req, res) => {
+    if (!adminDb) return res.status(503).json({ error: 'Service indisponible.' });
+    try {
+      const { clientId } = req.params;
+      const snap = await adminDb.collection('client_transactions')
+        .where('clientId', '==', clientId)
+        .get();
+      const batch = adminDb.batch();
+      snap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      res.json({ success: true, deleted: snap.size });
+    } catch (e: any) {
+      console.error('[delete transactions]', e);
       res.status(500).json({ error: e.message || 'Erreur serveur.' });
     }
   });

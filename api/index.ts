@@ -186,22 +186,32 @@ app.post('/api/client/withdrawal', requireDb, async (req, res) => {
 
     const clientSnap = await adminDb.collection('clients').doc(clientId).get();
     if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
-    if ((clientSnap.data()!.balance || 0) < amount)
+    const clientRef = adminDb.collection('clients').doc(clientId);
+    const clientData = clientSnap.data()!;
+    if ((clientData.balance || 0) < amount)
       return res.status(400).json({ error: 'Solde insuffisant.' });
 
-    const txRef = await adminDb.collection('client_transactions').add({
+    const batch = adminDb.batch();
+    batch.update(clientRef, {
+      balance: Math.max(0, (clientData.balance || 0) - amount),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    const txRef = adminDb.collection('client_transactions').doc();
+    batch.set(txRef, {
       clientId, clientName, type: 'withdrawal', amount, status: 'pending',
       method, accountNumber,
       description: `Demande de retrait via ${method}`,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
-    await adminDb.collection('admin_notifications').add({
+    const notifRef = adminDb.collection('admin_notifications').doc();
+    batch.set(notifRef, {
       type: 'client_withdrawal', clientId, clientName,
       clientPhone: clientPhone || '', clientWalletId: clientWalletId || '',
       transactionId: txRef.id, amount, method, accountNumber,
       read: false, createdAt: FieldValue.serverTimestamp(),
     });
+    await batch.commit();
     res.json({ success: true, transactionId: txRef.id });
   } catch (e: any) {
     console.error('[withdrawal]', e);
@@ -350,19 +360,23 @@ app.post('/api/admin/transaction/status', requireDb, async (req, res) => {
       ...(reason && { rejectionReason: reason }),
       updatedAt: FieldValue.serverTimestamp(),
     });
-    if (status === 'approved') {
-      const clientRef = adminDb.collection('clients').doc(txData.clientId);
-      const clientSnap = await clientRef.get();
-      if (clientSnap.exists) {
-        const clientData = clientSnap.data()!;
+    const clientRef2 = adminDb.collection('clients').doc(txData.clientId);
+    const clientSnap2 = await clientRef2.get();
+    if (clientSnap2.exists) {
+      const clientData2 = clientSnap2.data()!;
+      if (status === 'approved') {
         if (txData.type === 'deposit') {
-          batch.update(clientRef, {
-            balance: (clientData.balance || 0) + txData.amount,
+          batch.update(clientRef2, {
+            balance: (clientData2.balance || 0) + txData.amount,
             updatedAt: FieldValue.serverTimestamp(),
           });
-        } else if (txData.type === 'withdrawal') {
-          batch.update(clientRef, {
-            balance: Math.max(0, (clientData.balance || 0) - txData.amount),
+        }
+        // Withdrawal approved: balance already deducted on submission, no change needed
+      } else if (status === 'rejected') {
+        if (txData.type === 'withdrawal') {
+          // Withdrawal rejected: refund the amount deducted on submission
+          batch.update(clientRef2, {
+            balance: (clientData2.balance || 0) + txData.amount,
             updatedAt: FieldValue.serverTimestamp(),
           });
         }

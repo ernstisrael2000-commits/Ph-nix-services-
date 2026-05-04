@@ -28,6 +28,8 @@ export interface Product {
   stock?: number;
   whatsappMessage?: string;
   plans?: { id: string; name: string; price: string }[];
+  allowCustomAmount?: boolean;
+  customExchangeRate?: number;
   createdAt: any;
 }
 

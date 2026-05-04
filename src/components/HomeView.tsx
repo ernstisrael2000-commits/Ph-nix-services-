@@ -139,6 +139,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [isProductDetailOpen, setIsProductDetailOpen] = useState(false);
+  const [customAmountUSD, setCustomAmountUSD] = useState<string>('');
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [purchaseLoading, setPurchaseLoading] = useState(false);
 
@@ -228,6 +229,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const handleProductClick = (product: any) => {
     setSelectedProduct(product);
     setSelectedPlan(product.plans && product.plans.length > 0 ? product.plans[0] : null);
+    setCustomAmountUSD('');
     setIsProductDetailOpen(true);
   };
 
@@ -383,14 +385,6 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
       action: () => setIsCardsDialogOpen(true),
       buttonText: "Voir les cartes",
       color: "bg-emerald-50 border-emerald-100"
-    },
-    {
-      title: "Top-up jeux",
-      description: "Créditez vos comptes de jeux préférés instantanément.",
-      icon: <Gamepad2 className="h-8 w-8 text-purple-600" />,
-      action: () => setIsGamesDialogOpen(true),
-      buttonText: "Voir les jeux",
-      color: "bg-purple-50 border-purple-100"
     },
     {
       title: "Shipping",
@@ -961,31 +955,79 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                       </div>
                     </div>
                   )}
+
+                  {selectedProduct.allowCustomAmount && (
+                    <div className="space-y-2 pt-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Montant personnalisé</Label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-gray-400 text-lg">$</span>
+                        <Input
+                          type="number"
+                          value={customAmountUSD}
+                          onChange={e => setCustomAmountUSD(e.target.value)}
+                          placeholder="0.00"
+                          className="h-14 rounded-2xl text-lg font-black pl-10 border-2 focus:border-primary"
+                          min="0.01"
+                          step="0.01"
+                        />
+                      </div>
+                      {customAmountUSD && !isNaN(parseFloat(customAmountUSD)) && parseFloat(customAmountUSD) > 0 && (
+                        <div className="flex items-center gap-2 p-3 rounded-xl bg-primary/5 border border-primary/10">
+                          <DollarSign className="h-4 w-4 text-primary shrink-0" />
+                          <p className="text-sm font-black text-primary">
+                            = {Math.round(parseFloat(customAmountUSD) * (selectedProduct.customExchangeRate || exchangeRate)).toLocaleString()} HTG
+                            <span className="text-xs font-normal text-gray-400 ml-2">
+                              (taux: {selectedProduct.customExchangeRate || exchangeRate} HTG/$)
+                            </span>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                <Button 
-                  onClick={() => handleBuyRequested({ 
-                    name: selectedPlan ? `${selectedProduct.name} (${selectedPlan.name})` : selectedProduct.name, 
-                    price: selectedPlan ? selectedPlan.price : selectedProduct.price, 
-                    type: 'product' 
-                  })}
-                  className="w-full h-14 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-3 active:scale-95 transition-all"
-                >
-                  <LucideIcons.ArrowRight className="h-6 w-6" />
-                  Continuer via WhatsApp
-                </Button>
+                {(() => {
+                  const effectiveRate = selectedProduct.customExchangeRate || exchangeRate;
+                  const customHTG = selectedProduct.allowCustomAmount && customAmountUSD && !isNaN(parseFloat(customAmountUSD))
+                    ? Math.round(parseFloat(customAmountUSD) * effectiveRate)
+                    : null;
+                  const displayPrice = customHTG !== null
+                    ? `${customHTG} HTG`
+                    : (selectedPlan ? selectedPlan.price : selectedProduct.price);
+                  const displayName = selectedPlan
+                    ? `${selectedProduct.name} (${selectedPlan.name})`
+                    : selectedProduct.name;
+                  const customLabel = customHTG !== null
+                    ? `$${customAmountUSD} USD = ${customHTG.toLocaleString()} HTG`
+                    : null;
+                  return (
+                    <>
+                      <Button 
+                        onClick={() => handleBuyRequested({ 
+                          name: customLabel ? `${displayName} — ${customLabel}` : displayName, 
+                          price: displayPrice, 
+                          type: 'product' 
+                        })}
+                        className="w-full h-14 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-3 active:scale-95 transition-all"
+                      >
+                        <LucideIcons.ArrowRight className="h-6 w-6" />
+                        Continuer via WhatsApp
+                      </Button>
 
-                {loggedClient && (
-                  <WalletPayButton
-                    client={effectiveClient || loggedClient}
-                    price={selectedPlan ? selectedPlan.price : selectedProduct?.price}
-                    productName={selectedPlan ? `${selectedProduct?.name} (${selectedPlan.name})` : selectedProduct?.name}
-                    hasPendingPurchase={hasPendingPurchase}
-                    purchaseLoading={purchaseLoading}
-                    setPurchaseLoading={setPurchaseLoading}
-                    onSuccess={() => setIsProductDetailOpen(false)}
-                  />
-                )}
+                      {loggedClient && (
+                        <WalletPayButton
+                          client={effectiveClient || loggedClient}
+                          price={displayPrice}
+                          productName={customLabel ? `${displayName} — ${customLabel}` : displayName}
+                          hasPendingPurchase={hasPendingPurchase}
+                          purchaseLoading={purchaseLoading}
+                          setPurchaseLoading={setPurchaseLoading}
+                          onSuccess={() => setIsProductDetailOpen(false)}
+                        />
+                      )}
+                    </>
+                  );
+                })()}
                 
                 <p className="text-center text-[10px] text-gray-400 font-medium italic">
                   *Un agent vous répondra instantanément sur WhatsApp

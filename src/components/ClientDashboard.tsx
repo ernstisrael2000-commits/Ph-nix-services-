@@ -3,7 +3,7 @@ import {
   Wallet, ArrowDownToLine, ArrowUpFromLine, History, 
   LogOut, Loader2, X, Copy, CheckCircle2, AlertCircle,
   ArrowRightLeft, Clock, XCircle, TrendingUp, Shield,
-  ChevronRight, Banknote, CreditCard, Smartphone
+  ChevronRight, Banknote, CreditCard, Smartphone, Trash2
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -123,6 +123,22 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
       toast.error(err.message);
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const [isDeletingHistory, setIsDeletingHistory] = useState(false);
+
+  const handleDeleteHistory = async () => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer tout votre historique de transactions ? Cette action est irréversible.")) return;
+    setIsDeletingHistory(true);
+    try {
+      const res = await fetch(`/api/client/transactions/${clientId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Erreur lors de la suppression.');
+      toast.success("Historique supprimé avec succès.");
+    } catch {
+      toast.error("Impossible de supprimer l'historique.");
+    } finally {
+      setIsDeletingHistory(false);
     }
   };
 
@@ -263,6 +279,16 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                   </div>
                 ) : (
                   <div className="space-y-2">
+                    <div className="flex justify-end mb-1">
+                      <button
+                        onClick={handleDeleteHistory}
+                        disabled={isDeletingHistory}
+                        className="flex items-center gap-1.5 text-[11px] font-bold text-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                      >
+                        {isDeletingHistory ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        Supprimer l'historique
+                      </button>
+                    </div>
                     {transactions.map(tx => {
                       const sc = statusConfig[tx.status] || statusConfig.pending;
                       const isCredit = tx.type === 'deposit' || tx.type === 'transfer_received' || tx.type === 'refund';

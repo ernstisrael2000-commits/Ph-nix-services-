@@ -2157,7 +2157,9 @@ const AffiliateEditForm = ({
         price: '',
         stock: 0,
         whatsappMessage: '',
-        plans: []
+        plans: [],
+        allowCustomAmount: false,
+        customExchangeRate: undefined
       });
     }
     setIsProductDialogOpen(true);
@@ -7459,6 +7461,35 @@ const AffiliateEditForm = ({
                   placeholder="Quantité en stock"
                 />
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                <Label className="sm:text-right text-sm">Montant personnalisé</Label>
+                <div className="sm:col-span-3 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setProductFormData({...productFormData, allowCustomAmount: !productFormData.allowCustomAmount})}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${productFormData.allowCustomAmount ? 'bg-primary' : 'bg-gray-200'}`}
+                  >
+                    <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${productFormData.allowCustomAmount ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                  <span className="text-sm text-gray-600">Permettre à l'utilisateur de saisir un montant en dollars</span>
+                </div>
+              </div>
+              {productFormData.allowCustomAmount && (
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
+                  <Label className="sm:text-right text-sm">Taux de change (HTG/$)</Label>
+                  <div className="sm:col-span-3 space-y-1">
+                    <Input
+                      type="number"
+                      value={productFormData.customExchangeRate || ''}
+                      onChange={(e) => setProductFormData({...productFormData, customExchangeRate: e.target.value ? Number(e.target.value) : undefined})}
+                      className="h-10 rounded-xl"
+                      placeholder="Ex: 146 (laisser vide pour taux global)"
+                      min="1"
+                    />
+                    <p className="text-[10px] text-gray-400">Taux personnalisé pour ce produit. Si vide, le taux global de l'application sera utilisé.</p>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2 sm:gap-4">
                 <Label className="sm:text-right text-sm">Image (Lien)</Label>
                 <div className="sm:col-span-3 flex flex-col sm:flex-row gap-2">
