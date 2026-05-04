@@ -80,6 +80,24 @@ export default function FormationsAdminPanel() {
     if (!form.title.trim()) { toast.error('Le titre est requis.'); return; }
     setSaving(true);
     try {
+      const cleanModules: FormationModule[] = form.modules.map((m, idx) => ({
+        id: m.id,
+        title: m.title || '',
+        videoUrl: m.videoUrl || '',
+        duration: m.duration || '0:00',
+        order: m.order ?? idx + 1,
+        description: m.description || '',
+      }));
+
+      const cleanResources: FormationResource[] = form.resources
+        .filter(r => r.name && r.url)
+        .map(r => ({
+          id: r.id,
+          name: r.name || '',
+          url: r.url || '',
+          type: r.type || 'link',
+        }));
+
       const data = {
         title: form.title.trim(),
         description: form.description.trim(),
@@ -87,12 +105,13 @@ export default function FormationsAdminPanel() {
         coverImage: form.coverImage.trim(),
         price: parseFloat(form.price) || 0,
         level: form.level as any,
-        pdfUrl: form.pdfUrl.trim() || undefined,
+        pdfUrl: form.pdfUrl.trim(),
         published: form.published,
-        modules: form.modules,
-        resources: form.resources.filter(r => r.name && r.url),
+        modules: cleanModules,
+        resources: cleanResources,
         rating: 0,
       };
+
       if (editingId) {
         await updateFormation(editingId, data);
         toast.success('Formation mise à jour !');

@@ -33,6 +33,11 @@ export const signInWithGoogle = async (): Promise<FormationUser> => {
   };
 };
 
+// ─── Utility: strip undefined values from any object before Firestore writes ──
+function stripUndefined<T extends object>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj, (_key, value) => (value === undefined ? null : value)));
+}
+
 // ─── Formations CRUD ─────────────────────────────────────────────────────────
 
 export const useFormations = (onlyPublished = true) => {
@@ -76,17 +81,21 @@ export const useFormation = (id: string | null) => {
 };
 
 export const createFormation = async (data: Omit<Formation, 'id' | 'createdAt' | 'updatedAt'>) => {
-  return addDoc(collection(db, 'formations'), {
+  const clean = stripUndefined({
     ...data,
     studentsCount: 0,
     rating: 0,
+  });
+  return addDoc(collection(db, 'formations'), {
+    ...clean,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
 };
 
 export const updateFormation = async (id: string, data: Partial<Formation>) => {
-  return updateDoc(doc(db, 'formations', id), { ...data, updatedAt: serverTimestamp() });
+  const clean = stripUndefined(data);
+  return updateDoc(doc(db, 'formations', id), { ...clean, updatedAt: serverTimestamp() });
 };
 
 export const deleteFormation = async (id: string) => {
