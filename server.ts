@@ -66,8 +66,20 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
+    const hmrConfig = process.env.REPLIT_DEV_DOMAIN
+      ? {
+          clientPort: 443,
+          protocol: "wss" as const,
+          host: process.env.REPLIT_DEV_DOMAIN,
+        }
+      : true;
+
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: hmrConfig,
+        allowedHosts: true,
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
