@@ -57,6 +57,16 @@ async function startServer() {
 
   app.use(express.json());
 
+  // ── CORS — allow all origins so the deployed app works from any domain ──────
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
+
   // ── Health check ────────────────────────────────────────────────────────────
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
@@ -501,6 +511,147 @@ async function startServer() {
       console.error('[transaction/status]', e);
       res.status(500).json({ error: e.message || 'Erreur serveur.' });
     }
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // POST /api/client/register  — creates a new client via Admin SDK
+  // ────────────────────────────────────────────────────────────────────────────
+  app.post('/api/client/register', async (req, res) => {
+    try {
+      const { name, phone, email, password, sponsorCode } = req.body;
+      if (!name || !phone || !email || !password) {
+        return res.status(400).json({ error: 'Paramètres manquants.' });
+      }
+      if (!adminDb) return res.status(503).json({ error: 'Service indisponible.' });
+
+      const existing = await adminDb.collection('clients').where('email', '==', email).get();
+      if (!existing.empty) {
+        return res.status(409).json({ error: 'Un compte avec cet email existe déjà.' });
+      }
+
+      // Generate unique wallet ID
+      let walletId = '';
+      let unique = false;
+      while (!unique) {
+        walletId = Math.floor(10000000 + Math.random() * 90000000).toString();
+        const wSnap = await adminDb.collection('clients').where('walletId', '==', walletId).get();
+        if (wSnap.empty) unique = true;
+      }
+
+      // Resolve sponsor
+      let directSponsorId: string | undefined;
+      let indirectSponsorId: string | undefined;
+      if (sponsorCode) {
+        const affSnap = await adminDb.collection('affiliates').where('code', '==', sponsorCode).get();
+        if (!affSnap.empty) {
+          directSponsorId = affSnap.docs[0].id;
+          const affData = affSnap.docs[0].data();
+          if (affData.parentAffiliateId) indirectSponsorId = affData.parentAffiliateId;
+        }
+      }
+
+      const clientData: any = {
+        name, phone, email, password,
+        balance: 0, walletId, status: 'active',
+        ...(directSponsorId && { directSponsorId }),
+        ...(indirectSponsorId && { indirectSponsorId }),
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      };
+
+      const ref = await adminDb.collection('clients').add(clientData);
+      res.json({ success: true, client: { id: ref.id, ...clientData, createdAt: null, updatedAt: null } });
+    } catch (e: any) {
+      console.error('[register]', e);
+      res.status(500).json({ error: e.message || 'Erreur lors de l\'inscription.' });
+    }
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // POST /api/client/login  — authenticates a client via Admin SDK
+  // ────────────────────────────────────────────────────────────────────────────
+  app.post('/api/client/login', async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Email et mot de passe requis.' });
+      }
+      if (!adminDb) return res.status(503).json({ error: 'Service indisponible.' });
+
+      const snap = await adminDb.collection('clients')
+        .where('email', '==', email)
+        .where('password', '==', password)
+        .limit(1)
+        .get();
+
+      if (snap.empty) {
+        return res.status(401).json({ error: 'Email ou mot de passe incorrect.' });
+      }
+      const doc = snap.docs[0];
+      res.json({ success: true, client: serializeDoc(doc) });
+    } catch (e: any) {
+      console.error('[login]', e);
+      res.status(500).json({ error: e.message || 'Erreur de connexion.' });
+    }
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // POST /api/client/register-google  — creates or fetches a Google client
+  // ────────────────────────────────────────────────────────────────────────────
+  app.post('/api/client/register-google', async (req, res) => {
+    try {
+      const { phone, sponsorCode, googleUser } = req.body;
+      if (!googleUser?.email || !googleUser?.uid) {
+        return res.status(400).json({ error: 'Données Google manquantes.' });
+      }
+      if (!adminDb) return res.status(503).json({ error: 'Service indisponible.' });
+
+      const existing = await adminDb.collection('clients').where('email', '==', googleUser.email).get();
+      if (!existing.empty) {
+        return res.status(409).json({ error: 'Un compte avec cet email existe déjà.' });
+      }
+
+      let walletId = '';
+      let unique = false;
+      while (!unique) {
+        walletId = Math.floor(10000000 + Math.random() * 90000000).toString();
+        const wSnap = await adminDb.collection('clients').where('walletId', '==', walletId).get();
+        if (wSnap.empty) unique = true;
+      }
+
+      let directSponsorId: string | undefined;
+      let indirectSponsorId: string | undefined;
+      if (sponsorCode) {
+        const affSnap = await adminDb.collection('affiliates').where('code', '==', sponsorCode).get();
+        if (!affSnap.empty) {
+          directSponsorId = affSnap.docs[0].id;
+          const affData = affSnap.docs[0].data();
+          if (affData.parentAffiliateId) indirectSponsorId = affData.parentAffiliateId;
+        }
+      }
+
+      const clientData: any = {
+        name: googleUser.name, phone: phone || '',
+        email: googleUser.email, uid: googleUser.uid,
+        photoUrl: googleUser.photoUrl || '',
+        balance: 0, walletId, status: 'active',
+        ...(directSponsorId && { directSponsorId }),
+        ...(indirectSponsorId && { indirectSponsorId }),
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      };
+
+      const ref = await adminDb.collection('clients').add(clientData);
+      res.json({ success: true, client: { id: ref.id, ...clientData, createdAt: null, updatedAt: null } });
+    } catch (e: any) {
+      console.error('[register-google]', e);
+      res.status(500).json({ error: e.message || 'Erreur lors de l\'inscription Google.' });
+    }
+  });
+
+  // ── Catch-all: any unmatched /api/* route returns JSON (never HTML) ──────────
+  app.all('/api/*', (_req, res) => {
+    res.status(404).json({ error: 'Route API introuvable.' });
   });
 
   const httpServer = createHttpServer(app);

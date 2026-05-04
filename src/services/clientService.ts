@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   collection,
   query,
   where,
   getDocs,
-  addDoc,
   updateDoc,
   doc,
   serverTimestamp,
@@ -38,29 +37,14 @@ export const registerClient = async (data: {
   password: string;
   sponsorCode?: string;
 }): Promise<Client> => {
-  const emailQ = query(collection(db, 'clients'), where('email', '==', data.email));
-  const snap = await getDocs(emailQ);
-  if (!snap.empty) throw new Error("Un compte avec cet email existe déjà.");
-
-  const walletId = await generateUniqueWalletId();
-  const { directSponsorId, indirectSponsorId } = await resolveSponsor(data.sponsorCode);
-
-  const clientData: any = {
-    name: data.name,
-    phone: data.phone,
-    email: data.email,
-    password: data.password,
-    balance: 0,
-    walletId,
-    status: 'active',
-    ...(directSponsorId && { directSponsorId }),
-    ...(indirectSponsorId && { indirectSponsorId }),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  };
-
-  const ref = await addDoc(collection(db, 'clients'), clientData);
-  return { id: ref.id, ...clientData } as Client;
+  const res = await fetch('/api/client/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || `Erreur inscription (${res.status})`);
+  return json.client as Client;
 };
 
 export const registerClientWithGoogle = async (data: {
@@ -68,41 +52,26 @@ export const registerClientWithGoogle = async (data: {
   sponsorCode?: string;
   googleUser: { uid: string; email: string; name: string; photoUrl?: string };
 }): Promise<Client> => {
-  const emailQ = query(collection(db, 'clients'), where('email', '==', data.googleUser.email));
-  const snap = await getDocs(emailQ);
-  if (!snap.empty) throw new Error("Un compte avec cet email existe déjà.");
-
-  const walletId = await generateUniqueWalletId();
-  const { directSponsorId, indirectSponsorId } = await resolveSponsor(data.sponsorCode);
-
-  const clientData: any = {
-    name: data.googleUser.name,
-    phone: data.phone,
-    email: data.googleUser.email,
-    uid: data.googleUser.uid,
-    photoUrl: data.googleUser.photoUrl || '',
-    balance: 0,
-    walletId,
-    status: 'active',
-    ...(directSponsorId && { directSponsorId }),
-    ...(indirectSponsorId && { indirectSponsorId }),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  };
-
-  const ref = await addDoc(collection(db, 'clients'), clientData);
-  return { id: ref.id, ...clientData } as Client;
+  const res = await fetch('/api/client/register-google', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || `Erreur inscription Google (${res.status})`);
+  return json.client as Client;
 };
 
 export const loginClient = async (email: string, password: string): Promise<Client | null> => {
-  const q = query(
-    collection(db, 'clients'),
-    where('email', '==', email),
-    where('password', '==', password)
-  );
-  const snap = await getDocs(q);
-  if (snap.empty) return null;
-  return { id: snap.docs[0].id, ...snap.docs[0].data() } as Client;
+  const res = await fetch('/api/client/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  if (res.status === 401) return null;
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || `Erreur connexion (${res.status})`);
+  return json.client as Client;
 };
 
 export interface GoogleClientLoginResult {
@@ -159,35 +128,6 @@ export const loginClientWithGoogle = async (): Promise<GoogleClientLoginResult> 
   }
 };
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-async function generateUniqueWalletId(): Promise<string> {
-  let walletId = '';
-  let isUnique = false;
-  while (!isUnique) {
-    walletId = Math.floor(10000000 + Math.random() * 90000000).toString();
-    const wQ = query(collection(db, 'clients'), where('walletId', '==', walletId));
-    const wSnap = await getDocs(wQ);
-    if (wSnap.empty) isUnique = true;
-  }
-  return walletId;
-}
-
-async function resolveSponsor(sponsorCode?: string) {
-  let directSponsorId: string | undefined;
-  let indirectSponsorId: string | undefined;
-  if (sponsorCode) {
-    const affQ = query(collection(db, 'affiliates'), where('code', '==', sponsorCode));
-    const affSnap = await getDocs(affQ);
-    if (!affSnap.empty) {
-      const aff = affSnap.docs[0];
-      directSponsorId = aff.id;
-      const affData = aff.data();
-      if (affData.parentAffiliateId) indirectSponsorId = affData.parentAffiliateId;
-    }
-  }
-  return { directSponsorId, indirectSponsorId };
-}
 
 // ─── Client Data Hook ────────────────────────────────────────────────────────
 
