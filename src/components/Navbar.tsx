@@ -1,4 +1,4 @@
-import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users, Truck, ExternalLink, Menu, X, GraduationCap, Wallet, ChevronRight } from 'lucide-react';
+import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users, Truck, ExternalLink, Menu, X, Wallet, ChevronRight } from 'lucide-react';
 import { Button } from './ui/button';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -25,7 +25,6 @@ const NAV_ITEMS = [
   { key: 'home', icon: Home, label: 'Accueil' },
   { key: 'tracking', icon: Search, label: 'Suivi' },
   { key: 'shipping', icon: Truck, label: 'Shipping' },
-  { key: 'formations', icon: GraduationCap, label: 'Formations' },
   { key: 'affiliate', icon: Users, label: 'Affiliés' },
 ];
 
