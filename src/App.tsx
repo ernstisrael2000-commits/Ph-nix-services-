@@ -247,7 +247,7 @@ export default function App() {
                   <div className="p-6 pt-0 flex justify-center">
                     <Button 
                       onClick={() => setShowAnnouncement(false)}
-                      className="w-full h-12 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black text-sm shadow-xl shadow-accent-light/60 border-0 transition-all hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0 group"
+                      className="w-full h-12 rounded-2xl bg-primary hover:bg-[#1D4ED8] text-white font-black text-sm shadow-xl shadow-accent-light/60 border-0 transition-all hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0 group"
                     >
                       J'AI COMPRIS
                       <motion.span 

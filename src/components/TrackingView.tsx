@@ -102,7 +102,7 @@ export default function TrackingView() {
                 <Button 
                   type="submit" 
                   disabled={loading}
-                  className="h-14 px-10 bg-primary hover:bg-[#D98A1E] text-white font-bold text-lg rounded-2xl transition-all hover:shadow-xl hover:shadow-primary/20 active:scale-95 shadow-lg shadow-primary/30 border-0"
+                  className="h-14 px-10 bg-primary hover:bg-[#1D4ED8] text-white font-bold text-lg rounded-2xl transition-all hover:shadow-xl hover:shadow-primary/20 active:scale-95 shadow-lg shadow-primary/30 border-0"
                 >
                   {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : 'Rechercher'}
                 </Button>

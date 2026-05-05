@@ -61,7 +61,7 @@ export default function ShippingView() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button className="w-full bg-primary text-white group-hover:bg-[#D98A1E]">
+                  <Button className="w-full bg-primary text-white group-hover:bg-[#1D4ED8]">
                     Découvrir l'achat en ligne
                   </Button>
                 </CardContent>
@@ -78,7 +78,7 @@ export default function ShippingView() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Button className="w-full bg-primary text-white group-hover:bg-[#D98A1E]">
+                  <Button className="w-full bg-primary text-white group-hover:bg-[#1D4ED8]">
                     Découvrir le drop shipping
                   </Button>
                 </CardContent>
@@ -127,7 +127,7 @@ export default function ShippingView() {
                         </div>
                         <CardHeader className="pb-2">
                           <CardTitle className="text-lg font-bold flex items-center gap-2">
-                            <Badge className="bg-primary hover:bg-[#D98A1E]">
+                            <Badge className="bg-primary hover:bg-[#1D4ED8]">
                               {addr.city || 'Adresse'}
                             </Badge>
                           </CardTitle>

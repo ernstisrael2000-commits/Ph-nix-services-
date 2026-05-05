@@ -105,7 +105,7 @@ export default function AgentLogin({ onLogin }: AgentLoginProps) {
             </div>
             <Button 
               type="submit" 
-              className="w-full h-14 bg-primary hover:bg-[#D98A1E] text-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-xl shadow-primary/20 border-0 transition-all hover:shadow-2xl active:scale-95"
+              className="w-full h-14 bg-primary hover:bg-[#1D4ED8] text-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-xl shadow-primary/20 border-0 transition-all hover:shadow-2xl active:scale-95"
               disabled={loading}
             >
               {loading ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : "Entrer dans l'espace agent"}

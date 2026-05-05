@@ -146,7 +146,7 @@ const generatePDFReport = (stats: any) => {
   const doc = new jsPDF() as any;
   const now = new Date();
   const dateStr = format(now, 'dd/MM/yyyy HH:mm');
-  const primaryColor: [number, number, number] = [245, 166, 35]; // #F5A623
+  const primaryColor: [number, number, number] = [37, 99, 235]; // #F5A623
   const navyColor: [number, number, number] = [26, 31, 60]; // #1a1f3c
   const greyColor: [number, number, number] = [107, 114, 128]; // #6b7280
 
@@ -276,7 +276,7 @@ const AnalyticsDashboard = ({ stats, loading }: { stats: any, loading: boolean }
         </div>
         <Button 
           onClick={() => generatePDFReport(stats)}
-          className="bg-primary hover:bg-[#D98A1E] text-white shadow-lg shadow-accent-light/50 border-0 rounded-xl"
+          className="bg-primary hover:bg-[#1D4ED8] text-white shadow-lg shadow-accent-light/50 border-0 rounded-xl"
         >
           <Upload className="h-4 w-4 mr-2" />
           Générer Rapport PDF
@@ -324,8 +324,8 @@ const AnalyticsDashboard = ({ stats, loading }: { stats: any, loading: boolean }
               <AreaChart data={stats.dailyRevenue}>
                 <defs>
                   <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F5A623" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#F5A623" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#2563EB" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#2563EB" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
@@ -333,9 +333,9 @@ const AnalyticsDashboard = ({ stats, loading }: { stats: any, loading: boolean }
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9ca3af' }} />
                 <Tooltip 
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                  cursor={{ stroke: '#F5A623', strokeWidth: 2 }}
+                  cursor={{ stroke: '#2563EB', strokeWidth: 2 }}
                 />
-                <Area type="monotone" dataKey="value" stroke="#F5A623" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
+                <Area type="monotone" dataKey="value" stroke="#2563EB" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -384,7 +384,7 @@ const AnalyticsDashboard = ({ stats, loading }: { stats: any, loading: boolean }
                     dataKey="value"
                   >
                     {[0, 1, 2, 3, 4].map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#F5A623' : '#1a1f3c'} />
+                      <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#2563EB' : '#1a1f3c'} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -497,7 +497,7 @@ const IntelligenceSearch = React.memo(({ onSearch, isSearching }: { onSearch: (q
              <Button 
                onClick={() => onSearch(localInput)}
                disabled={isSearching || !localInput.trim()}
-               className="h-16 px-12 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black text-lg shadow-xl shadow-primary/30 border-0 transition-all active:scale-95 flex items-center justify-center gap-3"
+               className="h-16 px-12 rounded-2xl bg-primary hover:bg-[#1D4ED8] text-white font-black text-lg shadow-xl shadow-primary/30 border-0 transition-all active:scale-95 flex items-center justify-center gap-3"
              >
                {isSearching ? <LucideIcons.Loader2 className="h-6 w-6 animate-spin" /> : <LucideIcons.Network className="h-6 w-6" />}
                Déployer l'Analyse
@@ -1022,7 +1022,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     iconName: 'Package',
     targetUrl: '',
     redirectionInstruction: '',
-    color: '#F5A623',
+    color: '#2563EB',
     order: 0
   });
   
@@ -1771,7 +1771,7 @@ const AffiliateEditForm = ({
             className={`flex-1 sm:flex-none rounded-2xl h-12 font-bold shadow-xl border-0 px-10 transition-all active:scale-95 ${
               settings?.lockAffiliateEdits 
                 ? 'bg-gray-400 cursor-not-allowed opacity-50' 
-                : 'bg-primary hover:bg-[#D98A1E] text-white shadow-accent-light/50'
+                : 'bg-primary hover:bg-[#1D4ED8] text-white shadow-accent-light/50'
             }`}
           >
             {isSaving ? < LucideIcons.Loader2 className="h-4 w-4 animate-spin mr-2" /> : < LucideIcons.CheckCircle2 className="h-4 w-4 mr-2" />}
@@ -2633,7 +2633,7 @@ const AffiliateEditForm = ({
         iconName: 'Package',
         targetUrl: '',
         redirectionInstruction: '',
-        color: '#F5A623',
+        color: '#2563EB',
         order: (buttons.length || 0) + 1
       });
     }
@@ -2971,7 +2971,7 @@ const AffiliateEditForm = ({
         </div>
         <Button 
           onClick={() => setIsAgentDialogOpen(true)}
-          className="rounded-2xl bg-primary hover:bg-[#D98A1E] text-white shadow-lg shadow-primary/25 h-12 px-6 font-black uppercase tracking-widest text-[10px] border-0"
+          className="rounded-2xl bg-primary hover:bg-[#1D4ED8] text-white shadow-lg shadow-primary/25 h-12 px-6 font-black uppercase tracking-widest text-[10px] border-0"
         >
           <PlusCircle className="h-5 w-5 mr-2" />
           Nouvel Agent
@@ -3458,7 +3458,7 @@ const AffiliateEditForm = ({
             <TabsContent value="parcels" className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <h2 className="text-xl font-bold text-dark">Gestion des Colis</h2>
-            <Button onClick={() => handleOpenDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 border-0">
+            <Button onClick={() => handleOpenDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#1D4ED8] text-white flex items-center justify-center gap-2 border-0">
               <Plus className="h-4 w-4" />
               Nouveau Colis
             </Button>
@@ -3589,7 +3589,7 @@ const AffiliateEditForm = ({
         <TabsContent value="products" className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <h2 className="text-xl font-bold text-dark">Gestion des Produits / Services</h2>
-            <Button onClick={() => handleOpenProductDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 border-0">
+            <Button onClick={() => handleOpenProductDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#1D4ED8] text-white flex items-center justify-center gap-2 border-0">
               <Plus className="h-4 w-4" />
               Nouveau Produit
             </Button>
@@ -3669,7 +3669,7 @@ const AffiliateEditForm = ({
         <TabsContent value="games" className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <h2 className="text-xl font-bold text-dark">Gestion des Jeux (Top-up)</h2>
-            <Button onClick={() => handleOpenGameDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 border-0">
+            <Button onClick={() => handleOpenGameDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#1D4ED8] text-white flex items-center justify-center gap-2 border-0">
               <Plus className="h-4 w-4" />
               Nouveau Jeu
             </Button>
@@ -3749,7 +3749,7 @@ const AffiliateEditForm = ({
         <TabsContent value="cards" className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <h2 className="text-xl font-bold text-dark">Gestion des Cartes (Recharge)</h2>
-            <Button onClick={() => handleOpenCardDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 border-0">
+            <Button onClick={() => handleOpenCardDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#1D4ED8] text-white flex items-center justify-center gap-2 border-0">
               <Plus className="h-4 w-4" />
               Nouvelle Carte
             </Button>
@@ -3866,7 +3866,7 @@ const AffiliateEditForm = ({
                     <Button 
                       onClick={handleSaveSliderUrl} 
                       disabled={isSaving || !tempSliderImageUrl.trim()}
-                      className="bg-primary hover:bg-[#D98A1E] h-10 whitespace-nowrap border-0"
+                      className="bg-primary hover:bg-[#1D4ED8] h-10 whitespace-nowrap border-0"
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Lien
@@ -3882,7 +3882,7 @@ const AffiliateEditForm = ({
                       id="slider-upload"
                       disabled={isSliderUploading}
                     />
-                    <Button asChild disabled={isSliderUploading} className="bg-primary hover:bg-[#D98A1E] h-10 w-full sm:w-auto border-0">
+                    <Button asChild disabled={isSliderUploading} className="bg-primary hover:bg-[#1D4ED8] h-10 w-full sm:w-auto border-0">
                       <label htmlFor="slider-upload" className="cursor-pointer flex items-center justify-center gap-2">
                         {isSliderUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                         Télécharger
@@ -4044,7 +4044,7 @@ const AffiliateEditForm = ({
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsSliderImageEditDialogOpen(false)}>Annuler</Button>
-                <Button onClick={handleUpdateSliderImage} disabled={isSaving} className="bg-primary hover:bg-[#D98A1E] border-0">
+                <Button onClick={handleUpdateSliderImage} disabled={isSaving} className="bg-primary hover:bg-[#1D4ED8] border-0">
                   {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                   Enregistrer les modifications
                 </Button>
@@ -4103,7 +4103,7 @@ const AffiliateEditForm = ({
                     additionalSponsors: []
                   });
                   setIsAffiliateDialogOpen(true);
-                }} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 shadow-md border-0 h-10 px-6 rounded-xl font-black text-xs">
+                }} className="w-full sm:w-auto bg-primary hover:bg-[#1D4ED8] text-white flex items-center justify-center gap-2 shadow-md border-0 h-10 px-6 rounded-xl font-black text-xs">
                   <PlusCircle className="h-4 w-4" />
                   Nouvel Affilié
                 </Button>
@@ -4370,7 +4370,7 @@ const AffiliateEditForm = ({
                         </div>
                       ))}
                       <Button 
-                        className="w-full bg-primary hover:bg-[#D98A1E] text-white mt-2"
+                        className="w-full bg-primary hover:bg-[#1D4ED8] text-white mt-2"
                         onClick={handleAwardPrizes}
                         disabled={isAwarding}
                       >
@@ -4494,7 +4494,7 @@ const AffiliateEditForm = ({
                         <div className="flex gap-2">
                           <Button 
                             size="sm" 
-                            className="flex-1 bg-primary hover:bg-[#D98A1E] h-8 border-0"
+                            className="flex-1 bg-primary hover:bg-[#1D4ED8] h-8 border-0"
                             onClick={() => handleAffiliateRequestAction(r, 'approved')}
                           >
                             Approuver
@@ -4556,7 +4556,7 @@ const AffiliateEditForm = ({
                         <div className="flex gap-2">
                           <Button 
                             size="sm" 
-                            className="flex-1 bg-primary hover:bg-[#D98A1E] h-8 border-0"
+                            className="flex-1 bg-primary hover:bg-[#1D4ED8] h-8 border-0"
                             onClick={() => handleWithdrawalAction(w, 'approved')}
                           >
                             Approuver
@@ -5663,7 +5663,7 @@ const AffiliateEditForm = ({
                    setClientFormData({ name: '', phone: '', directSponsorId: '', indirectSponsorId: '' });
                    setIsClientDialogOpen(true);
                 }} 
-                className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 border-0 h-11 px-6 rounded-2xl shadow-lg shadow-primary/20 font-black uppercase text-xs"
+                className="w-full sm:w-auto bg-primary hover:bg-[#1D4ED8] text-white flex items-center justify-center gap-2 border-0 h-11 px-6 rounded-2xl shadow-lg shadow-primary/20 font-black uppercase text-xs"
             >
               <Plus className="h-4 w-4" />
               Ajouter un Client
@@ -6061,7 +6061,7 @@ const AffiliateEditForm = ({
                           toast.success("Lien du logo appliqué !");
                         }
                       }}
-                      className="bg-primary hover:bg-[#D98A1E] w-full sm:w-auto border-0"
+                      className="bg-primary hover:bg-[#1D4ED8] w-full sm:w-auto border-0"
                     >
                       Ajouter
                     </Button>
@@ -6274,7 +6274,7 @@ const AffiliateEditForm = ({
                         await updateSettings(dataToUpdate);
                         toast.success("Annonce enregistrée !");
                       }}
-                      className="w-full bg-primary hover:bg-[#D98A1E] text-white font-bold rounded-xl"
+                      className="w-full bg-primary hover:bg-[#1D4ED8] text-white font-bold rounded-xl"
                     >
                       Enregistrer l'annonce
                     </Button>
@@ -6336,7 +6336,7 @@ const AffiliateEditForm = ({
                           toast.success("Code de verrouillage enregistré !");
                         }
                       }}
-                      className="bg-primary hover:bg-[#D98A1E] text-white font-bold rounded-xl"
+                      className="bg-primary hover:bg-[#1D4ED8] text-white font-bold rounded-xl"
                     >
                       Enregistrer le code
                     </Button>
@@ -6360,7 +6360,7 @@ const AffiliateEditForm = ({
                           toast.success("Numéro WhatsApp enregistré !");
                         }
                       }}
-                      className="bg-primary hover:bg-[#D98A1E] text-white font-bold rounded-xl"
+                      className="bg-primary hover:bg-[#1D4ED8] text-white font-bold rounded-xl"
                     >
                       Enregistrer le numéro
                     </Button>
@@ -6381,7 +6381,7 @@ const AffiliateEditForm = ({
         <TabsContent value="nav-buttons" className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <h2 className="text-xl font-bold text-dark">Boutons de Navigation Rapide</h2>
-            <Button onClick={() => handleOpenNavButtonDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 border-0">
+            <Button onClick={() => handleOpenNavButtonDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#1D4ED8] text-white flex items-center justify-center gap-2 border-0">
               <Plus className="h-4 w-4" />
               Nouveau Bouton
             </Button>
@@ -6451,7 +6451,7 @@ const AffiliateEditForm = ({
         <TabsContent value="admins" className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <h2 className="text-xl font-bold text-dark">Gestion des Administrateurs</h2>
-            <Button onClick={() => handleOpenAdminDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#D98A1E] text-white flex items-center justify-center gap-2 rounded-2xl h-11 px-6 font-bold shadow-lg shadow-accent-light/50 border-0">
+            <Button onClick={() => handleOpenAdminDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#1D4ED8] text-white flex items-center justify-center gap-2 rounded-2xl h-11 px-6 font-bold shadow-lg shadow-accent-light/50 border-0">
               <Plus className="h-4 w-4" />
               Nouvel Admin
             </Button>
@@ -6616,7 +6616,7 @@ const AffiliateEditForm = ({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsRecordSaleDialogOpen(false)}>Annuler</Button>
-            <Button onClick={handleRecordSale} disabled={isRecordingSale} className="bg-primary hover:bg-[#D98A1E] text-white">
+            <Button onClick={handleRecordSale} disabled={isRecordingSale} className="bg-primary hover:bg-[#1D4ED8] text-white">
               {isRecordingSale ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
               Confirmer la vente
             </Button>
@@ -6733,7 +6733,7 @@ const AffiliateEditForm = ({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsNavButtonDialogOpen(false)}>Annuler</Button>
-            <Button onClick={handleSaveNavButton} className="bg-primary hover:bg-[#D98A1E] text-white border-0">
+            <Button onClick={handleSaveNavButton} className="bg-primary hover:bg-[#1D4ED8] text-white border-0">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Enregistrer
             </Button>
@@ -7259,7 +7259,7 @@ const AffiliateEditForm = ({
                 className={`flex-1 sm:flex-none rounded-2xl h-12 font-bold shadow-xl border-0 px-10 transition-all active:scale-95 ${
                   settings?.lockAffiliateEdits 
                     ? 'bg-gray-400 cursor-not-allowed opacity-50' 
-                    : 'bg-primary hover:bg-[#D98A1E] text-white shadow-accent-light/50'
+                    : 'bg-primary hover:bg-[#1D4ED8] text-white shadow-accent-light/50'
                 }`}
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
@@ -7508,7 +7508,7 @@ const AffiliateEditForm = ({
                         toast.success("Lien d'image appliqué !");
                       }
                     }}
-                    className="bg-primary hover:bg-[#D98A1E] w-full sm:w-auto border-0"
+                    className="bg-primary hover:bg-[#1D4ED8] w-full sm:w-auto border-0"
                   >
                     Ajouter
                   </Button>
@@ -7660,7 +7660,7 @@ const AffiliateEditForm = ({
                         toast.success("Lien d'image appliqué !");
                       }
                     }}
-                    className="bg-primary hover:bg-[#D98A1E] w-full sm:w-auto border-0"
+                    className="bg-primary hover:bg-[#1D4ED8] w-full sm:w-auto border-0"
                   >
                     Ajouter
                   </Button>
@@ -7812,7 +7812,7 @@ const AffiliateEditForm = ({
               <Button 
                 onClick={handleSaveGame} 
                 disabled={isSaving} 
-                className="bg-primary hover:bg-[#D98A1E] text-white font-bold h-9 rounded-xl shadow-lg shadow-accent-light/50 border-0 px-6 min-w-[100px]"
+                className="bg-primary hover:bg-[#1D4ED8] text-white font-bold h-9 rounded-xl shadow-lg shadow-accent-light/50 border-0 px-6 min-w-[100px]"
               >
                 {isSaving ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : null}
                 Enregistrer
@@ -8052,7 +8052,7 @@ const AffiliateEditForm = ({
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" onClick={() => setIsCardDialogOpen(false)} className="h-10 px-6">Annuler</Button>
-              <Button onClick={handleSaveCard} disabled={isSaving} className="bg-primary hover:bg-[#D98A1E] h-10 px-8 text-white font-bold shadow-md shadow-accent-light/50 active:scale-95 transition-all border-0">
+              <Button onClick={handleSaveCard} disabled={isSaving} className="bg-primary hover:bg-[#1D4ED8] h-10 px-8 text-white font-bold shadow-md shadow-accent-light/50 active:scale-95 transition-all border-0">
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Enregistrer
               </Button>
@@ -8175,7 +8175,7 @@ const AffiliateEditForm = ({
                       toast.success("Lien de preuve appliqué !");
                     }
                   }}
-                  className="bg-primary hover:bg-[#D98A1E] w-full sm:w-auto border-0"
+                  className="bg-primary hover:bg-[#1D4ED8] w-full sm:w-auto border-0"
                 >
                   Ajouter
                 </Button>
@@ -8233,7 +8233,7 @@ const AffiliateEditForm = ({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Annuler</Button>
-            <Button onClick={handleSave} disabled={isSaving} className="bg-primary hover:bg-[#D98A1E] border-0">
+            <Button onClick={handleSave} disabled={isSaving} className="bg-primary hover:bg-[#1D4ED8] border-0">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Enregistrer
             </Button>
@@ -8411,7 +8411,7 @@ const AffiliateEditForm = ({
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsUnlockDialogOpen(false)} className="rounded-xl h-11 font-bold">Annuler</Button>
-            <Button onClick={handleToggleLockEdits} className="bg-primary hover:bg-[#D98A1E] text-white rounded-xl h-11 font-bold flex-1 border-0">
+            <Button onClick={handleToggleLockEdits} className="bg-primary hover:bg-[#1D4ED8] text-white rounded-xl h-11 font-bold flex-1 border-0">
               Confirmer
             </Button>
           </DialogFooter>
@@ -8549,7 +8549,7 @@ const AffiliateEditForm = ({
             )}
             <div className="flex gap-2 ml-auto w-full sm:w-auto order-1 sm:order-2">
               <Button variant="outline" onClick={() => setIsAdminDialogOpen(false)} className="flex-1 sm:flex-none h-12 rounded-2xl border-gray-100 font-bold bg-white">Annuler</Button>
-              <Button onClick={handleSaveAdminAccount} disabled={isSaving} className="flex-1 sm:flex-none h-12 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-bold px-8 shadow-xl shadow-accent-light/50 border-0">
+              <Button onClick={handleSaveAdminAccount} disabled={isSaving} className="flex-1 sm:flex-none h-12 rounded-2xl bg-primary hover:bg-[#1D4ED8] text-white font-bold px-8 shadow-xl shadow-accent-light/50 border-0">
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Enregistrer l'Admin
               </Button>
@@ -8751,7 +8751,7 @@ const AffiliateEditForm = ({
             <Button 
                 onClick={handleSaveClient} 
                 disabled={isSaving}
-                className="h-14 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black px-12 shadow-xl shadow-primary/20 flex-1 sm:flex-none"
+                className="h-14 rounded-2xl bg-primary hover:bg-[#1D4ED8] text-white font-black px-12 shadow-xl shadow-primary/20 flex-1 sm:flex-none"
             >
               {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : (editingClient ? 'Mettre à jour' : 'Enregistrer Client')}
             </Button>
@@ -8788,7 +8788,7 @@ const AffiliateEditForm = ({
       >
         <Button 
           onClick={scrollToTop}
-          className="pointer-events-auto h-14 w-14 rounded-3xl bg-primary hover:bg-[#D98A1E] text-white shadow-2xl flex items-center justify-center p-0 border-0 active:scale-90 transition-transform"
+          className="pointer-events-auto h-14 w-14 rounded-3xl bg-primary hover:bg-[#1D4ED8] text-white shadow-2xl flex items-center justify-center p-0 border-0 active:scale-90 transition-transform"
         >
           <ArrowUp className="h-7 w-7" />
         </Button>

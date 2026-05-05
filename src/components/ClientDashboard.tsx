@@ -183,7 +183,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
         className="relative z-10 w-full max-w-md bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] max-h-[92vh] overflow-hidden flex flex-col shadow-2xl"
       >
         {/* Header */}
-        <div className="bg-gradient-to-br from-primary to-[#D98A1E] p-6 text-white relative shrink-0">
+        <div className="bg-gradient-to-br from-primary to-[#1B4FD8] p-6 text-white relative shrink-0">
           <button onClick={onClose} className="absolute top-4 right-4 h-9 w-9 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors">
             <X className="h-5 w-5 text-white" />
           </button>

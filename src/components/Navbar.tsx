@@ -152,7 +152,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                 </div>
               ) : (
                 <Button onClick={() => setShowAuthModal(true)}
-                  className="bg-primary hover:bg-[#D98A1E] text-white text-xs font-bold px-3 py-1.5 h-auto rounded-xl flex items-center gap-1.5">
+                  className="bg-primary hover:bg-[#1D4ED8] text-white text-xs font-bold px-3 py-1.5 h-auto rounded-xl flex items-center gap-1.5">
                   <LogIn className="h-3.5 w-3.5" />
                   <span className="hidden xs:inline">Connexion</span>
                 </Button>
@@ -252,7 +252,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                 </button>
               ) : (
                 <button onClick={() => { setShowAuthModal(true); setMenuOpen(false); }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-[#D98A1E] transition-all">
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold bg-primary text-white hover:bg-[#1D4ED8] transition-all">
                   <LogIn className="h-5 w-5 shrink-0" />
                   <span>Connexion</span>
                 </button>
@@ -292,7 +292,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-6">
-            <Button className="w-full h-12 rounded-xl bg-primary hover:bg-[#D98A1E] text-white font-bold flex items-center justify-center gap-2"
+            <Button className="w-full h-12 rounded-xl bg-primary hover:bg-[#1D4ED8] text-white font-bold flex items-center justify-center gap-2"
               onClick={() => { window.open(window.location.href, '_blank'); setShowLoginErrorDialog(false); }}>
               <ExternalLink className="h-5 w-5" />
               Ouvrir dans un nouvel onglet

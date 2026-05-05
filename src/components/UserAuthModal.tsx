@@ -255,7 +255,7 @@ export default function UserAuthModal({
         {/* ── CHOICE ── */}
         {view === 'choice' && (
           <div>
-            <div className="bg-gradient-to-br from-primary to-[#D98A1E] p-8 text-white text-center">
+            <div className="bg-gradient-to-br from-primary to-[#1B4FD8] p-8 text-white text-center">
               <div className="h-16 w-16 rounded-[20px] bg-white/20 backdrop-blur-md flex items-center justify-center mx-auto mb-4 border border-white/30">
                 <Wallet className="h-8 w-8 text-white" />
               </div>
@@ -350,7 +350,7 @@ export default function UserAuthModal({
         {/* ── CLIENT LOGIN ── */}
         {view === 'client-login' && (
           <div>
-            <div className="bg-gradient-to-br from-primary to-[#D98A1E] p-6 text-white">
+            <div className="bg-gradient-to-br from-primary to-[#1B4FD8] p-6 text-white">
               <button onClick={() => setView('choice')}
                 className="flex items-center gap-1 text-white/70 hover:text-white text-sm mb-4 transition-colors">
                 <ArrowLeft className="h-4 w-4" /> Retour
@@ -383,7 +383,7 @@ export default function UserAuthModal({
                   </div>
                 </div>
                 <Button type="submit" disabled={loading}
-                  className="w-full h-12 rounded-xl bg-primary hover:bg-[#D98A1E] text-white font-black shadow-lg shadow-primary/30">
+                  className="w-full h-12 rounded-xl bg-primary hover:bg-[#1D4ED8] text-white font-black shadow-lg shadow-primary/30">
                   {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <><LogIn className="h-5 w-5 mr-2" />Connexion</>}
                 </Button>
               </form>

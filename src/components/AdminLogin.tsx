@@ -111,7 +111,7 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full h-14 bg-primary hover:bg-[#D98A1E] text-white font-black rounded-2xl shadow-lg shadow-accent-light/50 transition-all active:scale-[0.98] mt-4"
+                className="w-full h-14 bg-primary hover:bg-[#1D4ED8] text-white font-black rounded-2xl shadow-lg shadow-accent-light/50 transition-all active:scale-[0.98] mt-4"
               >
                 {loading ? (
                   <>

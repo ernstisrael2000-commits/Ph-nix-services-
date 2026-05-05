@@ -574,11 +574,11 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                   <LucideIcon 
                     name={btn.iconName} 
                     className="h-5 w-5 transition-colors group-hover:text-primary" 
-                    color={btn.color || '#F5A623'} 
+                    color={btn.color || '#2563EB'} 
                   />
                   <span 
                     className="font-heading font-bold text-sm md:text-base transition-colors group-hover:text-primary"
-                    style={{ color: btn.color || '#F5A623' }}
+                    style={{ color: btn.color || '#2563EB' }}
                   >
                     {btn.label}
                   </span>
@@ -754,8 +754,8 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
 
       {/* Payment Proof Section */}
       <section id="payment" className="bg-primary rounded-[2rem] p-8 md:p-12 text-white shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-[#D98A1E] rounded-full opacity-50 blur-3xl" />
-        <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-[#D98A1E] rounded-full opacity-50 blur-3xl" />
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-[#1D4ED8] rounded-full opacity-50 blur-3xl" />
+        <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-[#1D4ED8] rounded-full opacity-50 blur-3xl" />
         
         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
           <div className="space-y-4 text-center md:text-left">
@@ -1063,7 +1063,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                           price: displayPrice, 
                           type: 'product' 
                         })}
-                        className="w-full h-14 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-3 active:scale-95 transition-all"
+                        className="w-full h-14 rounded-2xl bg-primary hover:bg-[#1D4ED8] text-white font-black text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-3 active:scale-95 transition-all"
                       >
                         <LucideIcons.ArrowRight className="h-6 w-6" />
                         Continuer via WhatsApp
@@ -1252,7 +1252,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
       >
         <Button 
           onClick={scrollToTop}
-          className="pointer-events-auto h-12 w-12 rounded-full bg-primary hover:bg-[#D98A1E] text-white shadow-xl flex items-center justify-center p-0"
+          className="pointer-events-auto h-12 w-12 rounded-full bg-primary hover:bg-[#1D4ED8] text-white shadow-xl flex items-center justify-center p-0"
         >
           <ArrowUp className="h-6 w-6" />
         </Button>
@@ -1391,7 +1391,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
             <Button 
                onClick={handleFinalPaymentSubmit}
                disabled={!paymentTransactionInfo.trim()}
-               className="w-full h-14 rounded-2xl bg-primary hover:bg-[#D98A1E] text-white font-black text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-3 transition-all active:scale-95 disabled:grayscale disabled:opacity-50"
+               className="w-full h-14 rounded-2xl bg-primary hover:bg-[#1D4ED8] text-white font-black text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-3 transition-all active:scale-95 disabled:grayscale disabled:opacity-50"
             >
                Envoyer et Payer
                <ArrowRight className="h-5 w-5" />

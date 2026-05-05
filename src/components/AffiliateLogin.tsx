@@ -160,7 +160,7 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
             </div>
             <Button 
               type="submit" 
-              className="w-full h-12 bg-primary hover:bg-[#D98A1E] text-lg font-semibold border-0"
+              className="w-full h-12 bg-primary hover:bg-[#1D4ED8] text-lg font-semibold border-0"
               disabled={loading}
             >
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Se connecter"}
@@ -276,7 +276,7 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
                     />
                   </div>
                   <DialogFooter className="pt-4">
-                    <Button type="submit" className="w-full bg-primary hover:bg-[#D98A1E] border-0" disabled={registerLoading}>
+                    <Button type="submit" className="w-full bg-primary hover:bg-[#1D4ED8] border-0" disabled={registerLoading}>
                       {registerLoading ? (
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
                       ) : (
