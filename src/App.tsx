@@ -5,6 +5,7 @@ import AdminDashboard from './components/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
 import HomeView from './components/HomeView';
 import ShippingView from './components/ShippingView';
+import FormationsView from './components/FormationsView';
 import AffiliateLogin from './components/AffiliateLogin';
 import AffiliateDashboard from './components/AffiliateDashboard';
 import AgentLogin from './components/AgentLogin';
@@ -24,8 +25,8 @@ import { db } from './lib/firebase';
 import { toast } from 'sonner';
 
 export default function App() {
-  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent'>('home');
-  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent')[]>(['home']);
+  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent' | 'formations'>('home');
+  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent' | 'formations')[]>(['home']);
   const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'admin' | 'agent' | null>(null);
   const { loading } = useAuth();
   const { settings } = useSettings();
@@ -304,6 +305,13 @@ export default function App() {
 
           {view === 'shipping' && (
             <ShippingView />
+          )}
+
+          {view === 'formations' && (
+            <FormationsView
+              loggedClient={loggedClient}
+              onOpenWallet={() => setShowClientDashboard(true)}
+            />
           )}
 
           {view === 'admin' && (

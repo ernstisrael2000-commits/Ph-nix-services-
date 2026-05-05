@@ -993,6 +993,91 @@ async function startServer() {
     }
   });
 
+  // ────────────────────────────────────────────────────────────────────────────
+  // POST /api/formations/purchases/wallet — buy a formation with wallet balance
+  // ────────────────────────────────────────────────────────────────────────────
+  app.post('/api/formations/purchases/wallet', async (req, res) => {
+    if (!adminDb) return res.status(503).json({ error: 'Firebase Admin non initialisé.' });
+    try {
+      const { clientId, clientName, formationId, formationTitle, amount } = req.body;
+      if (!clientId || !formationId) return res.status(400).json({ error: 'Paramètres manquants.' });
+
+      // Check if already purchased
+      const existingSnap = await adminDb.collection('formation_purchases')
+        .where('userId', '==', clientId)
+        .where('formationId', '==', formationId)
+        .where('status', '==', 'active')
+        .get();
+      if (!existingSnap.empty) {
+        return res.json({ success: true, alreadyOwned: true });
+      }
+
+      const clientRef = adminDb.collection('clients').doc(clientId);
+      const clientSnap = await clientRef.get();
+      if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
+      const clientData = clientSnap.data()!;
+
+      const price = Number(amount) || 0;
+      if (price > 0 && (clientData.balance || 0) < price) {
+        return res.status(400).json({ error: 'Solde insuffisant.' });
+      }
+
+      const batch = adminDb.batch();
+
+      // Deduct balance if paid
+      if (price > 0) {
+        batch.update(clientRef, {
+          balance: Math.max(0, (clientData.balance || 0) - price),
+          updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+
+      // Create active purchase record
+      const purchaseRef = adminDb.collection('formation_purchases').doc();
+      batch.set(purchaseRef, {
+        userId: clientId,
+        userEmail: clientData.email || '',
+        userName: clientName || clientData.name || '',
+        formationId,
+        formationTitle: formationTitle || '',
+        amount: price,
+        method: price === 0 ? 'Gratuit' : 'Wallet',
+        status: 'active',
+        purchasedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      // Increment studentsCount on formation
+      if (formationId) {
+        batch.update(adminDb.collection('formations').doc(formationId), {
+          studentsCount: FieldValue.increment(1),
+        });
+      }
+
+      // Notify admin
+      if (price > 0) {
+        const notifRef = adminDb.collection('admin_notifications').doc();
+        batch.set(notifRef, {
+          type: 'formation_purchase',
+          clientId,
+          clientName: clientName || clientData.name || '',
+          formationId,
+          formationTitle: formationTitle || '',
+          amount: price,
+          method: 'Wallet',
+          read: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error('[formations/purchases/wallet]', e);
+      res.status(500).json({ error: e.message || 'Erreur serveur.' });
+    }
+  });
+
   // ── Catch-all: any unmatched /api/* route returns JSON (never HTML) ──────────
   app.all('/api/*', (_req, res) => {
     res.status(404).json({ error: 'Route API introuvable.' });

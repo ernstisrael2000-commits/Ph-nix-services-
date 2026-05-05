@@ -6,9 +6,9 @@
   --font-heading: "DM Sans", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --color-subtext: #6b7280;
-  --color-primary: #F5A623;
+  --color-primary: #2563EB;
   --color-dark: #1a1f3c;
-  --color-accent-light: #FFF3CD;
+  --color-accent-light: #EFF6FF;
 }
 
 @utility custom-scrollbar {
@@ -19,11 +19,11 @@
     background: transparent;
   }
   &::-webkit-scrollbar-thumb {
-    background: #FFF3CD;
+    background: #BFDBFE;
     border-radius: 10px;
   }
   &::-webkit-scrollbar-thumb:hover {
-    background: #F5A623;
+    background: #2563EB;
   }
 }
 
@@ -105,32 +105,32 @@
     --card-foreground: #1a1f3c;
     --popover: #ffffff;
     --popover-foreground: #1a1f3c;
-    --primary: #F5A623;
+    --primary: #2563EB;
     --primary-foreground: #ffffff;
-    --secondary: #FFF3CD;
-    --secondary-foreground: #F5A623;
+    --secondary: #EFF6FF;
+    --secondary-foreground: #2563EB;
     --muted: #f3f4f6;
     --muted-foreground: #6b7280;
-    --accent: #FFF3CD;
-    --accent-foreground: #F5A623;
+    --accent: #EFF6FF;
+    --accent-foreground: #2563EB;
     --destructive: #ef4444;
     --border: #e5e7eb;
     --input: #e5e7eb;
-    --ring: #F5A623;
-    --chart-1: #F5A623;
+    --ring: #2563EB;
+    --chart-1: #2563EB;
     --chart-2: #1a1f3c;
     --chart-3: #6b7280;
-    --chart-4: #FFF3CD;
+    --chart-4: #EFF6FF;
     --chart-5: #e5e7eb;
     --radius: 0.625rem;
     --sidebar: #ffffff;
     --sidebar-foreground: #1a1f3c;
-    --sidebar-primary: #F5A623;
+    --sidebar-primary: #2563EB;
     --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #FFF3CD;
+    --sidebar-accent: #EFF6FF;
     --sidebar-accent-foreground: #1a1f3c;
     --sidebar-border: #e5e7eb;
-    --sidebar-ring: #F5A623;
+    --sidebar-ring: #2563EB;
 }
 
 .dark {
@@ -140,7 +140,7 @@
     --card-foreground: #ffffff;
     --popover: #1e2448;
     --popover-foreground: #ffffff;
-    --primary: #F5A623;
+    --primary: #3B82F6;
     --primary-foreground: #ffffff;
     --secondary: #2d345a;
     --secondary-foreground: #ffffff;
@@ -151,20 +151,20 @@
     --destructive: #ef4444;
     --border: #e5e7eb1a;
     --input: #e5e7eb26;
-    --ring: #F5A623;
-    --chart-1: #F5A623;
+    --ring: #3B82F6;
+    --chart-1: #3B82F6;
     --chart-2: #6b7280;
     --chart-3: #ffffff;
-    --chart-4: #FFF3CD;
+    --chart-4: #EFF6FF;
     --chart-5: #2d345a;
     --sidebar: #1a1f3c;
     --sidebar-foreground: #ffffff;
-    --sidebar-primary: #F5A623;
+    --sidebar-primary: #3B82F6;
     --sidebar-primary-foreground: #ffffff;
     --sidebar-accent: #2d345a;
     --sidebar-accent-foreground: #ffffff;
     --sidebar-border: #e5e7eb1a;
-    --sidebar-ring: #F5A623;
+    --sidebar-ring: #3B82F6;
 }
 
 @layer base {
@@ -252,8 +252,6 @@
     transition: transform 0.3s ease !important;
   }
 
-  /* Specific override for general products to be cover if needed, 
-     but keeping it uniform for beautiful rectangles */
   .product-card:hover .product-image {
     transform: scale(1.05) !important;
   }
@@ -300,14 +298,14 @@
   }
 
   .product-price {
-    color: #F5A623 !important;
+    color: #2563EB !important;
     font-size: 13px !important;
     font-weight: 600 !important;
   }
 
   /* BOUTON ACHETER */
   .product-buy-button {
-    background-color: #F5A623 !important;
+    background-color: #2563EB !important;
     color: white !important;
     font-size: 12px !important;
     border-radius: 8px !important;
@@ -320,7 +318,7 @@
   }
 
   .product-buy-button:hover {
-    background-color: #D98A1E !important;
+    background-color: #1D4ED8 !important;
   }
 }
 
@@ -359,13 +357,13 @@
     color: #1a1f3c;
   }
   .product-price {
-    color: #F5A623;
+    color: #2563EB;
     font-weight: 700;
     font-size: 1.25rem;
   }
 }
 
-/* BOUTON CHAT FLOTTANT (General but specific mobile rules) */
+/* BOUTON CHAT FLOTTANT */
 .floating-chat-button-container {
   position: fixed !important;
   bottom: 20px !important;
@@ -374,7 +372,7 @@
 }
 
 .floating-chat-button {
-  background-color: #25D366 !important; /* WhatsApp Green */
+  background-color: #25D366 !important;
   color: white !important;
   width: 56px !important;
   height: 56px !important;
