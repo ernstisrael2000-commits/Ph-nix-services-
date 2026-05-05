@@ -1,109 +1,69 @@
-# Neopay Logistics App
+# Neopay
 
-A React + Vite + Express web application for parcel tracking, logistics management, and e-learning — built for the Haitian market (French language UI).
+A logistics/fintech web app with role-based dashboards for clients, affiliates, agents, and admins — handling package tracking, payments, deposits, withdrawals, and affiliate commissions.
 
-## Architecture
+## Run & Operate
 
-- **Frontend**: React 19 + Vite 6 + TailwindCSS 4 + shadcn/ui components
-- **Backend**: Express.js server (`server.ts`) serving Vite middleware in dev, static files in production
-- **Database**: Firebase Firestore (custom database ID from `firebase-applet-config.json`)
-- **Auth**: Firebase Auth with IndexedDB persistence (Google Sign-In enabled for Formations)
-- **Storage**: Firebase Storage
-- **AI**: Google Gemini API
+- **Dev**: `npm run dev` (starts Express + Vite middleware on port 5000)
+- **Build**: `npm run build` (Vite production build to `/dist`)
+- **Typecheck**: `npm run lint`
 
-## Project Structure
+### Required env vars / secrets
+| Key | Purpose |
+|-----|---------|
+| `FIREBASE_SERVICE_ACCOUNT` | Firebase Admin SDK JSON (server-side Firestore access) |
+| `SMTP_USER` | Gmail address for registration notification emails (optional) |
+| `SMTP_PASS` | Gmail app password for SMTP (optional) |
+| `RECAPTCHA_SECRET_KEY` | Google reCAPTCHA v2 secret for server-side verification (optional) |
 
-```
-/
-├── server.ts                  # Express server (port 5000) + Vite middleware
-├── api/index.ts               # Production mirror of server.ts routes (keep in sync)
-├── vite.config.ts             # Vite config with TailwindCSS, path aliases
-├── firebase-applet-config.json  # Firebase project config
-├── src/
-│   ├── App.tsx                # Main app — view routing: home/tracking/admin/affiliate/shipping/agent/formations
-│   ├── main.tsx               # React entry point
-│   ├── types.ts               # All TypeScript types incl. Formation, FormationModule, FormationProgress, FormationPurchase
-│   ├── components/
-│   │   ├── formations/        # E-learning platform components
-│   │   │   ├── FormationsView.tsx        # Root view (sub-nav, auth)
-│   │   │   ├── FormationsPage.tsx        # Marketplace with search/filter
-│   │   │   ├── FormationCard.tsx         # Premium card with progress
-│   │   │   ├── FormationDetail.tsx       # Detail page: header, video, modules, PDF, buy modal
-│   │   │   ├── VideoPlayer.tsx           # Locked/unlocked video player (YouTube, Vimeo, MP4)
-│   │   │   ├── MyCourses.tsx             # User's purchased formations
-│   │   │   └── FormationsAdminPanel.tsx  # Admin CRUD: formations, modules, purchases, stats
-│   │   ├── AdminDashboard.tsx # Admin panel with "Formations" tab added
-│   │   └── Navbar.tsx         # Top nav with "Formations" button
-│   ├── services/
-│   │   ├── formationService.ts  # Firestore hooks & functions for formations
-│   │   └── ...                  # Other service layers
-│   ├── hooks/                 # Custom hooks (useAuth)
-│   └── lib/                   # Firebase init, utilities
-```
+## Stack
 
-## Key Features
+- **Frontend**: React 19, Vite 6, Tailwind CSS 4, shadcn/ui primitives, Recharts, Framer Motion
+- **Backend**: Express 4, Firebase Admin SDK 13, Nodemailer
+- **Database**: Cloud Firestore (custom DB: `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2`)
+- **Auth**: Firebase Auth (client SDK) + custom role resolution via Firestore
+- **Runtime**: Node 20, tsx (TypeScript runner)
 
-- **Parcel Tracking**: Track shipments by ID
-- **Admin Dashboard**: Manage parcels, affiliates, agents, settings, and now formations
-- **Affiliate System**: Affiliate registration, login, and dashboard
-- **Agent System**: Agent login and dashboard
-- **Shipping**: Shipping request management
-- **Global Announcements**: Admin-controlled announcements shown on load
-- **Email Notifications**: SMTP via nodemailer for registration alerts
-- **Client Wallet System**: Client registration/login, wallet dashboard with deposit/withdrawal
-- **Product Payment with Balance**: "Pay with wallet balance" option in product detail modal
-- **Admin Transaction Approvals**: Admin can approve/reject client deposits, withdrawals, purchases
-- **reCAPTCHA v2**: On deposit and withdrawal forms (keys: RECAPTCHA_SITE_KEY, RECAPTCHA_SECRET_KEY)
-- **Formations E-Learning Platform** (full Udemy/Coursera-style):
-  - Marketplace page with premium cards, search, level filters
-  - Google Sign-In for formation users (Firebase Auth)
-  - Formation detail: header, locked video player, module list, PDF resources
-  - Progression system: per-module completion, % tracking, auto-save to Firestore
-  - Purchase flow: WhatsApp-based payment request (MonCash/NatCash/Admi)
-  - Admin panel: CRUD formations + modules, manage purchases (approve/revoke), statistics
-  - Firestore collections: formations, formation_purchases, formation_progress, formation_users
+## Where things live
 
-## Firestore Collections
+- `server.ts` — Express server + all `/api/*` routes (1037 lines)
+- `src/App.tsx` — Role-based routing state machine (home/admin/affiliate/agent/client)
+- `src/lib/firebase.ts` — Firebase client SDK init
+- `src/hooks/useAuth.ts` — Firebase Auth role detection
+- `src/components/` — Role dashboards (Admin, Affiliate, Agent, Client) + shared views
+- `firebase-applet-config.json` — Firebase client config (public, committed)
+- `firestore.rules` — Firestore security rules
 
-| Collection | Purpose |
-|---|---|
-| `formations` | Formation metadata, modules, published state |
-| `formation_purchases` | User purchases (pending → active → revoked) |
-| `formation_progress` | Per-user progress (completed modules + %) |
-| `formation_users` | Google-authenticated formation user profiles |
+## Architecture decisions
 
-## Running the App
+- **Single Express server serves both API and frontend**: In dev, Vite runs in middleware mode attached to the Express HTTP server. In prod, Express serves the built `/dist` static files.
+- **Firebase Admin SDK only on server**: All privileged Firestore writes (balance mutations, transaction records, notifications) go through `/api/*` Express routes using the Admin SDK — never directly from the browser.
+- **Custom Firestore database**: Uses a named Firestore database (not `(default)`) — the ID is in `firebase-applet-config.json` and hardcoded in `server.ts`.
+- **Role auth is custom**: No Firebase Auth sign-in for most roles. Admin/affiliate/agent log in with credentials checked against Firestore collections. Only clients may use Firebase Auth.
+- **Graceful degradation**: SMTP and reCAPTCHA are optional — server warns and skips when keys are absent.
 
-```bash
-npm run dev
-```
+## Product
 
-Server runs on port 5000 (Express + Vite middleware).
-**Important**: Kill port before restarting: `fuser -k 5000/tcp`
+- **Home**: Service showcase, package tracking lookup, product/service carousel
+- **Client dashboard**: Balance, deposit/withdrawal requests, purchase history, PDF statements
+- **Affiliate dashboard**: Referral network, commissions, team sales tracking
+- **Agent dashboard**: Client management, transaction oversight
+- **Admin dashboard**: Full transaction management, notification center, approve/decline operations
+- **Shipping view**: Shipping service information
+- **Tracking view**: Package tracking by ID
 
-## Environment Variables / Secrets
+## User preferences
 
-- `RECAPTCHA_SITE_KEY` — Google reCAPTCHA v2 site key
-- `RECAPTCHA_SECRET_KEY` — Google reCAPTCHA v2 secret key
-- `FIREBASE_SERVICE_ACCOUNT` — Firebase Admin SDK service account JSON
-- `GEMINI_API_KEY` — Google Gemini AI (optional)
-- `SMTP_USER` / `SMTP_PASS` — Gmail for notifications (optional)
+- App is in French (UI language)
+- Keep Firebase as the auth and database layer — do not migrate to Replit DB or Replit Auth
 
-## Deployment
+## Gotchas
 
-Configured for autoscale deployment:
-- Build: `npm run build`
-- Run: `npx tsx server.ts`
+- `adminDb` points to a **named** Firestore database — passing only `getFirestore(adminApp)` without the DB ID will hit the wrong database
+- HMR websocket uses `REPLIT_DEV_DOMAIN` with `wss://` on port 443 for Replit preview compatibility
+- The `FIREBASE_SERVICE_ACCOUNT` JSON may need a leading `{` prepended — the server handles this edge case
 
-## Replit Migration Notes
+## Pointers
 
-- HMR configured via `vite.config.ts` to use `wss://` on port 443 with the `REPLIT_DEV_DOMAIN` env var
-- Firebase Auth (Google Sign-In) is kept as-is — it's the user's own Firebase project
-- Both `server.ts` AND `api/index.ts` must be kept in sync for all API routes
-- SMTP email notifications gracefully skip if `SMTP_USER`/`SMTP_PASS` are not set
-
-## Super Admin
-
-Bootstrapped automatically on first load:
-- Name: Ernst israel
-- Login code: ER-2026
+- Firebase Console: https://console.firebase.google.com/project/gen-lang-client-0739219145
+- Firestore rules: `firestore.rules`
