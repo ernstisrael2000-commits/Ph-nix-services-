@@ -1,3 +1,16 @@
+export interface OnlineSubService {
+  id?: string;
+  label: string;
+  description: string;
+  icon: string;
+  target: 'tracking' | 'shipping' | 'url';
+  url?: string;
+  order: number;
+  active: boolean;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
 export type ParcelStatus = 'En route' | 'En transit' | 'Arrivé' | 'Livré';
 export type PaymentStatus = 'Payé' | 'Non payé';
 

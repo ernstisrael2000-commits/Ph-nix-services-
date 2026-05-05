@@ -17,7 +17,7 @@ import {
 import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import { db, storage, auth } from '../lib/firebase';
 import { handleFirestoreError } from '../lib/firebase-errors';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Game, ShippingConfig, CardTopup, NavButton } from '../types';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Game, ShippingConfig, CardTopup, NavButton, OnlineSubService } from '../types';
 
 // Navigation Buttons Services
 export const useNavButtons = () => {
@@ -515,5 +515,48 @@ export const deleteShippingConfig = async (id: string) => {
     await deleteDoc(configRef);
   } catch (error) {
     handleFirestoreError(error, 'delete', 'shipping_configs', auth);
+  }
+};
+
+// ── Online Sub-Services ────────────────────────────────────────────────────
+
+export const useOnlineServices = () => {
+  const [services, setServices] = useState<OnlineSubService[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db, 'online_sub_services'), orderBy('order', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as OnlineSubService[];
+      setServices(data);
+      setLoading(false);
+    }, (error) => {
+      console.error('Error fetching online sub-services:', error);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  return { services, loading };
+};
+
+export const saveOnlineSubService = async (data: Partial<OnlineSubService>, id?: string) => {
+  try {
+    const { id: _id, createdAt: _c, ...dataToSave } = data as any;
+    if (id) {
+      await updateDoc(doc(db, 'online_sub_services', id), { ...dataToSave, updatedAt: serverTimestamp() });
+    } else {
+      await addDoc(collection(db, 'online_sub_services'), { ...dataToSave, createdAt: serverTimestamp() });
+    }
+  } catch (error) {
+    handleFirestoreError(error, 'update', 'online_sub_services', auth);
+  }
+};
+
+export const deleteOnlineSubService = async (id: string) => {
+  try {
+    await deleteDoc(doc(db, 'online_sub_services', id));
+  } catch (error) {
+    handleFirestoreError(error, 'delete', 'online_sub_services', auth);
   }
 };

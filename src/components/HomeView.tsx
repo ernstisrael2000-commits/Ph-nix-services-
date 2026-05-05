@@ -1,13 +1,13 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Package, CreditCard, Gamepad2, Truck, MessageCircle, ArrowRight, CircleCheck as CheckCircle2, Info, ArrowUp, Circle as HelpCircle } from 'lucide-react';
+import { Package, CreditCard, Gamepad2, Truck, MessageCircle, ArrowRight, CircleCheck as CheckCircle2, Info, ArrowUp, Circle as HelpCircle, Globe, ChevronDown } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { CaptchaWidget } from './CaptchaWidget';
 import { Button } from './ui/button';
 import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { useProducts, useGames, useCardTopups, useSliderImages, useNavButtons, useSettings } from '../services/parcelService';
+import { useProducts, useGames, useCardTopups, useSliderImages, useNavButtons, useSettings, useOnlineServices } from '../services/parcelService';
 import { AnimatePresence } from 'motion/react';
 import { 
   Dialog, 
@@ -131,6 +131,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const { sliderImages, loading: sliderLoading } = useSliderImages();
   const { buttons, loading: buttonsLoading } = useNavButtons();
   const { settings } = useSettings();
+  const { services: onlineSubServices } = useOnlineServices();
   // Expose admin phone globally so WalletPayButton can use it
   React.useEffect(() => {
     if (settings?.whatsappAdminNumber) {
@@ -145,6 +146,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const [customAmountUSD, setCustomAmountUSD] = useState<string>('');
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [purchaseLoading, setPurchaseLoading] = useState(false);
+  const [showOnlineServices, setShowOnlineServices] = useState(false);
 
   // Live client wallet data
   const { client: liveClient } = useClientData(loggedClient?.id || null);
@@ -382,32 +384,13 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
     }
   };
 
-  const services = [
-    {
-      title: "Suivi de colis",
-      description: "Suivez l'état de vos colis Neopay en temps réel.",
-      icon: <Package className="h-8 w-8 text-primary" />,
-      action: onTrackingClick,
-      buttonText: "Suivre un colis",
-      color: "bg-accent-light border-accent-light/50"
-    },
-    {
-      title: "Recharge carte",
-      description: "Rechargez vos cartes de crédit ou prépayées rapidement.",
-      icon: <CreditCard className="h-8 w-8 text-emerald-600" />,
-      action: () => setIsCardsDialogOpen(true),
-      buttonText: "Voir les cartes",
-      color: "bg-emerald-50 border-emerald-100"
-    },
-    {
-      title: "Shipping",
-      description: "Service global d'envoi et de réception de colis.",
-      icon: <Truck className="h-8 w-8 text-primary" />,
-      action: () => onViewChange('shipping'),
-      buttonText: "Accéder au service",
-      color: "bg-accent-light border-accent-light/50"
-    }
+  const defaultOnlineSubServices = [
+    { id: '_default_tracking', label: 'Suivi de colis', description: "Suivez l'état de vos colis en temps réel.", icon: 'Package', target: 'tracking' as const, order: 1, active: true },
+    { id: '_default_shipping', label: 'Expédition', description: "Envoi et réception de colis partout.", icon: 'Truck', target: 'shipping' as const, order: 2, active: true },
   ];
+  const effectiveOnlineSubServices = onlineSubServices.length > 0
+    ? onlineSubServices.filter(s => s.active)
+    : defaultOnlineSubServices;
 
   return (
     <div className="max-w-7xl mx-auto px-4 pt-8 pb-12 space-y-8">
@@ -613,41 +596,100 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
       ) : null}
 
       {/* Services Section */}
-      <section ref={servicesRef} id="services" className="space-y-10">
+      <section ref={servicesRef} id="services" className="space-y-8">
         <div className="text-center">
           <h2 className="text-3xl font-bold text-dark">Nos Services</h2>
           <div className="h-1 w-20 bg-primary mx-auto mt-4 rounded-full" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {services.map((service, idx) => (
-            <motion.div
-              key={service.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.1 }}
-            >
-              <Card className={`${service.color} border-2 hover:shadow-lg transition-all group h-full flex flex-col`}>
-                <CardHeader>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          {/* Card 1 — Recharge carte */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}>
+            <Card className="bg-emerald-50 border-2 border-emerald-100 hover:shadow-lg transition-all group h-full flex flex-col">
+              <CardHeader>
+                <div className="mb-4 group-hover:scale-110 transition-transform duration-300">
+                  <CreditCard className="h-8 w-8 text-emerald-600" />
+                </div>
+                <CardTitle className="text-xl">Recharge carte</CardTitle>
+                <CardDescription className="text-gray-600">
+                  Rechargez vos cartes de crédit ou prépayées rapidement.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="mt-auto">
+                <Button
+                  onClick={() => setIsCardsDialogOpen(true)}
+                  className="w-full bg-white text-gray-900 border-2 border-transparent hover:border-gray-900 hover:bg-gray-900 hover:text-white transition-all"
+                >
+                  Voir les cartes
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Card 2 — Services en ligne (expandable) */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <Card className="bg-accent-light border-2 border-accent-light/50 hover:shadow-lg transition-all h-full flex flex-col">
+              <CardHeader>
+                <div className="flex items-start justify-between">
                   <div className="mb-4 group-hover:scale-110 transition-transform duration-300">
-                    {service.icon}
+                    <Globe className="h-8 w-8 text-primary" />
                   </div>
-                  <CardTitle className="text-xl">{service.title}</CardTitle>
-                  <CardDescription className="text-gray-600">
-                    {service.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="mt-auto">
-                  <Button 
-                    onClick={service.action}
-                    className="w-full bg-white text-gray-900 border-2 border-transparent hover:border-gray-900 hover:bg-gray-900 hover:text-white transition-all"
-                  >
-                    {service.buttonText}
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
+                </div>
+                <CardTitle className="text-xl">Services en ligne</CardTitle>
+                <CardDescription className="text-gray-600">
+                  Expédition, suivi de colis et plus — accédez à tous nos services numériques.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="mt-auto space-y-3">
+                <Button
+                  onClick={() => setShowOnlineServices(v => !v)}
+                  className="w-full bg-white text-gray-900 border-2 border-transparent hover:border-gray-900 hover:bg-gray-900 hover:text-white transition-all"
+                >
+                  {showOnlineServices ? 'Masquer les services' : 'Voir les services'}
+                  <ChevronDown className={`ml-2 h-4 w-4 transition-transform duration-300 ${showOnlineServices ? 'rotate-180' : ''}`} />
+                </Button>
+
+                <AnimatePresence>
+                  {showOnlineServices && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pt-2 space-y-2">
+                        {effectiveOnlineSubServices.map((sub) => {
+                          const IconComp = (LucideIcons as any)[sub.icon] || Package;
+                          const handleSubClick = () => {
+                            if (sub.target === 'tracking') { onTrackingClick(); setShowOnlineServices(false); }
+                            else if (sub.target === 'shipping') { onViewChange('shipping'); setShowOnlineServices(false); }
+                            else if (sub.target === 'url' && sub.url) { window.open(sub.url, '_blank'); }
+                          };
+                          return (
+                            <button
+                              key={sub.id}
+                              onClick={handleSubClick}
+                              className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/80 hover:bg-white border border-white/50 hover:border-primary/20 hover:shadow-sm transition-all text-left group/sub"
+                            >
+                              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover/sub:bg-primary/20 transition-colors">
+                                <IconComp className="h-4 w-4 text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-bold text-sm text-dark">{sub.label}</p>
+                                {sub.description && <p className="text-xs text-gray-500 truncate">{sub.description}</p>}
+                              </div>
+                              <ArrowRight className="h-4 w-4 text-gray-400 group-hover/sub:text-primary transition-colors shrink-0" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </CardContent>
+            </Card>
+          </motion.div>
         </div>
       </section>
 

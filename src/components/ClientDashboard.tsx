@@ -52,7 +52,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   const { transactions, loading: txLoading } = useClientTransactions(clientId);
   const { settings } = useSettings();
 
-  const [tab, setTab] = useState<'wallet' | 'history'>('wallet');
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -219,136 +219,147 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
           ) : null}
         </div>
 
-        {/* Tab Bar */}
-        <div className="flex border-b bg-gray-50 shrink-0">
-          <button onClick={() => setTab('wallet')} className={`flex-1 py-3 text-sm font-bold transition-colors ${tab === 'wallet' ? 'text-primary border-b-2 border-primary bg-white' : 'text-subtext hover:text-dark'}`}>
-            <Wallet className="h-4 w-4 inline mr-1.5" />Wallet
-          </button>
-          <button onClick={() => setTab('history')} className={`flex-1 py-3 text-sm font-bold transition-colors relative ${tab === 'history' ? 'text-primary border-b-2 border-primary bg-white' : 'text-subtext hover:text-dark'}`}>
-            <History className="h-4 w-4 inline mr-1.5" />Historique
-            {pendingCount > 0 && (
-              <span className="absolute top-2 right-8 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">{pendingCount}</span>
-            )}
-          </button>
-        </div>
-
-        {/* Content */}
+        {/* Content — single scrollable view */}
         <div className="flex-1 overflow-y-auto no-scrollbar">
-          <AnimatePresence mode="wait">
-            {tab === 'wallet' && (
-              <motion.div key="wallet" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-5 space-y-4">
-                {/* Quick Actions */}
-                <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => setIsDepositOpen(true)}
-                    className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-100 hover:border-emerald-300 transition-all group active:scale-95">
-                    <div className="h-12 w-12 rounded-xl bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-200 group-hover:scale-105 transition-transform">
-                      <ArrowDownToLine className="h-6 w-6 text-white" />
-                    </div>
-                    <span className="font-bold text-sm text-emerald-700">Déposer</span>
-                  </button>
-                  <button onClick={() => setIsWithdrawOpen(true)}
-                    className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-red-50 border-2 border-red-100 hover:border-red-300 transition-all group active:scale-95">
-                    <div className="h-12 w-12 rounded-xl bg-red-500 flex items-center justify-center shadow-lg shadow-red-200 group-hover:scale-105 transition-transform">
-                      <ArrowUpFromLine className="h-6 w-6 text-white" />
-                    </div>
-                    <span className="font-bold text-sm text-red-700">Retirer</span>
-                  </button>
+          <div className="p-5 space-y-4">
+            {/* Quick Actions */}
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setIsDepositOpen(true)}
+                className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-100 hover:border-emerald-300 transition-all group active:scale-95">
+                <div className="h-12 w-12 rounded-xl bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-200 group-hover:scale-105 transition-transform">
+                  <ArrowDownToLine className="h-6 w-6 text-white" />
                 </div>
+                <span className="font-bold text-sm text-emerald-700">Déposer</span>
+              </button>
+              <button onClick={() => setIsWithdrawOpen(true)}
+                className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-red-50 border-2 border-red-100 hover:border-red-300 transition-all group active:scale-95">
+                <div className="h-12 w-12 rounded-xl bg-red-500 flex items-center justify-center shadow-lg shadow-red-200 group-hover:scale-105 transition-transform">
+                  <ArrowUpFromLine className="h-6 w-6 text-white" />
+                </div>
+                <span className="font-bold text-sm text-red-700">Retirer</span>
+              </button>
+            </div>
 
-                {/* Payment Methods Info */}
-                <div className="rounded-2xl border border-gray-100 overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-2 border-b border-gray-100">
-                    <p className="text-xs font-black text-subtext uppercase tracking-widest">Moyens de paiement acceptés</p>
+            {/* Payment Methods Info */}
+            <div className="rounded-2xl border border-gray-100 overflow-hidden">
+              <div className="bg-gray-50 px-4 py-2 border-b border-gray-100">
+                <p className="text-xs font-black text-subtext uppercase tracking-widest">Moyens de paiement acceptés</p>
+              </div>
+              <div className="divide-y divide-gray-50">
+                {[
+                  { name: 'MonCash', number: settings?.moncashNumber, icon: <Smartphone className="h-5 w-5 text-primary" /> },
+                  { name: 'NatCash', number: settings?.natcashNumber, icon: <CreditCard className="h-5 w-5 text-blue-500" /> },
+                  { name: 'Admi', number: settings?.admiNumber, icon: <Banknote className="h-5 w-5 text-emerald-600" /> },
+                ].map(m => (
+                  <div key={m.name} className="flex items-center justify-between px-4 py-3 bg-white">
+                    <div className="flex items-center gap-3">
+                      {m.icon}
+                      <span className="font-bold text-sm text-dark">{m.name}</span>
+                    </div>
+                    {m.number ? (
+                      <span className="text-xs font-mono text-subtext bg-gray-50 px-2 py-1 rounded-lg">{m.number}</span>
+                    ) : (
+                      <span className="text-xs text-gray-300 italic">Non configuré</span>
+                    )}
                   </div>
-                  <div className="divide-y divide-gray-50">
-                    {[
-                      { name: 'MonCash', number: settings?.moncashNumber, icon: <Smartphone className="h-5 w-5 text-primary" /> },
-                      { name: 'NatCash', number: settings?.natcashNumber, icon: <CreditCard className="h-5 w-5 text-blue-500" /> },
-                      { name: 'Admi', number: settings?.admiNumber, icon: <Banknote className="h-5 w-5 text-emerald-600" /> },
-                    ].map(m => (
-                      <div key={m.name} className="flex items-center justify-between px-4 py-3 bg-white">
-                        <div className="flex items-center gap-3">
-                          {m.icon}
-                          <span className="font-bold text-sm text-dark">{m.name}</span>
+                ))}
+              </div>
+            </div>
+
+            {/* Security note */}
+            <div className="flex items-start gap-3 p-4 rounded-2xl bg-blue-50 border border-blue-100">
+              <Shield className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-700 leading-relaxed">
+                Les dépôts et retraits sont vérifiés par notre équipe dans les 24h. Toute transaction est sécurisée par Neopay.
+              </p>
+            </div>
+
+            {/* History Accordion */}
+            <div className="rounded-2xl border border-gray-100 overflow-hidden">
+              <button
+                onClick={() => setHistoryOpen(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <History className="h-4 w-4 text-subtext" />
+                  <span className="text-xs font-black text-subtext uppercase tracking-widest">Historique des transactions</span>
+                  {pendingCount > 0 && (
+                    <span className="bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">{pendingCount}</span>
+                  )}
+                </div>
+                <ChevronRight className={`h-4 w-4 text-gray-400 transition-transform duration-300 ${historyOpen ? 'rotate-90' : ''}`} />
+              </button>
+
+              <AnimatePresence initial={false}>
+                {historyOpen && (
+                  <motion.div
+                    key="history-panel"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-4 bg-white space-y-2">
+                      {txLoading ? (
+                        <div className="flex justify-center py-6"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+                      ) : transactions.length === 0 ? (
+                        <div className="text-center py-8">
+                          <History className="h-10 w-10 text-gray-200 mx-auto mb-2" />
+                          <p className="text-subtext text-sm font-medium">Aucune transaction pour le moment.</p>
+                          <p className="text-xs text-gray-400 mt-1">Effectuez un dépôt pour commencer.</p>
                         </div>
-                        {m.number ? (
-                          <span className="text-xs font-mono text-subtext bg-gray-50 px-2 py-1 rounded-lg">{m.number}</span>
-                        ) : (
-                          <span className="text-xs text-gray-300 italic">Non configuré</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Security note */}
-                <div className="flex items-start gap-3 p-4 rounded-2xl bg-blue-50 border border-blue-100">
-                  <Shield className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
-                  <p className="text-xs text-blue-700 leading-relaxed">
-                    Les dépôts et retraits sont vérifiés par notre équipe dans les 24h. Toute transaction est sécurisée par Neopay.
-                  </p>
-                </div>
-              </motion.div>
-            )}
-
-            {tab === 'history' && (
-              <motion.div key="history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-5">
-                {txLoading ? (
-                  <div className="flex justify-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-                ) : transactions.length === 0 ? (
-                  <div className="text-center py-12">
-                    <History className="h-12 w-12 text-gray-200 mx-auto mb-3" />
-                    <p className="text-subtext font-medium">Aucune transaction pour le moment.</p>
-                    <p className="text-xs text-gray-400 mt-1">Effectuez un dépôt pour commencer.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex justify-end mb-1">
-                      <button
-                        onClick={handleDeleteHistory}
-                        disabled={isDeletingHistory}
-                        className="flex items-center gap-1.5 text-[11px] font-bold text-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
-                      >
-                        {isDeletingHistory ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                        Supprimer l'historique
-                      </button>
+                      ) : (
+                        <>
+                          <div className="flex justify-end mb-1">
+                            <button
+                              onClick={handleDeleteHistory}
+                              disabled={isDeletingHistory}
+                              className="flex items-center gap-1.5 text-[11px] font-bold text-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                            >
+                              {isDeletingHistory ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                              Supprimer l'historique
+                            </button>
+                          </div>
+                          {transactions.map(tx => {
+                            const sc = statusConfig[tx.status] || statusConfig.pending;
+                            const isCredit = tx.type === 'deposit' || tx.type === 'transfer_received' || tx.type === 'refund';
+                            return (
+                              <div key={tx.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100 hover:border-gray-200 transition-colors">
+                                <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${isCredit ? 'bg-emerald-100' : 'bg-red-100'}`}>
+                                  {isCredit
+                                    ? <ArrowDownToLine className="h-5 w-5 text-emerald-600" />
+                                    : <ArrowUpFromLine className="h-5 w-5 text-red-600" />
+                                  }
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-bold text-sm text-dark truncate">{typeLabel[tx.type] || tx.type}</p>
+                                  <p className="text-xs text-subtext truncate">{tx.description || tx.method || ''}</p>
+                                  {tx.createdAt?.toDate && (
+                                    <p className="text-[10px] text-gray-400 mt-0.5">
+                                      {format(tx.createdAt.toDate(), 'dd MMM yyyy HH:mm', { locale: fr })}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <p className={`font-black text-sm ${isCredit ? 'text-emerald-600' : 'text-red-600'}`}>
+                                    {isCredit ? '+' : '-'}{tx.amount.toLocaleString()} HTG
+                                  </p>
+                                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${sc.color}`}>
+                                    {sc.icon}{sc.label}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
                     </div>
-                    {transactions.map(tx => {
-                      const sc = statusConfig[tx.status] || statusConfig.pending;
-                      const isCredit = tx.type === 'deposit' || tx.type === 'transfer_received' || tx.type === 'refund';
-                      return (
-                        <div key={tx.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100 hover:border-gray-200 transition-colors">
-                          <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${isCredit ? 'bg-emerald-100' : 'bg-red-100'}`}>
-                            {isCredit 
-                              ? <ArrowDownToLine className="h-5 w-5 text-emerald-600" />
-                              : <ArrowUpFromLine className="h-5 w-5 text-red-600" />
-                            }
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-bold text-sm text-dark truncate">{typeLabel[tx.type] || tx.type}</p>
-                            <p className="text-xs text-subtext truncate">{tx.description || tx.method || ''}</p>
-                            {tx.createdAt?.toDate && (
-                              <p className="text-[10px] text-gray-400 mt-0.5">
-                                {format(tx.createdAt.toDate(), 'dd MMM yyyy HH:mm', { locale: fr })}
-                              </p>
-                            )}
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className={`font-black text-sm ${isCredit ? 'text-emerald-600' : 'text-red-600'}`}>
-                              {isCredit ? '+' : '-'}{tx.amount.toLocaleString()} HTG
-                            </p>
-                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${sc.color}`}>
-                              {sc.icon}{sc.label}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  </motion.div>
                 )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+              </AnimatePresence>
+            </div>
+          </div>
         </div>
 
         {/* Footer */}

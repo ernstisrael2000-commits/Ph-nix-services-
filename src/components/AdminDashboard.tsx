@@ -8,7 +8,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuSeparator
 } from './ui/dropdown-menu';
-import { Smartphone, Plus, Search, CreditCard as Edit2, Trash2, Package, MoveVertical as MoreVertical, CircleCheck as CheckCircle2, Truck, Clock, CircleAlert as AlertCircle, TriangleAlert as AlertTriangle, Loader as Loader2, Upload, Trash, Settings as SettingsIcon, LayoutGrid, Landmark, Image as ImageIcon, CreditCard as Edit, CirclePlus as PlusCircle, X, Wallet, Users, Trophy, Gamepad2, Bell, ListFilter as Filter, ArrowUpDown, DollarSign, ArrowUp, ArrowDown, CreditCard, UserCheck, Circle as HelpCircle, Zap, Star, ChevronRight, ChevronLeft, ArrowRight, ArrowRightLeft, Network, TrendingUp, LayoutDashboard, Circle as XCircle } from 'lucide-react';
+import { Smartphone, Plus, Search, CreditCard as Edit2, Trash2, Package, MoveVertical as MoreVertical, CircleCheck as CheckCircle2, Truck, Clock, CircleAlert as AlertCircle, TriangleAlert as AlertTriangle, Loader as Loader2, Upload, Trash, Settings as SettingsIcon, LayoutGrid, Landmark, Image as ImageIcon, CreditCard as Edit, CirclePlus as PlusCircle, X, Wallet, Users, Trophy, Gamepad2, Bell, ListFilter as Filter, ArrowUpDown, DollarSign, ArrowUp, ArrowDown, CreditCard, UserCheck, Circle as HelpCircle, Zap, Star, ChevronRight, ChevronLeft, ArrowRight, ArrowRightLeft, Network, TrendingUp, LayoutDashboard, Circle as XCircle, Globe } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -29,7 +29,7 @@ import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Checkbox } from './ui/checkbox';
-import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage, useNavButtons, saveNavButton, deleteNavButton } from '../services/parcelService';
+import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage, useNavButtons, saveNavButton, deleteNavButton, useOnlineServices, saveOnlineSubService, deleteOnlineSubService } from '../services/parcelService';
 import { 
   useAllAffiliates, 
   useAllWithdrawals, 
@@ -61,7 +61,7 @@ import {
   updateAgentBalance
 } from '../services/agentService';
 import { useAnalytics } from '../services/analyticsService';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton, AdminAccount, Client, Agent, WalletTransaction, ClientTransaction, AdminClientNotification } from '../types';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton, AdminAccount, Client, Agent, WalletTransaction, ClientTransaction, AdminClientNotification, OnlineSubService } from '../types';
 import { useAllClientTransactions, updateClientTransactionStatus, useAdminClientNotifications, markAdminNotificationRead, markAllAdminNotificationsRead, approvePurchaseRequest, declinePurchaseRequest } from '../services/clientService';
 import AdminShippingManager from './AdminShippingManager';
 import { 
