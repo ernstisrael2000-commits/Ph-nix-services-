@@ -760,28 +760,6 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
         )}
       </section>
 
-      {/* Payment Proof Section */}
-      <section id="payment" className="bg-primary rounded-[2rem] p-8 md:p-12 text-white shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-[#1D4ED8] rounded-full opacity-50 blur-3xl" />
-        <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-40 h-40 bg-[#1D4ED8] rounded-full opacity-50 blur-3xl" />
-        
-        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
-          <div className="space-y-4 text-center md:text-left">
-            <h2 className="text-3xl font-bold">Paiement et preuve</h2>
-            <p className="text-accent-light text-lg max-w-xl">
-              Après avoir effectué votre paiement, veuillez envoyer une capture d'écran via WhatsApp pour validation.
-            </p>
-          </div>
-          <Button 
-            onClick={() => openWhatsApp("Bonjour, j'ai effectué mon paiement pour un service Neopay. Voici la preuve.")}
-            className="bg-white text-primary hover:bg-accent-light px-8 h-14 text-lg font-bold rounded-2xl shadow-lg flex items-center gap-3 active:scale-95 transition-all"
-          >
-            <CheckCircle2 className="h-6 w-6" />
-            J'ai effectué mon paiement
-          </Button>
-        </div>
-      </section>
-
       {/* ── FORMATIONS PREVIEW SECTION ── */}
       {previewFormations.length > 0 && (
         <section className="py-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
