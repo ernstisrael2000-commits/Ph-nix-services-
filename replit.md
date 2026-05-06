@@ -26,7 +26,9 @@ A logistics/fintech web app with role-based dashboards for clients, affiliates, 
 
 ## Where things live
 
-- `server.ts` — Express server + all `/api/*` routes (1170+ lines)
+- `src/api/router.ts` — **Single source of truth for ALL API routes** (50+ routes, Firebase Admin init, all helpers)
+- `server.ts` — Express HTTP server: imports `src/api/router.ts` + Vite dev middleware (slim, ~80 lines)
+- `api/index.ts` — Vercel serverless adapter: imports same `src/api/router.ts` (slim, ~25 lines)
 - `src/App.tsx` — Role-based routing state machine (home/admin/affiliate/agent/client)
 - `src/lib/firebase.ts` — Firebase client SDK init
 - `src/hooks/useAuth.ts` — Firebase Auth role detection
@@ -36,10 +38,12 @@ A logistics/fintech web app with role-based dashboards for clients, affiliates, 
 
 ## Architecture decisions
 
+- **Single shared API router**: All API routes live in `src/api/router.ts`. Both Replit (`server.ts`) and Vercel (`api/index.ts`) import it — zero duplication, guaranteed parity.
 - **Single Express server serves both API and frontend**: In dev, Vite runs in middleware mode attached to the Express HTTP server. In prod, Express serves the built `/dist` static files.
-- **Firebase Admin SDK only on server**: All privileged Firestore writes (balance mutations, transaction records, notifications) go through `/api/*` Express routes using the Admin SDK — never directly from the browser.
-- **Custom Firestore database**: Uses a named Firestore database (not `(default)`) — the ID is in `firebase-applet-config.json` and hardcoded in `server.ts`.
+- **Firebase Admin SDK only on server**: All privileged Firestore writes go through `/api/*` Express routes using the Admin SDK — never directly from the browser.
+- **Custom Firestore database**: Uses a named Firestore database (not `(default)`) — ID is `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2`.
 - **Role auth is custom**: No Firebase Auth sign-in for most roles. Admin/affiliate/agent log in with credentials checked against Firestore collections. Only clients may use Firebase Auth.
+- **Relative URLs only**: The frontend exclusively uses relative `/api/*` URLs — no hardcoded localhost, Replit, or Vercel URLs anywhere.
 - **Graceful degradation**: SMTP and reCAPTCHA are optional — server warns and skips when keys are absent.
 
 ## Product
@@ -66,6 +70,7 @@ A logistics/fintech web app with role-based dashboards for clients, affiliates, 
 - Vite file watcher excludes `.local/**` and `.cache/**` to prevent Replit system files from triggering constant page reloads
 - `online_sub_services` and `formations` are served via Express Admin SDK routes — NOT via client-side Firestore SDK — to bypass security rules
 - Client deposit/withdrawal dialogs include optional custom message (max 300 chars) appended to WhatsApp pre-fill
+- Admin email notifications fire on deposit and withdrawal submissions (fire-and-forget, requires Gmail app password)
 
 ## Pointers
 
