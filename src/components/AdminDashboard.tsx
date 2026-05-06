@@ -29,7 +29,7 @@ import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Checkbox } from './ui/checkbox';
-import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage, useNavButtons, saveNavButton, deleteNavButton, useOnlineServices, saveOnlineSubService, deleteOnlineSubService } from '../services/parcelService';
+import { useParcels, saveParcel, uploadProof, deleteParcel, useProducts, saveProduct, deleteProduct, useSettings, updateSettings, uploadLogo, useGames, saveGame, deleteGame, useCardTopups, saveCardTopup, deleteCardTopup, useSliderImages, saveSliderImage, deleteSliderImage, updateSliderImage, useNavButtons, saveNavButton, deleteNavButton, useOnlineServices, saveOnlineSubService, deleteOnlineSubService, useAdminFormations, saveAdminFormation, deleteAdminFormation } from '../services/parcelService';
 import { 
   useAllAffiliates, 
   useAllWithdrawals, 
@@ -61,7 +61,7 @@ import {
   updateAgentBalance
 } from '../services/agentService';
 import { useAnalytics } from '../services/analyticsService';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton, AdminAccount, Client, Agent, WalletTransaction, ClientTransaction, AdminClientNotification, OnlineSubService } from '../types';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton, AdminAccount, Client, Agent, WalletTransaction, ClientTransaction, AdminClientNotification, OnlineSubService, Formation, FormationModule, FormationChapter, FormationResource } from '../types';
 import { useAllClientTransactions, updateClientTransactionStatus, useAdminClientNotifications, markAdminNotificationRead, markAllAdminNotificationsRead, approvePurchaseRequest, declinePurchaseRequest } from '../services/clientService';
 import AdminShippingManager from './AdminShippingManager';
 import { 
@@ -977,6 +977,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   };
 
   const { stats, loading: analyticsLoading } = useAnalytics();
+  const { formations: adminFormations, loading: formationsLoading, refresh: refreshFormations } = useAdminFormations();
   const { parcels, loading: parcelsLoading } = useParcels();
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
@@ -1026,6 +1027,21 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     order: 0
   });
   
+  const [isFormationDialogOpen, setIsFormationDialogOpen] = useState(false);
+  const [editingFormation, setEditingFormation] = useState<Formation | null>(null);
+  const [isFormationDeleteDialogOpen, setIsFormationDeleteDialogOpen] = useState(false);
+  const [formationToDelete, setFormationToDelete] = useState<Formation | null>(null);
+  const [formationFormData, setFormationFormData] = useState<Partial<Formation>>({
+    title: '', description: '', shortDescription: '', coverImage: '',
+    price: 0, originalPrice: undefined, level: 'debutant', published: false,
+    modules: [], chapters: [], resources: [], pdfUrl: '',
+    instructor: '', instructorBio: '', instructorAvatar: '',
+    language: 'Français', totalDuration: '', hasCertificate: false,
+    category: '', tags: [], prerequisites: '', enrollmentLimit: undefined,
+    studentsCount: 0, rating: 0
+  });
+  const [formationTagInput, setFormationTagInput] = useState('');
+
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isProductDeleteDialogOpen, setIsProductDeleteDialogOpen] = useState(false);
@@ -1792,6 +1808,7 @@ const AffiliateEditForm = ({
         { value: 'affiliates', label: 'Affiliés', icon: Users, permission: 'affiliates' },
         { value: 'clients', label: 'Base Clients', icon: Smartphone, permission: 'affiliates' },
         { value: 'products', label: 'Catalogue', icon: LayoutGrid, permission: 'products' },
+        { value: 'formations', label: 'Formations', icon: LucideIcons.GraduationCap, permission: 'products' },
       ]
     },
     {
@@ -2139,6 +2156,106 @@ const AffiliateEditForm = ({
       });
     }
     setIsDialogOpen(true);
+  };
+
+  const handleOpenFormationDialog = (formation?: Formation) => {
+    if (formation) {
+      setEditingFormation(formation);
+      setFormationFormData({ ...formation, modules: formation.modules || [], chapters: formation.chapters || [], resources: formation.resources || [], tags: formation.tags || [] });
+    } else {
+      setEditingFormation(null);
+      setFormationFormData({
+        title: '', description: '', shortDescription: '', coverImage: '',
+        price: 0, originalPrice: undefined, level: 'debutant', published: false,
+        modules: [], chapters: [], resources: [], pdfUrl: '',
+        instructor: '', instructorBio: '', instructorAvatar: '',
+        language: 'Français', totalDuration: '', hasCertificate: false,
+        category: '', tags: [], prerequisites: '', enrollmentLimit: undefined,
+        studentsCount: 0, rating: 0
+      });
+    }
+    setFormationTagInput('');
+    setIsFormationDialogOpen(true);
+  };
+
+  const handleSaveFormation = async () => {
+    if (!formationFormData.title) { toast.error('Le titre est requis.'); return; }
+    setIsSaving(true);
+    try {
+      await saveAdminFormation(formationFormData, editingFormation?.id);
+      toast.success(editingFormation ? 'Formation mise à jour !' : 'Formation créée !');
+      setIsFormationDialogOpen(false);
+      refreshFormations();
+    } catch (err: any) {
+      toast.error(err.message || 'Erreur lors de la sauvegarde.');
+    } finally { setIsSaving(false); }
+  };
+
+  const handleConfirmDeleteFormation = async () => {
+    if (!formationToDelete?.id) return;
+    setIsDeleting(true);
+    try {
+      await deleteAdminFormation(formationToDelete.id);
+      toast.success('Formation supprimée.');
+      setIsFormationDeleteDialogOpen(false);
+      refreshFormations();
+    } catch (err: any) {
+      toast.error(err.message || 'Erreur lors de la suppression.');
+    } finally { setIsDeleting(false); setFormationToDelete(null); }
+  };
+
+  const addFormationModule = () => {
+    setFormationFormData(prev => ({
+      ...prev,
+      modules: [...(prev.modules || []), { id: generateId(), title: '', videoUrl: '', duration: '', order: (prev.modules || []).length + 1, description: '', pdfUrl: '', chapterId: '' }]
+    }));
+  };
+
+  const updateFormationModule = (id: string, updates: Partial<FormationModule>) => {
+    setFormationFormData(prev => ({
+      ...prev,
+      modules: (prev.modules || []).map(m => m.id === id ? { ...m, ...updates } : m)
+    }));
+  };
+
+  const removeFormationModule = (id: string) => {
+    setFormationFormData(prev => ({ ...prev, modules: (prev.modules || []).filter(m => m.id !== id) }));
+  };
+
+  const addFormationChapter = () => {
+    setFormationFormData(prev => ({
+      ...prev,
+      chapters: [...(prev.chapters || []), { id: generateId(), title: '', order: (prev.chapters || []).length + 1, description: '' }]
+    }));
+  };
+
+  const updateFormationChapter = (id: string, updates: Partial<FormationChapter>) => {
+    setFormationFormData(prev => ({
+      ...prev,
+      chapters: (prev.chapters || []).map(c => c.id === id ? { ...c, ...updates } : c)
+    }));
+  };
+
+  const removeFormationChapter = (id: string) => {
+    setFormationFormData(prev => ({ ...prev, chapters: (prev.chapters || []).filter(c => c.id !== id) }));
+  };
+
+  const addFormationResource = () => {
+    setFormationFormData(prev => ({
+      ...prev,
+      resources: [...(prev.resources || []), { id: generateId(), name: '', url: '', type: 'pdf' as const }]
+    }));
+  };
+
+  const updateFormationResource = (id: string, updates: Partial<FormationResource>) => {
+    setFormationFormData(prev => ({
+      ...prev,
+      resources: (prev.resources || []).map(r => r.id === id ? { ...r, ...updates } : r)
+    }));
+  };
+
+  const removeFormationResource = (id: string) => {
+    setFormationFormData(prev => ({ ...prev, resources: (prev.resources || []).filter(r => r.id !== id) }));
   };
 
   const handleOpenProductDialog = (product?: Product) => {
@@ -3655,6 +3772,98 @@ const AffiliateEditForm = ({
                         <TableRow>
                           <TableCell colSpan={5} className="h-32 text-center text-gray-400">
                             Aucun produit ajouté.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="formations" className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <h2 className="text-xl font-bold text-dark">Gestion des Formations</h2>
+            <Button onClick={() => handleOpenFormationDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#1D4ED8] text-white flex items-center justify-center gap-2 border-0">
+              <Plus className="h-4 w-4" />
+              Nouvelle Formation
+            </Button>
+          </div>
+
+          <Card className="shadow-sm border-gray-200">
+            <CardContent className="p-0">
+              {formationsLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                  <p>Chargement des formations...</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50/50">
+                        <TableHead>Couverture</TableHead>
+                        <TableHead>Titre</TableHead>
+                        <TableHead>Prix</TableHead>
+                        <TableHead>Niveau</TableHead>
+                        <TableHead>Modules</TableHead>
+                        <TableHead>Statut</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {adminFormations.map((formation) => (
+                        <TableRow key={formation.id} className="hover:bg-gray-50/50 transition-colors">
+                          <TableCell>
+                            {formation.coverImage ? (
+                              <img src={formation.coverImage} className="h-10 w-16 object-cover rounded-lg border" onError={(e) => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/formation/100/60'; }} />
+                            ) : (
+                              <div className="h-10 w-16 rounded-lg bg-blue-50 flex items-center justify-center border border-blue-100">
+                                <LucideIcons.GraduationCap className="h-5 w-5 text-blue-300" />
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-semibold text-sm">{formation.title}</p>
+                              {formation.instructor && <p className="text-xs text-gray-400">{formation.instructor}</p>}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-primary border-primary/20 bg-blue-50/50">
+                              {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={formation.level === 'debutant' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : formation.level === 'intermediaire' ? 'text-blue-700 bg-blue-50 border-blue-200' : 'text-purple-700 bg-purple-50 border-purple-200'}>
+                              {formation.level === 'debutant' ? 'Débutant' : formation.level === 'intermediaire' ? 'Intermédiaire' : 'Avancé'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-500">{(formation.modules || []).length} modules</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={formation.published ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-gray-500 bg-gray-50 border-gray-200'}>
+                              {formation.published ? 'Publié' : 'Brouillon'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => handleOpenFormationDialog(formation)} className="h-8 w-8 p-0">
+                                <Edit2 className="h-4 w-4 text-gray-500" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => { setFormationToDelete(formation); setIsFormationDeleteDialogOpen(true); }} className="h-8 text-red-500 hover:text-red-600 hover:bg-red-50 bg-white/50 border border-transparent hover:border-red-100 px-2 font-medium text-xs">
+                                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                                <span className="hidden sm:inline">Supprimer</span>
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {adminFormations.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={7} className="h-32 text-center text-gray-400">
+                            Aucune formation créée. Cliquez sur "Nouvelle Formation" pour commencer.
                           </TableCell>
                         </TableRow>
                       )}
@@ -7341,6 +7550,321 @@ const AffiliateEditForm = ({
       </Dialog>
 
       {/* Product Edit/Add Dialog */}
+      {/* ─── Formation Dialog ─────────────────────────────────────────────────── */}
+      <Dialog open={isFormationDialogOpen} onOpenChange={setIsFormationDialogOpen}>
+        <DialogContent className="sm:max-w-4xl flex flex-col overflow-hidden max-h-[94vh]" showCloseButton={false}>
+          <div className="bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 p-8 text-white relative overflow-hidden shrink-0">
+            <div className="absolute top-0 right-0 -mt-8 -mr-8 w-40 h-40 bg-white/5 rounded-full blur-3xl" />
+            <DialogHeader>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-4">
+                  <div className="h-14 w-14 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/10">
+                    <LucideIcons.GraduationCap className="h-8 w-8 text-white" />
+                  </div>
+                  <div>
+                    <DialogTitle className="text-2xl font-black uppercase tracking-tight">
+                      {editingFormation ? 'Modifier la Formation' : 'Nouvelle Formation'}
+                    </DialogTitle>
+                    <DialogDescription className="text-white/60 text-[10px] font-black uppercase tracking-widest mt-1">
+                      Configuration du cours en ligne
+                    </DialogDescription>
+                  </div>
+                </div>
+                <DialogClose className="rounded-full bg-white/10 p-2.5 hover:bg-white/20 transition-all border border-white/5">
+                  <LucideIcons.X className="h-5 w-5 text-white" />
+                </DialogClose>
+              </div>
+            </DialogHeader>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-6 space-y-8 overscroll-contain pb-24 custom-scrollbar">
+            {/* ── Section: Infos de base ── */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                <LucideIcons.FileText className="h-3.5 w-3.5" /> Informations de base
+              </h3>
+              <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2">
+                  <Label className="sm:text-right text-xs font-bold text-gray-500">Titre *</Label>
+                  <Input value={formationFormData.title || ''} onChange={e => setFormationFormData(p => ({ ...p, title: e.target.value }))} className="sm:col-span-3 h-10 rounded-xl" placeholder="Ex: Maîtriser le e-commerce en Haïti" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-2">
+                  <Label className="sm:text-right text-xs font-bold text-gray-500 pt-2">Résumé court</Label>
+                  <Input value={formationFormData.shortDescription || ''} onChange={e => setFormationFormData(p => ({ ...p, shortDescription: e.target.value }))} className="sm:col-span-3 h-10 rounded-xl" placeholder="Une phrase accrocheur pour la carte..." />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-2">
+                  <Label className="sm:text-right text-xs font-bold text-gray-500 pt-2">Description complète</Label>
+                  <textarea value={formationFormData.description || ''} onChange={e => setFormationFormData(p => ({ ...p, description: e.target.value }))} className="sm:col-span-3 flex min-h-[100px] w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" placeholder="Description détaillée de la formation..." />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2">
+                  <Label className="sm:text-right text-xs font-bold text-gray-500">Image couverture</Label>
+                  <Input value={formationFormData.coverImage || ''} onChange={e => setFormationFormData(p => ({ ...p, coverImage: e.target.value }))} className="sm:col-span-3 h-10 rounded-xl" placeholder="https://images.unsplash.com/..." />
+                </div>
+                {formationFormData.coverImage && (
+                  <div className="grid grid-cols-1 sm:grid-cols-4 items-start gap-2">
+                    <div className="sm:col-start-2 sm:col-span-3">
+                      <img src={formationFormData.coverImage} className="h-32 w-full object-cover rounded-xl border" onError={e => (e.currentTarget.style.display='none')} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── Section: Prix & Niveau ── */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                <LucideIcons.DollarSign className="h-3.5 w-3.5" /> Prix, Niveau & Catégorie
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-gray-500">Prix (HTG)</Label>
+                  <Input type="number" value={formationFormData.price ?? 0} onChange={e => setFormationFormData(p => ({ ...p, price: Number(e.target.value) }))} className="h-10 rounded-xl" min="0" placeholder="0 = Gratuit" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-gray-500">Prix original / barré (HTG)</Label>
+                  <Input type="number" value={formationFormData.originalPrice ?? ''} onChange={e => setFormationFormData(p => ({ ...p, originalPrice: e.target.value ? Number(e.target.value) : undefined }))} className="h-10 rounded-xl" min="0" placeholder="Ex: 5000 (optionnel)" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-gray-500">Niveau</Label>
+                  <select value={formationFormData.level || 'debutant'} onChange={e => setFormationFormData(p => ({ ...p, level: e.target.value as any }))} className="w-full h-10 rounded-xl border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+                    <option value="debutant">Débutant</option>
+                    <option value="intermediaire">Intermédiaire</option>
+                    <option value="avance">Avancé</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-gray-500">Catégorie</Label>
+                  <Input value={formationFormData.category || ''} onChange={e => setFormationFormData(p => ({ ...p, category: e.target.value }))} className="h-10 rounded-xl" placeholder="Ex: Finance, Marketing, Tech..." />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-gray-500">Langue</Label>
+                  <Input value={formationFormData.language || 'Français'} onChange={e => setFormationFormData(p => ({ ...p, language: e.target.value }))} className="h-10 rounded-xl" placeholder="Français" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-gray-500">Durée totale</Label>
+                  <Input value={formationFormData.totalDuration || ''} onChange={e => setFormationFormData(p => ({ ...p, totalDuration: e.target.value }))} className="h-10 rounded-xl" placeholder="Ex: 3h 30min" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-gray-500">Limite d'inscription</Label>
+                  <Input type="number" value={formationFormData.enrollmentLimit ?? ''} onChange={e => setFormationFormData(p => ({ ...p, enrollmentLimit: e.target.value ? Number(e.target.value) : undefined }))} className="h-10 rounded-xl" min="0" placeholder="Illimité si vide" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-gray-500">Note (0–5)</Label>
+                  <Input type="number" value={formationFormData.rating ?? 0} onChange={e => setFormationFormData(p => ({ ...p, rating: Number(e.target.value) }))} className="h-10 rounded-xl" min="0" max="5" step="0.1" />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-6 pt-2">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <button type="button" onClick={() => setFormationFormData(p => ({ ...p, hasCertificate: !p.hasCertificate }))}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${formationFormData.hasCertificate ? 'bg-primary' : 'bg-gray-200'}`}>
+                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${formationFormData.hasCertificate ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                  <span className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                    <LucideIcons.BadgeCheck className="h-4 w-4 text-amber-500" /> Formation certifiante
+                  </span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <button type="button" onClick={() => setFormationFormData(p => ({ ...p, published: !p.published }))}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${formationFormData.published ? 'bg-emerald-500' : 'bg-gray-200'}`}>
+                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${formationFormData.published ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                  <span className="text-sm font-medium text-gray-700">Publié (visible pour les clients)</span>
+                </label>
+              </div>
+            </div>
+
+            {/* ── Section: Instructeur ── */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                <LucideIcons.User className="h-3.5 w-3.5" /> Instructeur
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-gray-500">Nom de l'instructeur</Label>
+                  <Input value={formationFormData.instructor || ''} onChange={e => setFormationFormData(p => ({ ...p, instructor: e.target.value }))} className="h-10 rounded-xl" placeholder="Ex: Jean Paul Dupont" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-gray-500">Photo de l'instructeur (URL)</Label>
+                  <Input value={formationFormData.instructorAvatar || ''} onChange={e => setFormationFormData(p => ({ ...p, instructorAvatar: e.target.value }))} className="h-10 rounded-xl" placeholder="https://..." />
+                </div>
+                <div className="sm:col-span-2 space-y-1.5">
+                  <Label className="text-xs font-bold text-gray-500">Bio de l'instructeur</Label>
+                  <Input value={formationFormData.instructorBio || ''} onChange={e => setFormationFormData(p => ({ ...p, instructorBio: e.target.value }))} className="h-10 rounded-xl" placeholder="Ex: Expert en finance avec 10 ans d'expérience..." />
+                </div>
+              </div>
+            </div>
+
+            {/* ── Section: Prérequis & Tags ── */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                <LucideIcons.Tag className="h-3.5 w-3.5" /> Prérequis & Tags
+              </h3>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-gray-500">Prérequis</Label>
+                <textarea value={formationFormData.prerequisites || ''} onChange={e => setFormationFormData(p => ({ ...p, prerequisites: e.target.value }))} className="w-full min-h-[72px] rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" placeholder="Ex: Avoir un smartphone, connaître les bases de Facebook..." />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-gray-500">PDF de support (URL)</Label>
+                <Input value={formationFormData.pdfUrl || ''} onChange={e => setFormationFormData(p => ({ ...p, pdfUrl: e.target.value }))} className="h-10 rounded-xl" placeholder="https://..." />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-gray-500">Tags</Label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {(formationFormData.tags || []).map(tag => (
+                    <span key={tag} className="flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
+                      #{tag}
+                      <button type="button" onClick={() => setFormationFormData(p => ({ ...p, tags: (p.tags || []).filter(t => t !== tag) }))} className="hover:text-red-500 ml-1">
+                        <LucideIcons.X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Input value={formationTagInput} onChange={e => setFormationTagInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && formationTagInput.trim()) { e.preventDefault(); setFormationFormData(p => ({ ...p, tags: [...new Set([...(p.tags || []), formationTagInput.trim()])] })); setFormationTagInput(''); }}} className="h-9 rounded-xl flex-1" placeholder="Tapez un tag et appuyez Entrée..." />
+                  <Button type="button" size="sm" variant="outline" className="h-9 rounded-xl" onClick={() => { if (formationTagInput.trim()) { setFormationFormData(p => ({ ...p, tags: [...new Set([...(p.tags || []), formationTagInput.trim()])] })); setFormationTagInput(''); }}}>
+                    Ajouter
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Section: Chapitres ── */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                  <LucideIcons.Layers className="h-3.5 w-3.5" /> Chapitres (optionnel)
+                </h3>
+                <Button type="button" variant="outline" size="sm" onClick={addFormationChapter} className="h-8 rounded-xl text-xs">
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Ajouter un chapitre
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {(formationFormData.chapters || []).map((chapter, idx) => (
+                  <div key={chapter.id} className="p-4 rounded-2xl bg-gray-50 border border-gray-100 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Badge variant="outline" className="text-[10px] font-black">Chapitre {idx + 1}</Badge>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => removeFormationChapter(chapter.id)} className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full">
+                        <LucideIcons.Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Input value={chapter.title} onChange={e => updateFormationChapter(chapter.id, { title: e.target.value })} className="h-9 rounded-xl text-sm" placeholder="Titre du chapitre" />
+                      <Input value={chapter.description || ''} onChange={e => updateFormationChapter(chapter.id, { description: e.target.value })} className="h-9 rounded-xl text-sm" placeholder="Description (optionnel)" />
+                    </div>
+                  </div>
+                ))}
+                {(formationFormData.chapters || []).length === 0 && (
+                  <p className="text-sm text-gray-400 text-center py-4 border-2 border-dashed border-gray-100 rounded-2xl">Aucun chapitre — les modules seront affichés sans regroupement</p>
+                )}
+              </div>
+            </div>
+
+            {/* ── Section: Modules ── */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                  <LucideIcons.Video className="h-3.5 w-3.5" /> Modules / Vidéos
+                </h3>
+                <Button type="button" variant="outline" size="sm" onClick={addFormationModule} className="h-8 rounded-xl text-xs">
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Ajouter un module
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {(formationFormData.modules || []).map((mod, idx) => (
+                  <div key={mod.id} className="p-4 rounded-2xl bg-blue-50/50 border border-blue-100 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Badge variant="outline" className="text-[10px] font-black text-blue-700 bg-white border-blue-200">Module {idx + 1}</Badge>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => removeFormationModule(mod.id)} className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full">
+                        <LucideIcons.Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Input value={mod.title} onChange={e => updateFormationModule(mod.id, { title: e.target.value })} className="h-9 rounded-xl text-sm bg-white" placeholder="Titre du module *" />
+                      <Input value={mod.duration} onChange={e => updateFormationModule(mod.id, { duration: e.target.value })} className="h-9 rounded-xl text-sm bg-white" placeholder="Durée (ex: 14:30)" />
+                      <Input value={mod.videoUrl} onChange={e => updateFormationModule(mod.id, { videoUrl: e.target.value })} className="h-9 rounded-xl text-sm bg-white sm:col-span-2" placeholder="URL Vidéo (YouTube, Vimeo, Drive...)" />
+                      <Input value={mod.pdfUrl || ''} onChange={e => updateFormationModule(mod.id, { pdfUrl: e.target.value })} className="h-9 rounded-xl text-sm bg-white" placeholder="URL PDF du module (optionnel)" />
+                      <Input value={mod.description || ''} onChange={e => updateFormationModule(mod.id, { description: e.target.value })} className="h-9 rounded-xl text-sm bg-white" placeholder="Description courte (optionnel)" />
+                      {(formationFormData.chapters || []).length > 0 && (
+                        <div className="sm:col-span-2">
+                          <select value={mod.chapterId || ''} onChange={e => updateFormationModule(mod.id, { chapterId: e.target.value })} className="w-full h-9 rounded-xl border border-blue-100 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                            <option value="">— Aucun chapitre —</option>
+                            {(formationFormData.chapters || []).map(c => (
+                              <option key={c.id} value={c.id}>{c.title || `Chapitre ${c.order}`}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {(formationFormData.modules || []).length === 0 && (
+                  <p className="text-sm text-gray-400 text-center py-4 border-2 border-dashed border-blue-100 rounded-2xl">Aucun module ajouté</p>
+                )}
+              </div>
+            </div>
+
+            {/* ── Section: Ressources ── */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                  <LucideIcons.FileText className="h-3.5 w-3.5" /> Ressources supplémentaires
+                </h3>
+                <Button type="button" variant="outline" size="sm" onClick={addFormationResource} className="h-8 rounded-xl text-xs">
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Ajouter
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {(formationFormData.resources || []).map((res, idx) => (
+                  <div key={res.id} className="flex items-center gap-3 p-3 rounded-2xl bg-gray-50 border border-gray-100">
+                    <Badge variant="outline" className="text-[10px] shrink-0">#{idx + 1}</Badge>
+                    <Input value={res.name} onChange={e => updateFormationResource(res.id, { name: e.target.value })} className="h-9 rounded-xl text-sm flex-1" placeholder="Nom de la ressource" />
+                    <Input value={res.url} onChange={e => updateFormationResource(res.id, { url: e.target.value })} className="h-9 rounded-xl text-sm flex-1" placeholder="URL" />
+                    <select value={res.type} onChange={e => updateFormationResource(res.id, { type: e.target.value as any })} className="h-9 rounded-xl border border-input bg-background px-2 text-xs focus:outline-none">
+                      <option value="pdf">PDF</option>
+                      <option value="link">Lien</option>
+                      <option value="file">Fichier</option>
+                    </select>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => removeFormationResource(res.id)} className="h-8 w-8 p-0 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full shrink-0">
+                      <LucideIcons.Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+                {(formationFormData.resources || []).length === 0 && (
+                  <p className="text-sm text-gray-400 text-center py-3 border-2 border-dashed border-gray-100 rounded-2xl">Aucune ressource ajoutée</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="p-6 bg-gray-50/50 border-t border-gray-100 gap-3 shrink-0">
+            <Button variant="ghost" onClick={() => setIsFormationDialogOpen(false)} className="h-12 rounded-2xl font-bold px-8">Annuler</Button>
+            <Button onClick={handleSaveFormation} disabled={isSaving} className="h-12 rounded-2xl bg-primary hover:bg-[#1D4ED8] text-white font-black px-12 shadow-xl shadow-primary/20">
+              {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : (editingFormation ? 'Mettre à jour' : 'Créer la formation')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Formation Delete Confirmation */}
+      <Dialog open={isFormationDeleteDialogOpen} onOpenChange={setIsFormationDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px] rounded-[3rem] p-8 border-0 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3 text-red-600 text-2xl font-black">
+              <AlertTriangle className="h-6 w-6" /> Supprimer Formation
+            </DialogTitle>
+            <DialogDescription className="text-gray-500 pt-2 font-medium">
+              Action irréversible. Supprimer <span className="font-bold text-gray-900">"{formationToDelete?.title}"</span> ?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-3 mt-6 sm:justify-end">
+            <Button variant="ghost" onClick={() => setIsFormationDeleteDialogOpen(false)} className="rounded-2xl h-12 font-bold px-6">Garder</Button>
+            <Button variant="destructive" onClick={handleConfirmDeleteFormation} disabled={isDeleting} className="bg-red-600 hover:bg-red-700 rounded-2xl h-12 font-bold px-8 shadow-lg shadow-red-100">
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Supprimer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
         <DialogContent className="sm:max-w-3xl flex flex-col overflow-hidden max-h-[94vh]" showCloseButton={false}>
           <div className="bg-indigo-900 p-8 text-white relative overflow-hidden shrink-0">

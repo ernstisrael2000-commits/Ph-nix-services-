@@ -39,6 +39,9 @@ export default defineConfig(({ mode }) => {
         : true,
       host: '0.0.0.0',
       allowedHosts: true,
+      watch: {
+        ignored: ['**/.local/**', '**/.cache/**', '**/node_modules/**', '**/dist/**'],
+      },
     },
   };
 });

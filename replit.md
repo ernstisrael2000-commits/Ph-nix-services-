@@ -26,7 +26,7 @@ A logistics/fintech web app with role-based dashboards for clients, affiliates, 
 
 ## Where things live
 
-- `server.ts` — Express server + all `/api/*` routes (1037 lines)
+- `server.ts` — Express server + all `/api/*` routes (1170+ lines)
 - `src/App.tsx` — Role-based routing state machine (home/admin/affiliate/agent/client)
 - `src/lib/firebase.ts` — Firebase client SDK init
 - `src/hooks/useAuth.ts` — Firebase Auth role detection
@@ -48,7 +48,8 @@ A logistics/fintech web app with role-based dashboards for clients, affiliates, 
 - **Client dashboard**: Balance, deposit/withdrawal requests, purchase history, PDF statements
 - **Affiliate dashboard**: Referral network, commissions, team sales tracking
 - **Agent dashboard**: Client management, transaction oversight
-- **Admin dashboard**: Full transaction management, notification center, approve/decline operations
+- **Admin dashboard**: Full transaction management, notification center, approve/decline operations, formation management (CRUD)
+- **Formations**: Online course catalog with beautiful cards, purchase via Wallet, modules/chapters/resources, certificates
 - **Shipping view**: Shipping service information
 - **Tracking view**: Package tracking by ID
 
@@ -62,6 +63,9 @@ A logistics/fintech web app with role-based dashboards for clients, affiliates, 
 - `adminDb` points to a **named** Firestore database — passing only `getFirestore(adminApp)` without the DB ID will hit the wrong database
 - HMR websocket uses `REPLIT_DEV_DOMAIN` with `wss://` on port 443 for Replit preview compatibility
 - The `FIREBASE_SERVICE_ACCOUNT` JSON may need a leading `{` prepended — the server handles this edge case
+- Vite file watcher excludes `.local/**` and `.cache/**` to prevent Replit system files from triggering constant page reloads
+- `online_sub_services` and `formations` are served via Express Admin SDK routes — NOT via client-side Firestore SDK — to bypass security rules
+- Client deposit/withdrawal dialogs include optional custom message (max 300 chars) appended to WhatsApp pre-fill
 
 ## Pointers
 

@@ -219,7 +219,7 @@ async function startServer() {
   // ────────────────────────────────────────────────────────────────────────────
   app.post('/api/client/deposit', async (req, res) => {
     try {
-      const { clientId, clientName, clientWalletId, amount, method, txId, captchaToken } = req.body;
+      const { clientId, clientName, clientWalletId, amount, method, txId, message, captchaToken } = req.body;
       if (!clientId || !clientName || !amount || !method) {
         return res.status(400).json({ error: 'Paramètres manquants.' });
       }
@@ -236,7 +236,8 @@ async function startServer() {
         status: 'pending',
         method,
         ...(txId && { txId }),
-        description: `Demande de dépôt via ${method}`,
+        ...(message && { message }),
+        description: `Demande de dépôt via ${method}${message ? ` — ${message}` : ''}`,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
       });
@@ -250,6 +251,7 @@ async function startServer() {
         amount,
         method,
         ...(txId && { txId }),
+        ...(message && { message }),
         read: false,
         createdAt: FieldValue.serverTimestamp()
       });
@@ -266,7 +268,7 @@ async function startServer() {
   // ────────────────────────────────────────────────────────────────────────────
   app.post('/api/client/withdrawal', async (req, res) => {
     try {
-      const { clientId, clientName, clientPhone, clientWalletId, amount, method, accountNumber, captchaToken } = req.body;
+      const { clientId, clientName, clientPhone, clientWalletId, amount, method, accountNumber, message, captchaToken } = req.body;
       if (!clientId || !clientName || !amount || !method || !accountNumber) {
         return res.status(400).json({ error: 'Paramètres manquants.' });
       }
@@ -301,7 +303,8 @@ async function startServer() {
         status: 'pending',
         method,
         accountNumber,
-        description: `Demande de retrait via ${method}`,
+        ...(message && { message }),
+        description: `Demande de retrait via ${method}${message ? ` — ${message}` : ''}`,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp()
       });
@@ -317,6 +320,7 @@ async function startServer() {
         amount,
         method,
         accountNumber,
+        ...(message && { message }),
         read: false,
         createdAt: FieldValue.serverTimestamp()
       });
@@ -821,6 +825,49 @@ async function startServer() {
     } catch (e: any) {
       console.error('[formations purchases PATCH]', e);
       res.status(500).json({ error: e.message || 'Erreur.' });
+    }
+  });
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // ONLINE SUB-SERVICES — Public read via Admin SDK (bypasses Firestore rules)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  app.get('/api/online-sub-services', async (_req, res) => {
+    if (!adminDb) return res.status(503).json({ error: 'Firebase Admin non initialisé.' });
+    try {
+      const snap = await adminDb.collection('online_sub_services').orderBy('order', 'asc').get();
+      const services = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      return res.json({ services });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/admin/online-sub-services', async (req, res) => {
+    if (!adminDb) return res.status(503).json({ error: 'Firebase Admin non initialisé.' });
+    if (req.headers['x-admin-secret'] !== 'neopay-admin-2024') return res.status(403).json({ error: 'Non autorisé.' });
+    try {
+      const { id, createdAt: _c, ...data } = req.body;
+      if (id) {
+        await adminDb.collection('online_sub_services').doc(id).set({ ...data, updatedAt: new Date() }, { merge: true });
+        return res.json({ success: true, id });
+      } else {
+        const ref = await adminDb.collection('online_sub_services').add({ ...data, createdAt: new Date() });
+        return res.json({ success: true, id: ref.id });
+      }
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete('/api/admin/online-sub-services/:id', async (req, res) => {
+    if (!adminDb) return res.status(503).json({ error: 'Firebase Admin non initialisé.' });
+    if (req.headers['x-admin-secret'] !== 'neopay-admin-2024') return res.status(403).json({ error: 'Non autorisé.' });
+    try {
+      await adminDb.collection('online_sub_services').doc(req.params.id).delete();
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message });
     }
   });
 

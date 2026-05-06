@@ -17,7 +17,7 @@ import {
 import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import { db, storage, auth } from '../lib/firebase';
 import { handleFirestoreError } from '../lib/firebase-errors';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Game, ShippingConfig, CardTopup, NavButton, OnlineSubService } from '../types';
+import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Game, ShippingConfig, CardTopup, NavButton, OnlineSubService, Formation } from '../types';
 
 // Navigation Buttons Services
 export const useNavButtons = () => {
@@ -523,40 +523,84 @@ export const deleteShippingConfig = async (id: string) => {
 export const useOnlineServices = () => {
   const [services, setServices] = useState<OnlineSubService[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
-    const q = query(collection(db, 'online_sub_services'), orderBy('order', 'asc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as OnlineSubService[];
-      setServices(data);
-      setLoading(false);
-    }, (error) => {
-      console.error('Error fetching online sub-services:', error);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
+    let cancelled = false;
+    setLoading(true);
+    fetch('/api/online-sub-services')
+      .then(r => r.json())
+      .then(data => { if (!cancelled) { setServices(data.services || []); setLoading(false); } })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [refresh]);
 
-  return { services, loading };
+  const forceRefresh = () => setRefresh(r => r + 1);
+  return { services, loading, refresh: forceRefresh };
 };
 
 export const saveOnlineSubService = async (data: Partial<OnlineSubService>, id?: string) => {
-  try {
-    const { id: _id, createdAt: _c, ...dataToSave } = data as any;
-    if (id) {
-      await updateDoc(doc(db, 'online_sub_services', id), { ...dataToSave, updatedAt: serverTimestamp() });
-    } else {
-      await addDoc(collection(db, 'online_sub_services'), { ...dataToSave, createdAt: serverTimestamp() });
-    }
-  } catch (error) {
-    handleFirestoreError(error, 'update', 'online_sub_services', auth);
-  }
+  const payload = id ? { ...data, id } : data;
+  const res = await fetch('/api/admin/online-sub-services', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'neopay-admin-2024' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Erreur sauvegarde service'); }
 };
 
 export const deleteOnlineSubService = async (id: string) => {
-  try {
-    await deleteDoc(doc(db, 'online_sub_services', id));
-  } catch (error) {
-    handleFirestoreError(error, 'delete', 'online_sub_services', auth);
+  const res = await fetch(`/api/admin/online-sub-services/${id}`, {
+    method: 'DELETE',
+    headers: { 'x-admin-secret': 'neopay-admin-2024' },
+  });
+  if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Erreur suppression service'); }
+};
+
+// ─── Formations (Admin CRUD via API) ─────────────────────────────────────────
+
+export const useAdminFormations = () => {
+  const [formations, setFormations] = useState<Formation[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/admin/formations', { headers: { 'x-admin-secret': 'neopay-admin-2024' } })
+      .then(r => r.json())
+      .then(data => setFormations(data.formations || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const refresh = () => {
+    setLoading(true);
+    fetch('/api/admin/formations', { headers: { 'x-admin-secret': 'neopay-admin-2024' } })
+      .then(r => r.json())
+      .then(data => setFormations(data.formations || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  return { formations, loading, refresh };
+};
+
+export const saveAdminFormation = async (data: Partial<Formation>, id?: string): Promise<void> => {
+  const url = id ? `/api/admin/formations/${id}` : '/api/admin/formations';
+  const method = id ? 'PUT' : 'POST';
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'neopay-admin-2024' },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new Error(json.error || 'Erreur lors de la sauvegarde.');
   }
+};
+
+export const deleteAdminFormation = async (id: string): Promise<void> => {
+  const res = await fetch(`/api/admin/formations/${id}`, {
+    method: 'DELETE',
+    headers: { 'x-admin-secret': 'neopay-admin-2024' }
+  });
+  if (!res.ok) throw new Error('Erreur lors de la suppression.');
 };

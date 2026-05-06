@@ -297,6 +297,15 @@ export interface FormationModule {
   duration: string;
   order: number;
   description?: string;
+  pdfUrl?: string;
+  chapterId?: string;
+}
+
+export interface FormationChapter {
+  id: string;
+  title: string;
+  order: number;
+  description?: string;
 }
 
 export interface FormationResource {
@@ -313,13 +322,25 @@ export interface Formation {
   shortDescription: string;
   coverImage: string;
   price: number;
+  originalPrice?: number;
   level: FormationLevel;
   rating: number;
   studentsCount: number;
   modules: FormationModule[];
+  chapters?: FormationChapter[];
   pdfUrl?: string;
   resources?: FormationResource[];
   published: boolean;
+  instructor?: string;
+  instructorBio?: string;
+  instructorAvatar?: string;
+  language?: string;
+  totalDuration?: string;
+  hasCertificate?: boolean;
+  category?: string;
+  tags?: string[];
+  prerequisites?: string;
+  enrollmentLimit?: number;
   createdAt: any;
   updatedAt: any;
 }

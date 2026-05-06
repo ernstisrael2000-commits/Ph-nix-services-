@@ -61,12 +61,14 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   const [depositAmount, setDepositAmount] = useState('');
   const [depositMethod, setDepositMethod] = useState<string>('MonCash');
   const [depositTxId, setDepositTxId] = useState('');
+  const [depositMessage, setDepositMessage] = useState('');
   const [depositCaptchaToken, setDepositCaptchaToken] = useState<string | null>(null);
   const depositCaptchaRef = useRef<ReCAPTCHA>(null);
 
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawMethod, setWithdrawMethod] = useState<string>('MonCash');
   const [withdrawAccount, setWithdrawAccount] = useState('');
+  const [withdrawMessage, setWithdrawMessage] = useState('');
   const [withdrawCaptchaToken, setWithdrawCaptchaToken] = useState<string | null>(null);
   const withdrawCaptchaRef = useRef<ReCAPTCHA>(null);
 
@@ -101,15 +103,16 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     }
     setActionLoading(true);
     try {
-      await submitClientDeposit(client!, amount, depositMethod, depositTxId || undefined, depositCaptchaToken || undefined);
+      await submitClientDeposit(client!, amount, depositMethod, depositTxId || undefined, depositCaptchaToken || undefined, depositMessage || undefined);
       const info = methodInfo[depositMethod];
       const usdEquiv = (amount / exchangeRate).toFixed(2);
-      const msg = `Bonjour Neopay,\n\nJe souhaite effectuer un *DÉPÔT*:\n👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n💰 Montant: *${amount.toLocaleString()} HTG*\n≈ *$${usdEquiv} USD*\n💳 Via: *${depositMethod}*${info?.number ? `\n📞 Numéro: *${info.number}*` : ''}${depositTxId ? `\n🔖 ID Transaction: *${depositTxId}*` : ''}\n\nMerci de valider mon dépôt.`;
+      const msg = `Bonjour Neopay,\n\nJe souhaite effectuer un *DÉPÔT*:\n👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n💰 Montant: *${amount.toLocaleString()} HTG*\n≈ *$${usdEquiv} USD*\n💳 Via: *${depositMethod}*${info?.number ? `\n📞 Numéro: *${info.number}*` : ''}${depositTxId ? `\n🔖 ID Transaction: *${depositTxId}*` : ''}${depositMessage ? `\n💬 Message: *${depositMessage}*` : ''}\n\nMerci de valider mon dépôt.`;
       openWhatsApp(msg);
       toast.success("Demande de dépôt envoyée ! En attente de validation admin.");
       setIsDepositOpen(false);
       setDepositAmount('');
       setDepositTxId('');
+      setDepositMessage('');
       setDepositCaptchaToken(null);
       depositCaptchaRef.current?.reset();
     } catch (err: any) {
@@ -131,15 +134,15 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     }
     setActionLoading(true);
     try {
-      await submitClientWithdrawal(client!, amount, withdrawMethod, withdrawAccount, withdrawCaptchaToken || undefined);
+      await submitClientWithdrawal(client!, amount, withdrawMethod, withdrawAccount, withdrawCaptchaToken || undefined, withdrawMessage || undefined);
       toast.success(`Demande envoyée, ${client!.name} ! Vous recevrez votre argent tout à l'heure. ✅`);
       setIsWithdrawOpen(false);
-      setWithdrawAmount(''); setWithdrawAccount('');
+      setWithdrawAmount(''); setWithdrawAccount(''); setWithdrawMessage('');
       setWithdrawCaptchaToken(null);
       withdrawCaptchaRef.current?.reset();
       const num = settings?.whatsappAdminNumber || WHATSAPP_NUMBER;
       const usdEquiv = (amount / (settings?.exchangeRate || 146)).toFixed(2);
-      const msg = `Bonjour Neopay 👋,\n\nJe viens de soumettre une demande de *RETRAIT* :\n\n👤 Nom : *${client!.name}*\n🔑 ID Wallet : *${client!.walletId}*\n💰 Montant : *${amount.toLocaleString()} HTG* (~$${usdEquiv} USD)\n💳 Via : *${withdrawMethod}*\n📞 Compte : *${withdrawAccount}*\n\nMerci de traiter ma demande. 🙏`;
+      const msg = `Bonjour Neopay 👋,\n\nJe viens de soumettre une demande de *RETRAIT* :\n\n👤 Nom : *${client!.name}*\n🔑 ID Wallet : *${client!.walletId}*\n💰 Montant : *${amount.toLocaleString()} HTG* (~$${usdEquiv} USD)\n💳 Via : *${withdrawMethod}*\n📞 Compte : *${withdrawAccount}*${withdrawMessage ? `\n💬 Message : *${withdrawMessage}*` : ''}\n\nMerci de traiter ma demande. 🙏`;
       window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
     } catch (err: any) {
       toast.error(err.message);
@@ -435,7 +438,20 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               <p className="text-[10px] text-gray-400">Copiez l'ID de confirmation reçu lors du paiement.</p>
             </div>
 
-            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-700 leading-relaxed">
+            {/* Custom Message */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Message personnalisé (optionnel)</Label>
+              <textarea
+                value={depositMessage}
+                onChange={e => setDepositMessage(e.target.value)}
+                placeholder="Ex: Dépôt pour renouveler mon abonnement, réf. commande #1234..."
+                className="w-full min-h-[72px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                maxLength={300}
+              />
+              <p className="text-[10px] text-gray-400">{depositMessage.length}/300 caractères — visible par l'admin.</p>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700 leading-relaxed">
               <strong>Étape suivante :</strong> Après soumission, vous serez redirigé sur WhatsApp pour envoyer votre preuve de paiement à l'équipe Neopay.
             </div>
 
@@ -494,6 +510,19 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Numéro de compte</Label>
               <Input value={withdrawAccount} onChange={e => setWithdrawAccount(e.target.value)}
                 placeholder="Votre numéro de réception" className="h-12 rounded-xl" required />
+            </div>
+
+            {/* Custom Message */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Message personnalisé (optionnel)</Label>
+              <textarea
+                value={withdrawMessage}
+                onChange={e => setWithdrawMessage(e.target.value)}
+                placeholder="Ex: Retrait urgent, besoin pour payer loyer..."
+                className="w-full min-h-[72px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400 transition-all"
+                maxLength={300}
+              />
+              <p className="text-[10px] text-gray-400">{withdrawMessage.length}/300 — visible par l'admin.</p>
             </div>
 
             {/* reCAPTCHA */}

@@ -279,6 +279,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /online_sub_services/{serviceId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
