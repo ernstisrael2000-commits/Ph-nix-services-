@@ -16,6 +16,8 @@ import { Formation, FormationModule, FormationChapter } from '../types';
 import { Client } from '../types';
 import { toast } from 'sonner';
 import { useSettings } from '../services/parcelService';
+import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface FormationsViewProps {
   loggedClient: Client | null;
@@ -152,11 +154,30 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
   const [submittingPayment, setSubmittingPayment] = useState(false);
 
   useEffect(() => {
-    fetch('/api/formations')
-      .then(r => r.json())
-      .then(data => setFormations(data.formations || []))
-      .catch(() => toast.error('Impossible de charger les formations.'))
-      .finally(() => setLoading(false));
+    const loadFormations = async () => {
+      try {
+        const res = await fetch('/api/formations');
+        if (!res.ok) throw new Error('api_fail');
+        const data = await res.json();
+        if (!Array.isArray(data.formations)) throw new Error('api_fail');
+        setFormations(data.formations);
+      } catch {
+        try {
+          const q = query(
+            collection(db, 'formations'),
+            where('published', '==', true),
+            orderBy('createdAt', 'desc')
+          );
+          const snap = await getDocs(q);
+          setFormations(snap.docs.map(d => ({ id: d.id, ...d.data() } as Formation)));
+        } catch {
+          toast.error('Impossible de charger les formations.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadFormations();
   }, []);
 
   useEffect(() => {

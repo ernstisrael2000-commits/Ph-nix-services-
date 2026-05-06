@@ -8,6 +8,8 @@ import { Button } from './ui/button';
 import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { useProducts, useGames, useCardTopups, useSliderImages, useNavButtons, useSettings, useOnlineServices } from '../services/parcelService';
+import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { AnimatePresence } from 'motion/react';
 import { 
   Dialog, 
@@ -174,10 +176,28 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const [previewFormations, setPreviewFormations] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch('/api/formations')
-      .then(r => r.json())
-      .then(data => setPreviewFormations((data.formations || []).slice(0, 3)))
-      .catch(() => {});
+    const loadPreviewFormations = async () => {
+      try {
+        const res = await fetch('/api/formations');
+        if (!res.ok) throw new Error('api_fail');
+        const data = await res.json();
+        if (!Array.isArray(data.formations)) throw new Error('api_fail');
+        setPreviewFormations(data.formations.slice(0, 3));
+      } catch {
+        try {
+          const q = query(
+            collection(db, 'formations'),
+            where('published', '==', true),
+            orderBy('createdAt', 'desc')
+          );
+          const snap = await getDocs(q);
+          setPreviewFormations(snap.docs.map(d => ({ id: d.id, ...d.data() })).slice(0, 3));
+        } catch {
+          // silent fallback — preview is non-critical
+        }
+      }
+    };
+    loadPreviewFormations();
   }, []);
   const walletDepositCaptchaRef = useRef<ReCAPTCHA>(null);
   const walletWithdrawCaptchaRef = useRef<ReCAPTCHA>(null);
