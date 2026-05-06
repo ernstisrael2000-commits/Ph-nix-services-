@@ -5,7 +5,8 @@ import {
   CheckCircle2, X, Wallet, Loader2, BookOpen, Lock,
   ChevronRight, TrendingUp, Zap, Globe, Tag, User,
   FileText, Layers, BadgeCheck, Percent, MessageSquare,
-  ChevronDown, ChevronUp, Video, Download, ExternalLink
+  ChevronDown, ChevronUp, Video, Download, ExternalLink,
+  Smartphone, CreditCard, Send, AlertCircle, LayoutGrid
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -13,10 +14,13 @@ import { Dialog, DialogContent, DialogClose } from './ui/dialog';
 import { Formation, FormationModule, FormationChapter } from '../types';
 import { Client } from '../types';
 import { toast } from 'sonner';
+import { useSettings } from '../services/parcelService';
 
 interface FormationsViewProps {
   loggedClient: Client | null;
   onOpenWallet: () => void;
+  activeTab: 'all' | 'my';
+  onTabChange: (tab: 'all' | 'my') => void;
 }
 
 const levelLabels: Record<string, string> = {
@@ -126,7 +130,10 @@ function ModuleList({ modules, chapters, isOwned }: { modules: FormationModule[]
   );
 }
 
-export default function FormationsView({ loggedClient, onOpenWallet }: FormationsViewProps) {
+type PaymentStep = 'detail' | 'external-method' | 'form' | 'done';
+
+export default function FormationsView({ loggedClient, onOpenWallet, activeTab, onTabChange }: FormationsViewProps) {
+  const { settings } = useSettings();
   const [formations, setFormations] = useState<Formation[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Formation | null>(null);
@@ -135,6 +142,11 @@ export default function FormationsView({ loggedClient, onOpenWallet }: Formation
   const [filterLevel, setFilterLevel] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const [paymentStep, setPaymentStep] = useState<PaymentStep>('detail');
+  const [selectedPayMethod, setSelectedPayMethod] = useState<'moncash' | 'natcash' | null>(null);
+  const [payFormData, setPayFormData] = useState({ name: '', email: '', transactionCode: '' });
+  const [submittingPayment, setSubmittingPayment] = useState(false);
 
   useEffect(() => {
     fetch('/api/formations')
@@ -157,11 +169,27 @@ export default function FormationsView({ loggedClient, onOpenWallet }: Formation
       .catch(() => {});
   }, [loggedClient?.id]);
 
+  const openDetail = (formation: Formation) => {
+    setSelected(formation);
+    setPaymentStep('detail');
+    setSelectedPayMethod(null);
+    setPayFormData({
+      name: loggedClient?.name || '',
+      email: loggedClient?.email || '',
+      transactionCode: '',
+    });
+  };
+
+  const closeDetail = () => {
+    setSelected(null);
+    setPaymentStep('detail');
+    setSelectedPayMethod(null);
+  };
+
   const handleWalletPurchase = async (formation: Formation) => {
     if (!loggedClient) { onOpenWallet(); return; }
     if ((loggedClient.balance ?? 0) < (formation.price ?? 0)) {
       toast.error(`Solde insuffisant. Vous avez ${(loggedClient.balance ?? 0).toLocaleString()} HTG.`);
-      onOpenWallet();
       return;
     }
     setPurchasing(true);
@@ -180,12 +208,67 @@ export default function FormationsView({ loggedClient, onOpenWallet }: Formation
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Erreur lors de l\'achat.');
       setPurchasedIds(prev => [...prev, formation.id!]);
-      toast.success(`✅ Accès à "${formation.title}" activé !`);
+      toast.success(`✅ Accès à "${formation.title}" activé ! Achat réussi, vous pouvez commencer.`);
       setSelected(null);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
       setPurchasing(false);
+    }
+  };
+
+  const handleExternalPaymentSubmit = async () => {
+    if (!loggedClient || !selected || !selectedPayMethod) return;
+    if (!payFormData.transactionCode.trim()) {
+      toast.error('Veuillez saisir le code de transaction.');
+      return;
+    }
+    if (!payFormData.name.trim() || !payFormData.email.trim()) {
+      toast.error('Veuillez renseigner votre nom et email.');
+      return;
+    }
+    setSubmittingPayment(true);
+    try {
+      const res = await fetch('/api/formations/payment-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: loggedClient.id,
+          userEmail: payFormData.email,
+          userName: payFormData.name,
+          formationId: selected.id,
+          formationTitle: selected.title,
+          amount: selected.price,
+          method: selectedPayMethod === 'moncash' ? 'MonCash' : 'NatCash',
+          transactionCode: payFormData.transactionCode,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Erreur lors de la soumission.');
+      if (json.alreadyOwned) {
+        setPurchasedIds(prev => [...prev, selected.id!]);
+        toast.success('Vous avez déjà accès à cette formation !');
+        closeDetail();
+        return;
+      }
+      setPaymentStep('done');
+      const whatsappNum = settings?.whatsappAdminNumber?.replace(/\D/g, '') || '50944813185';
+      const methodLabel = selectedPayMethod === 'moncash' ? 'MonCash' : 'NatCash';
+      const msg = encodeURIComponent(
+        `Bonjour Neopay 👋\n\nJe viens d'effectuer un paiement pour une formation :\n\n` +
+        `👤 Nom: *${payFormData.name}*\n📧 Email: *${payFormData.email}*\n` +
+        `🎓 Cours: *${selected.title}*\n💳 Méthode: *${methodLabel}*\n` +
+        `💰 Montant: *${(selected.price || 0).toLocaleString()} HTG*\n` +
+        `🔖 Code transaction: *${payFormData.transactionCode}*\n\n` +
+        `Merci de valider mon accès.`
+      );
+      setTimeout(() => {
+        window.open(`https://wa.me/${whatsappNum}?text=${msg}`, '_blank');
+      }, 800);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSubmittingPayment(false);
     }
   };
 
@@ -198,11 +281,16 @@ export default function FormationsView({ loggedClient, onOpenWallet }: Formation
     return matchLevel && matchCat && matchSearch;
   });
 
+  const myCourses = formations.filter(f => f.id && purchasedIds.includes(f.id));
+
   const isOwned = (f: Formation) => !!f.id && purchasedIds.includes(f.id);
 
   const discount = (f: Formation) => f.originalPrice && f.originalPrice > f.price
     ? Math.round((1 - f.price / f.originalPrice) * 100)
     : 0;
+
+  const moncashNumber = settings?.moncashNumber || '—';
+  const natcashNumber = settings?.natcashNumber || '—';
 
   if (loading) {
     return (
@@ -215,262 +303,330 @@ export default function FormationsView({ loggedClient, onOpenWallet }: Formation
     );
   }
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      {/* Hero Header */}
+  const CourseCard = ({ formation, i }: { formation: Formation; i: number }) => {
+    const owned = isOwned(formation);
+    const disc = discount(formation);
+    return (
       <motion.div
-        initial={{ opacity: 0, y: -16 }}
+        key={formation.id}
+        initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative rounded-3xl overflow-hidden mb-10 bg-gradient-to-br from-primary via-blue-700 to-indigo-900 p-8 sm:p-12 text-white"
+        transition={{ delay: i * 0.05 }}
+        onClick={() => openDetail(formation)}
+        className="bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer overflow-hidden group flex flex-col"
       >
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,255,255,0.1)_0%,_transparent_60%)]" />
-        <div className="absolute -bottom-6 -right-6 w-48 h-48 bg-white/5 rounded-full blur-2xl" />
-        <div className="relative z-10">
-          <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm px-4 py-1.5 rounded-full text-sm font-bold mb-5 border border-white/20">
-            <GraduationCap className="h-4 w-4" />
-            Centre de Formations Neopay
+        <div className="relative h-48 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 shrink-0">
+          {formation.coverImage ? (
+            <img
+              src={formation.coverImage}
+              alt={formation.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+            />
+          ) : (
+            <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${levelGradients[formation.level] || 'from-blue-500 to-blue-700'}`}>
+              <GraduationCap className="h-20 w-20 text-white/30" />
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+          <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
+            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${levelColors[formation.level] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+              {levelLabels[formation.level] || formation.level}
+            </span>
+            {formation.hasCertificate && (
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200 flex items-center gap-1">
+                <BadgeCheck className="h-2.5 w-2.5" /> Certifiant
+              </span>
+            )}
           </div>
-          <h1 className="text-3xl sm:text-5xl font-black mb-3 leading-tight">
-            Développez vos<br />
-            <span className="text-blue-200">compétences</span>
-          </h1>
-          <p className="text-white/70 max-w-lg text-base mb-6">
-            Accédez à nos formations professionnelles et montez en compétences à votre rythme. Payez directement avec votre Wallet Neopay.
-          </p>
-          <div className="flex flex-wrap gap-4">
-            {[
-              { icon: BookOpen, label: `${formations.length} formations` },
-              { icon: Users, label: `${formations.reduce((s, f) => s + (f.studentsCount || 0), 0).toLocaleString()} étudiants` },
-              { icon: Award, label: `${formations.filter(f => f.hasCertificate).length} certifiantes` },
-              { icon: Globe, label: `${categories.length - 1} catégories` },
-            ].map(({ icon: Icon, label }) => (
-              <div key={label} className="flex items-center gap-2 text-sm text-white/80 font-semibold">
-                <Icon className="h-4 w-4 text-blue-300" />
-                {label}
+          {disc > 0 && (
+            <div className="absolute top-3 right-3 bg-red-500 text-white px-2 py-1 rounded-xl text-[10px] font-black">
+              -{disc}%
+            </div>
+          )}
+          {owned && (
+            <div className="absolute bottom-3 right-3 bg-emerald-500 text-white px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1">
+              <CheckCircle2 className="h-2.5 w-2.5" /> Accès activé
+            </div>
+          )}
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <div className="bg-white/90 backdrop-blur-sm rounded-full p-4 shadow-xl">
+              <Play className="h-6 w-6 text-primary fill-primary" />
+            </div>
+          </div>
+        </div>
+
+        <div className="p-5 flex flex-col flex-1">
+          {(formation.category || formation.language) && (
+            <div className="flex items-center gap-2 mb-2">
+              {formation.category && (
+                <span className="flex items-center gap-1 text-[10px] font-bold text-primary bg-primary/8 px-2 py-0.5 rounded-full">
+                  <Tag className="h-2.5 w-2.5" />{formation.category}
+                </span>
+              )}
+              {formation.language && (
+                <span className="flex items-center gap-1 text-[10px] font-semibold text-gray-500">
+                  <Globe className="h-2.5 w-2.5" />{formation.language}
+                </span>
+              )}
+            </div>
+          )}
+          <h3 className="font-black text-dark text-base mb-1.5 line-clamp-2 leading-snug">{formation.title}</h3>
+          <p className="text-xs text-subtext line-clamp-2 mb-3 flex-1">{formation.shortDescription || formation.description}</p>
+          {formation.instructor && (
+            <div className="flex items-center gap-1.5 mb-3">
+              {formation.instructorAvatar ? (
+                <img src={formation.instructorAvatar} className="h-5 w-5 rounded-full object-cover border border-gray-200" onError={e => (e.currentTarget.style.display = 'none')} />
+              ) : (
+                <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center">
+                  <User className="h-3 w-3 text-primary" />
+                </div>
+              )}
+              <span className="text-xs text-subtext">{formation.instructor}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-3 text-xs text-subtext mb-3">
+            {formation.totalDuration && (
+              <span className="flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" />{formation.totalDuration}
+              </span>
+            )}
+            <span className="flex items-center gap-1">
+              <BookOpen className="h-3.5 w-3.5" />
+              {(formation.modules || []).length} modules
+            </span>
+            <span className="flex items-center gap-1">
+              <Users className="h-3.5 w-3.5" />
+              {(formation.studentsCount || 0).toLocaleString()}
+            </span>
+          </div>
+          <StarRating rating={formation.rating || 0} />
+          <div className="mt-3 pt-3 border-t border-gray-50 flex items-end justify-between">
+            <div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-xl font-black text-primary">
+                  {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
+                </span>
+                {formation.originalPrice && formation.originalPrice > formation.price && (
+                  <span className="text-xs text-gray-400 line-through">{formation.originalPrice.toLocaleString()} HTG</span>
+                )}
               </div>
-            ))}
+              {formation.enrollmentLimit && (
+                <p className="text-[10px] text-amber-600 font-semibold mt-0.5">
+                  {formation.enrollmentLimit - (formation.studentsCount || 0)} places restantes
+                </p>
+              )}
+            </div>
+            <span className="flex items-center gap-1 text-xs font-bold text-primary group-hover:gap-2 transition-all">
+              Voir <ChevronRight className="h-3.5 w-3.5" />
+            </span>
           </div>
         </div>
       </motion.div>
+    );
+  };
 
-      {/* Search + Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="space-y-3 mb-8"
-      >
-        {/* Search */}
-        <div className="relative">
-          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </div>
-          <input
-            type="text"
-            placeholder="Rechercher une formation ou un instructeur..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 h-12 rounded-2xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all shadow-sm"
-          />
-        </div>
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Tab Navigation */}
+      <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-2xl mb-8 w-fit">
+        <button
+          onClick={() => onTabChange('all')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'all'
+              ? 'bg-white text-primary shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <LayoutGrid className="h-4 w-4" />
+          Tous les cours
+        </button>
+        <button
+          onClick={() => onTabChange('my')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all relative ${
+            activeTab === 'my'
+              ? 'bg-white text-primary shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <BookOpen className="h-4 w-4" />
+          Mes cours
+          {myCourses.length > 0 && (
+            <span className="bg-primary text-white text-[10px] font-black w-4 h-4 flex items-center justify-center rounded-full">
+              {myCourses.length}
+            </span>
+          )}
+        </button>
+      </div>
 
-        {/* Level filter */}
-        <div className="flex gap-2 flex-wrap">
-          <span className="text-xs font-bold text-subtext uppercase tracking-wider self-center mr-1">Niveau :</span>
-          {['all', 'debutant', 'intermediaire', 'avance'].map(lvl => (
-            <button
-              key={lvl}
-              onClick={() => setFilterLevel(lvl)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all border ${
-                filterLevel === lvl
-                  ? 'bg-primary text-white border-primary shadow-md shadow-primary/20'
-                  : 'bg-white text-gray-500 border-gray-200 hover:border-primary/40 hover:text-primary'
-              }`}
-            >
-              {lvl === 'all' ? 'Tous' : levelLabels[lvl]}
-            </button>
-          ))}
-        </div>
+      <AnimatePresence mode="wait">
+        {activeTab === 'all' && (
+          <motion.div key="all" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            {/* Search + Filters */}
+            <div className="space-y-3 mb-8">
+              <div className="relative">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Rechercher une formation ou un instructeur..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 h-12 rounded-2xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all shadow-sm"
+                />
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <span className="text-xs font-bold text-subtext uppercase tracking-wider self-center mr-1">Niveau :</span>
+                {['all', 'debutant', 'intermediaire', 'avance'].map(lvl => (
+                  <button
+                    key={lvl}
+                    onClick={() => setFilterLevel(lvl)}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                      filterLevel === lvl
+                        ? 'bg-primary text-white border-primary shadow-md shadow-primary/20'
+                        : 'bg-white text-gray-500 border-gray-200 hover:border-primary/40 hover:text-primary'
+                    }`}
+                  >
+                    {lvl === 'all' ? 'Tous' : levelLabels[lvl]}
+                  </button>
+                ))}
+              </div>
+              {categories.length > 2 && (
+                <div className="flex gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-subtext uppercase tracking-wider self-center mr-1">Catégorie :</span>
+                  {categories.map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setFilterCategory(cat)}
+                      className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                        filterCategory === cat
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200'
+                          : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-300 hover:text-indigo-600'
+                      }`}
+                    >
+                      {cat === 'all' ? 'Toutes' : cat}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
-        {/* Category filter */}
-        {categories.length > 2 && (
-          <div className="flex gap-2 flex-wrap">
-            <span className="text-xs font-bold text-subtext uppercase tracking-wider self-center mr-1">Catégorie :</span>
-            {categories.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setFilterCategory(cat)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all border ${
-                  filterCategory === cat
-                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200'
-                    : 'bg-white text-gray-500 border-gray-200 hover:border-indigo-300 hover:text-indigo-600'
-                }`}
-              >
-                {cat === 'all' ? 'Toutes' : cat}
-              </button>
-            ))}
-          </div>
+            {filtered.length === 0 ? (
+              <div className="text-center py-20">
+                <GraduationCap className="h-14 w-14 text-gray-200 mx-auto mb-4" />
+                <p className="text-subtext font-medium">Aucune formation trouvée.</p>
+                <p className="text-sm text-subtext/60 mt-1">Essayez de modifier vos filtres.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filtered.map((formation, i) => (
+                  <CourseCard key={formation.id} formation={formation} i={i} />
+                ))}
+              </div>
+            )}
+          </motion.div>
         )}
-      </motion.div>
 
-      {/* Grid */}
-      {filtered.length === 0 ? (
-        <div className="text-center py-20">
-          <GraduationCap className="h-14 w-14 text-gray-200 mx-auto mb-4" />
-          <p className="text-subtext font-medium">Aucune formation trouvée.</p>
-          <p className="text-sm text-subtext/60 mt-1">Essayez de modifier vos filtres.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((formation, i) => {
-            const owned = isOwned(formation);
-            const disc = discount(formation);
-            return (
-              <motion.div
-                key={formation.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                onClick={() => setSelected(formation)}
-                className="bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer overflow-hidden group flex flex-col"
-              >
-                {/* Cover Image */}
-                <div className="relative h-48 overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 shrink-0">
-                  {formation.coverImage ? (
-                    <img
-                      src={formation.coverImage}
-                      alt={formation.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    />
-                  ) : (
-                    <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${levelGradients[formation.level] || 'from-blue-500 to-blue-700'}`}>
-                      <GraduationCap className="h-20 w-20 text-white/30" />
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-
-                  {/* Top badges */}
-                  <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${levelColors[formation.level] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-                      {levelLabels[formation.level] || formation.level}
-                    </span>
-                    {formation.hasCertificate && (
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200 flex items-center gap-1">
-                        <BadgeCheck className="h-2.5 w-2.5" /> Certifiant
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Discount badge */}
-                  {disc > 0 && (
-                    <div className="absolute top-3 right-3 bg-red-500 text-white px-2 py-1 rounded-xl text-[10px] font-black">
-                      -{disc}%
-                    </div>
-                  )}
-
-                  {/* Owned badge */}
-                  {owned && (
-                    <div className="absolute bottom-3 right-3 bg-emerald-500 text-white px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1">
-                      <CheckCircle2 className="h-2.5 w-2.5" /> Accès activé
-                    </div>
-                  )}
-
-                  {/* Play hover overlay */}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <div className="bg-white/90 backdrop-blur-sm rounded-full p-4 shadow-xl">
-                      <Play className="h-6 w-6 text-primary fill-primary" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Content */}
-                <div className="p-5 flex flex-col flex-1">
-                  {/* Category + Language */}
-                  {(formation.category || formation.language) && (
-                    <div className="flex items-center gap-2 mb-2">
-                      {formation.category && (
-                        <span className="flex items-center gap-1 text-[10px] font-bold text-primary bg-primary/8 px-2 py-0.5 rounded-full">
-                          <Tag className="h-2.5 w-2.5" />{formation.category}
-                        </span>
-                      )}
-                      {formation.language && (
-                        <span className="flex items-center gap-1 text-[10px] font-semibold text-gray-500">
-                          <Globe className="h-2.5 w-2.5" />{formation.language}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  <h3 className="font-black text-dark text-base mb-1.5 line-clamp-2 leading-snug">{formation.title}</h3>
-                  <p className="text-xs text-subtext line-clamp-2 mb-3 flex-1">{formation.shortDescription || formation.description}</p>
-
-                  {/* Instructor */}
-                  {formation.instructor && (
-                    <div className="flex items-center gap-1.5 mb-3">
-                      {formation.instructorAvatar ? (
-                        <img src={formation.instructorAvatar} className="h-5 w-5 rounded-full object-cover border border-gray-200" onError={e => (e.currentTarget.style.display = 'none')} />
-                      ) : (
-                        <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center">
-                          <User className="h-3 w-3 text-primary" />
+        {activeTab === 'my' && (
+          <motion.div key="my" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            {!loggedClient ? (
+              <div className="text-center py-20">
+                <Lock className="h-14 w-14 text-gray-200 mx-auto mb-4" />
+                <p className="text-dark font-bold text-lg mb-2">Connectez-vous pour accéder à vos cours</p>
+                <p className="text-sm text-subtext mb-6">Votre espace personnel vous permet de retrouver tous les cours achetés.</p>
+                <Button onClick={onOpenWallet} className="bg-primary text-white rounded-2xl px-6">
+                  Se connecter
+                </Button>
+              </div>
+            ) : myCourses.length === 0 ? (
+              <div className="text-center py-20">
+                <BookOpen className="h-14 w-14 text-gray-200 mx-auto mb-4" />
+                <p className="text-dark font-bold text-lg mb-2">Vous n'avez pas encore de cours</p>
+                <p className="text-sm text-subtext mb-6">Explorez notre catalogue et démarrez votre apprentissage.</p>
+                <Button onClick={() => onTabChange('all')} className="bg-primary text-white rounded-2xl px-6 flex items-center gap-2">
+                  <GraduationCap className="h-4 w-4" /> Voir les cours
+                </Button>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm text-subtext font-semibold mb-6">{myCourses.length} cours acheté{myCourses.length > 1 ? 's' : ''}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {myCourses.map((formation, i) => {
+                    const firstVideoUrl = (formation.modules || []).find(m => m.videoUrl)?.videoUrl;
+                    return (
+                      <motion.div
+                        key={formation.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                        className="bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 overflow-hidden flex flex-col"
+                      >
+                        <div className="relative h-40 overflow-hidden shrink-0">
+                          {formation.coverImage ? (
+                            <img src={formation.coverImage} alt={formation.title} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${levelGradients[formation.level] || 'from-blue-500 to-blue-700'}`}>
+                              <GraduationCap className="h-16 w-16 text-white/30" />
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                          <div className="absolute top-3 left-3">
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                              <CheckCircle2 className="h-2.5 w-2.5" /> Accès activé
+                            </span>
+                          </div>
                         </div>
-                      )}
-                      <span className="text-xs text-subtext">{formation.instructor}</span>
-                    </div>
-                  )}
-
-                  {/* Stats row */}
-                  <div className="flex items-center gap-3 text-xs text-subtext mb-3">
-                    {formation.totalDuration && (
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" />{formation.totalDuration}
-                      </span>
-                    )}
-                    <span className="flex items-center gap-1">
-                      <BookOpen className="h-3.5 w-3.5" />
-                      {(formation.modules || []).length} modules
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Users className="h-3.5 w-3.5" />
-                      {(formation.studentsCount || 0).toLocaleString()}
-                    </span>
-                  </div>
-
-                  <StarRating rating={formation.rating || 0} />
-
-                  {/* Price + Tags */}
-                  <div className="mt-3 pt-3 border-t border-gray-50 flex items-end justify-between">
-                    <div>
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-xl font-black text-primary">
-                          {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
-                        </span>
-                        {formation.originalPrice && formation.originalPrice > formation.price && (
-                          <span className="text-xs text-gray-400 line-through">{formation.originalPrice.toLocaleString()} HTG</span>
-                        )}
-                      </div>
-                      {formation.enrollmentLimit && (
-                        <p className="text-[10px] text-amber-600 font-semibold mt-0.5">
-                          {formation.enrollmentLimit - (formation.studentsCount || 0)} places restantes
-                        </p>
-                      )}
-                    </div>
-                    <span className="flex items-center gap-1 text-xs font-bold text-primary group-hover:gap-2 transition-all">
-                      Voir <ChevronRight className="h-3.5 w-3.5" />
-                    </span>
-                  </div>
+                        <div className="p-5 flex flex-col flex-1">
+                          <h3 className="font-black text-dark text-base mb-1.5 line-clamp-2">{formation.title}</h3>
+                          {formation.instructor && (
+                            <p className="text-xs text-subtext mb-3">{formation.instructor}</p>
+                          )}
+                          <div className="flex items-center gap-2 text-xs text-subtext mb-4">
+                            <BookOpen className="h-3.5 w-3.5" />
+                            {(formation.modules || []).length} modules
+                          </div>
+                          <div className="mt-auto flex gap-2">
+                            {firstVideoUrl ? (
+                              <a
+                                href={firstVideoUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex-1 h-10 rounded-xl bg-primary hover:bg-blue-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors"
+                              >
+                                <Play className="h-4 w-4 fill-white" /> Commencer
+                              </a>
+                            ) : (
+                              <button
+                                onClick={() => openDetail(formation)}
+                                className="flex-1 h-10 rounded-xl bg-primary hover:bg-blue-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors"
+                              >
+                                <Play className="h-4 w-4 fill-white" /> Commencer
+                              </button>
+                            )}
+                            <button
+                              onClick={() => openDetail(formation)}
+                              className="h-10 px-3 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 text-sm transition-colors"
+                            >
+                              Détails
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
                 </div>
-              </motion.div>
-            );
-          })}
-        </div>
-      )}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Detail Dialog */}
       <AnimatePresence>
         {selected && (
-          <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
+          <Dialog open={!!selected} onOpenChange={() => closeDetail()}>
             <DialogContent className="max-w-2xl rounded-3xl p-0 overflow-hidden max-h-[92vh] overflow-y-auto">
               {/* Cover */}
               <div className="relative h-56 bg-gradient-to-br from-blue-100 to-blue-200 overflow-hidden shrink-0">
@@ -542,33 +698,6 @@ export default function FormationsView({ loggedClient, onOpenWallet }: Formation
                   ))}
                 </div>
 
-                {/* Additional info */}
-                <div className="flex flex-wrap gap-3 text-xs">
-                  {selected.language && (
-                    <div className="flex items-center gap-1.5 bg-gray-100 px-3 py-1.5 rounded-full font-semibold text-gray-600">
-                      <Globe className="h-3.5 w-3.5" /> {selected.language}
-                    </div>
-                  )}
-                  {selected.hasCertificate && (
-                    <div className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-full font-semibold text-amber-700">
-                      <BadgeCheck className="h-3.5 w-3.5" /> Certificat inclus
-                    </div>
-                  )}
-                  {selected.enrollmentLimit && (
-                    <div className="flex items-center gap-1.5 bg-orange-50 px-3 py-1.5 rounded-full font-semibold text-orange-700">
-                      <Users className="h-3.5 w-3.5" /> {selected.enrollmentLimit} places max
-                    </div>
-                  )}
-                </div>
-
-                {/* Prerequisites */}
-                {selected.prerequisites && (
-                  <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
-                    <p className="text-xs font-black text-blue-800 uppercase tracking-wider mb-1">Prérequis</p>
-                    <p className="text-xs text-blue-700 leading-relaxed">{selected.prerequisites}</p>
-                  </div>
-                )}
-
                 {/* Modules list */}
                 {(selected.modules || []).length > 0 && (
                   <div>
@@ -591,13 +720,9 @@ export default function FormationsView({ loggedClient, onOpenWallet }: Formation
                       <FileText className="h-4 w-4 text-primary" /> Ressources
                     </h4>
                     {isOwned(selected) ? (
-                      <a
-                        href={selected.pdfUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <a href={selected.pdfUrl} target="_blank" rel="noopener noreferrer"
                         className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-100 rounded-xl hover:bg-blue-100 transition-colors"
-                        onClick={e => e.stopPropagation()}
-                      >
+                        onClick={e => e.stopPropagation()}>
                         <Download className="h-4 w-4 text-primary" />
                         <span className="text-sm font-semibold text-primary flex-1">Télécharger le support PDF</span>
                         <ExternalLink className="h-3.5 w-3.5 text-primary/60" />
@@ -622,89 +747,281 @@ export default function FormationsView({ loggedClient, onOpenWallet }: Formation
                   </div>
                 )}
 
-                {/* Purchase section */}
+                {/* ── PURCHASE SECTION ── */}
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50/60 rounded-2xl p-5 border border-blue-100">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <div className="flex items-baseline gap-2">
-                        <p className="text-3xl font-black text-primary">
-                          {selected.price === 0 ? 'Gratuit' : `${(selected.price || 0).toLocaleString()} HTG`}
-                        </p>
-                        {selected.originalPrice && selected.originalPrice > selected.price && (
-                          <span className="text-sm text-gray-400 line-through">{selected.originalPrice.toLocaleString()} HTG</span>
+                  
+                  {/* STEP: DETAIL - main payment options */}
+                  {paymentStep === 'detail' && (
+                    <>
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <div className="flex items-baseline gap-2">
+                            <p className="text-3xl font-black text-primary">
+                              {selected.price === 0 ? 'Gratuit' : `${(selected.price || 0).toLocaleString()} HTG`}
+                            </p>
+                            {selected.originalPrice && selected.originalPrice > selected.price && (
+                              <span className="text-sm text-gray-400 line-through">{selected.originalPrice.toLocaleString()} HTG</span>
+                            )}
+                          </div>
+                          {loggedClient && selected.price > 0 && (
+                            <p className="text-xs text-subtext mt-1 flex items-center gap-1">
+                              <Wallet className="h-3 w-3" />
+                              Votre solde: <span className={`font-bold ml-0.5 ${(loggedClient.balance ?? 0) >= selected.price ? 'text-emerald-600' : 'text-red-500'}`}>
+                                {(loggedClient.balance ?? 0).toLocaleString()} HTG
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                        {isOwned(selected) && (
+                          <span className="flex items-center gap-1.5 bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-bold border border-emerald-200">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Accès activé
+                          </span>
                         )}
                       </div>
-                      {loggedClient && selected.price > 0 && (
-                        <p className="text-xs text-subtext mt-1 flex items-center gap-1">
-                          <Wallet className="h-3 w-3" />
-                          Votre solde: <span className={`font-bold ml-0.5 ${(loggedClient.balance ?? 0) >= selected.price ? 'text-emerald-600' : 'text-red-500'}`}>
-                            {(loggedClient.balance ?? 0).toLocaleString()} HTG
-                          </span>
-                        </p>
-                      )}
-                    </div>
-                    {isOwned(selected) && (
-                      <span className="flex items-center gap-1.5 bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-full text-xs font-bold border border-emerald-200">
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Accès activé
-                      </span>
-                    )}
-                  </div>
 
-                  {isOwned(selected) ? (
-                    <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-center">
-                      <CheckCircle2 className="h-6 w-6 text-emerald-500 mx-auto mb-2" />
-                      <p className="text-sm font-black text-emerald-700">Vous avez accès à cette formation</p>
-                      <p className="text-xs text-emerald-600 mt-1">Accédez aux vidéos ci-dessus ou contactez le support.</p>
-                    </div>
-                  ) : loggedClient ? (
-                    selected.price === 0 ? (
-                      <Button
-                        className="w-full h-12 rounded-2xl bg-primary hover:bg-blue-700 text-white font-bold flex items-center gap-2"
-                        onClick={() => handleWalletPurchase(selected)}
-                        disabled={purchasing}
+                      {isOwned(selected) ? (
+                        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-center">
+                          <CheckCircle2 className="h-6 w-6 text-emerald-500 mx-auto mb-2" />
+                          <p className="text-sm font-black text-emerald-700">👉 Achat réussi, vous pouvez commencer</p>
+                          <p className="text-xs text-emerald-600 mt-1">Accédez aux vidéos dans la liste des modules ci-dessus.</p>
+                        </div>
+                      ) : loggedClient ? (
+                        <div className="space-y-3">
+                          {/* Wallet option - instant */}
+                          {selected.price === 0 ? (
+                            <Button
+                              className="w-full h-12 rounded-2xl bg-primary hover:bg-blue-700 text-white font-bold flex items-center gap-2"
+                              onClick={() => handleWalletPurchase(selected)}
+                              disabled={purchasing}
+                            >
+                              {purchasing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                              Accéder gratuitement
+                            </Button>
+                          ) : (
+                            <>
+                              {/* Wallet - only if balance sufficient */}
+                              {(loggedClient.balance ?? 0) >= selected.price && (
+                                <Button
+                                  className="w-full h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2"
+                                  onClick={() => handleWalletPurchase(selected)}
+                                  disabled={purchasing}
+                                >
+                                  {purchasing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+                                  Acheter avec mon Wallet · Accès immédiat
+                                </Button>
+                              )}
+                              {/* External payment options */}
+                              <Button
+                                variant="outline"
+                                className="w-full h-12 rounded-2xl border-2 border-primary/30 text-primary font-bold flex items-center gap-2 hover:bg-primary/5"
+                                onClick={() => setPaymentStep('external-method')}
+                              >
+                                <Smartphone className="h-4 w-4" />
+                                Payer par MonCash / NatCash
+                              </Button>
+                              {(loggedClient.balance ?? 0) < selected.price && (
+                                <button
+                                  onClick={() => { closeDetail(); onOpenWallet(); }}
+                                  className="w-full text-xs text-primary font-semibold hover:underline flex items-center justify-center gap-1"
+                                >
+                                  <TrendingUp className="h-3 w-3" /> Recharger mon wallet
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <Button
+                          className="w-full h-12 rounded-2xl bg-primary hover:bg-blue-700 text-white font-bold flex items-center gap-2"
+                          onClick={() => { closeDetail(); onOpenWallet(); }}
+                        >
+                          <Lock className="h-4 w-4" />
+                          Connectez-vous pour acheter
+                        </Button>
+                      )}
+                    </>
+                  )}
+
+                  {/* STEP: EXTERNAL METHOD CHOICE */}
+                  {paymentStep === 'external-method' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <button onClick={() => setPaymentStep('detail')} className="text-gray-400 hover:text-gray-600 transition-colors">
+                          <ChevronRight className="h-4 w-4 rotate-180" />
+                        </button>
+                        <h4 className="font-black text-dark text-sm">Choisir le mode de paiement</h4>
+                      </div>
+                      <p className="text-xs text-subtext mb-3">
+                        Montant à envoyer : <strong className="text-primary text-sm">{(selected.price || 0).toLocaleString()} HTG</strong>
+                      </p>
+
+                      {/* MonCash */}
+                      <div
+                        onClick={() => setSelectedPayMethod('moncash')}
+                        className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${selectedPayMethod === 'moncash' ? 'border-rose-400 bg-rose-50' : 'border-gray-200 bg-white hover:border-rose-200 hover:bg-rose-50/30'}`}
                       >
-                        {purchasing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-                        Accéder gratuitement
-                      </Button>
-                    ) : (
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="h-10 w-10 rounded-xl bg-rose-100 flex items-center justify-center">
+                            <Smartphone className="h-5 w-5 text-rose-600" />
+                          </div>
+                          <div>
+                            <p className="font-black text-dark text-sm">MonCash</p>
+                            <p className="text-[10px] text-subtext">Paiement mobile instantané</p>
+                          </div>
+                          {selectedPayMethod === 'moncash' && <CheckCircle2 className="h-5 w-5 text-rose-500 ml-auto" />}
+                        </div>
+                        <div className="bg-white rounded-xl p-3 space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-subtext font-semibold">Numéro à utiliser</span>
+                            <span className="font-black text-dark">{moncashNumber}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-subtext font-semibold">Titulaire</span>
+                            <span className="font-black text-dark">Neopay</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-subtext font-semibold">Montant exact</span>
+                            <span className="font-black text-primary">{(selected.price || 0).toLocaleString()} HTG</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* NatCash */}
+                      <div
+                        onClick={() => setSelectedPayMethod('natcash')}
+                        className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${selectedPayMethod === 'natcash' ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white hover:border-amber-200 hover:bg-amber-50/30'}`}
+                      >
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="h-10 w-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                            <Smartphone className="h-5 w-5 text-amber-600" />
+                          </div>
+                          <div>
+                            <p className="font-black text-dark text-sm">NatCash</p>
+                            <p className="text-[10px] text-subtext">Sécurisé et rapide</p>
+                          </div>
+                          {selectedPayMethod === 'natcash' && <CheckCircle2 className="h-5 w-5 text-amber-500 ml-auto" />}
+                        </div>
+                        <div className="bg-white rounded-xl p-3 space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-subtext font-semibold">Numéro à utiliser</span>
+                            <span className="font-black text-dark">{natcashNumber}</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-subtext font-semibold">Titulaire</span>
+                            <span className="font-black text-dark">Neopay</span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-subtext font-semibold">Montant exact</span>
+                            <span className="font-black text-primary">{(selected.price || 0).toLocaleString()} HTG</span>
+                          </div>
+                        </div>
+                      </div>
+
                       <Button
                         className="w-full h-12 rounded-2xl bg-primary hover:bg-blue-700 text-white font-bold flex items-center gap-2 disabled:opacity-50"
-                        onClick={() => handleWalletPurchase(selected)}
-                        disabled={purchasing || (loggedClient.balance ?? 0) < selected.price}
+                        disabled={!selectedPayMethod}
+                        onClick={() => setPaymentStep('form')}
                       >
-                        {purchasing ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Wallet className="h-4 w-4" />
-                        )}
-                        {(loggedClient.balance ?? 0) < selected.price
-                          ? 'Solde insuffisant — Recharger'
-                          : 'Acheter avec mon Wallet Neopay'}
+                        <CheckCircle2 className="h-4 w-4" />
+                        J'ai effectué le paiement
                       </Button>
-                    )
-                  ) : (
-                    <Button
-                      className="w-full h-12 rounded-2xl bg-primary hover:bg-blue-700 text-white font-bold flex items-center gap-2"
-                      onClick={() => { setSelected(null); onOpenWallet(); }}
-                    >
-                      <Lock className="h-4 w-4" />
-                      Connectez-vous pour acheter
-                    </Button>
+                    </div>
                   )}
 
-                  {loggedClient && !isOwned(selected) && (loggedClient.balance ?? 0) < selected.price && selected.price > 0 && (
-                    <button
-                      onClick={() => { setSelected(null); onOpenWallet(); }}
-                      className="w-full mt-2 text-xs text-primary font-semibold hover:underline flex items-center justify-center gap-1"
-                    >
-                      <TrendingUp className="h-3 w-3" /> Recharger mon wallet
-                    </button>
+                  {/* STEP: CONFIRMATION FORM */}
+                  {paymentStep === 'form' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <button onClick={() => setPaymentStep('external-method')} className="text-gray-400 hover:text-gray-600 transition-colors">
+                          <ChevronRight className="h-4 w-4 rotate-180" />
+                        </button>
+                        <h4 className="font-black text-dark text-sm">Formulaire de confirmation</h4>
+                      </div>
+
+                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700 space-y-1">
+                        <p><strong>Cours :</strong> {selected.title}</p>
+                        <p><strong>Méthode :</strong> {selectedPayMethod === 'moncash' ? 'MonCash' : 'NatCash'}</p>
+                        <p><strong>Montant :</strong> {(selected.price || 0).toLocaleString()} HTG</p>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Votre nom</label>
+                          <input
+                            type="text"
+                            value={payFormData.name}
+                            onChange={e => setPayFormData(p => ({ ...p, name: e.target.value }))}
+                            placeholder="Nom complet"
+                            className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Email</label>
+                          <input
+                            type="email"
+                            value={payFormData.email}
+                            onChange={e => setPayFormData(p => ({ ...p, email: e.target.value }))}
+                            placeholder="votre@email.com"
+                            className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Code de transaction *</label>
+                          <input
+                            type="text"
+                            value={payFormData.transactionCode}
+                            onChange={e => setPayFormData(p => ({ ...p, transactionCode: e.target.value }))}
+                            placeholder="Ex: TX-1234567890"
+                            className="w-full h-10 px-3 rounded-xl border border-gray-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                          />
+                          <p className="text-[10px] text-gray-400 mt-1">Copiez le code de confirmation reçu lors du paiement.</p>
+                        </div>
+                      </div>
+
+                      <Button
+                        className="w-full h-12 rounded-2xl bg-primary hover:bg-blue-700 text-white font-bold flex items-center gap-2"
+                        onClick={handleExternalPaymentSubmit}
+                        disabled={submittingPayment}
+                      >
+                        {submittingPayment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        Envoyer ma demande
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* STEP: DONE / PENDING */}
+                  {paymentStep === 'done' && (
+                    <div className="space-y-4 text-center">
+                      <div className="h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
+                        <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                      </div>
+                      <div>
+                        <p className="font-black text-dark text-lg">Demande envoyée !</p>
+                        <p className="text-sm text-subtext mt-2">
+                          👉 Votre accès sera activé après vérification du paiement<br />
+                          <strong>(5 à 30 minutes)</strong>
+                        </p>
+                      </div>
+                      <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-700 flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        Un message WhatsApp s'est ouvert automatiquement. Si ce n'est pas le cas, contactez-nous directement.
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="w-full h-11 rounded-xl border-gray-200 text-gray-700 font-semibold"
+                        onClick={closeDetail}
+                      >
+                        Fermer
+                      </Button>
+                    </div>
+                  )}
+
+                  {paymentStep === 'detail' && (
+                    <p className="text-center text-[10px] text-subtext/60 mt-3">
+                      🟢 Paiement Wallet = Accès immédiat · 🟡 MonCash/NatCash = Vérification admin
+                    </p>
                   )}
                 </div>
-
-                <p className="text-center text-[10px] text-subtext/60">
-                  Paiement sécurisé via votre Wallet Neopay · Accès immédiat après achat
-                </p>
               </div>
             </DialogContent>
           </Dialog>

@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 export default function App() {
   const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent' | 'formations'>('home');
   const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent' | 'formations')[]>(['home']);
+  const [formationsTab, setFormationsTab] = useState<'all' | 'my'>('all');
   const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'admin' | 'agent' | null>(null);
   const { loading } = useAuth();
   const { settings } = useSettings();
@@ -202,6 +203,8 @@ export default function App() {
             handleAdminLogin(admin);
             handleViewChange('admin');
           }}
+          formationsTab={formationsTab}
+          onFormationsTabChange={setFormationsTab}
         />
 
         <AnimatePresence>
@@ -311,6 +314,8 @@ export default function App() {
             <FormationsView
               loggedClient={loggedClient}
               onOpenWallet={() => setShowClientDashboard(true)}
+              activeTab={formationsTab}
+              onTabChange={setFormationsTab}
             />
           )}
 

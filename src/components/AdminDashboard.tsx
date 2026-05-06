@@ -1027,6 +1027,57 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     order: 0
   });
   
+  const [formationPaymentRequests, setFormationPaymentRequests] = useState<any[]>([]);
+  const [loadingPaymentRequests, setLoadingPaymentRequests] = useState(false);
+  const [processingPaymentId, setProcessingPaymentId] = useState<string | null>(null);
+
+  const fetchFormationPaymentRequests = async () => {
+    setLoadingPaymentRequests(true);
+    try {
+      const res = await fetch('/api/admin/formations/payment-requests', {
+        headers: { 'x-admin-secret': 'neopay-admin-2024' },
+      });
+      const json = await res.json();
+      setFormationPaymentRequests(json.requests || []);
+    } catch { } finally {
+      setLoadingPaymentRequests(false);
+    }
+  };
+
+  useEffect(() => { fetchFormationPaymentRequests(); }, []);
+
+  const handleApprovePaymentRequest = async (id: string) => {
+    setProcessingPaymentId(id);
+    try {
+      const res = await fetch(`/api/admin/formations/payment-requests/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'neopay-admin-2024' },
+        body: JSON.stringify({ action: 'approve' }),
+      });
+      if (!res.ok) throw new Error('Erreur');
+      toast.success('Accès au cours activé !');
+      fetchFormationPaymentRequests();
+    } catch { toast.error('Erreur lors de l\'approbation.'); } finally {
+      setProcessingPaymentId(null);
+    }
+  };
+
+  const handleRejectPaymentRequest = async (id: string) => {
+    setProcessingPaymentId(id);
+    try {
+      const res = await fetch(`/api/admin/formations/payment-requests/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'neopay-admin-2024' },
+        body: JSON.stringify({ action: 'reject' }),
+      });
+      if (!res.ok) throw new Error('Erreur');
+      toast.success('Demande rejetée.');
+      fetchFormationPaymentRequests();
+    } catch { toast.error('Erreur lors du rejet.'); } finally {
+      setProcessingPaymentId(null);
+    }
+  };
+
   const [isFormationDialogOpen, setIsFormationDialogOpen] = useState(false);
   const [editingFormation, setEditingFormation] = useState<Formation | null>(null);
   const [isFormationDeleteDialogOpen, setIsFormationDeleteDialogOpen] = useState(false);
@@ -1809,6 +1860,7 @@ const AffiliateEditForm = ({
         { value: 'clients', label: 'Base Clients', icon: Smartphone, permission: 'affiliates' },
         { value: 'products', label: 'Catalogue', icon: LayoutGrid, permission: 'products' },
         { value: 'formations', label: 'Formations', icon: LucideIcons.GraduationCap, permission: 'products' },
+        { value: 'formation_payments', label: 'Paiements Cours', icon: LucideIcons.CreditCard, permission: 'products' },
       ]
     },
     {
@@ -3867,6 +3919,115 @@ const AffiliateEditForm = ({
                           </TableCell>
                         </TableRow>
                       )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="formation_payments" className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-dark">Gestion des Paiements Formations</h2>
+              <p className="text-sm text-subtext mt-1">Approuvez ou rejetez les demandes de paiement externes (MonCash / NatCash)</p>
+            </div>
+            <Button onClick={fetchFormationPaymentRequests} variant="outline" className="flex items-center gap-2 text-sm">
+              <LucideIcons.RefreshCw className="h-4 w-4" /> Actualiser
+            </Button>
+          </div>
+
+          <Card className="shadow-sm border-gray-200">
+            <CardContent className="p-0">
+              {loadingPaymentRequests ? (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                  <p>Chargement des demandes...</p>
+                </div>
+              ) : formationPaymentRequests.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                  <LucideIcons.CreditCard className="h-12 w-12 text-gray-200 mb-3" />
+                  <p className="font-semibold">Aucune demande de paiement en cours.</p>
+                  <p className="text-xs mt-1">Les demandes MonCash / NatCash apparaîtront ici.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50/50">
+                        <TableHead>Utilisateur</TableHead>
+                        <TableHead>Cours</TableHead>
+                        <TableHead>Montant</TableHead>
+                        <TableHead>Méthode</TableHead>
+                        <TableHead>Code transaction</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Statut</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {formationPaymentRequests.map((req: any) => (
+                        <TableRow key={req.id} className="hover:bg-gray-50/50 transition-colors">
+                          <TableCell>
+                            <div>
+                              <p className="font-semibold text-sm">{req.userName}</p>
+                              {req.userEmail && <p className="text-xs text-gray-400">{req.userEmail}</p>}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <p className="text-sm font-medium text-dark max-w-[180px] truncate">{req.formationTitle}</p>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-primary border-primary/20 bg-blue-50/50">
+                              {(req.amount || 0).toLocaleString()} HTG
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={req.method === 'MonCash' ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-amber-700 bg-amber-50 border-amber-200'}>
+                              {req.method}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <code className="text-xs bg-gray-100 px-2 py-0.5 rounded font-mono">{req.transactionCode}</code>
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-400">
+                            {req.createdAt?.seconds ? new Date(req.createdAt.seconds * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={
+                              req.status === 'pending' ? 'text-amber-700 bg-amber-50 border-amber-200' :
+                              req.status === 'approved' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' :
+                              'text-red-700 bg-red-50 border-red-200'
+                            }>
+                              {req.status === 'pending' ? 'En attente' : req.status === 'approved' ? 'Approuvé' : 'Rejeté'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {req.status === 'pending' && (
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  size="sm"
+                                  className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3"
+                                  disabled={processingPaymentId === req.id}
+                                  onClick={() => handleApprovePaymentRequest(req.id)}
+                                >
+                                  {processingPaymentId === req.id ? <Loader2 className="h-3 w-3 animate-spin" /> : '✅ Approuver'}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 text-red-500 hover:bg-red-50 hover:text-red-600 text-xs px-3"
+                                  disabled={processingPaymentId === req.id}
+                                  onClick={() => handleRejectPaymentRequest(req.id)}
+                                >
+                                  {processingPaymentId === req.id ? <Loader2 className="h-3 w-3 animate-spin" /> : '❌ Rejeter'}
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
                     </TableBody>
                   </Table>
                 </div>

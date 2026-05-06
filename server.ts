@@ -1125,6 +1125,101 @@ async function startServer() {
     }
   });
 
+  // ── Formation External Payment Requests ─────────────────────────────────────
+
+  // POST /api/formations/payment-request — create external payment request
+  app.post('/api/formations/payment-request', async (req, res) => {
+    try {
+      const { userId, userEmail, userName, formationId, formationTitle, amount, method, transactionCode } = req.body;
+      if (!userId || !formationId || !method || !transactionCode) {
+        return res.status(400).json({ error: 'Paramètres manquants.' });
+      }
+      const existing = await adminDb.collection('formation_purchases')
+        .where('userId', '==', userId)
+        .where('formationId', '==', formationId)
+        .where('status', '==', 'active')
+        .get();
+      if (!existing.empty) return res.json({ success: true, alreadyOwned: true });
+
+      const batch = adminDb.batch();
+      const reqRef = adminDb.collection('formation_payment_requests').doc();
+      batch.set(reqRef, {
+        userId, userEmail: userEmail || '', userName: userName || '',
+        formationId, formationTitle: formationTitle || '',
+        amount: amount || 0, method, transactionCode,
+        status: 'pending',
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      const notifRef = adminDb.collection('admin_notifications').doc();
+      batch.set(notifRef, {
+        type: 'formation_payment_request',
+        clientId: userId, clientName: userName || '',
+        formationId, formationTitle: formationTitle || '',
+        amount: amount || 0, method, transactionCode,
+        status: 'pending', read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      await batch.commit();
+      res.json({ success: true, id: reqRef.id });
+    } catch (e: any) {
+      console.error('[formation payment-request POST]', e);
+      res.status(500).json({ error: e.message || 'Erreur.' });
+    }
+  });
+
+  // GET /api/admin/formations/payment-requests — list all (admin)
+  app.get('/api/admin/formations/payment-requests', async (_req, res) => {
+    try {
+      const snap = await adminDb.collection('formation_payment_requests')
+        .orderBy('createdAt', 'desc').get();
+      res.json({ requests: snap.docs.map(serializeDoc) });
+    } catch (e: any) {
+      console.error('[formation payment-requests GET]', e);
+      res.status(500).json({ error: e.message || 'Erreur.' });
+    }
+  });
+
+  // PATCH /api/admin/formations/payment-requests/:id — approve or reject
+  app.patch('/api/admin/formations/payment-requests/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { action } = req.body;
+      const reqSnap = await adminDb.collection('formation_payment_requests').doc(id).get();
+      if (!reqSnap.exists) return res.status(404).json({ error: 'Demande introuvable.' });
+      const data = reqSnap.data()!;
+      const batch = adminDb.batch();
+      if (action === 'approve') {
+        batch.update(adminDb.collection('formation_payment_requests').doc(id), {
+          status: 'approved', updatedAt: FieldValue.serverTimestamp()
+        });
+        const purchaseRef = adminDb.collection('formation_purchases').doc();
+        batch.set(purchaseRef, {
+          userId: data.userId, userEmail: data.userEmail || '', userName: data.userName || '',
+          formationId: data.formationId, formationTitle: data.formationTitle || '',
+          amount: data.amount || 0, method: data.method || '',
+          status: 'active',
+          purchasedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        if (data.formationId) {
+          batch.update(adminDb.collection('formations').doc(data.formationId), {
+            studentsCount: FieldValue.increment(1),
+          });
+        }
+      } else if (action === 'reject') {
+        batch.update(adminDb.collection('formation_payment_requests').doc(id), {
+          status: 'rejected', updatedAt: FieldValue.serverTimestamp()
+        });
+      }
+      await batch.commit();
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error('[formation payment-requests PATCH]', e);
+      res.status(500).json({ error: e.message || 'Erreur.' });
+    }
+  });
+
   // ── Catch-all: any unmatched /api/* route returns JSON (never HTML) ──────────
   app.all('/api/*', (_req, res) => {
     res.status(404).json({ error: 'Route API introuvable.' });

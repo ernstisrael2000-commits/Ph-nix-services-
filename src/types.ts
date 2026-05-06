@@ -379,6 +379,21 @@ export interface FormationUser {
   createdAt: any;
 }
 
+export interface FormationPaymentRequest {
+  id?: string;
+  userId: string;
+  userEmail?: string;
+  userName: string;
+  formationId: string;
+  formationTitle: string;
+  amount: number;
+  method: 'MonCash' | 'NatCash';
+  transactionCode: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: any;
+  updatedAt?: any;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ClientTransactionType = 'deposit' | 'withdrawal' | 'purchase' | 'transfer_received' | 'refund';

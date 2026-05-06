@@ -21,7 +21,7 @@ import {
 import { Badge } from './ui/badge';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
-import { Loader as Loader2, ShieldCheck, Zap, Star, Headphones, QrCode, Wallet, Smartphone, Landmark, X, ArrowDownToLine, ArrowUpFromLine, TrendingUp, Copy, CircleCheck as CheckCircle, ChevronRight, Clock, DollarSign } from 'lucide-react';
+import { Loader as Loader2, ShieldCheck, Zap, Star, Headphones, QrCode, Wallet, Smartphone, Landmark, X, ArrowDownToLine, ArrowUpFromLine, TrendingUp, Copy, CircleCheck as CheckCircle, ChevronRight, Clock, DollarSign, GraduationCap, BookOpen, Play } from 'lucide-react';
 import { submitClientPurchase, useClientData, useClientTransactions, submitClientDeposit, submitClientWithdrawal, useClientPendingPurchase } from '../services/clientService';
 import { Client } from '../types';
 import { toast } from 'sonner';
@@ -171,6 +171,14 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const [copiedWalletId, setCopiedWalletId] = useState(false);
   const [walletDepositCaptcha, setWalletDepositCaptcha] = useState<string | null>(null);
   const [walletWithdrawCaptcha, setWalletWithdrawCaptcha] = useState<string | null>(null);
+  const [previewFormations, setPreviewFormations] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/formations')
+      .then(r => r.json())
+      .then(data => setPreviewFormations((data.formations || []).slice(0, 3)))
+      .catch(() => {});
+  }, []);
   const walletDepositCaptchaRef = useRef<ReCAPTCHA>(null);
   const walletWithdrawCaptchaRef = useRef<ReCAPTCHA>(null);
 
@@ -773,6 +781,79 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
           </Button>
         </div>
       </section>
+
+      {/* ── FORMATIONS PREVIEW SECTION ── */}
+      {previewFormations.length > 0 && (
+        <section className="py-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-black text-dark">Nos Formations</h2>
+              <p className="text-sm text-subtext mt-1">Développez vos compétences à votre rythme</p>
+            </div>
+            <button
+              onClick={() => onViewChange('formations')}
+              className="flex items-center gap-1.5 text-sm font-bold text-primary hover:underline"
+            >
+              Voir tous les cours <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {previewFormations.map((f: any, i: number) => (
+              <motion.div
+                key={f.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.07 }}
+                onClick={() => onViewChange('formations')}
+                className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden group"
+              >
+                <div className="relative h-36 overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-700 shrink-0">
+                  {f.coverImage ? (
+                    <img src={f.coverImage} alt={f.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <GraduationCap className="h-14 w-14 text-white/30" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                  <div className="absolute bottom-2 left-3">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white backdrop-blur-sm">
+                      {f.level === 'debutant' ? 'Débutant' : f.level === 'intermediaire' ? 'Intermédiaire' : 'Avancé'}
+                    </span>
+                  </div>
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="bg-white/90 rounded-full p-3 shadow-lg">
+                      <Play className="h-5 w-5 text-primary fill-primary" />
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4">
+                  <h3 className="font-black text-dark text-sm line-clamp-2 mb-1">{f.title}</h3>
+                  <div className="flex items-center justify-between mt-2">
+                    <div className="flex items-center gap-1 text-xs text-subtext">
+                      <BookOpen className="h-3 w-3" />
+                      {(f.modules || []).length} modules
+                    </div>
+                    <span className="text-sm font-black text-primary">
+                      {f.price === 0 ? 'Gratuit' : `${(f.price || 0).toLocaleString()} HTG`}
+                    </span>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+          <div className="text-center mt-6">
+            <button
+              onClick={() => onViewChange('formations')}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-primary text-white font-bold text-sm hover:bg-blue-700 transition-colors shadow-lg shadow-primary/20"
+            >
+              <GraduationCap className="h-4 w-4" />
+              Voir tous les cours
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* Games Dialog */}
       <Dialog open={isGamesDialogOpen} onOpenChange={setIsGamesDialogOpen}>

@@ -1,4 +1,4 @@
-import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users, Truck, ExternalLink, Menu, X, Wallet, ChevronRight, GraduationCap } from 'lucide-react';
+import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users, Truck, ExternalLink, Menu, X, Wallet, ChevronRight, GraduationCap, Settings, BookOpen, LayoutGrid } from 'lucide-react';
 import { Button } from './ui/button';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -19,6 +19,8 @@ interface NavbarProps {
   onClientLogout: () => void;
   onOpenWallet: () => void;
   onAdminLogin: (admin: AdminAccount) => void;
+  formationsTab?: 'all' | 'my';
+  onFormationsTabChange?: (tab: 'all' | 'my') => void;
 }
 
 const NAV_ITEMS = [
@@ -29,7 +31,7 @@ const NAV_ITEMS = [
   { key: 'affiliate', icon: Users, label: 'Affiliés' },
 ];
 
-export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet, onAdminLogin }: NavbarProps) {
+export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet, onAdminLogin, formationsTab, onFormationsTabChange }: NavbarProps) {
   const { user, isAdmin } = useAuth();
   const { settings } = useSettings();
   const { total: pendingAffiliateCount } = usePendingCounts(isAdmin);
@@ -39,6 +41,8 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
   const [showLoginErrorDialog, setShowLoginErrorDialog] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [formationsDropdownOpen, setFormationsDropdownOpen] = useState(false);
+  const formationsDropdownRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const isLoggedIn = !!(user || loggedClient);
@@ -63,10 +67,13 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
       }
+      if (formationsDropdownRef.current && !formationsDropdownRef.current.contains(e.target as Node)) {
+        setFormationsDropdownOpen(false);
+      }
     };
-    if (menuOpen) document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [menuOpen]);
+  }, [menuOpen, formationsDropdownOpen]);
 
   useEffect(() => {
     if (menuOpen) document.body.style.overflow = 'hidden';
@@ -127,6 +134,39 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                 </button>
               )}
             </div>
+
+            {/* Formations sub-menu (desktop) */}
+            {currentView === 'formations' && onFormationsTabChange && (
+              <div className="relative hidden md:block" ref={formationsDropdownRef}>
+                <button
+                  onClick={() => setFormationsDropdownOpen(v => !v)}
+                  className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 group ${formationsDropdownOpen ? 'bg-primary/10' : 'hover:bg-gray-100'}`}
+                >
+                  <Settings className={`h-[18px] w-[18px] transition-colors ${formationsDropdownOpen ? 'text-primary' : 'text-gray-400 group-hover:text-primary'}`} />
+                  <span className={`text-[9px] font-bold uppercase tracking-wide transition-colors ${formationsDropdownOpen ? 'text-primary' : 'text-gray-400/70 group-hover:text-primary/80'}`}>Options</span>
+                </button>
+                {formationsDropdownOpen && (
+                  <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-1.5 z-50">
+                    <button
+                      onClick={() => { onFormationsTabChange('all'); setFormationsDropdownOpen(false); }}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${formationsTab === 'all' ? 'text-primary bg-primary/5 font-bold' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      <LayoutGrid className="h-4 w-4 shrink-0" />
+                      Tous les cours
+                      {formationsTab === 'all' && <ChevronRight className="h-3.5 w-3.5 ml-auto text-primary" />}
+                    </button>
+                    <button
+                      onClick={() => { onFormationsTabChange('my'); setFormationsDropdownOpen(false); }}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${formationsTab === 'my' ? 'text-primary bg-primary/5 font-bold' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      <BookOpen className="h-4 w-4 shrink-0" />
+                      Mes cours
+                      {formationsTab === 'my' && <ChevronRight className="h-3.5 w-3.5 ml-auto text-primary" />}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Right side */}
             <div className="flex items-center gap-2 shrink-0">
