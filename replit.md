@@ -29,6 +29,7 @@ A logistics/fintech web app with role-based dashboards for clients, affiliates, 
 - `src/api/router.ts` — **Single source of truth for ALL API routes** (50+ routes, Firebase Admin init, all helpers)
 - `server.ts` — Express HTTP server: imports `src/api/router.ts` + Vite dev middleware (slim, ~80 lines)
 - `api/index.ts` — Vercel serverless adapter: imports same `src/api/router.ts` (slim, ~25 lines)
+- `api/formations.ts` — **Standalone Vercel function** for `GET /api/formations`: zero external deps, uses built-in `crypto` + Firestore REST API with JWT auth (bypasses ESM/CJS crash)
 - `src/App.tsx` — Role-based routing state machine (home/admin/affiliate/agent/client)
 - `src/lib/firebase.ts` — Firebase client SDK init
 - `src/hooks/useAuth.ts` — Firebase Auth role detection
@@ -44,6 +45,7 @@ A logistics/fintech web app with role-based dashboards for clients, affiliates, 
 - **Custom Firestore database**: Uses a named Firestore database (not `(default)`) — ID is `ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2`.
 - **Role auth is custom**: No Firebase Auth sign-in for most roles. Admin/affiliate/agent log in with credentials checked against Firestore collections. Only clients may use Firebase Auth.
 - **Relative URLs only**: The frontend exclusively uses relative `/api/*` URLs — no hardcoded localhost, Replit, or Vercel URLs anywhere.
+- **Vercel formations workaround**: `api/formations.ts` is a zero-dependency standalone function that replaces the firebase-admin path for the public formations endpoint on Vercel. Routes via `vercel.json` before the catch-all `/api/(.*)` rewrite. Requires `FIREBASE_SERVICE_ACCOUNT` in Vercel env vars.
 - **Graceful degradation**: SMTP and reCAPTCHA are optional — server warns and skips when keys are absent.
 
 ## Product
