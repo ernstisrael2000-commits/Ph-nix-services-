@@ -1,0 +1,102 @@
+Créer un endroit central dans ton projet pour gérer les vidéos.
+👉 Exemple logique :
+Chaque cours contient :
+modules
+leçons
+lien vidéo pour chaque leçon
+🎯 Organisation :
+Cours → Modules → Leçons → Lien vidéo
+💡 Règle :
+👉 Chaque leçon doit avoir un champ :
+video_url
+✅ Résultat :
+Tu peux changer une vidéo juste en remplaçant le lien, sans toucher au reste du site.
+🎥 2. AFFICHAGE DE LA VIDÉO
+🎯 Instruction :
+Quand l’utilisateur clique sur une leçon :
+Charger la vidéo liée à cette leçon
+Afficher la vidéo dans un lecteur intégré sur la page
+🎯 Règles :
+La vidéo doit apparaître dans la page (pas redirection)
+Le lecteur doit être :
+au centre
+responsive (mobile + desktop)
+✅ Résultat :
+Lecture directe sur ton site
+🔒 3. SYSTÈME DE VERROUILLAGE
+🎯 Instruction :
+Mettre en place une logique simple :
+Par défaut :
+Seules les premières leçons sont accessibles
+Condition :
+Une leçon est accessible seulement si la précédente est terminée
+Si bloqué :
+afficher 🔒
+empêcher le clic
+✅ Résultat :
+Progression obligatoire étape par étape
+📊 4. SYSTÈME DE PROGRESSION
+🎯 Instruction :
+Pour chaque utilisateur :
+Enregistrer :
+les leçons terminées
+Calculer :
+progression totale du cours
+Afficher :
+barre de progression
+pourcentage
+🎯 Mise à jour :
+Automatique quand une vidéo est terminée
+⏯️ 5. LOGIQUE “VIDÉO TERMINÉE”
+🎯 Instruction :
+Quand une vidéo atteint la fin :
+Marquer la leçon comme “complétée”
+Débloquer la suivante
+Mettre à jour la progression
+🎯 Option :
+Bouton “Marquer comme terminé” (sécurité si bug)
+🔁 6. REPRISE AUTOMATIQUE
+🎯 Instruction :
+Sauvegarder :
+dernière leçon ouverte
+position dans la vidéo
+Quand l’utilisateur revient :
+recharger cette leçon
+reprendre à la bonne seconde
+🧠 7. INTERFACE UTILISATEUR
+🎯 Instruction :
+Créer une page cours avec :
+Zone principale :
+Lecteur vidéo
+Sidebar :
+Liste des modules
+Liste des leçons
+Indicateurs :
+✔ terminé
+🔒 verrouillé
+▶ en cours
+En haut :
+barre de progression
+🔐 8. CONTRÔLE D’ACCÈS
+🎯 Instruction :
+Avant d’afficher une vidéo :
+Vérifier :
+utilisateur connecté
+accès au cours (achat ou autorisation)
+Si non :
+bloquer accès
+rediriger vers paiement ou login
+🚀 9. FLOW FINAL
+🎯 Parcours utilisateur :
+Clique sur “Commencer”
+Arrive sur page cours
+Clique sur une leçon
+Vidéo se lance sur le site
+Termine la vidéo
+Progression mise à jour
+Leçon suivante débloquée
+💥 POINT CLÉ (TRÈS IMPORTANT)
+👉 Tout repose sur ça :
+Un champ “video_url” par leçon
+Une liste de leçons complétées par utilisateur
+Une logique de verrouillage simple

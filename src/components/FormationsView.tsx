@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronUp, Video, Download, ExternalLink,
   Smartphone, CreditCard, Send, AlertCircle, LayoutGrid
 } from 'lucide-react';
+import CoursePlayer from './CoursePlayer';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogClose } from './ui/dialog';
@@ -142,6 +143,8 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
   const [filterLevel, setFilterLevel] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const [playerFormation, setPlayerFormation] = useState<Formation | null>(null);
 
   const [paymentStep, setPaymentStep] = useState<PaymentStep>('detail');
   const [selectedPayMethod, setSelectedPayMethod] = useState<'moncash' | 'natcash' | null>(null);
@@ -300,6 +303,16 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
           <p className="text-subtext font-medium">Chargement des formations...</p>
         </div>
       </div>
+    );
+  }
+
+  if (playerFormation && loggedClient) {
+    return (
+      <CoursePlayer
+        formation={playerFormation}
+        loggedClient={loggedClient}
+        onBack={() => setPlayerFormation(null)}
+      />
     );
   }
 
@@ -588,23 +601,12 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
                             {(formation.modules || []).length} modules
                           </div>
                           <div className="mt-auto flex gap-2">
-                            {firstVideoUrl ? (
-                              <a
-                                href={firstVideoUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex-1 h-10 rounded-xl bg-primary hover:bg-blue-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors"
-                              >
-                                <Play className="h-4 w-4 fill-white" /> Commencer
-                              </a>
-                            ) : (
-                              <button
-                                onClick={() => openDetail(formation)}
-                                className="flex-1 h-10 rounded-xl bg-primary hover:bg-blue-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors"
-                              >
-                                <Play className="h-4 w-4 fill-white" /> Commencer
-                              </button>
-                            )}
+                            <button
+                              onClick={() => setPlayerFormation(formation)}
+                              className="flex-1 h-10 rounded-xl bg-primary hover:bg-blue-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors"
+                            >
+                              <Play className="h-4 w-4 fill-white" /> Commencer
+                            </button>
                             <button
                               onClick={() => openDetail(formation)}
                               className="h-10 px-3 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 text-sm transition-colors"
@@ -780,10 +782,18 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
                       </div>
 
                       {isOwned(selected) ? (
-                        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-center">
-                          <CheckCircle2 className="h-6 w-6 text-emerald-500 mx-auto mb-2" />
-                          <p className="text-sm font-black text-emerald-700">👉 Achat réussi, vous pouvez commencer</p>
-                          <p className="text-xs text-emerald-600 mt-1">Accédez aux vidéos dans la liste des modules ci-dessus.</p>
+                        <div className="space-y-3">
+                          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex items-center gap-3">
+                            <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+                            <p className="text-sm font-bold text-emerald-700">Accès activé — Prêt à commencer !</p>
+                          </div>
+                          <Button
+                            className="w-full h-12 rounded-2xl bg-primary hover:bg-blue-700 text-white font-bold flex items-center gap-2"
+                            onClick={() => { closeDetail(); setPlayerFormation(selected); }}
+                          >
+                            <Play className="h-4 w-4 fill-white" />
+                            Commencer le cours
+                          </Button>
                         </div>
                       ) : loggedClient ? (
                         <div className="space-y-3">

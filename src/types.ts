@@ -379,6 +379,16 @@ export interface FormationUser {
   createdAt: any;
 }
 
+export interface FormationProgress {
+  id?: string;
+  userId: string;
+  formationId: string;
+  completedModuleIds: string[];
+  currentModuleId?: string;
+  lastPositionSeconds?: number;
+  updatedAt?: any;
+}
+
 export interface FormationPaymentRequest {
   id?: string;
   userId: string;

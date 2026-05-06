@@ -1125,6 +1125,82 @@ async function startServer() {
     }
   });
 
+  // ── Formation Progress Tracking ──────────────────────────────────────────────
+
+  // GET /api/formations/progress/:userId/:formationId
+  app.get('/api/formations/progress/:userId/:formationId', async (req, res) => {
+    try {
+      const { userId, formationId } = req.params;
+      const docId = `${userId}_${formationId}`;
+      const snap = await adminDb.collection('formation_progress').doc(docId).get();
+      if (!snap.exists) return res.json({ progress: null });
+      res.json({ progress: { id: snap.id, ...snap.data() } });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/formations/progress/complete — mark a module as completed
+  app.post('/api/formations/progress/complete', async (req, res) => {
+    try {
+      const { userId, formationId, moduleId } = req.body;
+      if (!userId || !formationId || !moduleId) return res.status(400).json({ error: 'Paramètres manquants.' });
+      const docId = `${userId}_${formationId}`;
+      const ref = adminDb.collection('formation_progress').doc(docId);
+      const snap = await ref.get();
+      if (snap.exists) {
+        const existing = snap.data()!.completedModuleIds || [];
+        if (!existing.includes(moduleId)) {
+          await ref.update({
+            completedModuleIds: FieldValue.arrayUnion(moduleId),
+            currentModuleId: moduleId,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+      } else {
+        await ref.set({
+          userId, formationId,
+          completedModuleIds: [moduleId],
+          currentModuleId: moduleId,
+          lastPositionSeconds: 0,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // POST /api/formations/progress/position — save video resume position
+  app.post('/api/formations/progress/position', async (req, res) => {
+    try {
+      const { userId, formationId, moduleId, positionSeconds } = req.body;
+      if (!userId || !formationId) return res.status(400).json({ error: 'Paramètres manquants.' });
+      const docId = `${userId}_${formationId}`;
+      const ref = adminDb.collection('formation_progress').doc(docId);
+      const snap = await ref.get();
+      if (snap.exists) {
+        await ref.update({
+          currentModuleId: moduleId,
+          lastPositionSeconds: positionSeconds || 0,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } else {
+        await ref.set({
+          userId, formationId,
+          completedModuleIds: [],
+          currentModuleId: moduleId,
+          lastPositionSeconds: positionSeconds || 0,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ── Formation External Payment Requests ─────────────────────────────────────
 
   // POST /api/formations/payment-request — create external payment request
