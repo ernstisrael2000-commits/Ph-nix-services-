@@ -5,8 +5,9 @@ import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { loginAgent } from '../services/agentService';
 import { loginWithGoogle } from '../services/authService';
+import { isInIframe } from '../lib/google-auth';
 import { toast } from 'sonner';
-import { Loader2, UserCheck, ShieldCheck } from 'lucide-react';
+import { Loader2, UserCheck, ShieldCheck, ExternalLink } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Agent } from '../types';
 
@@ -49,14 +50,14 @@ export default function AgentLogin({ onLogin }: AgentLoginProps) {
     try {
       const result = await loginWithGoogle('agent');
       if (result.error) {
-        toast.error(result.error);
+        if (result.error) toast.error(result.error);
       } else if (result.agent) {
         toast.success(`Bienvenue, Agent ${result.agent.name} !`);
         onLogin(result.agent);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error("Erreur connexion Google.");
+      toast.error(error?.message || "Erreur connexion Google.");
     } finally {
       setLoading(false);
     }
@@ -154,6 +155,17 @@ export default function AgentLogin({ onLogin }: AgentLoginProps) {
                 {loading ? <Loader2 className="h-5 w-5 animate-spin mx-auto text-primary" /> : "Accès via Google"}
               </Button>
             </motion.div>
+            {isInIframe() && (
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 mt-2">
+                <ExternalLink className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-amber-700 leading-relaxed">
+                  Connexion Google indisponible dans cet aperçu.{' '}
+                  <a href={window.location.href} target="_blank" rel="noopener noreferrer" className="font-bold underline">
+                    Ouvrir dans un onglet complet
+                  </a>.
+                </p>
+              </div>
+            )}
           </form>
           <div className="mt-10 pt-8 border-t border-gray-50 text-center">
             <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">

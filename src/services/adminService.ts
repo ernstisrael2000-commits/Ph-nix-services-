@@ -14,8 +14,9 @@ import {
   limit,
   Timestamp
 } from 'firebase/firestore';
-import { signInAnonymously, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { signInAnonymously, signOut } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
+import { signInWithGooglePopup, mapGoogleAuthError } from '../lib/google-auth';
 import { handleFirestoreError } from '../lib/firebase-errors';
 import { AdminAccount, AdminLog } from '../types';
 import { useState, useEffect } from 'react';
@@ -230,10 +231,7 @@ export const checkAdminLogin = async (fullName: string, password: string, loginC
 
 export const loginAdminWithGoogle = async (): Promise<{ success: boolean; admin?: AdminAccount; error?: string }> => {
   try {
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
-
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithGooglePopup();
     const googleEmail = result.user.email?.toLowerCase() || '';
     const googleUid = result.user.uid;
 
@@ -288,13 +286,9 @@ export const loginAdminWithGoogle = async (): Promise<{ success: boolean; admin?
     adminData.uid = googleUid;
     return { success: true, admin: adminData };
   } catch (error: any) {
-    if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') {
-      return { success: false, error: 'Connexion annulée.' };
-    }
-    if (error?.code === 'auth/popup-blocked') {
-      return { success: false, error: 'Popup bloquée par le navigateur. Autorisez les popups pour ce site.' };
-    }
+    const mapped = mapGoogleAuthError(error);
+    if (!mapped) return { success: false, error: '' };
     console.error('Google admin login error:', error);
-    return { success: false, error: "Erreur lors de la connexion Google. Réessayez." };
+    return { success: false, error: mapped };
   }
 };

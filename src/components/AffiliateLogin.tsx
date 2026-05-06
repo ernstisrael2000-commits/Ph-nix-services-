@@ -5,8 +5,9 @@ import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { loginAffiliate, submitAffiliateRequest } from '../services/affiliateService';
 import { loginWithGoogle } from '../services/authService';
+import { isInIframe } from '../lib/google-auth';
 import { toast } from 'sonner';
-import { Loader2, Lock, UserPlus, CheckCircle2 } from 'lucide-react';
+import { Loader2, Lock, UserPlus, CheckCircle2, ExternalLink } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Affiliate } from '../types';
 import { 
@@ -110,14 +111,14 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
     try {
       const result = await loginWithGoogle('affiliate');
       if (result.error) {
-        toast.error(result.error);
+        if (result.error) toast.error(result.error);
       } else if (result.affiliate) {
         toast.success(`Bienvenue, ${result.affiliate.name} !`);
         onLogin(result.affiliate);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error("Erreur connexion Google.");
+      toast.error(error?.message || "Erreur connexion Google.");
     } finally {
       setLoading(false);
     }
@@ -208,6 +209,17 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Se connecter avec Google"}
               </Button>
             </motion.div>
+            {isInIframe() && (
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 mt-2">
+                <ExternalLink className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-amber-700 leading-relaxed">
+                  Connexion Google indisponible dans cet aperçu.{' '}
+                  <a href={window.location.href} target="_blank" rel="noopener noreferrer" className="font-bold underline">
+                    Ouvrir dans un onglet complet
+                  </a>.
+                </p>
+              </div>
+            )}
           </form>
           <p className="mt-6 text-center text-sm text-subtext">
             Identifiants fournis par l'administrateur Neopay.

@@ -6,9 +6,10 @@ import { Label } from './ui/label';
 import {
   UserPlus, LogIn, ShieldCheck, Loader2, Eye, EyeOff,
   ArrowLeft, User, Phone, Mail, Lock, Hash, Wallet,
-  AlertCircle, Users
+  AlertCircle, Users, ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { isInIframe } from '../lib/google-auth';
 import {
   registerClient, loginClient,
   loginClientWithGoogle, registerClientWithGoogle
@@ -59,6 +60,30 @@ const Divider = ({ label = 'ou' }: { label?: string }) => (
     <div className="flex-1 h-px bg-gray-100" />
   </div>
 );
+
+const IframeGoogleWarning = () => {
+  if (!isInIframe()) return null;
+  return (
+    <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
+      <ExternalLink className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+      <div className="min-w-0">
+        <p className="text-xs font-bold text-amber-800 leading-snug">Connexion Google indisponible ici</p>
+        <p className="text-[11px] text-amber-700 leading-relaxed mt-0.5">
+          Votre navigateur bloque la connexion Google dans les aperçus intégrés.{' '}
+          <a
+            href={window.location.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold underline underline-offset-2 hover:text-amber-900"
+          >
+            Ouvrir dans un onglet complet
+          </a>
+          {' '}pour utiliser Google.
+        </p>
+      </div>
+    </div>
+  );
+};
 
 export default function UserAuthModal({
   open, onOpenChange, onClientLogin, onAdminLogin, onAffiliateAccess
@@ -319,6 +344,7 @@ export default function UserAuthModal({
               <div className="space-y-2">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Connexion Administrateur</p>
                 <GoogleBtn onClick={handleGoogleAdminLogin} label="Se connecter en tant qu'administrateur" loading={loading} />
+                <IframeGoogleWarning />
                 {googleError && (
                   <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-100">
                     <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
@@ -360,6 +386,7 @@ export default function UserAuthModal({
             </div>
             <div className="p-6 space-y-4 bg-white">
               <GoogleBtn onClick={handleGoogleClientLogin} label="Se connecter avec Google" loading={loading} />
+              <IframeGoogleWarning />
               <Divider />
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-1.5">
@@ -410,6 +437,7 @@ export default function UserAuthModal({
             </div>
             <div className="p-6 space-y-4 bg-white">
               <GoogleBtn onClick={handleGoogleClientLogin} label="S'inscrire avec Google" loading={loading} />
+              <IframeGoogleWarning />
               <Divider label="ou manuellement" />
               <form onSubmit={handleRegister} className="space-y-3 max-h-[45vh] overflow-y-auto no-scrollbar">
                 <div className="space-y-1.5">

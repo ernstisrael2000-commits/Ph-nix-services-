@@ -1,16 +1,13 @@
 import { 
-  GoogleAuthProvider, 
-  signInWithPopup, 
   onAuthStateChanged,
   User
 } from 'firebase/auth';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
+import { signInWithGooglePopup, mapGoogleAuthError } from '../lib/google-auth';
 import { getAffiliateByEmail } from './affiliateService';
 import { getAgentByEmail } from './agentService';
 import { Affiliate, Agent } from '../types';
-
-export const googleProvider = new GoogleAuthProvider();
 
 export interface SocialLoginResult {
   user: User;
@@ -22,7 +19,7 @@ export interface SocialLoginResult {
 
 export const loginWithGoogle = async (targetType: 'affiliate' | 'agent'): Promise<SocialLoginResult> => {
   try {
-    const result = await signInWithPopup(auth, googleProvider);
+    const result = await signInWithGooglePopup();
     const user = result.user;
     const email = user.email;
 
@@ -36,7 +33,6 @@ export const loginWithGoogle = async (targetType: 'affiliate' | 'agent'): Promis
         return { user, type: 'none', error: "Aucun compte affilié trouvé avec cet email." };
       }
 
-      // Link UID if not already linked or update email if it was only in info
       const updates: any = {
         uid: user.uid,
         email: email,
@@ -52,7 +48,6 @@ export const loginWithGoogle = async (targetType: 'affiliate' | 'agent'): Promis
         return { user, type: 'none', error: "Aucun compte agent trouvé avec cet email." };
       }
 
-      // Link UID
       const updates: any = {
         uid: user.uid,
         email: email,
@@ -64,11 +59,13 @@ export const loginWithGoogle = async (targetType: 'affiliate' | 'agent'): Promis
       return { user, agent: { ...agent, ...updates }, type: 'agent' };
     }
   } catch (error: any) {
+    const mapped = mapGoogleAuthError(error);
+    if (!mapped) return { user: {} as User, type: 'none', error: '' };
     console.error("Google Login Error:", error);
     return { 
       user: {} as User, 
       type: 'none', 
-      error: error.message || "Une erreur est survenue lors de la connexion Google." 
+      error: mapped
     };
   }
 };

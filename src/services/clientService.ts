@@ -11,8 +11,8 @@ import {
   limit,
   onSnapshot
 } from 'firebase/firestore';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
+import { signInWithGooglePopup, mapGoogleAuthError } from '../lib/google-auth';
 import { Client, ClientTransaction, AdminClientNotification } from '../types';
 
 // ─── Deserialize API doc (converts {_seconds} timestamps back to {toDate()}) ──
@@ -85,9 +85,8 @@ export interface GoogleClientLoginResult {
 }
 
 export const loginClientWithGoogle = async (): Promise<GoogleClientLoginResult> => {
-  const provider = new GoogleAuthProvider();
   try {
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithGooglePopup();
     const user = result.user;
     const email = user.email;
 
@@ -122,9 +121,10 @@ export const loginClientWithGoogle = async (): Promise<GoogleClientLoginResult> 
 
     return { client: { id: clientDoc.id, ...clientData, uid: user.uid } };
   } catch (error: any) {
-    if (error.code === 'auth/popup-closed-by-user') return { client: null, error: '' };
+    const mapped = mapGoogleAuthError(error);
+    if (!mapped) return { client: null, error: '' };
     console.error("Google client login error:", error);
-    return { client: null, error: error.message || "Erreur de connexion Google." };
+    return { client: null, error: mapped };
   }
 };
 
