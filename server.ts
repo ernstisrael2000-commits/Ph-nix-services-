@@ -94,6 +94,21 @@ async function startServer() {
     }
   }
 
+  // ── Admin email helper (fire-and-forget) ───────────────────────────────────
+  function sendAdminEmail(subject: string, text: string): void {
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return;
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    });
+    transporter.sendMail({
+      from: `"Neopay System" <${process.env.SMTP_USER}>`,
+      to: process.env.SMTP_USER,
+      subject,
+      text,
+    }).catch((err: any) => console.error('[Email] Erreur envoi:', err.message));
+  }
+
   // ── Registration email notification ────────────────────────────────────────
   app.post("/api/notify-registration", async (req, res) => {
     const { name, email, phone, message, date } = req.body;
@@ -256,6 +271,18 @@ async function startServer() {
         createdAt: FieldValue.serverTimestamp()
       });
 
+      sendAdminEmail(
+        `💰 Nouvelle demande de dépôt — ${clientName}`,
+        `Une nouvelle demande de dépôt a été soumise.\n\n` +
+        `Client : ${clientName}\n` +
+        `Wallet ID : ${clientWalletId || 'N/A'}\n` +
+        `Montant : ${amount.toLocaleString()} HTG\n` +
+        `Méthode : ${method}\n` +
+        (txId ? `Référence transaction : ${txId}\n` : '') +
+        (message ? `Message : ${message}\n` : '') +
+        `\nConnectez-vous au tableau de bord administrateur pour approuver ou rejeter cette demande.`
+      );
+
       res.json({ success: true, transactionId: txRef.id });
     } catch (e: any) {
       console.error('[deposit]', e);
@@ -326,6 +353,19 @@ async function startServer() {
       });
 
       await batch.commit();
+
+      sendAdminEmail(
+        `🏧 Nouvelle demande de retrait — ${clientName}`,
+        `Une nouvelle demande de retrait a été soumise.\n\n` +
+        `Client : ${clientName}\n` +
+        `Téléphone : ${clientPhone || 'N/A'}\n` +
+        `Wallet ID : ${clientWalletId || 'N/A'}\n` +
+        `Montant : ${amount.toLocaleString()} HTG\n` +
+        `Méthode : ${method}\n` +
+        `Compte destinataire : ${accountNumber}\n` +
+        (message ? `Message : ${message}\n` : '') +
+        `\n⚠️ Le solde a déjà été débité. Connectez-vous au tableau de bord administrateur pour traiter ce retrait.`
+      );
 
       res.json({ success: true, transactionId: txRef.id });
     } catch (e: any) {
