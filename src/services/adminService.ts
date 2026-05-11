@@ -1,28 +1,39 @@
 import { 
   collection, 
   query, 
-  where, 
   onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc,
-  setDoc,
   doc, 
   serverTimestamp,
-  getDocs,
+  setDoc,
   orderBy,
   limit,
-  Timestamp
 } from 'firebase/firestore';
-import { signInAnonymously, signOut } from 'firebase/auth';
+import { signInAnonymously } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { signInWithGooglePopup, mapGoogleAuthError } from '../lib/google-auth';
-import { handleFirestoreError } from '../lib/firebase-errors';
 import { AdminAccount, AdminLog } from '../types';
 import { useState, useEffect } from 'react';
 
 const ADMINS_COLLECTION = 'admin_accounts';
 const LOGS_COLLECTION = 'admin_login_logs';
+
+// ── Admin API helper ──────────────────────────────────────────────────────────
+async function adminApi(method: string, path: string, body?: object): Promise<any> {
+  const opts: RequestInit = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-secret': 'neopay-admin-2024',
+    },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Erreur serveur (${res.status})`);
+  return data;
+}
+
+// ── Hooks ─────────────────────────────────────────────────────────────────────
 
 export const useAdminAccounts = () => {
   const [admins, setAdmins] = useState<AdminAccount[]>([]);
@@ -31,69 +42,16 @@ export const useAdminAccounts = () => {
   useEffect(() => {
     const q = query(collection(db, ADMINS_COLLECTION), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as AdminAccount[];
-      setAdmins(data);
+      setAdmins(snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as AdminAccount[]);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching admin accounts:", error);
       setLoading(false);
-      try {
-        handleFirestoreError(error, 'list', ADMINS_COLLECTION, auth);
-      } catch (e) {
-        // Just log for now to prevent app crash in hook
-      }
     });
-
     return () => unsubscribe();
   }, []);
 
   return { admins, loading };
-};
-
-export const saveAdminAccount = async (adminData: Partial<AdminAccount>, id?: string) => {
-  try {
-    if (id) {
-      const adminRef = doc(db, ADMINS_COLLECTION, id);
-      await updateDoc(adminRef, {
-        ...adminData,
-        updatedAt: serverTimestamp()
-      });
-    } else {
-      await addDoc(collection(db, ADMINS_COLLECTION), {
-        ...adminData,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        failedAttempts: 0
-      });
-    }
-  } catch (error) {
-    handleFirestoreError(error, id ? 'update' : 'create', ADMINS_COLLECTION, auth);
-  }
-};
-
-export const deleteAdminAccount = async (id: string) => {
-  try {
-    const adminRef = doc(db, ADMINS_COLLECTION, id);
-    await deleteDoc(adminRef);
-  } catch (error) {
-    handleFirestoreError(error, 'delete', ADMINS_COLLECTION, auth);
-  }
-};
-
-export const logAdminAttempt = async (adminName: string, success: boolean) => {
-  try {
-    await addDoc(collection(db, LOGS_COLLECTION), {
-      adminName,
-      success,
-      timestamp: serverTimestamp(),
-      userAgent: navigator.userAgent
-    });
-  } catch (error) {
-    handleFirestoreError(error, 'create', LOGS_COLLECTION, auth);
-  }
 };
 
 export const useAdminLogs = (max: number = 50) => {
@@ -103,131 +61,74 @@ export const useAdminLogs = (max: number = 50) => {
   useEffect(() => {
     const q = query(collection(db, LOGS_COLLECTION), orderBy('timestamp', 'desc'), limit(max));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as AdminLog[];
-      setLogs(data);
+      setLogs(snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as AdminLog[]);
       setLoading(false);
-    }, (error) => {
-      try {
-        handleFirestoreError(error, 'list', LOGS_COLLECTION, auth);
-      } catch (e) {
-        // Log error
-      }
-    });
-
+    }, () => setLoading(false));
     return () => unsubscribe();
   }, [max]);
 
   return { logs, loading };
 };
 
-export const checkAdminLogin = async (fullName: string, password: string, loginCode?: string): Promise<{ success: boolean; admin?: AdminAccount; error?: string }> => {
+// ── Account CRUD (all via Admin SDK API) ──────────────────────────────────────
+
+export const saveAdminAccount = async (adminData: Partial<AdminAccount>, id?: string) => {
+  await adminApi('POST', '/api/admin/account', { ...adminData, ...(id && { id }) });
+};
+
+export const deleteAdminAccount = async (id: string) => {
+  await adminApi('DELETE', `/api/admin/account/${id}`);
+};
+
+// ── Helper: setup client-side admin session for real-time reads ───────────────
+// After server confirms login, we try to establish an anonymous Firebase Auth
+// session and write to admin_uids so isAdmin() works for client SDK onSnapshot hooks.
+async function setupClientAdminSession(adminId: string, fullName: string): Promise<void> {
   try {
-    // 1. Sign in anonymously FIRST if not already authenticated
-    // This ensures we have a UID for Firestore rules
-    if (!auth.currentUser) {
-      try {
-        await signInAnonymously(auth);
-      } catch (authError) {
-        console.error("Auth error:", authError);
-        return { success: false, error: "Erreur d'authentification système." };
-      }
-    }
-
-    // 2. Query the admin
-    const q = query(collection(db, ADMINS_COLLECTION), where('fullName', '==', fullName));
-    const snapshot = await getDocs(q);
-
-    if (snapshot.empty) {
-      await logAdminAttempt(fullName, false);
-      return { success: false, error: "Identifiants incorrects." };
-    }
-
-    const adminDoc = snapshot.docs[0];
-    const adminData = { id: adminDoc.id, ...adminDoc.data() } as AdminAccount;
-
-    // 3. Check lockout
-    if (adminData.lockUntil) {
-      const lockUntilDate = adminData.lockUntil instanceof Timestamp ? adminData.lockUntil.toDate() : new Date(adminData.lockUntil);
-      if (lockUntilDate > new Date()) {
-        return { success: false, error: `Compte bloqué temporairement. Réessayez plus tard.` };
-      }
-    }
-
-    // 4. Verify password
-    if (adminData.password !== password) {
-      const newAttempts = (adminData.failedAttempts || 0) + 1;
-      const updates: any = { failedAttempts: newAttempts };
-      
-      if (newAttempts >= 5) {
-        // Lock for 15 minutes
-        updates.lockUntil = Timestamp.fromDate(new Date(Date.now() + 15 * 60 * 1000));
-      }
-      
-      // We try to update failed attempts. This might fail if rules are strict, 
-      // but the login should still return "Identifiants incorrects".
-      try {
-        await updateDoc(doc(db, ADMINS_COLLECTION, adminData.id!), updates);
-      } catch (err) {
-        console.warn("Could not update failed attempts (permission denied), but security is maintained.");
-      }
-      
-      await logAdminAttempt(fullName, false);
-      return { success: false, error: "Identifiants incorrects." };
-    }
-
-    // 5. Verify Login Code for Super Admin
-    if (adminData.isSuperAdmin && adminData.loginCode && adminData.loginCode !== loginCode) {
-      await logAdminAttempt(fullName, false);
-      return { success: false, error: "Code de connexion incorrect." };
-    }
-
-    // 6. Success - Update UID and reset attempts
+    if (!auth.currentUser) await signInAnonymously(auth);
     const uid = auth.currentUser?.uid;
-    const finalUpdates: any = {
-      failedAttempts: 0,
-      lockUntil: null,
-      updatedAt: serverTimestamp()
-    };
-    
-    // Link UID if not already set or changed
-    if (uid && adminData.uid !== uid) {
-      finalUpdates.uid = uid;
+    if (uid) {
+      await setDoc(doc(db, 'admin_uids', uid), {
+        adminId,
+        fullName,
+        updatedAt: serverTimestamp()
+      });
     }
+  } catch (err) {
+    // Non-critical: server login already succeeded.
+    // Only real-time reads requiring isAdmin() will be affected.
+    console.warn('Could not establish client-side admin session (anonymous auth may be disabled):', err);
+  }
+}
 
-    try {
-      // 1. Update the main account doc
-      await updateDoc(doc(db, ADMINS_COLLECTION, adminData.id!), finalUpdates);
-      
-      // 2. Create/Update the admin_uids doc so isAdmin() rules pass
-      if (uid) {
-        await setDoc(doc(db, 'admin_uids', uid), {
-          adminId: adminData.id,
-          fullName: adminData.fullName,
-          updatedAt: serverTimestamp()
-        });
-      }
-      
-      adminData.uid = uid || adminData.uid;
-    } catch (err) {
-      console.warn("Could not fully update admin records (permission denied).", err);
-    }
+// ── Admin Login (credentials verified server-side, no Firestore rules needed) ─
 
-    await logAdminAttempt(fullName, true);
-    
+export const checkAdminLogin = async (
+  fullName: string,
+  password: string,
+  loginCode?: string
+): Promise<{ success: boolean; admin?: AdminAccount; error?: string }> => {
+  try {
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fullName, password, loginCode })
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) return { success: false, error: data.error || 'Erreur de connexion.' };
+
+    const adminData = data.admin as AdminAccount;
+    await setupClientAdminSession(adminData.id!, adminData.fullName);
+
     return { success: true, admin: adminData };
   } catch (error) {
     console.error("Login Error:", error);
-    try {
-      handleFirestoreError(error, 'list', ADMINS_COLLECTION, auth);
-    } catch (e) {
-      // Return standard error msg
-    }
     return { success: false, error: "Une erreur est survenue lors de la connexion." };
   }
 };
+
+// ── Admin Google Login ────────────────────────────────────────────────────────
 
 export const loginAdminWithGoogle = async (): Promise<{ success: boolean; admin?: AdminAccount; error?: string }> => {
   try {
@@ -235,55 +136,31 @@ export const loginAdminWithGoogle = async (): Promise<{ success: boolean; admin?
     const googleEmail = result.user.email?.toLowerCase() || '';
     const googleUid = result.user.uid;
 
-    // Search by email first
-    let adminSnap = await getDocs(query(collection(db, ADMINS_COLLECTION), where('email', '==', googleEmail)));
+    // Verify server-side (writes handled by Admin SDK)
+    const res = await fetch('/api/admin/verify-google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: googleEmail, uid: googleUid })
+    });
+    const data = await res.json().catch(() => ({}));
 
-    // Fallback: search by uid
-    if (adminSnap.empty) {
-      adminSnap = await getDocs(query(collection(db, ADMINS_COLLECTION), where('uid', '==', googleUid)));
+    if (!res.ok) {
+      return { success: false, error: data.error || 'Accès refusé.' };
     }
 
-    if (adminSnap.empty) {
-      // Not an authorized admin — sign out immediately
-      await signOut(auth);
-      return {
-        success: false,
-        error: `Accès refusé. L'adresse "${result.user.email}" n'est associée à aucun compte administrateur Neopay.`
-      };
-    }
+    const adminData = data.admin as AdminAccount;
 
-    const adminDoc = adminSnap.docs[0];
-    const adminData = { id: adminDoc.id, ...adminDoc.data() } as AdminAccount;
-
-    // Check lockout
-    if (adminData.lockUntil) {
-      const lockDate = adminData.lockUntil instanceof Timestamp
-        ? adminData.lockUntil.toDate()
-        : new Date(adminData.lockUntil);
-      if (lockDate > new Date()) {
-        await signOut(auth);
-        return { success: false, error: 'Compte bloqué temporairement. Réessayez plus tard.' };
-      }
-    }
-
-    // Store uid + email on admin account if missing
+    // Google user already has Firebase Auth session — write admin_uids
     try {
-      const updates: any = { failedAttempts: 0, updatedAt: serverTimestamp() };
-      if (!adminData.uid) updates.uid = googleUid;
-      if (!adminData.email) updates.email = googleEmail;
-      await updateDoc(doc(db, ADMINS_COLLECTION, adminData.id!), updates);
-
       await setDoc(doc(db, 'admin_uids', googleUid), {
         adminId: adminData.id,
         fullName: adminData.fullName,
         updatedAt: serverTimestamp()
       });
     } catch (err) {
-      console.warn('Could not update admin uid/email:', err);
+      console.warn('Could not write admin_uids for Google admin:', err);
     }
 
-    await logAdminAttempt(adminData.fullName, true);
-    adminData.uid = googleUid;
     return { success: true, admin: adminData };
   } catch (error: any) {
     const mapped = mapGoogleAuthError(error);

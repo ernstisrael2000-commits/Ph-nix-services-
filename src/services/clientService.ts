@@ -4,14 +4,12 @@ import {
   query,
   where,
   getDocs,
-  updateDoc,
   doc,
-  serverTimestamp,
   orderBy,
   limit,
   onSnapshot
 } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { signInWithGooglePopup, mapGoogleAuthError } from '../lib/google-auth';
 import { Client, ClientTransaction, AdminClientNotification } from '../types';
 
@@ -113,11 +111,20 @@ export const loginClientWithGoogle = async (): Promise<GoogleClientLoginResult> 
       return { client: null, error: "Votre compte est bloqué. Contactez le support." };
     }
 
-    await updateDoc(doc(db, 'clients', clientDoc.id), {
-      uid: user.uid,
-      ...(user.photoURL && { photoUrl: user.photoURL }),
-      updatedAt: serverTimestamp()
-    });
+    // Update uid/photoUrl via server API (client SDK can't update clients without isAdmin())
+    try {
+      await fetch('/api/client/update-google-uid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: clientDoc.id,
+          uid: user.uid,
+          ...(user.photoURL && { photoUrl: user.photoURL })
+        })
+      });
+    } catch (updateErr) {
+      console.warn('Could not update Google uid on client doc:', updateErr);
+    }
 
     return { client: { id: clientDoc.id, ...clientData, uid: user.uid } };
   } catch (error: any) {

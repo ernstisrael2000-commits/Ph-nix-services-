@@ -1050,6 +1050,300 @@ router.post('/api/formations/progress/position', async (req, res) => {
   }
 });
 
+// ── Admin secret guard ────────────────────────────────────────────────────────
+const requireAdminSecret = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (req.headers['x-admin-secret'] !== 'neopay-admin-2024')
+    return res.status(403).json({ error: 'Non autorisé.' });
+  next();
+};
+
+// ── Admin Login (server-side — élimine la dépendance à l'auth anonyme) ───────
+router.post('/api/admin/login', requireDb, async (req, res) => {
+  try {
+    const { fullName, password, loginCode } = req.body;
+    if (!fullName || !password)
+      return res.status(400).json({ error: 'Identifiants requis.' });
+
+    const snap = await adminDb.collection('admin_accounts').where('fullName', '==', fullName).limit(1).get();
+    if (snap.empty) {
+      await adminDb.collection('admin_login_logs').add({ adminName: fullName, success: false, timestamp: FieldValue.serverTimestamp() });
+      return res.status(401).json({ error: 'Identifiants incorrects.' });
+    }
+
+    const adminDoc = snap.docs[0];
+    const adminData: any = { id: adminDoc.id, ...adminDoc.data() };
+
+    if (adminData.lockUntil) {
+      const lockDate = adminData.lockUntil?.toDate ? adminData.lockUntil.toDate() : new Date(adminData.lockUntil);
+      if (lockDate > new Date())
+        return res.status(403).json({ error: 'Compte bloqué temporairement. Réessayez plus tard.' });
+    }
+
+    if (adminData.password !== password) {
+      const newAttempts = (adminData.failedAttempts || 0) + 1;
+      const upd: any = { failedAttempts: newAttempts };
+      if (newAttempts >= 5) upd.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
+      await adminDoc.ref.update(upd);
+      await adminDb.collection('admin_login_logs').add({ adminName: fullName, success: false, timestamp: FieldValue.serverTimestamp() });
+      return res.status(401).json({ error: 'Identifiants incorrects.' });
+    }
+
+    if (adminData.isSuperAdmin && adminData.loginCode && adminData.loginCode !== loginCode) {
+      await adminDb.collection('admin_login_logs').add({ adminName: fullName, success: false, timestamp: FieldValue.serverTimestamp() });
+      return res.status(401).json({ error: 'Code de connexion incorrect.' });
+    }
+
+    await adminDoc.ref.update({ failedAttempts: 0, lockUntil: null, updatedAt: FieldValue.serverTimestamp() });
+    await adminDb.collection('admin_login_logs').add({ adminName: fullName, success: true, timestamp: FieldValue.serverTimestamp() });
+
+    res.json({ success: true, admin: serializeDoc(adminDoc) });
+  } catch (e: any) {
+    console.error('[admin/login]', e);
+    res.status(500).json({ error: 'Erreur lors de la connexion.' });
+  }
+});
+
+// ── Admin: Verify Google login (server-side writes via Admin SDK) ─────────────
+router.post('/api/admin/verify-google', requireDb, async (req, res) => {
+  try {
+    const { email, uid } = req.body;
+    if (!email || !uid) return res.status(400).json({ error: 'Données manquantes.' });
+
+    let adminSnap = await adminDb.collection('admin_accounts').where('email', '==', email.toLowerCase()).limit(1).get();
+    if (adminSnap.empty) {
+      adminSnap = await adminDb.collection('admin_accounts').where('uid', '==', uid).limit(1).get();
+    }
+    if (adminSnap.empty) {
+      await adminDb.collection('admin_login_logs').add({ adminName: email, success: false, timestamp: FieldValue.serverTimestamp() });
+      return res.status(403).json({ error: `Accès refusé. L'adresse "${email}" n'est associée à aucun compte administrateur Neopay.` });
+    }
+
+    const adminDoc = adminSnap.docs[0];
+    const adminData: any = { id: adminDoc.id, ...adminDoc.data() };
+
+    if (adminData.lockUntil) {
+      const lockDate = adminData.lockUntil?.toDate ? adminData.lockUntil.toDate() : new Date(adminData.lockUntil);
+      if (lockDate > new Date()) {
+        return res.status(403).json({ error: 'Compte bloqué temporairement. Réessayez plus tard.' });
+      }
+    }
+
+    const updates: any = { failedAttempts: 0, updatedAt: FieldValue.serverTimestamp() };
+    if (!adminData.uid) updates.uid = uid;
+    if (!adminData.email) updates.email = email.toLowerCase();
+    await adminDoc.ref.update(updates);
+
+    await adminDb.collection('admin_login_logs').add({ adminName: adminData.fullName, success: true, timestamp: FieldValue.serverTimestamp() });
+
+    res.json({ success: true, admin: serializeDoc(adminDoc) });
+  } catch (e: any) {
+    console.error('[admin/verify-google]', e);
+    res.status(500).json({ error: 'Erreur vérification Google.' });
+  }
+});
+
+// ── Client: Update Google UID ─────────────────────────────────────────────────
+router.post('/api/client/update-google-uid', requireDb, async (req, res) => {
+  try {
+    const { clientId, uid, photoUrl } = req.body;
+    if (!clientId || !uid) return res.status(400).json({ error: 'Paramètres manquants.' });
+    const updates: any = { uid, updatedAt: FieldValue.serverTimestamp() };
+    if (photoUrl) updates.photoUrl = photoUrl;
+    await adminDb.collection('clients').doc(clientId).update(updates);
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Parcels ────────────────────────────────────────────────────────────
+router.post('/api/admin/parcel', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { id, createdAt: _c, updatedAt: _u, ...data } = req.body;
+    const ts = FieldValue.serverTimestamp();
+    if (id) {
+      await adminDb.collection('parcels').doc(id).update({ ...data, updatedAt: ts });
+      return res.json({ success: true, id });
+    }
+    const ref = await adminDb.collection('parcels').add({ ...data, createdAt: ts, updatedAt: ts });
+    res.json({ success: true, id: ref.id });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/api/admin/parcel/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    await adminDb.collection('parcels').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Products ───────────────────────────────────────────────────────────
+router.post('/api/admin/product', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { id, createdAt: _c, updatedAt: _u, ...data } = req.body;
+    const ts = FieldValue.serverTimestamp();
+    if (id) {
+      await adminDb.collection('products').doc(id).update({ ...data, updatedAt: ts });
+      return res.json({ success: true, id });
+    }
+    const ref = await adminDb.collection('products').add({ ...data, createdAt: ts });
+    res.json({ success: true, id: ref.id });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/api/admin/product/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    await adminDb.collection('products').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Games ──────────────────────────────────────────────────────────────
+router.post('/api/admin/game', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { id, createdAt: _c, updatedAt: _u, ...data } = req.body;
+    const ts = FieldValue.serverTimestamp();
+    if (id) {
+      await adminDb.collection('games').doc(id).update({ ...data, updatedAt: ts });
+      return res.json({ success: true, id });
+    }
+    const ref = await adminDb.collection('games').add({ ...data, createdAt: ts, updatedAt: ts });
+    res.json({ success: true, id: ref.id });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/api/admin/game/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    await adminDb.collection('games').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Card Topups ────────────────────────────────────────────────────────
+router.post('/api/admin/card-topup', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { id, createdAt: _c, updatedAt: _u, ...data } = req.body;
+    const ts = FieldValue.serverTimestamp();
+    if (id) {
+      await adminDb.collection('card_topups').doc(id).update({ ...data, updatedAt: ts });
+      return res.json({ success: true, id });
+    }
+    const ref = await adminDb.collection('card_topups').add({ ...data, createdAt: ts, updatedAt: ts });
+    res.json({ success: true, id: ref.id });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/api/admin/card-topup/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    await adminDb.collection('card_topups').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Nav Buttons ────────────────────────────────────────────────────────
+router.post('/api/admin/nav-button', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { id, createdAt: _c, updatedAt: _u, ...data } = req.body;
+    const ts = FieldValue.serverTimestamp();
+    if (id) {
+      await adminDb.collection('nav_buttons').doc(id).update({ ...data, updatedAt: ts });
+      return res.json({ success: true, id });
+    }
+    const ref = await adminDb.collection('nav_buttons').add({ ...data, createdAt: ts, updatedAt: ts });
+    res.json({ success: true, id: ref.id });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/api/admin/nav-button/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    await adminDb.collection('nav_buttons').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Slider Images ──────────────────────────────────────────────────────
+router.post('/api/admin/slider-image', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { url, title, description } = req.body;
+    const ref = await adminDb.collection('slider_images').add({
+      url, title: title || '', description: description || '',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    res.json({ success: true, id: ref.id });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/api/admin/slider-image/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const updates: any = { updatedAt: FieldValue.serverTimestamp() };
+    const { url, title, description } = req.body;
+    if (url !== undefined) updates.url = url;
+    if (title !== undefined) updates.title = title;
+    if (description !== undefined) updates.description = description;
+    await adminDb.collection('slider_images').doc(req.params.id).update(updates);
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/api/admin/slider-image/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    await adminDb.collection('slider_images').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Shipping Configs ───────────────────────────────────────────────────
+router.post('/api/admin/shipping-config', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { id: _id, type, ...data } = req.body;
+    if (!type) return res.status(400).json({ error: 'Type requis.' });
+    await adminDb.collection('shipping_configs').doc(type).set(
+      { ...data, type, updatedAt: FieldValue.serverTimestamp() }, { merge: true }
+    );
+    res.json({ success: true, id: type });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/api/admin/shipping-config/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    await adminDb.collection('shipping_configs').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Settings ───────────────────────────────────────────────────────────
+router.post('/api/admin/settings', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const cleanData = Object.entries(req.body).reduce((acc: any, [k, v]) => {
+      if (v !== undefined) acc[k] = v;
+      return acc;
+    }, {});
+    await adminDb.collection('settings').doc('global').set(cleanData, { merge: true });
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Admin Accounts CRUD ────────────────────────────────────────────────
+router.post('/api/admin/account', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { id, createdAt: _c, updatedAt: _u, ...data } = req.body;
+    const ts = FieldValue.serverTimestamp();
+    if (id) {
+      await adminDb.collection('admin_accounts').doc(id).update({ ...data, updatedAt: ts });
+      return res.json({ success: true, id });
+    }
+    const ref = await adminDb.collection('admin_accounts').add({
+      ...data, failedAttempts: 0, createdAt: ts, updatedAt: ts,
+    });
+    res.json({ success: true, id: ref.id });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/api/admin/account/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    await adminDb.collection('admin_accounts').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────
 router.all('/api/*', (_req, res) => {
   res.status(404).json({ error: 'Route API introuvable.' });

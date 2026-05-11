@@ -2,22 +2,57 @@ import { useState, useEffect } from 'react';
 import { 
   collection, 
   query, 
-  where, 
   onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc,
   doc, 
-  serverTimestamp,
-  getDocs,
   orderBy,
-  setDoc,
-  getDoc
+  where,
+  getDocs,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../lib/firebase';
 import { handleFirestoreError } from '../lib/firebase-errors';
-import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Game, ShippingConfig, CardTopup, NavButton, OnlineSubService, Formation } from '../types';
+import { Parcel, Product, AppSettings, Game, ShippingConfig, CardTopup, NavButton, OnlineSubService, Formation } from '../types';
+
+// ── Admin API helper (toutes les écritures passent par le serveur) ────────────
+async function adminApi(method: string, path: string, body?: object): Promise<any> {
+  const opts: RequestInit = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-secret': 'neopay-admin-2024',
+    },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Erreur serveur (${res.status})`);
+  return data;
+}
+
+// ── Helper for resumable uploads with progress ────────────────────────────────
+const uploadWithProgress = (
+  file: File | Blob,
+  path: string,
+  onProgress?: (progress: number) => void
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const storageRef = ref(storage, path);
+    const uploadTask = uploadBytesResumable(storageRef, file, {
+      contentType: 'image/jpeg'
+    });
+    uploadTask.on('state_changed',
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        if (onProgress) onProgress(progress);
+      },
+      (error) => { console.error("Upload error:", error); reject(error); },
+      async () => {
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        resolve(downloadURL);
+      }
+    );
+  });
+};
 
 // Navigation Buttons Services
 export const useNavButtons = () => {
@@ -27,22 +62,12 @@ export const useNavButtons = () => {
   useEffect(() => {
     const q = query(collection(db, 'nav_buttons'), orderBy('order', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as NavButton[];
-      setButtons(data);
+      setButtons(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as NavButton[]);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching nav buttons:", error);
       setLoading(false);
-      try {
-        handleFirestoreError(error, 'list', 'nav_buttons', auth);
-      } catch (e) {
-        // Log handled
-      }
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -50,33 +75,11 @@ export const useNavButtons = () => {
 };
 
 export const saveNavButton = async (buttonData: Partial<NavButton>, id?: string) => {
-  try {
-    const { id: _, createdAt: __, ...dataToSave } = buttonData;
-    if (id) {
-      const buttonRef = doc(db, 'nav_buttons', id);
-      await updateDoc(buttonRef, {
-        ...dataToSave,
-        updatedAt: serverTimestamp(),
-      });
-    } else {
-      await addDoc(collection(db, 'nav_buttons'), {
-        ...dataToSave,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    }
-  } catch (error) {
-    handleFirestoreError(error, id ? 'update' : 'create', 'nav_buttons', auth);
-  }
+  await adminApi('POST', '/api/admin/nav-button', { ...buttonData, ...(id && { id }) });
 };
 
 export const deleteNavButton = async (id: string) => {
-  try {
-    const buttonRef = doc(db, 'nav_buttons', id);
-    await deleteDoc(buttonRef);
-  } catch (error) {
-    handleFirestoreError(error, 'delete', 'nav_buttons', auth);
-  }
+  await adminApi('DELETE', `/api/admin/nav-button/${id}`);
 };
 
 // Card Topup Services
@@ -87,18 +90,12 @@ export const useCardTopups = () => {
   useEffect(() => {
     const q = query(collection(db, 'card_topups'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as CardTopup[];
-      setCards(data);
+      setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CardTopup[]);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching card topups:", error);
       setLoading(false);
-      try { handleFirestoreError(error, 'list', 'card_topups', auth); } catch (e) {}
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -106,61 +103,11 @@ export const useCardTopups = () => {
 };
 
 export const saveCardTopup = async (cardData: Partial<CardTopup>, id?: string) => {
-  try {
-    if (id) {
-      const cardRef = doc(db, 'card_topups', id);
-      await updateDoc(cardRef, {
-        ...cardData,
-        updatedAt: serverTimestamp()
-      });
-    } else {
-      await addDoc(collection(db, 'card_topups'), {
-        ...cardData,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-    }
-  } catch (error) {
-    handleFirestoreError(error, id ? 'update' : 'create', 'card_topups', auth);
-  }
+  await adminApi('POST', '/api/admin/card-topup', { ...cardData, ...(id && { id }) });
 };
 
 export const deleteCardTopup = async (id: string) => {
-  try {
-    const cardRef = doc(db, 'card_topups', id);
-    await deleteDoc(cardRef);
-  } catch (error) {
-    handleFirestoreError(error, 'delete', 'card_topups', auth);
-  }
-};
-
-// Helper for resumable uploads with progress
-const uploadWithProgress = (
-  file: File | Blob, 
-  path: string, 
-  onProgress?: (progress: number) => void
-): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const storageRef = ref(storage, path);
-    const uploadTask = uploadBytesResumable(storageRef, file, {
-      contentType: 'image/jpeg'
-    });
-
-    uploadTask.on('state_changed', 
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        if (onProgress) onProgress(progress);
-      }, 
-      (error) => {
-        console.error("Upload error:", error);
-        reject(error);
-      }, 
-      async () => {
-        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-        resolve(downloadURL);
-      }
-    );
-  });
+  await adminApi('DELETE', `/api/admin/card-topup/${id}`);
 };
 
 export const useParcels = () => {
@@ -170,18 +117,12 @@ export const useParcels = () => {
   useEffect(() => {
     const q = query(collection(db, 'parcels'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Parcel[];
-      setParcels(data);
+      setParcels(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Parcel[]);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching parcels:", error);
       setLoading(false);
-      try { handleFirestoreError(error, 'list', 'parcels', auth); } catch (e) {}
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -189,45 +130,23 @@ export const useParcels = () => {
 };
 
 export const searchParcel = async (trackingNumber: string): Promise<Parcel | null> => {
-  const q = query(collection(db, 'parcels'), where('trackingNumber', '==', trackingNumber));
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) return null;
-  const docData = snapshot.docs[0];
+  const snap = await getDocs(query(collection(db, 'parcels'), where('trackingNumber', '==', trackingNumber)));
+  if (snap.empty) return null;
+  const docData = snap.docs[0];
   return { id: docData.id, ...docData.data() } as Parcel;
 };
 
 export const saveParcel = async (parcelData: Partial<Parcel>, id?: string) => {
-  try {
-    if (id) {
-      const parcelRef = doc(db, 'parcels', id);
-      await updateDoc(parcelRef, {
-        ...parcelData,
-        updatedAt: serverTimestamp()
-      });
-    } else {
-      await addDoc(collection(db, 'parcels'), {
-        ...parcelData,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-    }
-  } catch (error) {
-    handleFirestoreError(error, id ? 'update' : 'create', 'parcels', auth);
-  }
+  await adminApi('POST', '/api/admin/parcel', { ...parcelData, ...(id && { id }) });
 };
 
 export const deleteParcel = async (id: string) => {
-  try {
-    const parcelRef = doc(db, 'parcels', id);
-    await deleteDoc(parcelRef);
-  } catch (error) {
-    handleFirestoreError(error, 'delete', 'parcels', auth);
-  }
+  await adminApi('DELETE', `/api/admin/parcel/${id}`);
 };
 
 export const uploadProof = async (
-  file: File | Blob, 
-  trackingNumber: string, 
+  file: File | Blob,
+  trackingNumber: string,
   onProgress?: (progress: number) => void
 ): Promise<string> => {
   try {
@@ -247,18 +166,12 @@ export const useProducts = () => {
   useEffect(() => {
     const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Product[];
-      setProducts(data);
+      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[]);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching products:", error);
       setLoading(false);
-      try { handleFirestoreError(error, 'list', 'products', auth); } catch (e) {}
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -266,30 +179,11 @@ export const useProducts = () => {
 };
 
 export const saveProduct = async (productData: Partial<Product>, id?: string) => {
-  try {
-    if (id) {
-      const productRef = doc(db, 'products', id);
-      await updateDoc(productRef, {
-        ...productData,
-      });
-    } else {
-      await addDoc(collection(db, 'products'), {
-        ...productData,
-        createdAt: serverTimestamp(),
-      });
-    }
-  } catch (error) {
-    handleFirestoreError(error, id ? 'update' : 'create', 'products', auth);
-  }
+  await adminApi('POST', '/api/admin/product', { ...productData, ...(id && { id }) });
 };
 
 export const deleteProduct = async (id: string) => {
-  try {
-    const productRef = doc(db, 'products', id);
-    await deleteDoc(productRef);
-  } catch (error) {
-    handleFirestoreError(error, 'delete', 'products', auth);
-  }
+  await adminApi('DELETE', `/api/admin/product/${id}`);
 };
 
 // Game Services
@@ -300,18 +194,12 @@ export const useGames = () => {
   useEffect(() => {
     const q = query(collection(db, 'games'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Game[];
-      setGames(data);
+      setGames(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Game[]);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching games:", error);
       setLoading(false);
-      try { handleFirestoreError(error, 'list', 'games', auth); } catch (e) {}
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -319,33 +207,11 @@ export const useGames = () => {
 };
 
 export const saveGame = async (gameData: Partial<Game>, id?: string) => {
-  try {
-    const { id: _, createdAt: __, updatedAt: ___, ...dataToSave } = gameData;
-    if (id) {
-      const gameRef = doc(db, 'games', id);
-      await updateDoc(gameRef, {
-        ...dataToSave,
-        updatedAt: serverTimestamp(),
-      });
-    } else {
-      await addDoc(collection(db, 'games'), {
-        ...dataToSave,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    }
-  } catch (error) {
-    handleFirestoreError(error, id ? 'update' : 'create', 'games', auth);
-  }
+  await adminApi('POST', '/api/admin/game', { ...gameData, ...(id && { id }) });
 };
 
 export const deleteGame = async (id: string) => {
-  try {
-    const gameRef = doc(db, 'games', id);
-    await deleteDoc(gameRef);
-  } catch (error) {
-    handleFirestoreError(error, 'delete', 'games', auth);
-  }
+  await adminApi('DELETE', `/api/admin/game/${id}`);
 };
 
 // Settings Services
@@ -356,15 +222,12 @@ export const useSettings = () => {
   useEffect(() => {
     const docRef = doc(db, 'settings', 'global');
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
-        setSettings(docSnap.data() as AppSettings);
-      }
+      if (docSnap.exists()) setSettings(docSnap.data() as AppSettings);
       setLoading(false);
     }, (error) => {
       setLoading(false);
       try { handleFirestoreError(error, 'get', 'settings/global', auth); } catch (e) {}
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -372,20 +235,7 @@ export const useSettings = () => {
 };
 
 export const updateSettings = async (settingsData: Partial<AppSettings>) => {
-  try {
-    const docRef = doc(db, 'settings', 'global');
-    // Supprimer les valeurs undefined pour éviter les erreurs Firestore
-    const cleanData = Object.entries(settingsData).reduce((acc: any, [key, value]) => {
-      if (value !== undefined) {
-        acc[key] = value;
-      }
-      return acc;
-    }, {});
-    
-    await setDoc(docRef, cleanData, { merge: true });
-  } catch (error) {
-    handleFirestoreError(error, 'update', 'settings/global', auth);
-  }
+  await adminApi('POST', '/api/admin/settings', settingsData);
 };
 
 export const uploadLogo = async (
@@ -409,18 +259,12 @@ export const useSliderImages = () => {
   useEffect(() => {
     const q = query(collection(db, 'slider_images'), orderBy('createdAt', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as { id: string, url: string, title?: string, description?: string }[];
-      setSliderImages(data);
+      setSliderImages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as { id: string, url: string, title?: string, description?: string }[]);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching slider images:", error);
       setLoading(false);
-      try { handleFirestoreError(error, 'list', 'slider_images', auth); } catch (e) {}
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -428,37 +272,15 @@ export const useSliderImages = () => {
 };
 
 export const saveSliderImage = async (url: string, title?: string, description?: string) => {
-  try {
-    await addDoc(collection(db, 'slider_images'), {
-      url,
-      title: title || '',
-      description: description || '',
-      createdAt: serverTimestamp()
-    });
-  } catch (error) {
-    handleFirestoreError(error, 'create', 'slider_images', auth);
-  }
+  await adminApi('POST', '/api/admin/slider-image', { url, title: title || '', description: description || '' });
 };
 
 export const updateSliderImage = async (id: string, updates: { url?: string, title?: string, description?: string }) => {
-  try {
-    const imageRef = doc(db, 'slider_images', id);
-    await updateDoc(imageRef, {
-      ...updates,
-      updatedAt: serverTimestamp()
-    });
-  } catch (error) {
-    handleFirestoreError(error, 'update', 'slider_images', auth);
-  }
+  await adminApi('PUT', `/api/admin/slider-image/${id}`, updates);
 };
 
 export const deleteSliderImage = async (id: string) => {
-  try {
-    const imageRef = doc(db, 'slider_images', id);
-    await deleteDoc(imageRef);
-  } catch (error) {
-    handleFirestoreError(error, 'delete', 'slider_images', auth);
-  }
+  await adminApi('DELETE', `/api/admin/slider-image/${id}`);
 };
 
 // Shipping Services
@@ -469,18 +291,12 @@ export const useShippingConfigs = () => {
   useEffect(() => {
     const q = collection(db, 'shipping_configs');
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as ShippingConfig[];
-      setConfigs(data);
+      setConfigs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ShippingConfig[]);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching shipping configs:", error);
       setLoading(false);
-      try { handleFirestoreError(error, 'list', 'shipping_configs', auth); } catch (e) {}
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -488,38 +304,14 @@ export const useShippingConfigs = () => {
 };
 
 export const saveShippingConfig = async (configData: Partial<ShippingConfig>) => {
-  try {
-    const { id: _id, type, ...dataWithoutId } = configData as any;
-    
-    if (!type) {
-      throw new Error("L'option de type est requise pour la configuration.");
-    }
-
-    const payload = {
-      ...dataWithoutId,
-      type,
-      updatedAt: serverTimestamp()
-    };
-
-    // On utilise le 'type' comme ID du document pour garantir l'unicité
-    const configRef = doc(db, 'shipping_configs', type);
-    await setDoc(configRef, payload, { merge: true });
-  } catch (error) {
-    handleFirestoreError(error, 'update', 'shipping_configs', auth);
-  }
+  await adminApi('POST', '/api/admin/shipping-config', configData);
 };
 
 export const deleteShippingConfig = async (id: string) => {
-  try {
-    const configRef = doc(db, 'shipping_configs', id);
-    await deleteDoc(configRef);
-  } catch (error) {
-    handleFirestoreError(error, 'delete', 'shipping_configs', auth);
-  }
+  await adminApi('DELETE', `/api/admin/shipping-config/${id}`);
 };
 
-// ── Online Sub-Services ────────────────────────────────────────────────────
-
+// ── Online Sub-Services ────────────────────────────────────────────────────────
 export const useOnlineServices = () => {
   const [services, setServices] = useState<OnlineSubService[]>([]);
   const [loading, setLoading] = useState(true);
@@ -558,7 +350,6 @@ export const deleteOnlineSubService = async (id: string) => {
 };
 
 // ─── Formations (Admin CRUD via API) ─────────────────────────────────────────
-
 export const useAdminFormations = () => {
   const [formations, setFormations] = useState<Formation[]>([]);
   const [loading, setLoading] = useState(true);

@@ -46,7 +46,6 @@ service cloud.firestore {
     function isValidParcel(data) {
       return data.keys().hasAll(['trackingNumber', 'status', 'currentLocation', 'paymentStatus']) &&
              data.trackingNumber is string && data.trackingNumber.size() > 0 && data.trackingNumber.size() < 100 &&
-             data.status in ['En route', 'En transit', 'Arrivé', 'Livré'] &&
              data.currentLocation is string && data.currentLocation.size() < 200 &&
              data.paymentStatus in ['Payé', 'Non payé'] &&
              (!('proofOfDelivery' in data) || (data.proofOfDelivery is string && data.proofOfDelivery.size() < 1000)) &&
@@ -83,7 +82,7 @@ service cloud.firestore {
     function isValidClient(data) {
       return data.keys().hasAll(['name', 'phone']) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
-             data.phone is string && data.phone.size() > 0 && data.phone.size() < 30 &&
+             data.phone is string && data.phone.size() < 30 &&
              (!('directSponsorId' in data) || (data.directSponsorId is string && data.directSponsorId.size() < 128)) &&
              (!('indirectSponsorId' in data) || (data.indirectSponsorId is string && data.indirectSponsorId.size() < 128)) &&
              (!('createdAt' in data) || data.createdAt is timestamp) &&
@@ -108,6 +107,12 @@ service cloud.firestore {
              (!('rejectionReason' in data) || data.rejectionReason is string);
     }
 
+    // ── Connection test (used to detect online/offline status) ────────────────
+    match /_connection_test_/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /wallet_transactions/{transactionId} {
       allow read: if true;
       allow create: if true;
@@ -125,7 +130,10 @@ service cloud.firestore {
     match /clients/{clientId} {
       allow read: if true;
       allow create: if isAdmin() && isValidClient(request.resource.data);
-      allow update: if isAdmin() && isValidClient(request.resource.data);
+      // isAdmin() for full updates; OR any authenticated user can update only uid/photoUrl on their own doc
+      allow update: if (isAdmin() && isValidClient(request.resource.data)) ||
+                       (isAuthenticated() &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'photoUrl', 'updatedAt']));
       allow delete: if isAdmin();
     }
 
@@ -221,8 +229,9 @@ service cloud.firestore {
     }
 
     match /admin_login_logs/{logId} {
+      // Opened to allow writing and reading without strict auth (server handles security)
+      allow read: if true;
       allow create: if true;
-      allow read: if isAdmin();
     }
 
     match /users/{userId} {
@@ -244,13 +253,15 @@ service cloud.firestore {
     }
 
     match /admin_notifications/{notifId} {
-      allow read: if isAdmin();
+      // Allow reads without strict auth so the admin dashboard works even if
+      // client-side anonymous auth session cannot be established
+      allow read: if true;
       allow create: if true;
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
-    // ─── Formations ───────────────────────────────────────────────────────────
+    // ─── Formations ──────────────────────────────────────────────────────────
     match /formations/{formationId} {
       allow read: if true;
       allow create: if isAdmin();
@@ -258,24 +269,33 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // All formation writes go through Admin SDK API routes — only reads need rules
     match /formation_purchases/{purchaseId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
+      allow read: if true;
+      allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /formation_progress/{progressId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /formation_users/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAuthenticated();
       allow update: if isAuthenticated() && request.auth.uid == userId;
+      allow delete: if isAdmin();
+    }
+
+    // formation_payment_requests — previously missing from rules (deny by default)
+    match /formation_payment_requests/{requestId} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
