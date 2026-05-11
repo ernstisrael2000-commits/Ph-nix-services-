@@ -178,18 +178,23 @@ async function apiPost(path: string, body: object): Promise<any> {
 
 export const submitClientDeposit = async (
   client: Client,
-  amount: number,
+  usdAmount: number,
   method: string,
   txId?: string,
   captchaToken?: string,
-  message?: string
+  message?: string,
+  htgAmount?: number,
+  exchangeRate?: number
 ) => {
-  if (amount <= 0) throw new Error("Montant invalide.");
+  if (usdAmount <= 0) throw new Error("Montant invalide.");
   await apiPost('/api/client/deposit', {
     clientId: client.id,
     clientName: client.name,
     clientWalletId: client.walletId || '',
-    amount,
+    amount: usdAmount,
+    usdAmount,
+    ...(htgAmount !== undefined && { htgAmount }),
+    ...(exchangeRate !== undefined && { exchangeRate }),
     method,
     ...(txId && { txId }),
     ...(message && { message }),
@@ -201,23 +206,30 @@ export const submitClientDeposit = async (
 
 export const submitClientWithdrawal = async (
   client: Client,
-  amount: number,
+  usdAmount: number,
   method: string,
   accountNumber: string,
   captchaToken?: string,
-  message?: string
+  message?: string,
+  accountName?: string,
+  exchangeRate?: number
 ) => {
-  if (amount <= 0) throw new Error("Montant invalide.");
-  if (amount > client.balance) throw new Error("Solde insuffisant.");
+  if (usdAmount <= 0) throw new Error("Montant invalide.");
+  if (usdAmount > client.balance) throw new Error("Solde insuffisant.");
   if (!accountNumber) throw new Error("Numéro de compte requis.");
+  const htgEquivalent = exchangeRate ? Math.round(usdAmount * exchangeRate) : undefined;
   await apiPost('/api/client/withdrawal', {
     clientId: client.id,
     clientName: client.name,
     clientPhone: client.phone || '',
     clientWalletId: client.walletId || '',
-    amount,
+    amount: usdAmount,
+    usdAmount,
+    ...(htgEquivalent !== undefined && { htgEquivalent }),
+    ...(exchangeRate !== undefined && { exchangeRate }),
     method,
     accountNumber,
+    ...(accountName && { accountName }),
     ...(message && { message }),
     ...(captchaToken && captchaToken !== 'bypass' && { captchaToken })
   });

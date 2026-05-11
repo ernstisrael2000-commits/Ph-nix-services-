@@ -1,25 +1,24 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { 
   Wallet, ArrowDownToLine, ArrowUpFromLine, History, 
   LogOut, Loader2, X, Copy, CheckCircle2, AlertCircle,
-  ArrowRightLeft, Clock, XCircle, TrendingUp, Shield,
-  ChevronRight, Banknote, CreditCard, Smartphone, Trash2
+  Clock, XCircle, Shield, ChevronRight, Trash2,
+  TrendingUp, Globe, Smartphone, CreditCard as CardIcon,
+  Building2, Bitcoin, Zap, Info, ChevronDown
 } from 'lucide-react';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { CaptchaWidget } from './CaptchaWidget';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Badge } from './ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from './ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useClientData, useClientTransactions, submitClientDeposit, submitClientWithdrawal } from '../services/clientService';
 import { useSettings } from '../services/parcelService';
-import { Client, ClientTransaction } from '../types';
+import { Client, ClientTransaction, PaymentMethod, DEFAULT_PAYMENT_METHODS } from '../types';
 
 interface ClientDashboardProps {
   clientId: string;
@@ -29,6 +28,7 @@ interface ClientDashboardProps {
 }
 
 const WHATSAPP_NUMBER = "+50944813185";
+const RECAPTCHA_SITE_KEY = process.env.RECAPTCHA_SITE_KEY || '';
 
 const statusConfig = {
   pending: { label: 'En attente', color: 'bg-amber-100 text-amber-700', icon: <Clock className="h-3 w-3" /> },
@@ -37,7 +37,7 @@ const statusConfig = {
   completed: { label: 'Complété', color: 'bg-blue-100 text-blue-700', icon: <CheckCircle2 className="h-3 w-3" /> },
 };
 
-const typeLabel = {
+const typeLabel: Record<string, string> = {
   deposit: 'Dépôt',
   withdrawal: 'Retrait',
   purchase: 'Achat',
@@ -45,39 +45,147 @@ const typeLabel = {
   refund: 'Remboursement',
 };
 
-const RECAPTCHA_SITE_KEY = process.env.RECAPTCHA_SITE_KEY || '';
+function getMethodIcon(type: string) {
+  switch (type) {
+    case 'mobile_money': return <Smartphone className="h-5 w-5" />;
+    case 'crypto': return <Bitcoin className="h-5 w-5" />;
+    case 'bank_transfer': return <Building2 className="h-5 w-5" />;
+    case 'payment_app': return <Globe className="h-5 w-5" />;
+    case 'card': return <CardIcon className="h-5 w-5" />;
+    default: return <Wallet className="h-5 w-5" />;
+  }
+}
+
+const methodColors: Record<string, string> = {
+  mobile_money: 'text-rose-500',
+  crypto: 'text-amber-500',
+  bank_transfer: 'text-blue-500',
+  payment_app: 'text-violet-500',
+  card: 'text-emerald-500',
+};
+
+// ─── Virtual Card Component ───────────────────────────────────────────────────
+
+function VirtualCard({
+  client, balance, rate, copied, onCopy
+}: {
+  client: Client; balance: number; rate: number; copied: boolean; onCopy: () => void;
+}) {
+  return (
+    <div className="relative w-full aspect-[1.75/1] rounded-3xl overflow-hidden select-none"
+      style={{ background: 'linear-gradient(135deg, #1a1f6e 0%, #2563eb 40%, #1e40af 70%, #0f172a 100%)' }}>
+      {/* Shine effect */}
+      <div className="absolute inset-0 opacity-30"
+        style={{ background: 'radial-gradient(ellipse at 20% 20%, rgba(255,255,255,0.3) 0%, transparent 60%)' }} />
+      {/* Grid pattern */}
+      <div className="absolute inset-0 opacity-10"
+        style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+      {/* Circles decoration */}
+      <div className="absolute -right-16 -top-16 w-48 h-48 rounded-full border border-white/10" />
+      <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full border border-white/10" />
+
+      <div className="relative z-10 h-full flex flex-col justify-between p-5">
+        {/* Top row */}
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-white/50 text-[9px] font-bold uppercase tracking-[0.2em]">Neopay Wallet</p>
+            <p className="text-white font-black text-base leading-tight mt-0.5">{client.name}</p>
+          </div>
+          <div className="flex flex-col items-end gap-1">
+            <div className="h-6 w-10 rounded-sm bg-gradient-to-br from-amber-300 to-amber-500 flex items-center justify-center shadow-md">
+              <div className="grid grid-cols-2 gap-0.5 p-1 w-full h-full">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="rounded-[1px] bg-amber-700/50" />
+                ))}
+              </div>
+            </div>
+            <Zap className="h-4 w-4 text-white/40" />
+          </div>
+        </div>
+
+        {/* Balance */}
+        <div>
+          <p className="text-white/50 text-[9px] font-bold uppercase tracking-[0.2em] mb-1">Solde disponible</p>
+          <p className="text-white font-black text-3xl leading-none">
+            ${balance.toFixed(2)}
+            <span className="text-white/50 text-sm font-semibold ml-1">USD</span>
+          </p>
+          <p className="text-white/40 text-xs mt-1">
+            ≈ {Math.round(balance * rate).toLocaleString()} HTG
+          </p>
+        </div>
+
+        {/* Bottom row */}
+        <div className="flex items-end justify-between">
+          <button onClick={onCopy}
+            className="flex items-center gap-2 group">
+            <span className="text-white/40 text-[10px] font-mono tracking-wider">
+              {client.walletId?.match(/.{1,4}/g)?.join(' ') || client.walletId}
+            </span>
+            {copied
+              ? <CheckCircle2 className="h-3 w-3 text-emerald-300" />
+              : <Copy className="h-3 w-3 text-white/30 group-hover:text-white/60 transition-colors" />}
+          </button>
+          <div className="flex gap-1">
+            <div className="h-6 w-6 rounded-full bg-red-500/80 -mr-2" />
+            <div className="h-6 w-6 rounded-full bg-amber-400/80" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function ClientDashboard({ clientId, onLogout, open, onClose }: ClientDashboardProps) {
   const { client, loading } = useClientData(clientId);
   const { transactions, loading: txLoading } = useClientTransactions(clientId);
   const { settings } = useSettings();
 
+  const rate = settings?.exchangeRate || 135;
+  const balance = client?.balance || 0;
+
+  const paymentMethods: PaymentMethod[] = useMemo(() => {
+    if (settings?.paymentMethods && settings.paymentMethods.length > 0) return settings.paymentMethods;
+    return DEFAULT_PAYMENT_METHODS;
+  }, [settings?.paymentMethods]);
+
+  const depositMethods = paymentMethods.filter(m => m.enabled && m.forDeposit);
+  const withdrawalMethods = paymentMethods.filter(m => m.enabled && m.forWithdrawal);
+
+  const [copied, setCopied] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [isDeletingHistory, setIsDeletingHistory] = useState(false);
 
-  const [depositAmount, setDepositAmount] = useState('');
-  const [depositMethod, setDepositMethod] = useState<string>('MonCash');
+  // Deposit state
+  const [depositMethod, setDepositMethod] = useState<PaymentMethod | null>(null);
+  const [htgAmount, setHtgAmount] = useState('');
   const [depositTxId, setDepositTxId] = useState('');
   const [depositMessage, setDepositMessage] = useState('');
   const [depositCaptchaToken, setDepositCaptchaToken] = useState<string | null>(null);
   const depositCaptchaRef = useRef<ReCAPTCHA>(null);
 
-  const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [withdrawMethod, setWithdrawMethod] = useState<string>('MonCash');
+  // Withdrawal state
+  const [withdrawMethod, setWithdrawMethod] = useState<PaymentMethod | null>(null);
+  const [withdrawUSD, setWithdrawUSD] = useState('');
   const [withdrawAccount, setWithdrawAccount] = useState('');
+  const [withdrawAccountName, setWithdrawAccountName] = useState('');
   const [withdrawMessage, setWithdrawMessage] = useState('');
   const [withdrawCaptchaToken, setWithdrawCaptchaToken] = useState<string | null>(null);
   const withdrawCaptchaRef = useRef<ReCAPTCHA>(null);
 
-  const exchangeRate = settings?.exchangeRate || 146;
-  const methodInfo = {
-    MonCash: { number: settings?.moncashNumber, qr: settings?.moncashQR },
-    NatCash: { number: settings?.natcashNumber, qr: settings?.natcashQR },
-    Admi:    { number: settings?.admiNumber,    qr: settings?.admiQR    },
-  } as Record<string, { number?: string; qr?: string }>;
+  // USD computed from HTG input
+  const usdPreview = htgAmount && !isNaN(parseFloat(htgAmount)) ? parseFloat(htgAmount) / rate : 0;
+  const htgPreview = withdrawUSD && !isNaN(parseFloat(withdrawUSD)) ? parseFloat(withdrawUSD) * rate : 0;
+
+  const minDeposit = settings?.minDepositUSD || 0.01;
+  const maxDeposit = settings?.maxDepositUSD || 10000;
+  const minWithdraw = settings?.minWithdrawalUSD || 0.01;
+  const maxWithdraw = settings?.maxWithdrawalUSD || 10000;
 
   const copyWalletId = () => {
     if (client?.walletId) {
@@ -93,28 +201,52 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
+  const resetDeposit = () => {
+    setHtgAmount(''); setDepositTxId(''); setDepositMessage('');
+    setDepositCaptchaToken(null); depositCaptchaRef.current?.reset();
+  };
+
+  const resetWithdraw = () => {
+    setWithdrawUSD(''); setWithdrawAccount(''); setWithdrawAccountName('');
+    setWithdrawMessage(''); setWithdrawCaptchaToken(null); withdrawCaptchaRef.current?.reset();
+  };
+
   const handleDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amount = parseFloat(depositAmount);
-    if (isNaN(amount) || amount <= 0) { toast.error("Montant invalide."); return; }
-    if (RECAPTCHA_SITE_KEY && !depositCaptchaToken) {
-      toast.error("Veuillez valider le captcha avant de continuer.");
-      return;
-    }
+    const htg = parseFloat(htgAmount);
+    if (isNaN(htg) || htg <= 0) { toast.error("Montant invalide."); return; }
+    const usd = htg / rate;
+    if (usd < minDeposit) { toast.error(`Montant minimum: $${minDeposit.toFixed(2)} USD`); return; }
+    if (usd > maxDeposit) { toast.error(`Montant maximum: $${maxDeposit.toFixed(2)} USD`); return; }
+    if (!depositMethod) { toast.error("Choisissez une méthode de paiement."); return; }
+    if (RECAPTCHA_SITE_KEY && !depositCaptchaToken) { toast.error("Validez le captcha."); return; }
+
     setActionLoading(true);
     try {
-      await submitClientDeposit(client!, amount, depositMethod, depositTxId || undefined, depositCaptchaToken || undefined, depositMessage || undefined);
-      const info = methodInfo[depositMethod];
-      const usdEquiv = (amount / exchangeRate).toFixed(2);
-      const msg = `Bonjour Neopay,\n\nJe souhaite effectuer un *DÉPÔT*:\n👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n💰 Montant: *${amount.toLocaleString()} HTG*\n≈ *$${usdEquiv} USD*\n💳 Via: *${depositMethod}*${info?.number ? `\n📞 Numéro: *${info.number}*` : ''}${depositTxId ? `\n🔖 ID Transaction: *${depositTxId}*` : ''}${depositMessage ? `\n💬 Message: *${depositMessage}*` : ''}\n\nMerci de valider mon dépôt.`;
+      await submitClientDeposit(
+        client!,
+        usd,
+        depositMethod.name,
+        depositTxId || undefined,
+        depositCaptchaToken || undefined,
+        depositMessage || undefined,
+        htg,
+        rate
+      );
+
+      const msg = `Bonjour Neopay 👋,\n\nDemande de *DÉPÔT* :\n` +
+        `👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n` +
+        `💵 Montant: *$${usd.toFixed(2)} USD*\n≈ *${htg.toLocaleString()} HTG* (taux: ${rate})\n` +
+        `💳 Via: *${depositMethod.name}*` +
+        (depositMethod.number ? `\n📞 Numéro: *${depositMethod.number}*` : '') +
+        (depositTxId ? `\n🔖 Référence: *${depositTxId}*` : '') +
+        (depositMessage ? `\n💬 Message: *${depositMessage}*` : '') +
+        `\n\nMerci de valider mon dépôt. 🙏`;
       openWhatsApp(msg);
-      toast.success("Demande de dépôt envoyée ! En attente de validation admin.");
+
+      toast.success("Demande envoyée ! En attente de validation.");
       setIsDepositOpen(false);
-      setDepositAmount('');
-      setDepositTxId('');
-      setDepositMessage('');
-      setDepositCaptchaToken(null);
-      depositCaptchaRef.current?.reset();
+      resetDeposit();
     } catch (err: any) {
       toast.error(err.message);
       depositCaptchaRef.current?.reset();
@@ -126,24 +258,42 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
 
   const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amount = parseFloat(withdrawAmount);
-    if (isNaN(amount) || amount <= 0) { toast.error("Montant invalide."); return; }
-    if (RECAPTCHA_SITE_KEY && !withdrawCaptchaToken) {
-      toast.error("Veuillez valider le captcha avant de continuer.");
-      return;
-    }
+    const usd = parseFloat(withdrawUSD);
+    if (isNaN(usd) || usd <= 0) { toast.error("Montant invalide."); return; }
+    if (usd < minWithdraw) { toast.error(`Montant minimum: $${minWithdraw.toFixed(2)} USD`); return; }
+    if (usd > maxWithdraw) { toast.error(`Montant maximum: $${maxWithdraw.toFixed(2)} USD`); return; }
+    if (usd > balance) { toast.error("Solde insuffisant."); return; }
+    if (!withdrawMethod) { toast.error("Choisissez une méthode de retrait."); return; }
+    if (!withdrawAccount) { toast.error("Numéro/adresse de réception requis."); return; }
+    if (RECAPTCHA_SITE_KEY && !withdrawCaptchaToken) { toast.error("Validez le captcha."); return; }
+
     setActionLoading(true);
     try {
-      await submitClientWithdrawal(client!, amount, withdrawMethod, withdrawAccount, withdrawCaptchaToken || undefined, withdrawMessage || undefined);
-      toast.success(`Demande envoyée, ${client!.name} ! Vous recevrez votre argent tout à l'heure. ✅`);
-      setIsWithdrawOpen(false);
-      setWithdrawAmount(''); setWithdrawAccount(''); setWithdrawMessage('');
-      setWithdrawCaptchaToken(null);
-      withdrawCaptchaRef.current?.reset();
+      await submitClientWithdrawal(
+        client!,
+        usd,
+        withdrawMethod.name,
+        withdrawAccount,
+        withdrawCaptchaToken || undefined,
+        withdrawMessage || undefined,
+        withdrawAccountName || undefined,
+        rate
+      );
+
+      const htgEq = Math.round(usd * rate);
       const num = settings?.whatsappAdminNumber || WHATSAPP_NUMBER;
-      const usdEquiv = (amount / (settings?.exchangeRate || 146)).toFixed(2);
-      const msg = `Bonjour Neopay 👋,\n\nJe viens de soumettre une demande de *RETRAIT* :\n\n👤 Nom : *${client!.name}*\n🔑 ID Wallet : *${client!.walletId}*\n💰 Montant : *${amount.toLocaleString()} HTG* (~$${usdEquiv} USD)\n💳 Via : *${withdrawMethod}*\n📞 Compte : *${withdrawAccount}*${withdrawMessage ? `\n💬 Message : *${withdrawMessage}*` : ''}\n\nMerci de traiter ma demande. 🙏`;
+      const msg = `Bonjour Neopay 👋,\n\nDemande de *RETRAIT* :\n` +
+        `👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n` +
+        `💵 Montant: *$${usd.toFixed(2)} USD*\n≈ *${htgEq.toLocaleString()} HTG* (taux: ${rate})\n` +
+        `💳 Via: *${withdrawMethod.name}*\n📞 Compte: *${withdrawAccount}*` +
+        (withdrawAccountName ? `\n👤 Bénéficiaire: *${withdrawAccountName}*` : '') +
+        (withdrawMessage ? `\n💬 Message: *${withdrawMessage}*` : '') +
+        `\n\nMerci de traiter ma demande. 🙏`;
       window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+
+      toast.success("Demande de retrait soumise !");
+      setIsWithdrawOpen(false);
+      resetWithdraw();
     } catch (err: any) {
       toast.error(err.message);
       withdrawCaptchaRef.current?.reset();
@@ -153,20 +303,15 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     }
   };
 
-  const [isDeletingHistory, setIsDeletingHistory] = useState(false);
-
   const handleDeleteHistory = async () => {
-    if (!window.confirm("Êtes-vous sûr de vouloir supprimer tout votre historique de transactions ? Cette action est irréversible.")) return;
+    if (!window.confirm("Supprimer tout l'historique ? Action irréversible.")) return;
     setIsDeletingHistory(true);
     try {
       const res = await fetch(`/api/client/transactions/${clientId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Erreur lors de la suppression.');
-      toast.success("Historique supprimé avec succès.");
-    } catch {
-      toast.error("Impossible de supprimer l'historique.");
-    } finally {
-      setIsDeletingHistory(false);
-    }
+      if (!res.ok) throw new Error('Erreur.');
+      toast.success("Historique supprimé.");
+    } catch { toast.error("Impossible de supprimer l'historique."); }
+    finally { setIsDeletingHistory(false); }
   };
 
   const pendingCount = transactions.filter(t => t.status === 'pending').length;
@@ -177,126 +322,146 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      
+
       <motion.div
-        initial={{ opacity: 0, y: 60, scale: 0.97 }}
+        initial={{ opacity: 0, y: 80, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 60, scale: 0.97 }}
-        transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-        className="relative z-10 w-full max-w-md bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] max-h-[92vh] overflow-hidden flex flex-col shadow-2xl"
+        exit={{ opacity: 0, y: 80, scale: 0.95 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+        className="relative z-10 w-full max-w-md bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] max-h-[95vh] overflow-hidden flex flex-col shadow-2xl"
       >
         {/* Header */}
-        <div className="bg-gradient-to-br from-primary to-[#1B4FD8] p-6 text-white relative shrink-0">
-          <button onClick={onClose} className="absolute top-4 right-4 h-9 w-9 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors">
-            <X className="h-5 w-5 text-white" />
-          </button>
-          {loading ? (
-            <div className="flex items-center gap-3">
-              <div className="h-14 w-14 rounded-2xl bg-white/20 animate-pulse" />
-              <div className="space-y-2"><div className="h-4 w-32 bg-white/20 rounded animate-pulse" /><div className="h-3 w-20 bg-white/20 rounded animate-pulse" /></div>
-            </div>
-          ) : client ? (
-            <div>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="h-14 w-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 text-2xl font-black">
-                  {client.name.charAt(0).toUpperCase()}
+        <div className="bg-[#0f172a] p-5 shrink-0 relative overflow-hidden">
+          <div className="absolute inset-0 opacity-20"
+            style={{ background: 'radial-gradient(ellipse at 70% 0%, #2563eb 0%, transparent 70%)' }} />
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
+                  <Wallet className="h-4 w-4 text-white" />
                 </div>
-                <div>
-                  <p className="font-black text-lg leading-tight">{client.name}</p>
-                  <p className="text-white/70 text-xs">{client.email}</p>
-                </div>
+                <span className="text-white font-black text-sm tracking-tight">Mon Wallet</span>
               </div>
-              <div className="bg-white/15 rounded-2xl p-4 border border-white/20">
-                <p className="text-white/60 text-xs font-bold uppercase tracking-widest mb-1">Solde disponible</p>
-                <p className="text-4xl font-black">{(client.balance || 0).toLocaleString()} <span className="text-xl font-bold opacity-70">HTG</span></p>
-                <p className="text-primary text-sm font-bold mt-1">
-                  ≈ ${((client.balance || 0) / (settings?.exchangeRate || 146)).toFixed(2)} <span className="text-white/40 text-xs font-normal">USD</span>
-                  <span className="text-white/30 text-xs font-normal ml-2">· taux {settings?.exchangeRate || 146} HTG/$</span>
-                </p>
-                <button onClick={copyWalletId} className="flex items-center gap-2 mt-3 text-white/60 hover:text-white text-xs transition-colors group">
-                  <span className="font-mono bg-white/10 px-2 py-1 rounded-lg">ID: {client.walletId}</span>
-                  {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5 group-hover:scale-110 transition-transform" />}
-                </button>
-              </div>
+              <button onClick={onClose}
+                className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
+                <X className="h-4 w-4 text-white" />
+              </button>
             </div>
-          ) : null}
+
+            {loading ? (
+              <div className="w-full aspect-[1.75/1] rounded-3xl bg-white/5 animate-pulse" />
+            ) : client ? (
+              <VirtualCard client={client} balance={balance} rate={rate} copied={copied} onCopy={copyWalletId} />
+            ) : (
+              <div className="w-full aspect-[1.75/1] rounded-3xl bg-white/5 flex items-center justify-center">
+                <AlertCircle className="h-8 w-8 text-white/30" />
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Content — single scrollable view */}
+        {/* Content */}
         <div className="flex-1 overflow-y-auto no-scrollbar">
           <div className="p-5 space-y-4">
+
+            {/* Balance info bar */}
+            {client && (
+              <div className="flex items-center gap-3 p-3 rounded-2xl bg-blue-50 border border-blue-100">
+                <TrendingUp className="h-4 w-4 text-blue-500 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-blue-700">
+                    Taux actuel : 1 USD = {rate} HTG
+                  </p>
+                  <p className="text-[10px] text-blue-500/80">
+                    Votre solde : ${balance.toFixed(2)} USD ≈ {Math.round(balance * rate).toLocaleString()} HTG
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Quick Actions */}
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => setIsDepositOpen(true)}
+              <button onClick={() => { setDepositMethod(depositMethods[0] || null); setIsDepositOpen(true); }}
                 className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-100 hover:border-emerald-300 transition-all group active:scale-95">
-                <div className="h-12 w-12 rounded-xl bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-200 group-hover:scale-105 transition-transform">
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-200 group-hover:scale-105 transition-transform">
                   <ArrowDownToLine className="h-6 w-6 text-white" />
                 </div>
-                <span className="font-bold text-sm text-emerald-700">Déposer</span>
+                <div className="text-center">
+                  <p className="font-black text-sm text-emerald-700">Déposer</p>
+                  <p className="text-[10px] text-emerald-500">En HTG → USD</p>
+                </div>
               </button>
-              <button onClick={() => setIsWithdrawOpen(true)}
+              <button onClick={() => { setWithdrawMethod(withdrawalMethods[0] || null); setIsWithdrawOpen(true); }}
                 className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-red-50 border-2 border-red-100 hover:border-red-300 transition-all group active:scale-95">
-                <div className="h-12 w-12 rounded-xl bg-red-500 flex items-center justify-center shadow-lg shadow-red-200 group-hover:scale-105 transition-transform">
+                <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-lg shadow-red-200 group-hover:scale-105 transition-transform">
                   <ArrowUpFromLine className="h-6 w-6 text-white" />
                 </div>
-                <span className="font-bold text-sm text-red-700">Retirer</span>
+                <div className="text-center">
+                  <p className="font-black text-sm text-red-700">Retirer</p>
+                  <p className="text-[10px] text-red-500">En USD</p>
+                </div>
               </button>
             </div>
 
-            {/* Payment Methods Info */}
-            <div className="rounded-2xl border border-gray-100 overflow-hidden">
-              <div className="bg-gray-50 px-4 py-2 border-b border-gray-100">
-                <p className="text-xs font-black text-subtext uppercase tracking-widest">Moyens de paiement acceptés</p>
-              </div>
-              <div className="divide-y divide-gray-50">
-                {[
-                  { name: 'MonCash', number: settings?.moncashNumber, icon: <Smartphone className="h-5 w-5 text-primary" /> },
-                  { name: 'NatCash', number: settings?.natcashNumber, icon: <CreditCard className="h-5 w-5 text-blue-500" /> },
-                  { name: 'Admi', number: settings?.admiNumber, icon: <Banknote className="h-5 w-5 text-emerald-600" /> },
-                ].map(m => (
-                  <div key={m.name} className="flex items-center justify-between px-4 py-3 bg-white">
-                    <div className="flex items-center gap-3">
-                      {m.icon}
-                      <span className="font-bold text-sm text-dark">{m.name}</span>
+            {/* Payment Methods */}
+            {depositMethods.length > 0 && (
+              <div className="rounded-2xl border border-gray-100 overflow-hidden">
+                <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 flex items-center gap-2">
+                  <CardIcon className="h-3.5 w-3.5 text-subtext" />
+                  <p className="text-[10px] font-black text-subtext uppercase tracking-widest">Méthodes acceptées</p>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {depositMethods.slice(0, 6).map(m => (
+                    <div key={m.id} className="flex items-center justify-between px-4 py-3 bg-white">
+                      <div className="flex items-center gap-3">
+                        <div className={`${methodColors[m.type] || 'text-gray-400'}`}>
+                          {getMethodIcon(m.type)}
+                        </div>
+                        <div>
+                          <p className="font-bold text-sm text-dark">{m.icon} {m.name}</p>
+                          {m.number && <p className="text-[10px] text-subtext font-mono">{m.number}</p>}
+                          {m.address && <p className="text-[10px] text-subtext font-mono truncate max-w-[140px]">{m.address}</p>}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        {m.qrUrl && (
+                          <img src={m.qrUrl} alt="QR" className="h-8 w-8 rounded-lg object-cover border border-gray-200"
+                            onError={e => (e.currentTarget.style.display = 'none')} />
+                        )}
+                      </div>
                     </div>
-                    {m.number ? (
-                      <span className="text-xs font-mono text-subtext bg-gray-50 px-2 py-1 rounded-lg">{m.number}</span>
-                    ) : (
-                      <span className="text-xs text-gray-300 italic">Non configuré</span>
-                    )}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Security note */}
+            {/* Security */}
             <div className="flex items-start gap-3 p-4 rounded-2xl bg-blue-50 border border-blue-100">
               <Shield className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
               <p className="text-xs text-blue-700 leading-relaxed">
-                Les dépôts et retraits sont vérifiés par notre équipe dans les 24h. Toute transaction est sécurisée par Neopay.
+                Toutes les transactions sont vérifiées par notre équipe sous 24h. Vos fonds sont sécurisés par Neopay.
               </p>
             </div>
 
-            {/* History Accordion */}
+            {/* Transaction History */}
             <div className="rounded-2xl border border-gray-100 overflow-hidden">
               <button
                 onClick={() => setHistoryOpen(v => !v)}
-                className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
-              >
+                className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors">
                 <div className="flex items-center gap-2">
                   <History className="h-4 w-4 text-subtext" />
-                  <span className="text-xs font-black text-subtext uppercase tracking-widest">Historique des transactions</span>
+                  <span className="text-[10px] font-black text-subtext uppercase tracking-widest">Historique</span>
                   {pendingCount > 0 && (
                     <span className="bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">{pendingCount}</span>
                   )}
                 </div>
-                <ChevronRight className={`h-4 w-4 text-gray-400 transition-transform duration-300 ${historyOpen ? 'rotate-90' : ''}`} />
+                <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-300 ${historyOpen ? 'rotate-180' : ''}`} />
               </button>
 
               <AnimatePresence initial={false}>
                 {historyOpen && (
                   <motion.div
-                    key="history-panel"
+                    key="history"
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
@@ -309,35 +474,30 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                       ) : transactions.length === 0 ? (
                         <div className="text-center py-8">
                           <History className="h-10 w-10 text-gray-200 mx-auto mb-2" />
-                          <p className="text-subtext text-sm font-medium">Aucune transaction pour le moment.</p>
-                          <p className="text-xs text-gray-400 mt-1">Effectuez un dépôt pour commencer.</p>
+                          <p className="text-subtext text-sm font-medium">Aucune transaction.</p>
                         </div>
                       ) : (
                         <>
                           <div className="flex justify-end mb-1">
-                            <button
-                              onClick={handleDeleteHistory}
-                              disabled={isDeletingHistory}
-                              className="flex items-center gap-1.5 text-[11px] font-bold text-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
-                            >
+                            <button onClick={handleDeleteHistory} disabled={isDeletingHistory}
+                              className="flex items-center gap-1.5 text-[11px] font-bold text-red-400 hover:text-red-600 transition-colors disabled:opacity-50">
                               {isDeletingHistory ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                               Supprimer l'historique
                             </button>
                           </div>
                           {transactions.map(tx => {
-                            const sc = statusConfig[tx.status] || statusConfig.pending;
+                            const sc = statusConfig[tx.status as keyof typeof statusConfig] || statusConfig.pending;
                             const isCredit = tx.type === 'deposit' || tx.type === 'transfer_received' || tx.type === 'refund';
+                            const usdAmt = tx.usdAmount ?? tx.amount;
+                            const htgEq = tx.htgAmount ?? tx.htgEquivalent;
                             return (
                               <div key={tx.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100 hover:border-gray-200 transition-colors">
                                 <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${isCredit ? 'bg-emerald-100' : 'bg-red-100'}`}>
-                                  {isCredit
-                                    ? <ArrowDownToLine className="h-5 w-5 text-emerald-600" />
-                                    : <ArrowUpFromLine className="h-5 w-5 text-red-600" />
-                                  }
+                                  {isCredit ? <ArrowDownToLine className="h-5 w-5 text-emerald-600" /> : <ArrowUpFromLine className="h-5 w-5 text-red-600" />}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="font-bold text-sm text-dark truncate">{typeLabel[tx.type] || tx.type}</p>
-                                  <p className="text-xs text-subtext truncate">{tx.description || tx.method || ''}</p>
+                                  <p className="text-[10px] text-subtext truncate">{tx.description || tx.method || ''}</p>
                                   {tx.createdAt?.toDate && (
                                     <p className="text-[10px] text-gray-400 mt-0.5">
                                       {format(tx.createdAt.toDate(), 'dd MMM yyyy HH:mm', { locale: fr })}
@@ -346,9 +506,12 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                                 </div>
                                 <div className="text-right shrink-0">
                                   <p className={`font-black text-sm ${isCredit ? 'text-emerald-600' : 'text-red-600'}`}>
-                                    {isCredit ? '+' : '-'}{tx.amount.toLocaleString()} HTG
+                                    {isCredit ? '+' : '-'}${usdAmt.toFixed(2)}
                                   </p>
-                                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${sc.color}`}>
+                                  {htgEq && htgEq > 0 && (
+                                    <p className="text-[10px] text-gray-400">≈ {Math.round(htgEq).toLocaleString()} HTG</p>
+                                  )}
+                                  <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full ${sc.color}`}>
                                     {sc.icon}{sc.label}
                                   </span>
                                 </div>
@@ -373,101 +536,124 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
         </div>
       </motion.div>
 
-      {/* Deposit Modal */}
-      <Dialog open={isDepositOpen} onOpenChange={(v) => { setIsDepositOpen(v); if (!v) { setDepositAmount(''); setDepositTxId(''); setDepositCaptchaToken(null); depositCaptchaRef.current?.reset(); } }}>
-        <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl p-0 overflow-hidden">
-          <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 p-5 text-white">
+      {/* ── Deposit Modal ───────────────────────────────────────────────────── */}
+      <Dialog open={isDepositOpen} onOpenChange={v => { if (!v) resetDeposit(); setIsDepositOpen(v); }}>
+        <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl p-0 overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="bg-gradient-to-br from-emerald-600 to-emerald-800 p-5 text-white shrink-0">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center">
-                <ArrowDownToLine className="h-5 w-5 text-white" />
+                <ArrowDownToLine className="h-5 w-5" />
               </div>
               <div>
                 <DialogTitle className="text-lg font-black text-white">Faire un dépôt</DialogTitle>
-                <DialogDescription className="text-emerald-100/70 text-xs">Rechargez votre wallet Neopay</DialogDescription>
+                <DialogDescription className="text-emerald-100/70 text-xs">Rechargez votre wallet en HTG</DialogDescription>
               </div>
             </div>
           </div>
-          <form onSubmit={handleDeposit} className="p-5 space-y-4 bg-white">
+
+          <form onSubmit={handleDeposit} className="p-5 space-y-4 bg-white overflow-y-auto flex-1">
             {/* Method picker */}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Méthode de paiement</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: 'MonCash', icon: '💰', active: 'border-rose-300 bg-rose-50 text-rose-700 ring-2 ring-rose-400' },
-                  { id: 'NatCash', icon: '💳', active: 'border-amber-300 bg-amber-50 text-amber-700 ring-2 ring-amber-400' },
-                  { id: 'Admi',    icon: '🏦', active: 'border-indigo-300 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-400' },
-                ].map(m => (
-                  <button key={m.id} type="button" onClick={() => setDepositMethod(m.id)}
-                    className={`flex flex-col items-center gap-1 p-3 rounded-2xl border-2 transition-all text-center ${depositMethod === m.id ? m.active : 'border-gray-100 bg-white text-gray-500 hover:border-gray-200'}`}>
-                    <span className="text-xl">{m.icon}</span>
-                    <span className="text-[10px] font-black">{m.id}</span>
-                  </button>
-                ))}
-              </div>
+              {depositMethods.length === 0 ? (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-100">
+                  <Info className="h-4 w-4 text-amber-600 shrink-0" />
+                  <p className="text-xs text-amber-700">Aucune méthode de dépôt activée par l'admin.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {depositMethods.map(m => (
+                    <button key={m.id} type="button" onClick={() => setDepositMethod(m)}
+                      className={`flex flex-col items-center gap-1 p-2.5 rounded-2xl border-2 transition-all text-center ${depositMethod?.id === m.id
+                        ? 'border-emerald-400 bg-emerald-50 text-emerald-700 ring-2 ring-emerald-300'
+                        : 'border-gray-100 bg-white text-gray-500 hover:border-gray-200'}`}>
+                      <span className="text-lg">{m.icon}</span>
+                      <span className="text-[10px] font-black leading-tight">{m.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Method info: number + QR */}
-            {methodInfo[depositMethod]?.number && (
-              <div className="flex items-start gap-3 p-3 rounded-2xl bg-gray-50 border border-gray-100">
-                <Smartphone className="h-4 w-4 text-subtext shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-[10px] font-black text-subtext uppercase tracking-wider">Envoyez au numéro</p>
-                  <p className="font-black text-dark text-base font-mono">{methodInfo[depositMethod].number}</p>
-                </div>
-                {methodInfo[depositMethod]?.qr && (
-                  <img src={methodInfo[depositMethod].qr} alt="QR Code" className="h-14 w-14 rounded-xl object-cover border border-gray-200" onError={e => (e.currentTarget.style.display = 'none')} />
+            {/* Method details */}
+            {depositMethod && (depositMethod.number || depositMethod.address || depositMethod.qrUrl || depositMethod.instructions) && (
+              <div className="p-3 rounded-2xl bg-gray-50 border border-gray-100 space-y-2">
+                {depositMethod.number && (
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="h-4 w-4 text-subtext" />
+                    <div>
+                      <p className="text-[10px] font-black text-subtext uppercase">Numéro</p>
+                      <p className="font-black text-dark font-mono">{depositMethod.number}</p>
+                    </div>
+                    {depositMethod.qrUrl && (
+                      <img src={depositMethod.qrUrl} alt="QR" className="h-14 w-14 rounded-xl ml-auto border border-gray-200 object-cover"
+                        onError={e => (e.currentTarget.style.display = 'none')} />
+                    )}
+                  </div>
+                )}
+                {depositMethod.address && (
+                  <div>
+                    <p className="text-[10px] font-black text-subtext uppercase">Adresse</p>
+                    <p className="font-mono text-xs text-dark break-all">{depositMethod.address}</p>
+                    {depositMethod.qrUrl && (
+                      <img src={depositMethod.qrUrl} alt="QR" className="h-20 w-20 rounded-xl mt-2 border border-gray-200 object-cover"
+                        onError={e => (e.currentTarget.style.display = 'none')} />
+                    )}
+                  </div>
+                )}
+                {depositMethod.accountName && (
+                  <p className="text-xs text-subtext">Compte: <span className="font-bold text-dark">{depositMethod.accountName}</span></p>
+                )}
+                {depositMethod.instructions && (
+                  <p className="text-[11px] text-blue-700 bg-blue-50 rounded-lg p-2">{depositMethod.instructions}</p>
                 )}
               </div>
             )}
 
-            {/* Amount */}
+            {/* Amount in HTG */}
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Montant (HTG)</Label>
-              <Input type="number" value={depositAmount} onChange={e => setDepositAmount(e.target.value)}
-                placeholder="Ex: 1 500" className="h-12 rounded-xl text-lg font-black" min="1" required />
-              {depositAmount && !isNaN(parseFloat(depositAmount)) && (
-                <p className="text-[11px] text-primary font-bold">≈ ${(parseFloat(depositAmount) / exchangeRate).toFixed(2)} USD</p>
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Montant envoyé (HTG)</Label>
+              <Input type="number" value={htgAmount} onChange={e => setHtgAmount(e.target.value)}
+                placeholder="Ex: 1 000" className="h-12 rounded-xl text-lg font-black" min="1" step="1" required />
+              {usdPreview > 0 && (
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-50 border border-emerald-100">
+                  <TrendingUp className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  <p className="text-xs font-black text-emerald-700">
+                    Vous recevrez ≈ <span className="text-base">${usdPreview.toFixed(2)} USD</span>
+                  </p>
+                </div>
               )}
             </div>
 
             {/* Transaction ID */}
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">ID / Référence de transaction</Label>
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Référence / ID transaction</Label>
               <Input value={depositTxId} onChange={e => setDepositTxId(e.target.value)}
                 placeholder="Ex: TX-1234567890" className="h-11 rounded-xl font-mono" />
-              <p className="text-[10px] text-gray-400">Copiez l'ID de confirmation reçu lors du paiement.</p>
             </div>
 
-            {/* Custom Message */}
+            {/* Message */}
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Message personnalisé (optionnel)</Label>
-              <textarea
-                value={depositMessage}
-                onChange={e => setDepositMessage(e.target.value)}
-                placeholder="Ex: Dépôt pour renouveler mon abonnement, réf. commande #1234..."
-                className="w-full min-h-[72px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                maxLength={300}
-              />
-              <p className="text-[10px] text-gray-400">{depositMessage.length}/300 caractères — visible par l'admin.</p>
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Message (optionnel)</Label>
+              <textarea value={depositMessage} onChange={e => setDepositMessage(e.target.value)}
+                placeholder="Informations supplémentaires..."
+                className="w-full min-h-[60px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400 transition-all"
+                maxLength={300} />
+              <p className="text-[10px] text-gray-400">{depositMessage.length}/300</p>
             </div>
 
-            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700 leading-relaxed">
-              <strong>Étape suivante :</strong> Après soumission, vous serez redirigé sur WhatsApp pour envoyer votre preuve de paiement à l'équipe Neopay.
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700">
+              <strong>Étape suivante :</strong> Vous serez redirigé sur WhatsApp pour envoyer votre preuve de paiement.
             </div>
 
-            {/* reCAPTCHA */}
             {RECAPTCHA_SITE_KEY && (
-              <div className="flex flex-col items-center gap-1">
-                <CaptchaWidget
-                  sitekey={RECAPTCHA_SITE_KEY}
-                  captchaRef={depositCaptchaRef}
-                  onChange={(token) => setDepositCaptchaToken(token)}
-                  onExpired={() => setDepositCaptchaToken(null)}
-                />
+              <div className="flex flex-col items-center">
+                <CaptchaWidget sitekey={RECAPTCHA_SITE_KEY} captchaRef={depositCaptchaRef}
+                  onChange={t => setDepositCaptchaToken(t)} onExpired={() => setDepositCaptchaToken(null)} />
               </div>
             )}
 
-            <Button type="submit" disabled={actionLoading || (!!RECAPTCHA_SITE_KEY && !depositCaptchaToken)}
+            <Button type="submit" disabled={actionLoading || !depositMethod || (!!RECAPTCHA_SITE_KEY && !depositCaptchaToken)}
               className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black">
               {actionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Confirmer et envoyer preuve →'}
             </Button>
@@ -475,69 +661,98 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
         </DialogContent>
       </Dialog>
 
-      {/* Withdraw Modal */}
-      <Dialog open={isWithdrawOpen} onOpenChange={(v) => { setIsWithdrawOpen(v); if (!v) { setWithdrawCaptchaToken(null); withdrawCaptchaRef.current?.reset(); } }}>
-        <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl">
-          <DialogHeader>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="h-10 w-10 rounded-xl bg-red-100 flex items-center justify-center">
-                <ArrowUpFromLine className="h-5 w-5 text-red-600" />
+      {/* ── Withdraw Modal ──────────────────────────────────────────────────── */}
+      <Dialog open={isWithdrawOpen} onOpenChange={v => { if (!v) resetWithdraw(); setIsWithdrawOpen(v); }}>
+        <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl p-0 overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="bg-gradient-to-br from-red-600 to-red-800 p-5 text-white shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                <ArrowUpFromLine className="h-5 w-5" />
               </div>
               <div>
-                <DialogTitle className="text-lg font-black text-dark">Retirer des fonds</DialogTitle>
-                <DialogDescription className="text-xs text-subtext">Solde: <strong>{(client?.balance || 0).toLocaleString()} HTG</strong></DialogDescription>
+                <DialogTitle className="text-lg font-black text-white">Retirer des fonds</DialogTitle>
+                <DialogDescription className="text-red-100/70 text-xs">
+                  Solde: <strong>${balance.toFixed(2)} USD</strong> ≈ {Math.round(balance * rate).toLocaleString()} HTG
+                </DialogDescription>
               </div>
             </div>
-          </DialogHeader>
-          <form onSubmit={handleWithdraw} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Montant (HTG)</Label>
-              <Input type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)}
-                placeholder="Ex: 500" className="h-12 rounded-xl text-lg font-bold" min="1" max={client?.balance || 0} required />
+          </div>
+
+          <form onSubmit={handleWithdraw} className="p-5 space-y-4 bg-white overflow-y-auto flex-1">
+            {/* Method picker */}
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Méthode de retrait</Label>
+              {withdrawalMethods.length === 0 ? (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 border border-amber-100">
+                  <Info className="h-4 w-4 text-amber-600 shrink-0" />
+                  <p className="text-xs text-amber-700">Aucune méthode de retrait activée.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {withdrawalMethods.map(m => (
+                    <button key={m.id} type="button" onClick={() => setWithdrawMethod(m)}
+                      className={`flex flex-col items-center gap-1 p-2.5 rounded-2xl border-2 transition-all text-center ${withdrawMethod?.id === m.id
+                        ? 'border-red-400 bg-red-50 text-red-700 ring-2 ring-red-300'
+                        : 'border-gray-100 bg-white text-gray-500 hover:border-gray-200'}`}>
+                      <span className="text-lg">{m.icon}</span>
+                      <span className="text-[10px] font-black leading-tight">{m.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
+
+            {/* USD amount */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Moyen de retrait</Label>
-              <Select value={withdrawMethod} onValueChange={setWithdrawMethod}>
-                <SelectTrigger className="h-12 rounded-xl"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="MonCash">💰 MonCash</SelectItem>
-                  <SelectItem value="NatCash">💳 NatCash</SelectItem>
-                  <SelectItem value="Admi">🏦 Admi</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Montant à retirer (USD)</Label>
+              <Input type="number" value={withdrawUSD} onChange={e => setWithdrawUSD(e.target.value)}
+                placeholder="Ex: 10.00" className="h-12 rounded-xl text-lg font-black"
+                min="0.01" max={balance} step="0.01" required />
+              {htgPreview > 0 && (
+                <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 border border-red-100">
+                  <TrendingUp className="h-3.5 w-3.5 text-red-600 shrink-0" />
+                  <p className="text-xs font-black text-red-700">
+                    ≈ <span className="text-base">{Math.round(htgPreview).toLocaleString()} HTG</span> que vous recevrez
+                  </p>
+                </div>
+              )}
             </div>
+
+            {/* Account */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Numéro de compte</Label>
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">
+                {withdrawMethod?.type === 'crypto' ? 'Adresse crypto' : 'Numéro / Compte de réception'}
+              </Label>
               <Input value={withdrawAccount} onChange={e => setWithdrawAccount(e.target.value)}
-                placeholder="Votre numéro de réception" className="h-12 rounded-xl" required />
+                placeholder={withdrawMethod?.type === 'crypto' ? '0x...' : 'Numéro de réception'}
+                className="h-11 rounded-xl" required />
             </div>
 
-            {/* Custom Message */}
+            {/* Account name */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-subtext uppercase tracking-wider">Message personnalisé (optionnel)</Label>
-              <textarea
-                value={withdrawMessage}
-                onChange={e => setWithdrawMessage(e.target.value)}
-                placeholder="Ex: Retrait urgent, besoin pour payer loyer..."
-                className="w-full min-h-[72px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400 transition-all"
-                maxLength={300}
-              />
-              <p className="text-[10px] text-gray-400">{withdrawMessage.length}/300 — visible par l'admin.</p>
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Nom du bénéficiaire</Label>
+              <Input value={withdrawAccountName} onChange={e => setWithdrawAccountName(e.target.value)}
+                placeholder="Nom complet" className="h-11 rounded-xl" />
             </div>
 
-            {/* reCAPTCHA */}
+            {/* Message */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-subtext uppercase tracking-widest">Message (optionnel)</Label>
+              <textarea value={withdrawMessage} onChange={e => setWithdrawMessage(e.target.value)}
+                placeholder="Informations supplémentaires..."
+                className="w-full min-h-[60px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400 transition-all"
+                maxLength={300} />
+              <p className="text-[10px] text-gray-400">{withdrawMessage.length}/300</p>
+            </div>
+
             {RECAPTCHA_SITE_KEY && (
-              <div className="flex flex-col items-center gap-1">
-                <CaptchaWidget
-                  sitekey={RECAPTCHA_SITE_KEY}
-                  captchaRef={withdrawCaptchaRef}
-                  onChange={(token) => setWithdrawCaptchaToken(token)}
-                  onExpired={() => setWithdrawCaptchaToken(null)}
-                />
+              <div className="flex flex-col items-center">
+                <CaptchaWidget sitekey={RECAPTCHA_SITE_KEY} captchaRef={withdrawCaptchaRef}
+                  onChange={t => setWithdrawCaptchaToken(t)} onExpired={() => setWithdrawCaptchaToken(null)} />
               </div>
             )}
 
-            <Button type="submit" disabled={actionLoading || (!!RECAPTCHA_SITE_KEY && !withdrawCaptchaToken)}
+            <Button type="submit" disabled={actionLoading || !withdrawMethod || (!!RECAPTCHA_SITE_KEY && !withdrawCaptchaToken)}
               className="w-full h-12 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black">
               {actionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Soumettre la demande'}
             </Button>

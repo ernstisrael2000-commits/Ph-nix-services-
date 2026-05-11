@@ -64,6 +64,7 @@ import { useAnalytics } from '../services/analyticsService';
 import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton, AdminAccount, Client, Agent, WalletTransaction, ClientTransaction, AdminClientNotification, OnlineSubService, Formation, FormationModule, FormationChapter, FormationResource } from '../types';
 import { useAllClientTransactions, updateClientTransactionStatus, useAdminClientNotifications, markAdminNotificationRead, markAllAdminNotificationsRead, approvePurchaseRequest, declinePurchaseRequest } from '../services/clientService';
 import AdminShippingManager from './AdminShippingManager';
+import AdminWalletManager from './AdminWalletManager';
 import { 
   BarChart, 
   Bar, 
@@ -1889,6 +1890,7 @@ const AffiliateEditForm = ({
         { value: 'withdrawals', label: 'Retraits', icon: ArrowUp, permission: 'affiliates' },
         { value: 'wallet-tx', label: 'Dépôts & Flux', icon: CreditCard, permission: 'affiliates' },
         { value: 'clients-tx', label: 'Paiements Clients', icon: Wallet, permission: 'affiliates' },
+        { value: 'wallet-management', label: 'Gestion Wallet', icon: DollarSign, permission: 'settings' },
       ]
     },
     {
@@ -6742,6 +6744,10 @@ const AffiliateEditForm = ({
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="wallet-management" className="space-y-6 pt-6 px-6 pb-20 custom-scrollbar overflow-y-auto h-full">
+          <AdminWalletManager />
         </TabsContent>
 
         <TabsContent value="shipping">

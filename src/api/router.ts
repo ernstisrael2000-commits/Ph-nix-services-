@@ -210,18 +210,34 @@ router.patch('/api/admin/notifications/:id/read', requireDb, async (req, res) =>
 // ── Deposit ───────────────────────────────────────────────────────────────────
 router.post('/api/client/deposit', requireDb, async (req, res) => {
   try {
-    const { clientId, clientName, clientWalletId, amount, method, txId, message, captchaToken } = req.body;
+    const { clientId, clientName, clientWalletId, amount, usdAmount, htgAmount, exchangeRate, method, txId, message, captchaToken } = req.body;
     if (!clientId || !clientName || !amount || !method)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     if (amount <= 0) return res.status(400).json({ error: 'Montant invalide.' });
     if (captchaToken && !(await verifyRecaptcha(captchaToken)))
       return res.status(400).json({ error: 'Vérification reCAPTCHA échouée. Veuillez réessayer.' });
 
+    // Validate min/max from settings
+    try {
+      const settingsSnap = await adminDb.collection('settings').doc('global').get();
+      if (settingsSnap.exists) {
+        const s = settingsSnap.data()!;
+        const usd = usdAmount || amount;
+        if (s.minDepositUSD && usd < s.minDepositUSD)
+          return res.status(400).json({ error: `Montant minimum: $${s.minDepositUSD.toFixed(2)} USD` });
+        if (s.maxDepositUSD && usd > s.maxDepositUSD)
+          return res.status(400).json({ error: `Montant maximum: $${s.maxDepositUSD.toFixed(2)} USD` });
+      }
+    } catch {}
+
     const txRef = await adminDb.collection('client_transactions').add({
       clientId, clientName, type: 'deposit', amount, status: 'pending', method,
+      ...(usdAmount !== undefined && { usdAmount }),
+      ...(htgAmount !== undefined && { htgAmount }),
+      ...(exchangeRate !== undefined && { exchangeRate }),
       ...(txId && { txId }),
       ...(message && { message }),
-      description: `Demande de dépôt via ${method}${message ? ` — ${message}` : ''}`,
+      description: `Dépôt via ${method}${htgAmount ? ` — ${htgAmount.toLocaleString()} HTG` : ''}${message ? ` — ${message}` : ''}`,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -230,6 +246,9 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
       type: 'client_deposit', clientId, clientName,
       clientWalletId: clientWalletId || '', transactionId: txRef.id,
       amount, method,
+      ...(usdAmount !== undefined && { usdAmount }),
+      ...(htgAmount !== undefined && { htgAmount }),
+      ...(exchangeRate !== undefined && { exchangeRate }),
       ...(txId && { txId }),
       ...(message && { message }),
       read: false,
@@ -237,13 +256,15 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
     });
 
     sendAdminEmail(
-      `💰 Nouvelle demande de dépôt — ${clientName}`,
-      `Une nouvelle demande de dépôt a été soumise.\n\n` +
+      `💰 Dépôt — ${clientName}`,
+      `Nouvelle demande de dépôt.\n\n` +
       `Client : ${clientName}\nWallet ID : ${clientWalletId || 'N/A'}\n` +
-      `Montant : ${amount.toLocaleString()} HTG\nMéthode : ${method}\n` +
-      (txId ? `Référence transaction : ${txId}\n` : '') +
-      (message ? `Message : ${message}\n` : '') +
-      `\nConnectez-vous au tableau de bord administrateur pour approuver ou rejeter cette demande.`
+      `Montant USD : $${(usdAmount || amount).toFixed(2)}\n` +
+      (htgAmount ? `Montant HTG : ${htgAmount.toLocaleString()} HTG\n` : '') +
+      (exchangeRate ? `Taux : ${exchangeRate} HTG/USD\n` : '') +
+      `Méthode : ${method}\n` +
+      (txId ? `Référence : ${txId}\n` : '') +
+      (message ? `Message : ${message}\n` : '')
     );
 
     res.json({ success: true, transactionId: txRef.id });
@@ -256,12 +277,34 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
 // ── Withdrawal ────────────────────────────────────────────────────────────────
 router.post('/api/client/withdrawal', requireDb, async (req, res) => {
   try {
-    const { clientId, clientName, clientPhone, clientWalletId, amount, method, accountNumber, message, captchaToken } = req.body;
+    const { clientId, clientName, clientPhone, clientWalletId, amount, usdAmount, htgEquivalent, exchangeRate, method, accountNumber, accountName, message, captchaToken } = req.body;
     if (!clientId || !clientName || !amount || !method || !accountNumber)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     if (amount <= 0) return res.status(400).json({ error: 'Montant invalide.' });
     if (captchaToken && !(await verifyRecaptcha(captchaToken)))
       return res.status(400).json({ error: 'Vérification reCAPTCHA échouée. Veuillez réessayer.' });
+
+    // Validate min/max from settings
+    try {
+      const settingsSnap = await adminDb.collection('settings').doc('global').get();
+      if (settingsSnap.exists) {
+        const s = settingsSnap.data()!;
+        const usd = usdAmount || amount;
+        if (s.minWithdrawalUSD && usd < s.minWithdrawalUSD)
+          return res.status(400).json({ error: `Montant minimum: $${s.minWithdrawalUSD.toFixed(2)} USD` });
+        if (s.maxWithdrawalUSD && usd > s.maxWithdrawalUSD)
+          return res.status(400).json({ error: `Montant maximum: $${s.maxWithdrawalUSD.toFixed(2)} USD` });
+      }
+    } catch {}
+
+    // Anti double-withdrawal: block if pending withdrawal exists
+    const pendingCheck = await adminDb.collection('client_transactions')
+      .where('clientId', '==', clientId)
+      .where('type', '==', 'withdrawal')
+      .where('status', '==', 'pending')
+      .limit(1).get();
+    if (!pendingCheck.empty)
+      return res.status(400).json({ error: 'Un retrait est déjà en cours de traitement. Veuillez patienter.' });
 
     const clientRef = adminDb.collection('clients').doc(clientId);
     const clientSnap = await clientRef.get();
@@ -279,8 +322,12 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
     batch.set(txRef, {
       clientId, clientName, type: 'withdrawal', amount, status: 'pending',
       method, accountNumber,
+      ...(usdAmount !== undefined && { usdAmount }),
+      ...(htgEquivalent !== undefined && { htgEquivalent }),
+      ...(exchangeRate !== undefined && { exchangeRate }),
+      ...(accountName && { accountName }),
       ...(message && { message }),
-      description: `Demande de retrait via ${method}${message ? ` — ${message}` : ''}`,
+      description: `Retrait via ${method}${htgEquivalent ? ` — ≈ ${htgEquivalent.toLocaleString()} HTG` : ''}${message ? ` — ${message}` : ''}`,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -289,6 +336,10 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
       type: 'client_withdrawal', clientId, clientName,
       clientPhone: clientPhone || '', clientWalletId: clientWalletId || '',
       transactionId: txRef.id, amount, method, accountNumber,
+      ...(usdAmount !== undefined && { usdAmount }),
+      ...(htgEquivalent !== undefined && { htgEquivalent }),
+      ...(exchangeRate !== undefined && { exchangeRate }),
+      ...(accountName && { accountName }),
       ...(message && { message }),
       read: false,
       createdAt: FieldValue.serverTimestamp(),
@@ -296,19 +347,68 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
     await batch.commit();
 
     sendAdminEmail(
-      `🏧 Nouvelle demande de retrait — ${clientName}`,
-      `Une nouvelle demande de retrait a été soumise.\n\n` +
+      `🏧 Retrait — ${clientName}`,
+      `Nouvelle demande de retrait.\n\n` +
       `Client : ${clientName}\nTéléphone : ${clientPhone || 'N/A'}\n` +
-      `Wallet ID : ${clientWalletId || 'N/A'}\nMontant : ${amount.toLocaleString()} HTG\n` +
-      `Méthode : ${method}\nCompte destinataire : ${accountNumber}\n` +
+      `Wallet ID : ${clientWalletId || 'N/A'}\n` +
+      `Montant USD : $${(usdAmount || amount).toFixed ? (usdAmount || amount).toFixed(2) : usdAmount || amount}\n` +
+      (htgEquivalent ? `≈ HTG : ${htgEquivalent.toLocaleString()} HTG\n` : '') +
+      `Méthode : ${method}\nCompte : ${accountNumber}\n` +
+      (accountName ? `Bénéficiaire : ${accountName}\n` : '') +
       (message ? `Message : ${message}\n` : '') +
-      `\n⚠️ Le solde a déjà été débité. Connectez-vous au tableau de bord pour traiter ce retrait.`
+      `\n⚠️ Solde débité. Traitez ce retrait depuis le tableau de bord.`
     );
 
     res.json({ success: true, transactionId: txRef.id });
   } catch (e: any) {
     console.error('[withdrawal]', e);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Delete client transaction history ────────────────────────────────────────
+router.delete('/api/client/transactions/:clientId', requireDb, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    if (!clientId) return res.status(400).json({ error: 'clientId requis.' });
+    const snap = await adminDb.collection('client_transactions')
+      .where('clientId', '==', clientId).limit(200).get();
+    const batch = adminDb.batch();
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+    res.json({ success: true, deleted: snap.size });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Admin: Wallet Stats ───────────────────────────────────────────────────────
+router.get('/api/admin/wallet/stats', requireDb, async (req, res) => {
+  if (req.headers['x-admin-secret'] !== 'neopay-admin-2024')
+    return res.status(403).json({ error: 'Non autorisé.' });
+  try {
+    const [txSnap, clientsSnap] = await Promise.all([
+      adminDb.collection('client_transactions').orderBy('createdAt', 'desc').limit(500).get(),
+      adminDb.collection('clients').get(),
+    ]);
+    const txs = txSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+    const clients = clientsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+
+    const sum = (arr: any[], field: string) => arr.reduce((s, t) => s + (t[field] || t.amount || 0), 0);
+    const approved = (type: string) => txs.filter(t => t.type === type && (t.status === 'approved' || t.status === 'completed'));
+
+    res.json({
+      totalDeposited: sum(approved('deposit'), 'usdAmount'),
+      totalWithdrawn: sum(approved('withdrawal'), 'usdAmount'),
+      totalSpent: sum(approved('purchase'), 'usdAmount'),
+      totalBalance: clients.reduce((s: number, c: any) => s + (c.balance || 0), 0),
+      activeWallets: clients.filter((c: any) => (c.balance || 0) > 0).length,
+      totalClients: clients.length,
+      pendingDeposits: txs.filter(t => t.type === 'deposit' && t.status === 'pending').length,
+      pendingWithdrawals: txs.filter(t => t.type === 'withdrawal' && t.status === 'pending').length,
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 

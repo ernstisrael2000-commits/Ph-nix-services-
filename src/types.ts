@@ -71,8 +71,8 @@ export interface AdditionalSponsor {
 
 export interface Affiliate {
   id?: string;
-  uid?: string; // For social login
-  email?: string; // For social login
+  uid?: string;
+  email?: string;
   username: string;
   password: string; 
   name: string;
@@ -92,7 +92,7 @@ export interface Affiliate {
   totalEarnings: number;
   totalWithdrawn?: number;
   walletId?: string;
-  info?: any; // Stores registration data
+  info?: any;
   createdAt: any;
   updatedAt: any;
 }
@@ -117,8 +117,8 @@ export type TransactionStatus = 'pending' | 'completed' | 'approved' | 'rejected
 export interface Agent {
   id?: string;
   uid?: string;
-  email?: string; // For social login
-  agentCode: string; // 8 digits
+  email?: string;
+  agentCode: string;
   name: string;
   phone: string;
   balance: number;
@@ -131,15 +131,15 @@ export interface Agent {
 export interface WalletTransaction {
   id?: string;
   affiliateId: string;
-  agentId?: string; // For agent deposits
-  agentCode?: string; // For agent deposits
+  agentId?: string;
+  agentCode?: string;
   type: TransactionType;
   amount: number;
   status: TransactionStatus;
   description?: string;
-  relatedAffiliateId?: string; // recipientId or senderId
+  relatedAffiliateId?: string;
   relatedAffiliateName?: string;
-  recipientWalletId?: string; // For transfers
+  recipientWalletId?: string;
   method?: string;
   accountNumber?: string;
   rejectionReason?: string;
@@ -156,6 +156,45 @@ export interface AffiliateNotification {
   read: boolean;
   createdAt: any;
 }
+
+// ─── Payment Methods ──────────────────────────────────────────────────────────
+
+export type PaymentMethodType = 'mobile_money' | 'bank_transfer' | 'crypto' | 'payment_app' | 'card' | 'cash';
+
+export interface PaymentMethod {
+  id: string;
+  name: string;
+  type: PaymentMethodType;
+  icon: string;
+  enabled: boolean;
+  forDeposit: boolean;
+  forWithdrawal: boolean;
+  number?: string;
+  accountName?: string;
+  qrUrl?: string;
+  address?: string;
+  instructions?: string;
+  minAmountUSD?: number;
+  maxAmountUSD?: number;
+}
+
+export const DEFAULT_PAYMENT_METHODS: PaymentMethod[] = [
+  { id: 'moncash', name: 'MonCash', type: 'mobile_money', icon: '📱', enabled: true, forDeposit: true, forWithdrawal: true },
+  { id: 'natcash', name: 'NatCash', type: 'mobile_money', icon: '💳', enabled: true, forDeposit: true, forWithdrawal: true },
+  { id: 'admi', name: 'Admi', type: 'mobile_money', icon: '🏦', enabled: true, forDeposit: true, forWithdrawal: false },
+  { id: 'wave', name: 'Wave', type: 'mobile_money', icon: '🌊', enabled: false, forDeposit: true, forWithdrawal: true },
+  { id: 'orange_money', name: 'Orange Money', type: 'mobile_money', icon: '🟠', enabled: false, forDeposit: true, forWithdrawal: true },
+  { id: 'zelle', name: 'Zelle', type: 'payment_app', icon: '💜', enabled: false, forDeposit: true, forWithdrawal: true },
+  { id: 'paypal', name: 'PayPal', type: 'payment_app', icon: '🅿️', enabled: false, forDeposit: true, forWithdrawal: true },
+  { id: 'cashapp', name: 'Cash App', type: 'payment_app', icon: '💚', enabled: false, forDeposit: true, forWithdrawal: true },
+  { id: 'binance', name: 'Binance Pay', type: 'crypto', icon: '🟡', enabled: false, forDeposit: true, forWithdrawal: true },
+  { id: 'usdt_trc20', name: 'USDT TRC20', type: 'crypto', icon: '🔶', enabled: false, forDeposit: true, forWithdrawal: true },
+  { id: 'usdt_bep20', name: 'USDT BEP20', type: 'crypto', icon: '🔷', enabled: false, forDeposit: true, forWithdrawal: true },
+  { id: 'carte', name: 'Carte Bancaire', type: 'card', icon: '💳', enabled: false, forDeposit: true, forWithdrawal: false },
+  { id: 'virement', name: 'Virement Bancaire', type: 'bank_transfer', icon: '🏛️', enabled: false, forDeposit: true, forWithdrawal: true },
+];
+
+// ─── App Settings ─────────────────────────────────────────────────────────────
 
 export interface AppSettings {
   logoUrl?: string;
@@ -183,6 +222,12 @@ export interface AppSettings {
     monthlySales: number;
     monthlyReferredClients: number;
   }[];
+  // Wallet system
+  paymentMethods?: PaymentMethod[];
+  minDepositUSD?: number;
+  maxDepositUSD?: number;
+  minWithdrawalUSD?: number;
+  maxWithdrawalUSD?: number;
 }
 
 export interface Game {
@@ -379,16 +424,6 @@ export interface FormationUser {
   createdAt: any;
 }
 
-export interface FormationProgress {
-  id?: string;
-  userId: string;
-  formationId: string;
-  completedModuleIds: string[];
-  currentModuleId?: string;
-  lastPositionSeconds?: number;
-  updatedAt?: any;
-}
-
 export interface FormationPaymentRequest {
   id?: string;
   userId: string;
@@ -415,10 +450,15 @@ export interface ClientTransaction {
   clientName?: string;
   type: ClientTransactionType;
   amount: number;
+  htgAmount?: number;
+  htgEquivalent?: number;
+  usdAmount?: number;
+  exchangeRate?: number;
   status: ClientTransactionStatus;
   description?: string;
   method?: string;
   accountNumber?: string;
+  accountName?: string;
   txId?: string;
   productName?: string;
   productPrice?: string;
@@ -438,8 +478,11 @@ export interface AdminClientNotification {
   clientWalletId?: string;
   transactionId: string;
   amount: number;
+  htgAmount?: number;
+  exchangeRate?: number;
   method?: string;
   accountNumber?: string;
+  accountName?: string;
   txId?: string;
   productName?: string;
   productPrice?: string;
