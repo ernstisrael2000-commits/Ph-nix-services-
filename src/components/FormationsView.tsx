@@ -303,51 +303,51 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
         <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 25% 50%, #7C3AED 0%, transparent 50%), radial-gradient(circle at 75% 20%, #3B82F6 0%, transparent 50%)' }} />
         <div className="absolute inset-0 opacity-5" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20">
-          <div className="max-w-3xl">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="px-3 py-1 bg-violet-500/20 text-violet-300 text-xs font-bold rounded-full border border-violet-500/30 flex items-center gap-1.5">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="px-2.5 py-0.5 bg-violet-500/20 text-violet-300 text-xs font-bold rounded-full border border-violet-500/30 flex items-center gap-1.5">
                 <Sparkles className="h-3 w-3" /> Formations Neopay
               </span>
             </div>
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white leading-tight mb-4">
-              Élevez vos compétences<br />
+            <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight mb-2">
+              Élevez vos compétences{' '}
               <span className="text-violet-400">vers l'excellence</span>
             </h1>
-            <p className="text-gray-400 text-base sm:text-lg mb-8 max-w-xl">
-              Accédez à des formations de classe mondiale conçues par les meilleurs experts de l'industrie.
+            <p className="text-gray-400 text-sm mb-5 max-w-lg">
+              Accédez à des formations conçues par les meilleurs experts de l'industrie.
             </p>
 
             {/* Search bar */}
-            <div className="flex gap-2 max-w-xl">
+            <div className="flex gap-2 max-w-lg">
               <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Design, Tech, Business..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full pl-11 pr-4 h-12 rounded-xl bg-white/10 backdrop-blur border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400/50 focus:bg-white/15 transition-all"
+                  className="w-full pl-10 pr-4 h-10 rounded-xl bg-white/10 backdrop-blur border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400/50 focus:bg-white/15 transition-all"
                 />
               </div>
               <button
-                onClick={() => { if (searchQuery) {} }}
-                className="h-12 px-6 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl transition-colors text-sm shrink-0"
+                onClick={() => {}}
+                className="h-10 px-5 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl transition-colors text-sm shrink-0"
               >
                 Chercher
               </button>
             </div>
 
             {/* Stats */}
-            <div className="flex flex-wrap gap-6 mt-8 text-sm">
+            <div className="flex flex-wrap gap-5 mt-5 text-sm">
               {[
                 { label: 'Formations', value: formations.length + '+' },
                 { label: 'Cours gratuits', value: freeCourses.length + '' },
                 { label: 'Apprenants', value: formations.reduce((s, f) => s + (f.studentsCount || 0), 0).toLocaleString() + '+' },
               ].map(s => (
-                <div key={s.label} className="flex items-center gap-2 text-gray-400">
-                  <span className="text-white font-black text-lg">{s.value}</span>
-                  <span>{s.label}</span>
+                <div key={s.label} className="flex items-center gap-1.5 text-gray-400">
+                  <span className="text-white font-black">{s.value}</span>
+                  <span className="text-xs">{s.label}</span>
                 </div>
               ))}
             </div>
@@ -389,7 +389,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
       </div>
 
       {/* ── CONTENT ─────────────────────────────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
         <AnimatePresence mode="wait">
 
           {/* ── ALL COURSES TAB ──────────────────────────────────────────── */}
@@ -439,7 +439,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
 
               {/* ── My courses in progress (if logged) */}
               {loggedClient && myCourses.length > 0 && (
-                <div className="mb-10">
+                <div className="mb-6">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-black text-gray-900">Continuer l'apprentissage</h2>
                     <button onClick={() => onTabChange('my')} className="text-sm text-violet-600 font-bold hover:underline flex items-center gap-1">
@@ -463,7 +463,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
                   {filtered.length === 0 ? (
                     <EmptyState icon={<Search className="h-10 w-10" />} title="Aucun résultat" sub="Essayez un autre mot-clé ou modifiez vos filtres." />
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {filtered.map((f, i) => <CourseCard key={f.id} formation={f} i={i} owned={isOwned(f)} fav={isFav(f)} disc={discount(f)} onOpen={() => openDetail(f)} onFav={(e) => toggleFavorite(f, e)} />)}
                     </div>
                   )}
@@ -471,16 +471,16 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
               ) : (
                 <>
                   {/* ── Les plus populaires */}
-                  <Section title="Les plus populaires" icon={<TrendingUp className="h-5 w-5 text-violet-600" />}>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <Section title="Les plus populaires" icon={<TrendingUp className="h-4 w-4 text-violet-600" />}>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {popularCourses.map((f, i) => <CourseCard key={f.id} formation={f} i={i} owned={isOwned(f)} fav={isFav(f)} disc={discount(f)} onOpen={() => openDetail(f)} onFav={(e) => toggleFavorite(f, e)} />)}
                     </div>
                   </Section>
 
                   {/* ── Cours gratuits */}
                   {freeCourses.length > 0 && (
-                    <Section title="Cours gratuits" icon={<Zap className="h-5 w-5 text-emerald-500" />}>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <Section title="Cours gratuits" icon={<Zap className="h-4 w-4 text-emerald-500" />}>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {freeCourses.slice(0, 6).map((f, i) => <CourseCard key={f.id} formation={f} i={i} owned={isOwned(f)} fav={isFav(f)} disc={discount(f)} onOpen={() => openDetail(f)} onFav={(e) => toggleFavorite(f, e)} />)}
                       </div>
                     </Section>
@@ -488,25 +488,25 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
 
                   {/* ── Nouveautés */}
                   {newCourses.length > 0 && (
-                    <Section title="Nouveautés" icon={<Sparkles className="h-5 w-5 text-amber-500" />}>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <Section title="Nouveautés" icon={<Sparkles className="h-4 w-4 text-amber-500" />}>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {newCourses.map((f, i) => <CourseCard key={f.id} formation={f} i={i} owned={isOwned(f)} fav={isFav(f)} disc={discount(f)} onOpen={() => openDetail(f)} onFav={(e) => toggleFavorite(f, e)} />)}
                       </div>
                     </Section>
                   )}
 
                   {/* ── CTA Banner */}
-                  <div className="mt-12 bg-gradient-to-br from-slate-900 to-violet-950 rounded-3xl p-8 sm:p-12 text-center text-white">
-                    <h3 className="text-2xl sm:text-3xl font-black mb-3">Prêt à transformer votre carrière ?</h3>
-                    <p className="text-gray-400 mb-8 max-w-md mx-auto">
+                  <div className="mt-6 bg-gradient-to-br from-slate-900 to-violet-950 rounded-2xl p-6 sm:p-8 text-center text-white">
+                    <h3 className="text-xl font-black mb-2">Prêt à transformer votre carrière ?</h3>
+                    <p className="text-gray-400 text-sm mb-4 max-w-md mx-auto">
                       Rejoignez plus de {formations.reduce((s, f) => s + (f.studentsCount || 0), 0).toLocaleString()} apprenants et accédez à l'intégralité du catalogue.
                     </p>
-                    <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                      <button onClick={() => setSearchQuery('')} className="px-8 py-3 bg-violet-600 hover:bg-violet-700 rounded-xl font-bold transition-colors">
+                    <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                      <button onClick={() => setSearchQuery('')} className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 rounded-xl font-bold transition-colors text-sm">
                         Commencer maintenant
                       </button>
                       {!loggedClient && (
-                        <button onClick={onOpenWallet} className="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-colors border border-white/20">
+                        <button onClick={onOpenWallet} className="px-6 py-2.5 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-colors border border-white/20 text-sm">
                           Se connecter
                         </button>
                       )}
@@ -521,23 +521,23 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
           {activeTab === 'my' && (
             <motion.div key="my" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               {!loggedClient ? (
-                <div className="text-center py-24">
-                  <div className="bg-violet-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-5 border border-violet-100">
-                    <Lock className="h-9 w-9 text-violet-400" />
+                <div className="text-center py-14">
+                  <div className="bg-violet-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border border-violet-100">
+                    <Lock className="h-7 w-7 text-violet-400" />
                   </div>
-                  <h3 className="text-xl font-black text-gray-900 mb-2">Connectez-vous pour accéder à vos cours</h3>
-                  <p className="text-gray-500 text-sm mb-6 max-w-sm mx-auto">Votre espace personnel vous permet de retrouver tous vos cours achetés et votre progression.</p>
+                  <h3 className="text-lg font-black text-gray-900 mb-1.5">Connectez-vous pour accéder à vos cours</h3>
+                  <p className="text-gray-500 text-sm mb-5 max-w-sm mx-auto">Votre espace personnel vous permet de retrouver tous vos cours achetés et votre progression.</p>
                   <Button onClick={onOpenWallet} className="bg-violet-600 hover:bg-violet-700 text-white rounded-xl px-6">
                     Se connecter
                   </Button>
                 </div>
               ) : myCourses.length === 0 ? (
-                <div className="text-center py-24">
-                  <div className="bg-violet-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-5 border border-violet-100">
-                    <BookOpen className="h-9 w-9 text-violet-400" />
+                <div className="text-center py-14">
+                  <div className="bg-violet-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border border-violet-100">
+                    <BookOpen className="h-7 w-7 text-violet-400" />
                   </div>
-                  <h3 className="text-xl font-black text-gray-900 mb-2">Vous n'avez pas encore de cours</h3>
-                  <p className="text-gray-500 text-sm mb-6 max-w-sm mx-auto">Explorez notre catalogue et démarrez votre apprentissage dès aujourd'hui.</p>
+                  <h3 className="text-lg font-black text-gray-900 mb-1.5">Vous n'avez pas encore de cours</h3>
+                  <p className="text-gray-500 text-sm mb-5 max-w-sm mx-auto">Explorez notre catalogue et démarrez votre apprentissage dès aujourd'hui.</p>
                   <Button onClick={() => onTabChange('all')} className="bg-violet-600 hover:bg-violet-700 text-white rounded-xl px-6 flex items-center gap-2">
                     <GraduationCap className="h-4 w-4" /> Explorer le catalogue
                   </Button>
@@ -567,10 +567,10 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
 
 function Section({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="mb-12">
-      <div className="flex items-center gap-2.5 mb-5">
+    <div className="mb-7">
+      <div className="flex items-center gap-2 mb-4">
         <div className="bg-gray-100 rounded-lg p-1.5">{icon}</div>
-        <h2 className="text-lg font-black text-gray-900">{title}</h2>
+        <h2 className="text-base font-black text-gray-900">{title}</h2>
       </div>
       {children}
     </div>
@@ -579,8 +579,8 @@ function Section({ title, icon, children }: { title: string; icon: React.ReactNo
 
 function EmptyState({ icon, title, sub }: { icon: React.ReactNode; title: string; sub: string }) {
   return (
-    <div className="text-center py-20 text-gray-400">
-      <div className="mb-4 mx-auto opacity-30">{icon}</div>
+    <div className="text-center py-12 text-gray-400">
+      <div className="mb-3 mx-auto opacity-30">{icon}</div>
       <p className="font-bold text-gray-700 mb-1">{title}</p>
       <p className="text-sm">{sub}</p>
     </div>
