@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ChevronLeft, Play, CheckCircle2, Lock, Clock, Loader2,
-  BookOpen, Menu, X, ChevronRight, ChevronDown, ChevronUp,
-  Layers, FileText, Download, Trophy, RotateCcw,
-  Video, List, StickyNote, BarChart3, ExternalLink
+  BookOpen, X, ChevronDown, ChevronUp,
+  FileText, Download, Trophy,
+  Video, List, StickyNote
 } from 'lucide-react';
-import { Formation, FormationModule, FormationChapter } from '../types';
+import { Formation, FormationModule } from '../types';
 import { Client } from '../types';
 import { toast } from 'sonner';
 
@@ -103,7 +103,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
       .finally(() => setLoadingProgress(false));
   }, [loggedClient.id, formation.id]);
 
-  // ── Load note for current module ────────────────────────────────────────────
+  // ── Load note for current module ───────────────────────────────────────────
   useEffect(() => {
     if (!formation.id || !currentModuleId) return;
     const saved = localStorage.getItem(getNoteKey(formation.id, currentModuleId)) || '';
@@ -216,7 +216,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
     setExpandedChapters(prev => ({ ...prev, [chapterId]: !prev[chapterId] }));
   };
 
-  // ── Module list item ───────────────────────────────────────────────────────
+  // ── Module list item (light theme) ────────────────────────────────────────
   const ModuleItem = ({ mod, idx }: { mod: FormationModule; idx: number }) => {
     const locked = isLocked(mod, idx);
     const completed = isCompleted(mod);
@@ -224,28 +224,53 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
     const hasVideo = !!mod.videoUrl;
 
     return (
-      <button onClick={() => goToModule(mod, idx)} disabled={locked}
+      <button
+        onClick={() => goToModule(mod, idx)}
+        disabled={locked}
         className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-all border-l-2 ${
-          current ? 'bg-violet-900/30 border-violet-400' : locked ? 'opacity-40 cursor-not-allowed border-transparent' : 'hover:bg-white/5 border-transparent'
-        }`}>
+          current
+            ? 'bg-violet-50 border-violet-500'
+            : locked
+            ? 'opacity-40 cursor-not-allowed border-transparent'
+            : 'hover:bg-gray-50 border-transparent'
+        }`}
+      >
+        {/* Status icon */}
         <div className={`mt-0.5 h-6 w-6 rounded-full flex items-center justify-center shrink-0 text-[10px] font-black transition-colors ${
-          completed ? 'bg-emerald-500' : current ? 'bg-violet-500' : 'bg-white/10'
+          completed ? 'bg-emerald-500' : current ? 'bg-violet-600' : 'bg-gray-200'
         }`}>
-          {completed ? <CheckCircle2 className="h-3.5 w-3.5 text-white" /> :
-           locked ? <Lock className="h-3 w-3 text-white/60" /> :
-           current ? <Play className="h-3 w-3 text-white fill-white" /> :
-           <span className="text-white/60">{idx + 1}</span>}
+          {completed
+            ? <CheckCircle2 className="h-3.5 w-3.5 text-white" />
+            : locked
+            ? <Lock className="h-3 w-3 text-gray-400" />
+            : current
+            ? <Play className="h-3 w-3 text-white fill-white" />
+            : <span className="text-gray-500">{idx + 1}</span>}
         </div>
+
         <div className="flex-1 min-w-0">
-          <p className={`text-xs font-semibold leading-snug line-clamp-2 ${current ? 'text-white' : completed ? 'text-white/60' : locked ? 'text-white/30' : 'text-white/70'}`}>
+          <p className={`text-xs font-semibold leading-snug line-clamp-2 ${
+            current ? 'text-violet-700' : completed ? 'text-gray-500' : locked ? 'text-gray-400' : 'text-gray-700'
+          }`}>
             {mod.title}
           </p>
           <div className="flex items-center gap-2 mt-0.5">
-            {mod.duration && <span className="text-[10px] text-white/30 flex items-center gap-1"><Clock className="h-2.5 w-2.5" />{mod.duration}</span>}
-            {!hasVideo && mod.pdfUrl && <span className="text-[10px] text-violet-400 flex items-center gap-1"><FileText className="h-2.5 w-2.5" />PDF</span>}
+            {mod.duration && (
+              <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                <Clock className="h-2.5 w-2.5" />{mod.duration}
+              </span>
+            )}
+            {!hasVideo && mod.pdfUrl && (
+              <span className="text-[10px] text-violet-500 flex items-center gap-1">
+                <FileText className="h-2.5 w-2.5" />PDF
+              </span>
+            )}
           </div>
         </div>
-        {current && !completed && <div className="mt-1 h-2 w-2 rounded-full bg-violet-400 shrink-0 animate-pulse" />}
+
+        {current && !completed && (
+          <div className="mt-1 h-2 w-2 rounded-full bg-violet-500 shrink-0 animate-pulse" />
+        )}
       </button>
     );
   };
@@ -265,13 +290,17 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
       <>
         {formation.chapters.map((chapter, ci) => (
           <div key={chapter.id}>
-            <button onClick={() => toggleChapter(chapter.id)}
-              className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-white/5 transition-colors">
-              <span className="text-[10px] font-black text-violet-400 uppercase tracking-widest">{String(ci + 1).padStart(2, '0')}</span>
-              <span className="text-xs font-black text-white/80 flex-1 line-clamp-1">{chapter.title}</span>
+            <button
+              onClick={() => toggleChapter(chapter.id)}
+              className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+            >
+              <span className="text-[10px] font-black text-violet-500 uppercase tracking-widest">
+                {String(ci + 1).padStart(2, '0')}
+              </span>
+              <span className="text-xs font-black text-gray-800 flex-1 line-clamp-1">{chapter.title}</span>
               {expandedChapters[chapter.id]
-                ? <ChevronUp className="h-3.5 w-3.5 text-white/30 shrink-0" />
-                : <ChevronDown className="h-3.5 w-3.5 text-white/30 shrink-0" />}
+                ? <ChevronUp className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                : <ChevronDown className="h-3.5 w-3.5 text-gray-400 shrink-0" />}
             </button>
             {expandedChapters[chapter.id] && (groupedByChapter[chapter.id] || []).map(mod => {
               const globalIdx = modules.findIndex(m => m.id === mod.id);
@@ -287,15 +316,16 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
     );
   };
 
+  // ── Loading ────────────────────────────────────────────────────────────────
   if (loadingProgress) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="relative mx-auto mb-4 w-14 h-14">
-            <div className="absolute inset-0 rounded-full border-4 border-violet-900" />
-            <div className="absolute inset-0 rounded-full border-4 border-t-violet-500 animate-spin" />
+            <div className="absolute inset-0 rounded-full border-4 border-violet-100" />
+            <div className="absolute inset-0 rounded-full border-4 border-t-violet-600 animate-spin" />
           </div>
-          <p className="text-white/50 font-medium text-sm">Chargement du cours...</p>
+          <p className="text-gray-500 font-medium text-sm">Chargement du cours...</p>
         </div>
       </div>
     );
@@ -306,50 +336,100 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
   const currentCompleted = currentModule ? isCompleted(currentModule) : false;
 
   const TABS: { id: PlayerTab; label: string; icon: React.ReactNode }[] = [
-    { id: 'overview', label: 'Aperçu', icon: <BookOpen className="h-3.5 w-3.5" /> },
-    { id: 'resources', label: 'Ressources', icon: <FileText className="h-3.5 w-3.5" /> },
-    { id: 'notes', label: 'Mes notes', icon: <StickyNote className="h-3.5 w-3.5" /> },
+    { id: 'overview',   label: 'Aperçu',      icon: <BookOpen   className="h-3.5 w-3.5" /> },
+    { id: 'resources',  label: 'Ressources',   icon: <FileText   className="h-3.5 w-3.5" /> },
+    { id: 'notes',      label: 'Mes notes',    icon: <StickyNote className="h-3.5 w-3.5" /> },
   ];
 
+  // ── Sidebar panel (shared between desktop + mobile) ────────────────────────
+  const SidebarContent = () => (
+    <>
+      {/* Header */}
+      <div className="p-4 border-b border-gray-100 shrink-0">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-gray-900 font-black text-sm">Contenu du cours</span>
+          <span className="text-[11px] text-violet-600 font-bold">{progressPct}%</span>
+        </div>
+        {/* Progress bar */}
+        <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+          <motion.div
+            className="h-full bg-violet-600 rounded-full"
+            initial={{ width: 0 }}
+            animate={{ width: `${progressPct}%` }}
+            transition={{ duration: 0.5 }}
+          />
+        </div>
+        <p className="text-[11px] text-gray-400 mt-1.5">
+          {completedVideoCount}/{totalVideoModules} leçons terminées
+        </p>
+      </div>
+      {/* List */}
+      <div className="flex-1 overflow-y-auto py-1">{renderModuleList()}</div>
+      {/* Certificate banner */}
+      {formation.hasCertificate && progressPct === 100 && (
+        <div className="p-3 border-t border-gray-100 bg-emerald-50 shrink-0">
+          <div className="flex items-center gap-2 text-emerald-600">
+            <Trophy className="h-4 w-4" />
+            <span className="text-xs font-bold">Cours terminé — Certificat disponible !</span>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
 
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
-      <div className="h-14 bg-gray-900 border-b border-white/10 flex items-center px-4 gap-3 shrink-0 z-20">
-        <button onClick={onBack}
-          className="flex items-center gap-2 text-white/60 hover:text-white transition-colors text-sm font-semibold shrink-0">
+      <div className="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-3 shrink-0 z-20 shadow-sm">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-gray-500 hover:text-gray-900 transition-colors text-sm font-semibold shrink-0"
+        >
           <ChevronLeft className="h-5 w-5" />
           <span className="hidden sm:inline">Retour</span>
         </button>
-        <div className="h-4 w-px bg-white/10 shrink-0" />
-        <p className="text-white font-bold text-sm flex-1 truncate">{formation.title}</p>
+        <div className="h-4 w-px bg-gray-200 shrink-0" />
+        <p className="text-gray-900 font-bold text-sm flex-1 truncate">{formation.title}</p>
 
-        {/* Progress */}
+        {/* Desktop progress */}
         <div className="hidden sm:flex items-center gap-3 shrink-0">
-          <div className="w-28 bg-white/10 rounded-full h-1.5 overflow-hidden">
-            <motion.div className="h-full bg-violet-500 rounded-full"
-              initial={{ width: 0 }} animate={{ width: `${progressPct}%` }} transition={{ duration: 0.5 }} />
+          <div className="w-28 bg-gray-200 rounded-full h-2 overflow-hidden">
+            <motion.div
+              className="h-full bg-violet-600 rounded-full"
+              initial={{ width: 0 }}
+              animate={{ width: `${progressPct}%` }}
+              transition={{ duration: 0.5 }}
+            />
           </div>
-          <span className="text-xs font-bold text-white/50 shrink-0">{progressPct}% complété</span>
+          <span className="text-xs font-bold text-gray-500 shrink-0">{progressPct}% complété</span>
         </div>
 
-        {/* Mobile: open lesson list */}
-        <button onClick={() => setMobileSidebarOpen(v => !v)}
-          className="md:hidden p-2 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors">
+        {/* Mobile sidebar toggle */}
+        <button
+          onClick={() => setMobileSidebarOpen(v => !v)}
+          className="md:hidden p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-800 transition-colors"
+        >
           <List className="h-4 w-4" />
         </button>
 
-        {/* Desktop: toggle sidebar */}
-        <button onClick={() => setSidebarOpen(v => !v)}
-          className="hidden md:flex p-2 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors">
+        {/* Desktop sidebar toggle */}
+        <button
+          onClick={() => setSidebarOpen(v => !v)}
+          className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-800 transition-colors"
+        >
           <List className="h-4 w-4" />
         </button>
       </div>
 
-      {/* Mobile progress bar */}
-      <div className="md:hidden h-0.5 bg-white/10 shrink-0">
-        <motion.div className="h-full bg-violet-500"
-          initial={{ width: 0 }} animate={{ width: `${progressPct}%` }} transition={{ duration: 0.5 }} />
+      {/* Mobile progress stripe */}
+      <div className="md:hidden h-1 bg-gray-100 shrink-0">
+        <motion.div
+          className="h-full bg-violet-600"
+          initial={{ width: 0 }}
+          animate={{ width: `${progressPct}%` }}
+          transition={{ duration: 0.5 }}
+        />
       </div>
 
       {/* ── Body ────────────────────────────────────────────────────────────── */}
@@ -358,33 +438,16 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
         {/* ── Desktop sidebar ───────────────────────────────────────────────── */}
         <AnimatePresence initial={false}>
           {sidebarOpen && (
-            <motion.div key="sidebar"
+            <motion.div
+              key="sidebar"
               initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 320, opacity: 1 }}
+              animate={{ width: 300, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.22, ease: 'easeInOut' }}
-              className="hidden md:flex flex-col bg-gray-900 border-r border-white/10 shrink-0 overflow-hidden"
-              style={{ minWidth: 0 }}>
-              <div className="p-4 border-b border-white/10 shrink-0">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-white font-black text-sm">Contenu du cours</span>
-                  <span className="text-[11px] text-violet-400 font-bold">{progressPct}% complété</span>
-                </div>
-                <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
-                  <motion.div className="h-full bg-violet-500 rounded-full"
-                    initial={{ width: 0 }} animate={{ width: `${progressPct}%` }} transition={{ duration: 0.5 }} />
-                </div>
-                <p className="text-[11px] text-white/30 mt-1.5">{completedVideoCount}/{totalVideoModules} leçons terminées</p>
-              </div>
-              <div className="flex-1 overflow-y-auto py-1">{renderModuleList()}</div>
-              {formation.hasCertificate && progressPct === 100 && (
-                <div className="p-3 border-t border-white/10 bg-emerald-500/10 shrink-0">
-                  <div className="flex items-center gap-2 text-emerald-400">
-                    <Trophy className="h-4 w-4" />
-                    <span className="text-xs font-bold">Cours terminé — Certificat disponible !</span>
-                  </div>
-                </div>
-              )}
+              className="hidden md:flex flex-col bg-white border-r border-gray-200 shrink-0 overflow-hidden"
+              style={{ minWidth: 0 }}
+            >
+              <SidebarContent />
             </motion.div>
           )}
         </AnimatePresence>
@@ -393,132 +456,172 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
         <AnimatePresence>
           {mobileSidebarOpen && (
             <>
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/60 z-40 md:hidden" onClick={() => setMobileSidebarOpen(false)} />
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/30 z-40 md:hidden"
+                onClick={() => setMobileSidebarOpen(false)}
+              />
               <motion.div
                 initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
                 transition={{ type: 'tween', duration: 0.25 }}
-                className="fixed right-0 top-14 bottom-0 w-80 max-w-[85vw] bg-gray-900 z-50 md:hidden flex flex-col shadow-2xl border-l border-white/10">
-                <div className="p-4 border-b border-white/10 flex items-center justify-between shrink-0">
-                  <div>
-                    <p className="text-white font-black text-sm">Contenu du cours</p>
-                    <p className="text-[11px] text-violet-400 font-bold mt-0.5">{progressPct}% complété</p>
-                  </div>
-                  <button onClick={() => setMobileSidebarOpen(false)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/60">
+                className="fixed right-0 top-14 bottom-0 w-80 max-w-[85vw] bg-white z-50 md:hidden flex flex-col shadow-2xl border-l border-gray-200"
+              >
+                {/* Close button row */}
+                <div className="flex items-center justify-between px-4 pt-3 pb-0 shrink-0">
+                  <span className="text-xs text-gray-400 font-semibold">LEÇONS</span>
+                  <button
+                    onClick={() => setMobileSidebarOpen(false)}
+                    className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"
+                  >
                     <X className="h-4 w-4" />
                   </button>
                 </div>
-                <div className="flex-1 overflow-y-auto py-1">{renderModuleList()}</div>
+                <SidebarContent />
               </motion.div>
             </>
           )}
         </AnimatePresence>
 
         {/* ── Main content ──────────────────────────────────────────────────── */}
-        <div ref={mainContentRef} className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+        <div ref={mainContentRef} className="flex-1 overflow-y-auto min-h-0 flex flex-col bg-gray-50">
+
           {!currentModule ? (
-            <div className="flex items-center justify-center flex-1 text-white/30">
+            <div className="flex items-center justify-center flex-1 text-gray-400">
               <div className="text-center px-4">
-                <Video className="h-14 w-14 mx-auto mb-4 opacity-20" />
-                <p className="font-semibold text-sm">Sélectionnez une leçon pour commencer</p>
+                <Video className="h-14 w-14 mx-auto mb-4 text-gray-300" />
+                <p className="font-semibold text-sm text-gray-500">Sélectionnez une leçon pour commencer</p>
               </div>
             </div>
           ) : (
             <>
-              {/* ── Video player ────────────────────────────────────────── */}
-              <div className="bg-black w-full shrink-0">
+              {/* ── Video area — stays black (player standard) ─────────────── */}
+              <div className="bg-black w-full shrink-0 shadow-md">
                 {!currentModule.videoUrl ? (
-                  <div className="aspect-video flex flex-col items-center justify-center text-white/30 bg-gray-900">
-                    <FileText className="h-12 w-12 mb-3" />
-                    <p className="text-sm font-semibold">Leçon sans vidéo</p>
-                    <p className="text-xs mt-1 text-white/20">Consultez le contenu et les ressources ci-dessous</p>
+                  <div className="aspect-video flex flex-col items-center justify-center text-gray-400 bg-gray-100">
+                    <FileText className="h-12 w-12 mb-3 text-gray-300" />
+                    <p className="text-sm font-semibold text-gray-500">Leçon sans vidéo</p>
+                    <p className="text-xs mt-1 text-gray-400">Consultez le contenu et les ressources ci-dessous</p>
                   </div>
                 ) : videoInfo?.type === 'youtube' ? (
                   <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
-                    <iframe key={currentModule.id}
+                    <iframe
+                      key={currentModule.id}
                       src={`https://www.youtube.com/embed/${videoInfo.videoId}?enablejsapi=1&rel=0&modestbranding=1&origin=${window.location.origin}`}
                       className="absolute inset-0 w-full h-full"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen title={currentModule.title} />
+                      allowFullScreen
+                      title={currentModule.title}
+                    />
                   </div>
                 ) : videoInfo?.type === 'vimeo' ? (
                   <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
-                    <iframe key={currentModule.id}
+                    <iframe
+                      key={currentModule.id}
                       src={`https://player.vimeo.com/video/${videoInfo.videoId}?api=1&color=7C3AED`}
                       className="absolute inset-0 w-full h-full"
-                      allow="autoplay; fullscreen; picture-in-picture" allowFullScreen title={currentModule.title} />
+                      allow="autoplay; fullscreen; picture-in-picture"
+                      allowFullScreen
+                      title={currentModule.title}
+                    />
                   </div>
                 ) : videoInfo?.type === 'direct' ? (
-                  <video key={currentModule.id} ref={videoRef} controls playsInline
-                    className="w-full aspect-video" style={{ background: '#000' }}
+                  <video
+                    key={currentModule.id}
+                    ref={videoRef}
+                    controls
+                    playsInline
+                    className="w-full aspect-video"
+                    style={{ background: '#000' }}
                     onEnded={() => markComplete()}
-                    onTimeUpdate={e => savePosition((e.target as HTMLVideoElement).currentTime)}>
+                    onTimeUpdate={e => savePosition((e.target as HTMLVideoElement).currentTime)}
+                  >
                     <source src={videoInfo.url} />
                   </video>
                 ) : (
-                  <div className="aspect-video flex items-center justify-center bg-gray-900 text-white/30">
+                  <div className="aspect-video flex items-center justify-center bg-gray-900 text-gray-400">
                     <p className="text-sm">URL vidéo non reconnue</p>
                   </div>
                 )}
               </div>
 
-              {/* ── Lesson header ─────────────────────────────────────────── */}
-              <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-5">
-                <div className="flex items-start justify-between gap-4 mb-4">
+              {/* ── Lesson info ────────────────────────────────────────────── */}
+              <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 py-6">
+
+                {/* Title row */}
+                <div className="flex items-start justify-between gap-4 mb-5">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-2">
-                      <span className="text-[11px] font-bold text-white/30 uppercase tracking-widest">
+                      <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                         Leçon {currentIdx + 1} / {modules.length}
                       </span>
                       {currentCompleted && (
-                        <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
+                        <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
                           <CheckCircle2 className="h-3 w-3" /> Terminée
                         </span>
                       )}
                       {justCompleted && (
-                        <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }}
-                          className="flex items-center gap-1 text-[11px] font-bold text-violet-400 bg-violet-400/10 px-2 py-0.5 rounded-full">
+                        <motion.span
+                          initial={{ scale: 0 }} animate={{ scale: 1 }}
+                          className="flex items-center gap-1 text-[11px] font-bold text-violet-600 bg-violet-50 border border-violet-200 px-2 py-0.5 rounded-full"
+                        >
                           ✨ Bravo !
                         </motion.span>
                       )}
                     </div>
-                    <h2 className="text-lg sm:text-xl font-black text-white leading-tight">{currentModule.title}</h2>
+                    <h2 className="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                      {currentModule.title}
+                    </h2>
                     {currentModule.description && (
-                      <p className="text-sm text-white/40 mt-1.5 leading-relaxed">{currentModule.description}</p>
+                      <p className="text-sm text-gray-500 mt-1.5 leading-relaxed">{currentModule.description}</p>
                     )}
                   </div>
+
                   {!currentCompleted && (
-                    <button onClick={() => markComplete()} disabled={marking}
-                      className="shrink-0 flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl transition-colors disabled:opacity-50">
-                      {marking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                    <button
+                      onClick={() => markComplete()}
+                      disabled={marking}
+                      className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-xl transition-colors disabled:opacity-50 shadow-sm shadow-violet-200"
+                    >
+                      {marking
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <CheckCircle2 className="h-3.5 w-3.5" />}
                       <span className="hidden sm:inline">Marquer terminée</span>
                     </button>
                   )}
                 </div>
 
-                {/* ── Navigation buttons ─────────────────────────────────── */}
+                {/* Navigation buttons */}
                 <div className="flex items-center gap-2 mb-6">
-                  <button onClick={goPrev} disabled={!canGoPrev}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/10 text-white/50 hover:text-white hover:border-white/20 text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed">
+                  <button
+                    onClick={goPrev}
+                    disabled={!canGoPrev}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:text-gray-900 hover:border-gray-300 text-xs font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-sm"
+                  >
                     <ChevronLeft className="h-3.5 w-3.5" /> Précédente
                   </button>
-                  <button onClick={goNext} disabled={!canGoNext || navigating}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-violet-900/40">
-                    {navigating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                    Suivante <ChevronRight className="h-3.5 w-3.5" />
+                  <button
+                    onClick={goNext}
+                    disabled={!canGoNext || navigating}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm shadow-violet-200"
+                  >
+                    {navigating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    Suivante <ChevronDown className="h-3.5 w-3.5 -rotate-90" />
                   </button>
                 </div>
 
                 {/* ── Tabs ───────────────────────────────────────────────── */}
-                <div className="border-b border-white/10 mb-6">
+                <div className="border-b border-gray-200 mb-6">
                   <div className="flex gap-0 overflow-x-auto no-scrollbar">
                     {TABS.map(tab => (
-                      <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                        className={`flex items-center gap-2 px-4 py-3 text-xs font-bold whitespace-nowrap border-b-2 transition-all ${
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`flex items-center gap-2 px-5 py-3 text-xs font-bold whitespace-nowrap border-b-2 transition-all ${
                           activeTab === tab.id
-                            ? 'text-violet-400 border-violet-500'
-                            : 'text-white/40 border-transparent hover:text-white/60'
-                        }`}>
+                            ? 'text-violet-700 border-violet-600 bg-violet-50/50'
+                            : 'text-gray-400 border-transparent hover:text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
                         {tab.icon} {tab.label}
                       </button>
                     ))}
@@ -528,73 +631,89 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                 {/* ── Tab content ────────────────────────────────────────── */}
                 <AnimatePresence mode="wait">
                   {activeTab === 'overview' && (
-                    <motion.div key="overview" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-                      {currentModule.description ? (
-                        <p className="text-white/60 text-sm leading-relaxed">{currentModule.description}</p>
-                      ) : (
-                        <p className="text-white/30 text-sm">Aucune description pour cette leçon.</p>
-                      )}
-                      {currentModule.duration && (
-                        <div className="flex items-center gap-2 mt-4 text-xs text-white/30">
-                          <Clock className="h-3.5 w-3.5" /> Durée estimée : {currentModule.duration}
-                        </div>
-                      )}
+                    <motion.div key="overview" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                      <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                        {currentModule.description ? (
+                          <p className="text-gray-600 text-sm leading-relaxed">{currentModule.description}</p>
+                        ) : (
+                          <p className="text-gray-400 text-sm">Aucune description pour cette leçon.</p>
+                        )}
+                        {currentModule.duration && (
+                          <div className="flex items-center gap-2 mt-4 text-xs text-gray-400 pt-4 border-t border-gray-50">
+                            <Clock className="h-3.5 w-3.5" /> Durée estimée : {currentModule.duration}
+                          </div>
+                        )}
+                      </div>
                     </motion.div>
                   )}
 
                   {activeTab === 'resources' && (
-                    <motion.div key="resources" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                    <motion.div key="resources" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                       {currentModule.pdfUrl ? (
-                        <a href={currentModule.pdfUrl} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-4 p-4 bg-white/5 hover:bg-white/10 rounded-xl border border-white/10 transition-colors group">
-                          <div className="h-10 w-10 bg-violet-500/20 rounded-xl flex items-center justify-center shrink-0">
-                            <FileText className="h-5 w-5 text-violet-400" />
+                        <a
+                          href={currentModule.pdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-4 p-4 bg-white hover:bg-violet-50 rounded-2xl border border-gray-100 hover:border-violet-200 transition-all group shadow-sm"
+                        >
+                          <div className="h-12 w-12 bg-violet-100 rounded-xl flex items-center justify-center shrink-0">
+                            <FileText className="h-6 w-6 text-violet-600" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-white">Support de cours PDF</p>
-                            <p className="text-xs text-white/40 mt-0.5">Cliquez pour télécharger</p>
+                            <p className="text-sm font-bold text-gray-900">Support de cours PDF</p>
+                            <p className="text-xs text-gray-400 mt-0.5">Cliquez pour télécharger</p>
                           </div>
-                          <Download className="h-4 w-4 text-white/40 group-hover:text-white transition-colors shrink-0" />
+                          <Download className="h-5 w-5 text-gray-300 group-hover:text-violet-600 transition-colors shrink-0" />
                         </a>
                       ) : (
-                        <div className="text-center py-12 text-white/20">
-                          <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                          <p className="text-sm">Aucune ressource pour cette leçon.</p>
+                        <div className="text-center py-14 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                          <FileText className="h-10 w-10 mx-auto mb-3 text-gray-200" />
+                          <p className="text-sm text-gray-400">Aucune ressource pour cette leçon.</p>
                         </div>
                       )}
                     </motion.div>
                   )}
 
                   {activeTab === 'notes' && (
-                    <motion.div key="notes" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-                      <div className="mb-3 flex items-center justify-between">
-                        <p className="text-xs text-white/40">Prendre des notes pour cette leçon</p>
-                        <button onClick={saveNote}
-                          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${noteSaved ? 'bg-emerald-500/20 text-emerald-400' : 'bg-violet-500/20 text-violet-400 hover:bg-violet-500/30'}`}>
-                          {noteSaved ? '✓ Sauvegardé' : 'Sauvegarder'}
-                        </button>
+                    <motion.div key="notes" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-xs text-gray-400 font-semibold">Notes pour cette leçon</p>
+                          <button
+                            onClick={saveNote}
+                            className={`text-xs font-bold px-4 py-1.5 rounded-lg transition-all ${
+                              noteSaved
+                                ? 'bg-emerald-100 text-emerald-600 border border-emerald-200'
+                                : 'bg-violet-100 text-violet-700 hover:bg-violet-200 border border-violet-200'
+                            }`}
+                          >
+                            {noteSaved ? '✓ Sauvegardé' : 'Sauvegarder'}
+                          </button>
+                        </div>
+                        <textarea
+                          value={note}
+                          onChange={e => setNote(e.target.value)}
+                          placeholder="Commencez à écrire vos notes ici... Elles sont sauvegardées localement."
+                          className="w-full h-48 bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-violet-400/50 focus:border-violet-400 transition-all resize-none"
+                        />
                       </div>
-                      <textarea
-                        value={note}
-                        onChange={e => setNote(e.target.value)}
-                        placeholder="Commencez à écrire vos notes ici... Elles seront sauvegardées localement."
-                        className="w-full h-48 bg-white/5 border border-white/10 rounded-xl p-4 text-sm text-white/70 placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/40 transition-all resize-none"
-                      />
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
 
-              {/* ── Certificate banner ─────────────────────────────────────────── */}
+              {/* ── Certificate banner ─────────────────────────────────────── */}
               {formation.hasCertificate && progressPct === 100 && (
                 <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 pb-8">
-                  <div className="bg-gradient-to-r from-amber-500/20 to-amber-600/10 border border-amber-500/30 rounded-2xl p-5 flex items-center gap-4">
-                    <div className="h-12 w-12 bg-amber-500/20 rounded-xl flex items-center justify-center shrink-0">
-                      <Trophy className="h-6 w-6 text-amber-400" />
+                  <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-5 flex items-center gap-4">
+                    <div className="h-12 w-12 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+                      <Trophy className="h-6 w-6 text-amber-500" />
                     </div>
                     <div>
-                      <p className="text-amber-300 font-black text-sm">🎉 Félicitations ! Cours terminé</p>
-                      <p className="text-amber-400/70 text-xs mt-0.5">Votre certificat d'achèvement est disponible. Contactez Neopay pour l'obtenir.</p>
+                      <p className="text-amber-800 font-black text-sm">🎉 Félicitations ! Cours terminé</p>
+                      <p className="text-amber-600 text-xs mt-0.5">
+                        Votre certificat d'achèvement est disponible. Contactez Neopay pour l'obtenir.
+                      </p>
                     </div>
                   </div>
                 </div>
