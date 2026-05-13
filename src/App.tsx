@@ -11,6 +11,7 @@ import AffiliateDashboard from './components/AffiliateDashboard';
 import AgentLogin from './components/AgentLogin';
 import AgentDashboard from './components/AgentDashboard';
 import ClientDashboard from './components/ClientDashboard';
+import PWAInstallPrompt from './components/PWAInstallPrompt';
 import { Toaster } from './components/ui/sonner';
 import AccessChoice from './components/AccessChoice';
 import { useAuth } from './hooks/useAuth';
@@ -396,6 +397,9 @@ export default function App() {
             />
           )}
         </AnimatePresence>
+
+        {/* PWA Install Prompt */}
+        <PWAInstallPrompt />
       </div>
     </ErrorBoundary>
   );
