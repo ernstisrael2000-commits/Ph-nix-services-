@@ -63,7 +63,7 @@ import {
 } from '../services/agentService';
 import { useAnalytics } from '../services/analyticsService';
 import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, WithdrawalRequest, AffiliateRequest, Game, CardTopup, NavButton, AdminAccount, Client, Agent, WalletTransaction, ClientTransaction, AdminClientNotification, OnlineSubService, Formation, FormationModule, FormationChapter, FormationResource } from '../types';
-import { useAllClientTransactions, updateClientTransactionStatus, useAdminClientNotifications, markAdminNotificationRead, markAllAdminNotificationsRead, approvePurchaseRequest, declinePurchaseRequest } from '../services/clientService';
+import { useAllClientTransactions, updateClientTransactionStatus, useAdminClientNotifications, markAdminNotificationRead, markAllAdminNotificationsRead, clearAllAdminNotifications, approvePurchaseRequest, declinePurchaseRequest } from '../services/clientService';
 import AdminShippingManager from './AdminShippingManager';
 import AdminWalletManager from './AdminWalletManager';
 import { 
@@ -6174,6 +6174,15 @@ const AffiliateEditForm = ({
                       Tout marquer lu
                     </button>
                   )}
+                  <button
+                    onClick={async () => {
+                      if (confirm('Effacer tout l\'historique des notifications ? Cette action est irréversible.')) {
+                        await clearAllAdminNotifications();
+                      }
+                    }}
+                    className="text-[11px] font-bold text-red-400 hover:text-red-300 underline underline-offset-2 transition-colors flex items-center gap-1">
+                    🗑 Effacer l'historique
+                  </button>
                   <button onClick={() => setActiveTab('clients-tx')}
                     className="text-[11px] font-bold text-amber-400 hover:text-amber-300 transition-colors">
                     Voir transactions →
@@ -6249,161 +6258,153 @@ const AffiliateEditForm = ({
             </Card>
           )}
 
-          <Card className="shadow-sm border-gray-200">
-            <CardHeader className="border-b bg-gray-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-4">
-              <CardTitle className="text-lg font-semibold">Demandes en attente ({allPendingRequests.length})</CardTitle>
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input 
-                  placeholder="Rechercher par nom ou code..." 
-                  className="pl-10"
+          {/* ── Demandes en attente — vue cartes ── */}
+          <div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+              <h3 className="text-lg font-black text-dark flex items-center gap-2">
+                <span className="h-7 w-7 rounded-lg bg-amber-100 flex items-center justify-center">
+                  <Clock className="h-4 w-4 text-amber-600" />
+                </span>
+                Demandes en attente
+                {allPendingRequests.length > 0 && (
+                  <span className="ml-1 h-6 px-2 rounded-full bg-amber-500 text-white text-[11px] font-black flex items-center">
+                    {allPendingRequests.length}
+                  </span>
+                )}
+              </h3>
+              <div className="relative w-full sm:w-60">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                <Input
+                  placeholder="Rechercher…"
+                  className="pl-9 h-9 text-sm"
                   value={notifSearch}
                   onChange={(e) => setNotifSearch(e.target.value)}
                 />
               </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="divide-y">
-                {allPendingRequests.length > 0 ? (
-                  allPendingRequests.map((req) => (
-                    <div key={req.id} className="p-4 hover:bg-gray-50 transition-colors flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <div className="flex items-start gap-4 min-w-0">
-                        <div className={`p-2 rounded-xl shrink-0 ${
-                          req.type === 'registration' ? 'bg-accent-light text-primary' :
-                          req.type === 'withdrawal' || req.type === 'client_withdrawal_req' ? 'bg-red-100 text-red-600' :
-                          req.type === 'client_deposit_req' ? 'bg-emerald-100 text-emerald-600' :
-                          'bg-accent-light/50 text-dark'
-                        }`}>
-                          {req.type === 'registration' ? <Users className="h-5 w-5" /> :
-                           req.type === 'withdrawal' ? <Wallet className="h-5 w-5" /> :
-                           req.type === 'client_withdrawal_req' ? <ArrowUp className="h-5 w-5" /> :
-                           req.type === 'client_deposit_req' ? <ArrowDown className="h-5 w-5" /> :
-                           <PlusCircle className="h-5 w-5" />}
+            </div>
+
+            {allPendingRequests.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                {allPendingRequests.map((req) => {
+                  const isRegistration = req.type === 'registration';
+                  const isWithdrawal = req.type === 'withdrawal';
+                  const isClientWithdrawal = req.type === 'client_withdrawal_req';
+                  const isClientDeposit = req.type === 'client_deposit_req';
+                  const isDeposit = req.type === 'deposit_request';
+
+                  const typeColor = isRegistration
+                    ? { bg: 'bg-violet-50', border: 'border-violet-200', icon: 'bg-violet-100 text-violet-600', badge: 'bg-violet-100 text-violet-700', amount: 'text-violet-700' }
+                    : isWithdrawal || isClientWithdrawal
+                    ? { bg: 'bg-red-50', border: 'border-red-200', icon: 'bg-red-100 text-red-600', badge: 'bg-red-100 text-red-700', amount: 'text-red-600' }
+                    : { bg: 'bg-emerald-50', border: 'border-emerald-200', icon: 'bg-emerald-100 text-emerald-600', badge: 'bg-emerald-100 text-emerald-700', amount: 'text-emerald-600' };
+
+                  const typeLabel = isRegistration ? 'Inscription' : isWithdrawal ? 'Retrait affilié' : isClientWithdrawal ? '↑ Retrait client' : isClientDeposit ? '↓ Dépôt client' : '↓ Dépôt';
+                  const TypeIcon = isRegistration ? Users : (isWithdrawal || isClientWithdrawal) ? ArrowUp : ArrowDown;
+                  const loading = clientTxActionLoading === (req as any).id;
+
+                  return (
+                    <div key={req.id} className={`relative rounded-2xl border ${typeColor.border} ${typeColor.bg} p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${typeColor.icon}`}>
+                          <TypeIcon className="h-5 w-5" />
                         </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <p className="font-bold text-dark truncate">{req.name}</p>
-                            <Badge variant="outline" className={
-                              req.type === 'registration' ? 'bg-accent-light text-primary border-primary/20' :
-                              req.type === 'withdrawal' ? 'bg-red-50 text-red-600 border-red-100' :
-                              req.type === 'client_withdrawal_req' ? 'bg-red-50 text-red-700 border-red-200' :
-                              req.type === 'client_deposit_req' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                              'bg-emerald-50 text-emerald-600 border-emerald-100'
-                            }>
-                              {req.type === 'registration' ? 'Inscription' :
-                               req.type === 'withdrawal' ? 'Retrait affilié' :
-                               req.type === 'client_withdrawal_req' ? '↑ Retrait client' :
-                               req.type === 'client_deposit_req' ? '↓ Dépôt client' : 'Dépôt'}
-                            </Badge>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-black text-dark text-sm leading-tight truncate">{req.name}</p>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${typeColor.badge}`}>{typeLabel}</span>
                           </div>
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {req.createdAt?.toDate ? format(req.createdAt.toDate(), 'PPp', { locale: fr }) : 'Date inconnue'}
-                            </span>
-                            {req.type === 'withdrawal' && (
-                              <div className="flex flex-col gap-1 mt-1">
-                                <span className="font-black text-red-600">{(req as any).amount} $</span>
-                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-red-50 rounded-lg w-fit border border-red-100">
-                                  <Smartphone className="h-3 w-3 text-red-500" />
-                                  <span className="font-black text-red-500 text-[10px] uppercase">{(req as any).method}: {(req as any).accountNumber}</span>
-                                </div>
-                              </div>
-                            )}
-                            {req.type === 'deposit_request' && (
-                              <div className="flex flex-col gap-1 mt-1">
-                                <span className="font-black text-emerald-600">{(req as any).amount} $</span>
-                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 rounded-lg w-fit border border-emerald-100">
-                                  <PlusCircle className="h-3 w-3 text-emerald-500" />
-                                  <span className="font-black text-emerald-500 text-[10px] uppercase">Dépôt: {(req as any).method}</span>
-                                </div>
-                              </div>
-                            )}
-                            {req.type === 'registration' && (
-                              <div className="flex flex-col gap-1 mt-1">
-                                <span className="text-gray-600">{(req as any).email}</span>
-                                {(req as any).phone && (
-                                  <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
-                                    <Smartphone className="h-3 w-3" />
-                                    {(req as any).phone}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                            {(req.type === 'client_deposit_req' || req.type === 'client_withdrawal_req') && (
-                              <div className="flex flex-wrap items-center gap-2 mt-1">
-                                <span className={`font-black text-base ${req.type === 'client_deposit_req' ? 'text-emerald-600' : 'text-red-600'}`}>
-                                  {(req as any).amount?.toLocaleString()} HTG
-                                </span>
-                                {(req as any).method && (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                                    via {(req as any).method}
-                                  </span>
-                                )}
-                                {(req as any).accountNumber && (
-                                  <span className="font-mono text-[10px] text-gray-500">{(req as any).accountNumber}</span>
-                                )}
-                                {(req as any).txId && (
-                                  <span className="font-mono text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
-                                    Réf: {(req as any).txId}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
+                          <p className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {req.createdAt?.toDate ? format(req.createdAt.toDate(), 'dd MMM, HH:mm', { locale: fr }) : 'Date inconnue'}
+                          </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 w-full sm:w-auto">
-                        <Button 
-                          size="sm" 
-                          className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 border-0 text-white font-black"
-                          disabled={clientTxActionLoading === (req as any).id}
+
+                      <div className="space-y-1.5">
+                        {isRegistration && (
+                          <>
+                            {(req as any).email && <p className="text-xs text-gray-600 truncate">📧 {(req as any).email}</p>}
+                            {(req as any).phone && <p className="text-xs text-gray-500">📱 {(req as any).phone}</p>}
+                          </>
+                        )}
+                        {(isWithdrawal || isDeposit) && (
+                          <>
+                            <p className={`text-xl font-black ${typeColor.amount}`}>{(req as any).amount} $</p>
+                            {(req as any).method && (
+                              <div className="flex items-center gap-1.5">
+                                <Smartphone className="h-3 w-3 text-gray-400" />
+                                <span className="text-xs font-bold text-gray-600">{(req as any).method}{(req as any).accountNumber ? ` · ${(req as any).accountNumber}` : ''}</span>
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {(isClientDeposit || isClientWithdrawal) && (
+                          <>
+                            <p className={`text-xl font-black ${typeColor.amount}`}>{(req as any).amount?.toLocaleString()} HTG</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(req as any).method && (
+                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/70 border border-gray-200 text-gray-600">via {(req as any).method}</span>
+                              )}
+                              {(req as any).accountNumber && (
+                                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-white/70 border border-gray-200 text-gray-500">{(req as any).accountNumber}</span>
+                              )}
+                              {(req as any).txId && (
+                                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-600">#{(req as any).txId}</span>
+                              )}
+                            </div>
+                            {(req as any).clientWalletId && (
+                              <p className="text-[11px] text-gray-400 font-mono">Wallet: {(req as any).clientWalletId}</p>
+                            )}
+                            {(req as any).message && (
+                              <p className="text-[11px] text-gray-500 italic bg-white/60 rounded-lg px-2 py-1">"{(req as any).message}"</p>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2 mt-auto pt-1">
+                        <Button
+                          size="sm"
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 border-0 text-white font-black h-9 rounded-xl"
+                          disabled={loading}
                           onClick={() => {
-                            if (req.type === 'registration') {
-                              handleAffiliateRequestAction(req as any, 'approved');
-                            } else if (req.type === 'withdrawal') {
-                              handleWithdrawalAction(req as any, 'approved');
-                            } else if (req.type === 'client_deposit_req' || req.type === 'client_withdrawal_req') {
-                              handleClientTxAction(req.id!, 'approved');
-                            } else {
-                              updateWalletTransactionStatus(req.id!, 'approved');
-                            }
+                            if (isRegistration) handleAffiliateRequestAction(req as any, 'approved');
+                            else if (isWithdrawal) handleWithdrawalAction(req as any, 'approved');
+                            else if (isClientDeposit || isClientWithdrawal) handleClientTxAction(req.id!, 'approved');
+                            else updateWalletTransactionStatus(req.id!, 'approved');
                           }}
                         >
-                          {clientTxActionLoading === (req as any).id ? <Loader2 className="h-4 w-4 animate-spin" /> : '✓ Approuver'}
+                          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : '✓ Approuver'}
                         </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="flex-1 sm:flex-none border-red-200 text-red-600 hover:bg-red-50 font-black"
-                          disabled={clientTxActionLoading === (req as any).id}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 border-red-200 text-red-600 hover:bg-red-50 font-black h-9 rounded-xl"
+                          disabled={loading}
                           onClick={() => {
-                            if (req.type === 'registration') {
-                              handleAffiliateRequestAction(req as any, 'rejected');
-                            } else if (req.type === 'withdrawal') {
-                              handleWithdrawalAction(req as any, 'rejected');
-                            } else if (req.type === 'client_deposit_req' || req.type === 'client_withdrawal_req') {
-                              handleClientTxAction(req.id!, 'rejected');
-                            } else {
-                              updateWalletTransactionStatus(req.id!, 'rejected');
-                            }
+                            if (isRegistration) handleAffiliateRequestAction(req as any, 'rejected');
+                            else if (isWithdrawal) handleWithdrawalAction(req as any, 'rejected');
+                            else if (isClientDeposit || isClientWithdrawal) handleClientTxAction(req.id!, 'rejected');
+                            else updateWalletTransactionStatus(req.id!, 'rejected');
                           }}
                         >
                           ✕ Rejeter
                         </Button>
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                    <Bell className="h-12 w-12 mb-4 opacity-20" />
-                    <p className="text-lg font-medium">Aucune notification en attente</p>
-                    <p className="text-sm">Toutes les demandes ont été traitées.</p>
-                  </div>
-                )}
+                  );
+                })}
               </div>
-            </CardContent>
-          </Card>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 rounded-2xl bg-gray-50 border border-dashed border-gray-200">
+                <div className="h-14 w-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-3">
+                  <Bell className="h-7 w-7 text-gray-300" />
+                </div>
+                <p className="text-base font-black text-gray-400">Aucune demande en attente</p>
+                <p className="text-sm text-gray-300 mt-1">Toutes les demandes ont été traitées.</p>
+              </div>
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-6">

@@ -211,6 +211,18 @@ router.patch('/api/admin/notifications/:id/read', requireDb, async (req, res) =>
   }
 });
 
+router.delete('/api/admin/notifications/clear-all', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('admin_notifications').limit(500).get();
+    const batch = adminDb.batch();
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+    res.json({ success: true, deleted: snap.size });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Deposit ───────────────────────────────────────────────────────────────────
 router.post('/api/client/deposit', requireDb, async (req, res) => {
   try {

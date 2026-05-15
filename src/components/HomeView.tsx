@@ -157,8 +157,9 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const effectiveClient = liveClient || loggedClient;
   const hasPendingPurchase = useClientPendingPurchase(loggedClient?.id || null);
   const exchangeRate = settings?.exchangeRate || 146;
-  const balanceHTG = effectiveClient?.balance ?? 0;
-  const balanceUSD = (balanceHTG / exchangeRate).toFixed(2);
+  const balanceUSD_raw = effectiveClient?.balance ?? 0;
+  const balanceHTG = Math.round(balanceUSD_raw * exchangeRate);
+  const balanceUSD = balanceUSD_raw.toFixed(2);
 
   const [previewFormations, setPreviewFormations] = useState<any[]>([]);
 

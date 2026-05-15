@@ -422,3 +422,7 @@ export const markAdminNotificationRead = async (notifId: string) => {
 export const markAllAdminNotificationsRead = async () => {
   await fetch('/api/admin/notifications/read-all', { method: 'PATCH' });
 };
+
+export const clearAllAdminNotifications = async () => {
+  await fetch('/api/admin/notifications/clear-all', { method: 'DELETE' });
+};
