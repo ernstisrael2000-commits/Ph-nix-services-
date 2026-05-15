@@ -22,6 +22,9 @@ function initFirebaseAdmin() {
       let json = raw.trim();
       if (!json.startsWith('{')) json = '{' + json;
       const serviceAccount = JSON.parse(json);
+      if (serviceAccount.private_key) {
+        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+      }
       adminApp = initializeApp({
         credential: cert(serviceAccount),
         databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`,

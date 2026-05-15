@@ -67,6 +67,9 @@ export default async function handler(req: any, res: any) {
     let raw = rawSa.trim();
     if (!raw.startsWith('{')) raw = '{' + raw;
     const sa = JSON.parse(raw);
+    if (sa.private_key) {
+      sa.private_key = sa.private_key.replace(/\\n/g, '\n');
+    }
 
     const token = await getAccessToken(sa);
 
