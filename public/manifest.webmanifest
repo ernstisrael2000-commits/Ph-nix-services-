@@ -1,6 +1,6 @@
 {
-  "name": "Neopay",
-  "short_name": "Neopay",
+  "name": "Rena",
+  "short_name": "Rena",
   "description": "Votre plateforme de logistique et paiements en ligne",
   "start_url": "/",
   "display": "standalone",

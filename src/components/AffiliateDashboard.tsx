@@ -242,7 +242,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       // Send WhatsApp notification to admin
       const adminPhone = settings?.whatsappAdminNumber || "+50944813185";
       const methodText = withdrawMethod === 'Physical' ? 'En personne (Juvénat)' : withdrawMethod;
-      const message = `Bonjour Admin, j'ai soumis une demande de retrait Neopay.\n\nMontant: ${amount} $\nMéthode: ${methodText}\nNuméro/Lieu: ${withdrawMethod === 'Physical' ? 'Bureau Juvénat' : accountNumber.trim()}\nCode Affilié: ${affiliate.code}\nNom: ${affiliate.name}`;
+      const message = `Bonjour Admin, j'ai soumis une demande de retrait Rena.\n\nMontant: ${amount} $\nMéthode: ${methodText}\nNuméro/Lieu: ${withdrawMethod === 'Physical' ? 'Bureau Juvénat' : accountNumber.trim()}\nCode Affilié: ${affiliate.code}\nNom: ${affiliate.name}`;
       window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`, '_blank');
       
     } catch (error: any) {
@@ -330,7 +330,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         setDepositAmount('');
         
         const adminPhone = settings?.whatsappAdminNumber || "+50944813185";
-        const message = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Neopay.\n\nMontant: ${amount} $\nMéthode: ${depositMethod}\nID Wallet: ${affiliate.walletId}\nNom: ${affiliate.name}`;
+        const message = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Rena.\n\nMontant: ${amount} $\nMéthode: ${depositMethod}\nID Wallet: ${affiliate.walletId}\nNom: ${affiliate.name}`;
         window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`, '_blank');
       }
     } catch (error: any) {
@@ -628,7 +628,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 <DialogHeader className="p-8 bg-emerald-600 text-white relative">
                   <DialogTitle className="text-2xl font-black">Recharger mon Compte</DialogTitle>
                   <DialogDescription className="font-medium text-emerald-100 italic">
-                    Alimentez votre solde Neopay via l'un de nos partenaires.
+                    Alimentez votre solde Rena via l'un de nos partenaires.
                   </DialogDescription>
                   <DialogClose className="absolute right-6 top-6 rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
                     <X className="h-5 w-5" />
@@ -824,7 +824,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 <DialogHeader className="p-8 bg-blue-600 text-white relative">
                   <DialogTitle className="text-2xl font-black">Transfert Entre Affiliés</DialogTitle>
                   <DialogDescription className="font-medium text-blue-100 italic">
-                    Envoyez des Dollars ($) instantanément à un autre membre Neopay.
+                    Envoyez des Dollars ($) instantanément à un autre membre Rena.
                   </DialogDescription>
                   <DialogClose className="absolute right-6 top-6 rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
                     <X className="h-5 w-5" />

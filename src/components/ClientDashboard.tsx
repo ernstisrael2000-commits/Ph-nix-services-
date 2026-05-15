@@ -267,7 +267,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     try {
       await submitClientDeposit(client!, usd, depositMethod.name, depositTxId || undefined,
         depositCaptchaToken || undefined, depositMessage || undefined, htg, rate);
-      const msg = `Bonjour Neopay 👋,\n\nDemande de *DÉPÔT* :\n` +
+      const msg = `Bonjour Rena 👋,\n\nDemande de *DÉPÔT* :\n` +
         `👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n` +
         `💵 Montant: *$${usd.toFixed(2)} USD*\n≈ *${htg.toLocaleString()} HTG* (taux: ${rate})\n` +
         `💳 Via: *${depositMethod.name}*` +
@@ -301,7 +301,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
         withdrawAccountName || undefined, rate);
       const htgEq = Math.round(usd * rate);
       const num = settings?.whatsappAdminNumber || WHATSAPP_NUMBER;
-      const msg = `Bonjour Neopay 👋,\n\nDemande de *RETRAIT* :\n` +
+      const msg = `Bonjour Rena 👋,\n\nDemande de *RETRAIT* :\n` +
         `👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n` +
         `💵 Montant: *$${usd.toFixed(2)} USD*\n≈ *${htgEq.toLocaleString()} HTG* (taux: ${rate})\n` +
         `💳 Via: *${withdrawMethod.name}*\n📞 Compte: *${withdrawAccount}*` +
@@ -502,7 +502,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                 <Shield className="h-4 w-4 text-violet-600" />
               </div>
               <p className="text-xs text-violet-700 leading-relaxed">
-                Toutes les transactions sont vérifiées par notre équipe sous 24h. Vos fonds sont sécurisés par Neopay.
+                Toutes les transactions sont vérifiées par notre équipe sous 24h. Vos fonds sont sécurisés par Rena.
               </p>
             </div>
 

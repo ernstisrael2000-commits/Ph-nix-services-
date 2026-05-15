@@ -1,4 +1,4 @@
-const CACHE_NAME = 'neopay-cache-v1';
+const CACHE_NAME = 'rena-cache-v1';
 const OFFLINE_URL = '/';
 
 const PRECACHE_ASSETS = [
@@ -29,9 +29,7 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
-
   const url = new URL(event.request.url);
-
   if (url.pathname.startsWith('/api/')) return;
 
   if (event.request.mode === 'navigate') {
@@ -61,4 +59,40 @@ self.addEventListener('fetch', (event) => {
       })
     );
   }
+});
+
+// ── Push Notifications ────────────────────────────────────────────────────────
+self.addEventListener('push', (event) => {
+  let data = { title: 'Rena', body: 'Nouvelle notification', icon: '/icon.svg', badge: '/icon.svg', tag: 'rena-notif' };
+  try {
+    if (event.data) data = { ...data, ...event.data.json() };
+  } catch (e) {}
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: data.icon || '/icon.svg',
+      badge: data.badge || '/icon.svg',
+      tag: data.tag || 'rena-notif',
+      renotify: true,
+      vibrate: [200, 100, 200],
+      data: { url: data.url || '/' },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.focus();
+          return;
+        }
+      }
+      if (clients.openWindow) return clients.openWindow(url);
+    })
+  );
 });

@@ -61,10 +61,10 @@ const WalletPayButton = ({
       onSuccess();
 
       // Open WhatsApp to notify admin
-      const adminNum = (window as any).__neopayAdminPhone || WHATSAPP_NUMBER;
+      const adminNum = (window as any).__renaAdminPhone || WHATSAPP_NUMBER;
       const now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       const msg =
-        `🛍️ *ACHAT EFFECTUÉ — Neopay*\n\n` +
+        `🛍️ *ACHAT EFFECTUÉ — Rena*\n\n` +
         `👤 Client: *${client.name}*\n` +
         `🔑 ID Wallet: *#${client.walletId || '—'}*\n` +
         `📱 Téléphone: *${client.phone || '—'}*\n` +
@@ -137,7 +137,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   // Expose admin phone globally so WalletPayButton can use it
   React.useEffect(() => {
     if (settings?.whatsappAdminNumber) {
-      (window as any).__neopayAdminPhone = settings.whatsappAdminNumber;
+      (window as any).__renaAdminPhone = settings.whatsappAdminNumber;
     }
   }, [settings?.whatsappAdminNumber]);
   const [isGamesDialogOpen, setIsGamesDialogOpen] = React.useState(false);
@@ -222,7 +222,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
     if (!paymentTarget || !selectedPaymentMethod) return;
 
     const methodLabel = selectedPaymentMethod === 'moncash' ? 'Mon Cash' : selectedPaymentMethod === 'natcash' ? 'Natcash' : 'Admi';
-    const message = `Bonjour Neopay,\n\nJe souhaite commander :\n📦 *${paymentTarget.name}*\n💰 Prix : *${paymentTarget.price}*\n\n💳 Mode de paiement : *${methodLabel}*\n📝 Infos Transaction : *${paymentTransactionInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`;
+    const message = `Bonjour Rena,\n\nJe souhaite commander :\n📦 *${paymentTarget.name}*\n💰 Prix : *${paymentTarget.price}*\n\n💳 Mode de paiement : *${methodLabel}*\n📝 Infos Transaction : *${paymentTransactionInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`;
     
     openWhatsApp(message);
     setIsPaymentModalOpen(false);
@@ -242,7 +242,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
     const gold = usd * (selectedCardForRecharge.goldRate || 1);
     const gourdes = usd * (settings?.exchangeRate || 146);
     
-    const message = `Bonjour Neopay,\n\nJe souhaite recharger ma carte :\n👤 Client : *${customerName || 'Non spécifié'}*\n💳 Carte : *${selectedCardForRecharge.name}*\n💵 Montant USD : *${usd}$*\n💰 Équivalent Gold : *${gold} Gold*\n🇭🇹 Montant en Gourdes : *${gourdes.toLocaleString()} HTG*\n\n💳 Moyen de paiement : *${method}*\n\nMerci de valider ma recharge.`;
+    const message = `Bonjour Rena,\n\nJe souhaite recharger ma carte :\n👤 Client : *${customerName || 'Non spécifié'}*\n💳 Carte : *${selectedCardForRecharge.name}*\n💵 Montant USD : *${usd}$*\n💰 Équivalent Gold : *${gold} Gold*\n🇭🇹 Montant en Gourdes : *${gourdes.toLocaleString()} HTG*\n\n💳 Moyen de paiement : *${method}*\n\nMerci de valider ma recharge.`;
     
     openWhatsApp(message);
     setIsPaymentMethodDialogOpen(false);
@@ -261,8 +261,8 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const [currentSlide, setCurrentSlide] = useState(0);
 
   const imagesToDisplay = sliderImages.length > 0 
-    ? sliderImages.map(img => ({ url: img.url, title: img.title || 'Neopay', description: img.description || '' }))
-    : SLIDER_IMAGES.map(url => ({ url, title: 'Neopay', description: 'Digital Services & Gift Cards' }));
+    ? sliderImages.map(img => ({ url: img.url, title: 'Rena', description: img.description || '' }))
+    : SLIDER_IMAGES.map(url => ({ url, title: 'Rena', description: 'Digital Services & Gift Cards' }));
 
   useEffect(() => {
     const handleScroll = () => {
@@ -611,7 +611,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                   <div className="product-card-content">
                     <div className="mb-2">
                       <h3 className="product-name">{product.name}</h3>
-                      <p className="product-subtitle truncate">Livraison rapide / Neopay</p>
+                      <p className="product-subtitle truncate">Livraison rapide / Rena</p>
                     </div>
                     
                     <div className="product-footer flex items-center justify-between">
@@ -890,7 +890,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
               <div className="p-8 space-y-6">
                 <div>
                   <h2 className="text-3xl font-black text-dark leading-tight">{selectedProduct.name}</h2>
-                  <p className="text-gray-400 font-medium">Service Premium • Neopay Digital</p>
+                  <p className="text-gray-400 font-medium">Service Premium • Rena Digital</p>
                 </div>
 
                 <div className="space-y-4">
@@ -1042,7 +1042,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
       {/* Floating Chat Button */}
       <div className="floating-chat-button-container">
         <Button
-          onClick={() => openWhatsApp("Bonjour Neopay, je souhaite avoir plus de renseignements.")}
+          onClick={() => openWhatsApp("Bonjour Rena, je souhaite avoir plus de renseignements sur Rena.")}
           className="floating-chat-button"
         >
           <MessageCircle className="h-6 w-6" />
@@ -1061,7 +1061,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                   </div>
                   <div>
                     <DialogTitle className="text-xl font-black uppercase tracking-tight">Finaliser Paiement</DialogTitle>
-                    <DialogDescription className="text-white/70 text-xs font-bold uppercase tracking-widest">Paiement Sécurisé Neopay</DialogDescription>
+                    <DialogDescription className="text-white/70 text-xs font-bold uppercase tracking-widest">Paiement Sécurisé Rena</DialogDescription>
                   </div>
                 </div>
                 <DialogClose className="rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">

@@ -1,4 +1,5 @@
 import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users, Truck, ExternalLink, Menu, X, Wallet, ChevronRight, GraduationCap, Settings, BookOpen, LayoutGrid } from 'lucide-react';
+import RenaLogo from './RenaLogo';
 import { Button } from './ui/button';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -109,9 +110,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                 <img src={settings.logoUrl} alt="Rena Logo" className="h-7 w-auto object-contain"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
               ) : (
-                <div className="bg-primary p-1.5 rounded-lg">
-                  <Package className="h-5 w-5 text-white" />
-                </div>
+                <RenaLogo size={32} />
               )}
               <span className="text-lg font-black tracking-tight text-gray-800 hidden sm:block">Rena</span>
             </div>

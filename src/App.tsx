@@ -12,12 +12,13 @@ import AgentLogin from './components/AgentLogin';
 import AgentDashboard from './components/AgentDashboard';
 import ClientDashboard from './components/ClientDashboard';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
+import LoadingScreen from './components/LoadingScreen';
 import { Toaster } from './components/ui/sonner';
 import AccessChoice from './components/AccessChoice';
 import { useAuth } from './hooks/useAuth';
 import { useSettings } from './services/parcelService';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Loader2, Package, ChevronLeft, Bell, X, WifiOff } from 'lucide-react';
+import { Package, ChevronLeft, Bell, X, WifiOff } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Affiliate, AdminAccount, Agent, Client } from './types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -180,14 +181,7 @@ export default function App() {
   }, [loggedClient?.id]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-subtext font-medium">Initialisation de Rena...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   return (
@@ -379,7 +373,7 @@ export default function App() {
             <div className="flex justify-center gap-6 mt-6 text-sm text-subtext/60">
               <a href="#" className="hover:text-subtext transition-colors">Confidentialité</a>
               <a href="#" className="hover:text-subtext transition-colors">Conditions d'utilisation</a>
-              <a href="mailto:neopayservices509@gmail.com" className="hover:text-subtext transition-colors">Support</a>
+              <a href="mailto:renaservices509@gmail.com" className="hover:text-subtext transition-colors">Support</a>
             </div>
           </div>
         </footer>

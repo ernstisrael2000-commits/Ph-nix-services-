@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useDeferredValue } from 'react';
+import React, { useState, useEffect, useDeferredValue, useCallback } from 'react';
+import { usePushNotifications } from '../hooks/usePushNotifications';
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -963,6 +964,7 @@ function PurchaseNotifCard({
 }
 
 export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps) {
+  const { supported: pushSupported, permission: pushPermission, subscription: pushSub, loading: pushLoading, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe } = usePushNotifications();
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   useEffect(() => {
@@ -2966,7 +2968,7 @@ const AffiliateEditForm = ({
       await updateWithdrawalStatus(request.id!, status);
       toast.success(`Demande approuvée !`);
       
-      const message = `Bonjour ${request.affiliateName},\n\nVotre demande de retrait de ${request.amount} $ a été validée avec succès. Vous recevrez le paiement sur votre compte ${request.method} dans les plus brefs délais.\n\nMerci pour votre patience et votre engagement avec Rena Affilié.\n\nCordialement,\nL'équipe Neopay`;
+      const message = `Bonjour ${request.affiliateName},\n\nVotre demande de retrait de ${request.amount} $ a été validée avec succès. Vous recevrez le paiement sur votre compte ${request.method} dans les plus brefs délais.\n\nMerci pour votre patience et votre engagement avec Rena Affilié.\n\nCordialement,\nL'équipe Rena`;
       
       toast.success("Message de confirmation prêt.");
       console.log("Message pour l'affilié:", message);
@@ -4212,7 +4214,7 @@ const AffiliateEditForm = ({
                   <div className="space-y-2">
                     <Label>Titre du slide</Label>
                     <Input 
-                      placeholder="Ex: Neopay Services" 
+                      placeholder="Ex: Rena Services" 
                       value={sliderTitle}
                       onChange={(e) => setSliderTitle(e.target.value)}
                     />
@@ -4389,7 +4391,7 @@ const AffiliateEditForm = ({
                     <Input 
                       value={editingSliderImage?.title || ''}
                       onChange={(e) => setEditingSliderImage(prev => prev ? {...prev, title: e.target.value} : null)}
-                      placeholder="Ex: Neopay Services"
+                      placeholder="Ex: Rena Services"
                     />
                   </div>
                   <div className="space-y-2">
@@ -6088,6 +6090,43 @@ const AffiliateEditForm = ({
         </TabsContent>
 
         <TabsContent value="notifications" className="space-y-6">
+          {/* Push notification activation banner */}
+          {pushSupported && pushPermission !== 'denied' && (
+            <div className={`flex items-center justify-between gap-3 p-4 rounded-2xl border ${pushSub ? 'bg-emerald-50 border-emerald-200' : 'bg-violet-50 border-violet-200'}`}>
+              <div className="flex items-center gap-3">
+                <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${pushSub ? 'bg-emerald-100' : 'bg-violet-100'}`}>
+                  <Bell className={`h-5 w-5 ${pushSub ? 'text-emerald-600' : 'text-violet-600'}`} />
+                </div>
+                <div>
+                  <p className={`text-sm font-black ${pushSub ? 'text-emerald-800' : 'text-violet-800'}`}>
+                    {pushSub ? '✅ Notifications push activées' : '🔔 Recevoir des alertes même hors-ligne'}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${pushSub ? 'text-emerald-600' : 'text-violet-500'}`}>
+                    {pushSub
+                      ? 'Vous recevrez des alertes pour chaque dépôt et retrait, même si vous n\'êtes pas sur le site.'
+                      : 'Activez les notifications pour être alerté de chaque dépôt et retrait en temps réel.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={pushSub ? pushUnsubscribe : pushSubscribe}
+                disabled={pushLoading}
+                className={`shrink-0 px-4 py-2 rounded-xl text-xs font-black transition-all ${pushSub
+                  ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-700'
+                  : 'bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-200'
+                } disabled:opacity-50`}
+              >
+                {pushLoading ? '...' : pushSub ? 'Désactiver' : 'Activer'}
+              </button>
+            </div>
+          )}
+          {pushSupported && pushPermission === 'denied' && (
+            <div className="flex items-center gap-3 p-4 rounded-2xl bg-red-50 border border-red-200">
+              <Bell className="h-5 w-5 text-red-400 shrink-0" />
+              <p className="text-xs text-red-600">Les notifications sont bloquées dans votre navigateur. Autorisez-les dans les paramètres du site pour les activer.</p>
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <h2 className="text-xl font-bold flex items-center gap-2 text-dark">
               <Bell className="h-5 w-5 text-primary" />

@@ -1,5 +1,6 @@
 import express from 'express';
 import nodemailer from 'nodemailer';
+import webpush from 'web-push';
 import { initializeApp, cert, getApps, App } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
@@ -270,6 +271,11 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
       (message ? `Message : ${message}\n` : '')
     );
 
+    sendPushToAdmins(
+      `💰 Nouveau dépôt — ${clientName}`,
+      `$${(usdAmount || amount).toFixed(2)} via ${method}${htgAmount ? ` (${htgAmount.toLocaleString()} HTG)` : ''}`
+    );
+
     res.json({ success: true, transactionId: txRef.id });
   } catch (e: any) {
     console.error('[deposit]', e);
@@ -360,6 +366,11 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
       (accountName ? `Bénéficiaire : ${accountName}\n` : '') +
       (message ? `Message : ${message}\n` : '') +
       `\n⚠️ Solde débité. Traitez ce retrait depuis le tableau de bord.`
+    );
+
+    sendPushToAdmins(
+      `🏧 Nouveau retrait — ${clientName}`,
+      `$${(usdAmount || amount).toFixed ? (usdAmount || amount).toFixed(2) : usdAmount || amount} via ${method} → ${accountNumber}`
     );
 
     res.json({ success: true, transactionId: txRef.id });
@@ -1533,6 +1544,78 @@ router.delete('/api/admin/account/:id', requireDb, requireAdminSecret, async (re
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
+
+// ── Push Notifications ────────────────────────────────────────────────────────
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    'mailto:renaservices@gmail.com',
+    VAPID_PUBLIC_KEY,
+    VAPID_PRIVATE_KEY
+  );
+} else {
+  console.warn('[Push] VAPID keys not configured — push notifications disabled');
+}
+
+const pushSubscriptions: Map<string, any> = new Map();
+
+router.post('/api/push/subscribe', (req, res) => {
+  try {
+    const { subscription } = req.body;
+    if (!subscription?.endpoint) return res.status(400).json({ error: 'Subscription invalide.' });
+    pushSubscriptions.set(subscription.endpoint, subscription);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/api/push/unsubscribe', (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (endpoint) pushSubscriptions.delete(endpoint);
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/api/push/send', requireDb, async (req, res) => {
+  if (req.headers['x-admin-secret'] !== 'rena-admin-2024')
+    return res.status(403).json({ error: 'Non autorisé.' });
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY)
+    return res.status(503).json({ error: 'Push notifications non configurées.' });
+
+  const { title, body, url, tag } = req.body;
+  const payload = JSON.stringify({ title: title || 'Rena', body: body || '', url: url || '/', tag: tag || 'rena-notif', icon: '/icon.svg', badge: '/icon.svg' });
+
+  const results = await Promise.allSettled(
+    [...pushSubscriptions.values()].map(sub =>
+      webpush.sendNotification(sub, payload).catch((err: any) => {
+        if (err.statusCode === 410 || err.statusCode === 404) pushSubscriptions.delete(sub.endpoint);
+        throw err;
+      })
+    )
+  );
+
+  const sent = results.filter(r => r.status === 'fulfilled').length;
+  const failed = results.filter(r => r.status === 'rejected').length;
+  res.json({ success: true, sent, failed, total: pushSubscriptions.size });
+});
+
+async function sendPushToAdmins(title: string, body: string, url = '/'): Promise<void> {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || pushSubscriptions.size === 0) return;
+  const payload = JSON.stringify({ title, body, url, icon: '/icon.svg', badge: '/icon.svg', tag: 'rena-admin' });
+  await Promise.allSettled(
+    [...pushSubscriptions.values()].map(sub =>
+      webpush.sendNotification(sub, payload).catch((err: any) => {
+        if (err.statusCode === 410 || err.statusCode === 404) pushSubscriptions.delete(sub.endpoint);
+      })
+    )
+  );
+}
 
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────
 router.all('/api/*', (_req, res) => {

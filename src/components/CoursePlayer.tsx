@@ -39,7 +39,7 @@ function getSortedModules(formation: Formation): FormationModule[] {
 }
 
 function getNoteKey(formationId: string, moduleId: string) {
-  return `neopay_notes_${formationId}_${moduleId}`;
+  return `rena_notes_${formationId}_${moduleId}`;
 }
 
 export default function CoursePlayer({ formation, loggedClient, onBack }: CoursePlayerProps) {
@@ -712,7 +712,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                     <div>
                       <p className="text-amber-800 font-black text-sm">🎉 Félicitations ! Cours terminé</p>
                       <p className="text-amber-600 text-xs mt-0.5">
-                        Votre certificat d'achèvement est disponible. Contactez Neopay pour l'obtenir.
+                        Votre certificat d'achèvement est disponible. Contactez Rena pour l'obtenir.
                       </p>
                     </div>
                   </div>

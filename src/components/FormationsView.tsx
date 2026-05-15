@@ -68,10 +68,10 @@ function ProgressBar({ pct, color = 'bg-violet-600' }: { pct: number; color?: st
 }
 
 function getFavorites(): string[] {
-  try { return JSON.parse(localStorage.getItem('neopay_favorites') || '[]'); } catch { return []; }
+  try { return JSON.parse(localStorage.getItem('rena_favorites') || '[]'); } catch { return []; }
 }
 function setFavorites(ids: string[]) {
-  try { localStorage.setItem('neopay_favorites', JSON.stringify(ids)); } catch {}
+  try { localStorage.setItem('rena_favorites', JSON.stringify(ids)); } catch {}
 }
 
 type PaymentStep = 'detail' | 'external-method' | 'form' | 'done';
@@ -232,7 +232,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
       const whatsappNum = settings?.whatsappAdminNumber?.replace(/\D/g, '') || '50944813185';
       const methodLabel = selectedPayMethod === 'moncash' ? 'MonCash' : 'NatCash';
       const msg = encodeURIComponent(
-        `Bonjour Neopay 👋\n\nJe viens d'effectuer un paiement pour une formation :\n\n` +
+        `Bonjour Rena 👋\n\nJe viens d'effectuer un paiement pour une formation :\n\n` +
         `👤 Nom: *${payFormData.name}*\n📧 Email: *${payFormData.email}*\n` +
         `🎓 Cours: *${selected.title}*\n💳 Méthode: *${methodLabel}*\n` +
         `💰 Montant: *${(selected.price || 0).toLocaleString()} HTG*\n` +
@@ -307,7 +307,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
           <div className="max-w-2xl">
             <div className="flex items-center gap-2 mb-3">
               <span className="px-2.5 py-0.5 bg-violet-500/20 text-violet-300 text-xs font-bold rounded-full border border-violet-500/30 flex items-center gap-1.5">
-                <Sparkles className="h-3 w-3" /> Formations Neopay
+                <Sparkles className="h-3 w-3" /> Formations Rena
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight mb-2">
