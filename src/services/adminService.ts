@@ -23,7 +23,7 @@ async function adminApi(method: string, path: string, body?: object): Promise<an
     method,
     headers: {
       'Content-Type': 'application/json',
-      'x-admin-secret': 'neopay-admin-2024',
+      'x-admin-secret': 'rena-admin-2024',
     },
   };
   if (body) opts.body = JSON.stringify(body);

@@ -38,3 +38,8 @@ externalPort = 80
 deploymentTarget = "autoscale"
 run = ["npx", "tsx", "server.ts"]
 build = ["npm", "run", "build"]
+
+[userenv]
+
+[userenv.shared]
+VAPID_PUBLIC_KEY = "BBKd8Oy-Zuvr3XN2qXkNXPZKvA05nfzChYmm0WQInUOwHUAYUO0yGDS-VzUOKmImahgcZxpeqwE7FATMadhBui8"

@@ -222,7 +222,7 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
             )}
           </form>
           <p className="mt-6 text-center text-sm text-subtext">
-            Identifiants fournis par l'administrateur Neopay.
+            Identifiants fournis par l'administrateur Rena.
           </p>
 
           <div className="mt-8 pt-6 border-t text-center">
@@ -238,7 +238,7 @@ export default function AffiliateLogin({ onLogin }: AffiliateLoginProps) {
               />
               <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                  <DialogTitle>Devenir Affilié Neopay</DialogTitle>
+                  <DialogTitle>Devenir Affilié Rena</DialogTitle>
                   <DialogDescription>
                     Remplissez ce formulaire pour soumettre votre demande d'adhésion.
                   </DialogDescription>

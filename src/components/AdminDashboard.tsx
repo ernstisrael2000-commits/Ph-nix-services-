@@ -158,7 +158,7 @@ const generatePDFReport = (stats: any) => {
   doc.setFontSize(24);
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.text('NEOPAY', 14, 20);
+  doc.text('RENA', 14, 20);
   
   doc.setFontSize(14);
   doc.setFont('helvetica', 'normal');
@@ -249,11 +249,11 @@ const generatePDFReport = (stats: any) => {
     doc.setPage(i);
     doc.setFontSize(8);
     doc.setTextColor(...greyColor);
-    doc.text('Neopay - Report Generated Automatically - Highly Confidential', 14, 285);
+    doc.text('Rena - Report Generated Automatically - Highly Confidential', 14, 285);
     doc.text(`Page ${i} of ${totalPages}`, 190, 285);
   }
 
-  doc.save(`RAPPORT_NEOPAY_INTELLIGENCE_${format(now, 'yyyy_MM_dd')}.pdf`);
+  doc.save(`RAPPORT_RENA_INTELLIGENCE_${format(now, 'yyyy_MM_dd')}.pdf`);
   toast.success("Rapport professionnel généré avec succès !");
 };
 
@@ -939,7 +939,7 @@ function PurchaseNotifCard({
             setApproving(false);
             const phone = (notif as any).clientPhone;
             if (phone) {
-              const msg = `✅ Bonjour ${notif.clientName},\n\nVotre service *${(notif as any).productName || 'Service'}* au prix de *${notif.amount.toLocaleString()} HTG* a été *approuvé* et sera traité immédiatement.\n\nMerci de votre confiance — Équipe Neopay 🙏`;
+              const msg = `✅ Bonjour ${notif.clientName},\n\nVotre service *${(notif as any).productName || 'Service'}* au prix de *${notif.amount.toLocaleString()} HTG* a été *approuvé* et sera traité immédiatement.\n\nMerci de votre confiance — Équipe Rena 🙏`;
               openWhatsApp(phone, msg);
             }
           }}
@@ -1036,7 +1036,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     setLoadingPaymentRequests(true);
     try {
       const res = await fetch('/api/admin/formations/payment-requests', {
-        headers: { 'x-admin-secret': 'neopay-admin-2024' },
+        headers: { 'x-admin-secret': 'rena-admin-2024' },
       });
       const json = await res.json();
       setFormationPaymentRequests(json.requests || []);
@@ -1052,7 +1052,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     try {
       const res = await fetch(`/api/admin/formations/payment-requests/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'neopay-admin-2024' },
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
         body: JSON.stringify({ action: 'approve' }),
       });
       if (!res.ok) throw new Error('Erreur');
@@ -1068,7 +1068,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     try {
       const res = await fetch(`/api/admin/formations/payment-requests/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'neopay-admin-2024' },
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
         body: JSON.stringify({ action: 'reject' }),
       });
       if (!res.ok) throw new Error('Erreur');
@@ -1290,8 +1290,8 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     // Standardize phone number: remove non-digits
     const cleanPhone = phone.replace(/\D/g, '');
     const message = isAffiliate 
-      ? `Bonjour ${name}, nous vous contactons concernant votre statut d'affilié sur Neopay.` 
-      : `Bonjour, nous vous contactons concernant votre dossier client Neopay (N° ${phone}).`;
+      ? `Bonjour ${name}, nous vous contactons concernant votre statut d'affilié sur Rena.` 
+      : `Bonjour, nous vous contactons concernant votre dossier client Rena (N° ${phone}).`;
     
     const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
@@ -2966,7 +2966,7 @@ const AffiliateEditForm = ({
       await updateWithdrawalStatus(request.id!, status);
       toast.success(`Demande approuvée !`);
       
-      const message = `Bonjour ${request.affiliateName},\n\nVotre demande de retrait de ${request.amount} $ a été validée avec succès. Vous recevrez le paiement sur votre compte ${request.method} dans les plus brefs délais.\n\nMerci pour votre patience et votre engagement avec Neopay Affilié.\n\nCordialement,\nL'équipe Neopay`;
+      const message = `Bonjour ${request.affiliateName},\n\nVotre demande de retrait de ${request.amount} $ a été validée avec succès. Vous recevrez le paiement sur votre compte ${request.method} dans les plus brefs délais.\n\nMerci pour votre patience et votre engagement avec Rena Affilié.\n\nCordialement,\nL'équipe Neopay`;
       
       toast.success("Message de confirmation prêt.");
       console.log("Message pour l'affilié:", message);
@@ -3793,7 +3793,7 @@ const AffiliateEditForm = ({
                               src={product.image} 
                               className="h-10 w-10 object-cover rounded-lg border"
                               onError={(e) => {
-                                (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/neopay/100/100';
+                                (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/100/100';
                               }}
                             />
                           </TableCell>
@@ -6372,7 +6372,7 @@ const AffiliateEditForm = ({
           <Card className="max-w-2xl mx-auto sm:mx-0">
             <CardHeader>
               <CardTitle>Identité Visuelle</CardTitle>
-              <CardDescription>Gérez le logo de votre plateforme Neopay.</CardDescription>
+              <CardDescription>Gérez le logo de votre plateforme Rena.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
@@ -8214,7 +8214,7 @@ const AffiliateEditForm = ({
                       src={productFormData.image} 
                       className="w-full h-full object-contain"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/neopay/400/400';
+                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/400/400';
                       }}
                     />
                     <Button 
@@ -8881,7 +8881,7 @@ const AffiliateEditForm = ({
                       src={formData.proofOfDelivery} 
                       className="w-full h-full object-contain"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/neopay/400/400';
+                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/400/400';
                       }}
                     />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">

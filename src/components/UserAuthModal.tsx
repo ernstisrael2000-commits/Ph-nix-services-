@@ -284,7 +284,7 @@ export default function UserAuthModal({
               <div className="h-16 w-16 rounded-[20px] bg-white/20 backdrop-blur-md flex items-center justify-center mx-auto mb-4 border border-white/30">
                 <Wallet className="h-8 w-8 text-white" />
               </div>
-              <DialogTitle className="text-2xl font-black text-white">Accès Neopay</DialogTitle>
+              <DialogTitle className="text-2xl font-black text-white">Accès Rena</DialogTitle>
               <DialogDescription className="text-white/80 text-sm mt-1">Choisissez votre type d'accès</DialogDescription>
             </div>
             <div className="p-6 space-y-3 bg-white">
@@ -305,7 +305,7 @@ export default function UserAuthModal({
                 </div>
                 <div>
                   <p className="font-bold text-dark">Créer un compte</p>
-                  <p className="text-xs text-gray-500">Nouveau chez Neopay ? Inscrivez-vous</p>
+                  <p className="text-xs text-gray-500">Nouveau chez Rena ? Inscrivez-vous</p>
                 </div>
               </button>
               <button onClick={() => setView('admin-access')}
@@ -315,7 +315,7 @@ export default function UserAuthModal({
                 </div>
                 <div>
                   <p className="font-bold text-dark">Accès Admin / Affilié</p>
-                  <p className="text-xs text-gray-500">Espace professionnel Neopay</p>
+                  <p className="text-xs text-gray-500">Espace professionnel Rena</p>
                 </div>
               </button>
             </div>
@@ -352,7 +352,7 @@ export default function UserAuthModal({
                   </div>
                 )}
                 <p className="text-[10px] text-gray-400 text-center leading-relaxed">
-                  Seuls les emails autorisés par Neopay peuvent accéder au tableau de bord admin.
+                  Seuls les emails autorisés par Rena peuvent accéder au tableau de bord admin.
                 </p>
               </div>
               <Divider />
@@ -382,7 +382,7 @@ export default function UserAuthModal({
                 <ArrowLeft className="h-4 w-4" /> Retour
               </button>
               <DialogTitle className="text-xl font-black text-white">Connexion Client</DialogTitle>
-              <DialogDescription className="text-white/70 text-xs mt-1">Accédez à votre wallet Neopay</DialogDescription>
+              <DialogDescription className="text-white/70 text-xs mt-1">Accédez à votre wallet Rena</DialogDescription>
             </div>
             <div className="p-6 space-y-4 bg-white">
               <GoogleBtn onClick={handleGoogleClientLogin} label="Se connecter avec Google" loading={loading} />
@@ -433,7 +433,7 @@ export default function UserAuthModal({
                 <ArrowLeft className="h-4 w-4" /> Retour
               </button>
               <DialogTitle className="text-xl font-black text-white">Créer un compte</DialogTitle>
-              <DialogDescription className="text-white/70 text-xs mt-1">Rejoignez Neopay gratuitement</DialogDescription>
+              <DialogDescription className="text-white/70 text-xs mt-1">Rejoignez Rena gratuitement</DialogDescription>
             </div>
             <div className="p-6 space-y-4 bg-white">
               <GoogleBtn onClick={handleGoogleClientLogin} label="S'inscrire avec Google" loading={loading} />

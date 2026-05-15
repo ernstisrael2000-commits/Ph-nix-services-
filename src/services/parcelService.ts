@@ -19,7 +19,7 @@ async function adminApi(method: string, path: string, body?: object): Promise<an
     method,
     headers: {
       'Content-Type': 'application/json',
-      'x-admin-secret': 'neopay-admin-2024',
+      'x-admin-secret': 'rena-admin-2024',
     },
   };
   if (body) opts.body = JSON.stringify(body);
@@ -335,7 +335,7 @@ export const saveOnlineSubService = async (data: Partial<OnlineSubService>, id?:
   const payload = id ? { ...data, id } : data;
   const res = await fetch('/api/admin/online-sub-services', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'neopay-admin-2024' },
+    headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
     body: JSON.stringify(payload),
   });
   if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Erreur sauvegarde service'); }
@@ -344,7 +344,7 @@ export const saveOnlineSubService = async (data: Partial<OnlineSubService>, id?:
 export const deleteOnlineSubService = async (id: string) => {
   const res = await fetch(`/api/admin/online-sub-services/${id}`, {
     method: 'DELETE',
-    headers: { 'x-admin-secret': 'neopay-admin-2024' },
+    headers: { 'x-admin-secret': 'rena-admin-2024' },
   });
   if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Erreur suppression service'); }
 };
@@ -355,7 +355,7 @@ export const useAdminFormations = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/admin/formations', { headers: { 'x-admin-secret': 'neopay-admin-2024' } })
+    fetch('/api/admin/formations', { headers: { 'x-admin-secret': 'rena-admin-2024' } })
       .then(r => r.json())
       .then(data => setFormations(data.formations || []))
       .catch(() => {})
@@ -364,7 +364,7 @@ export const useAdminFormations = () => {
 
   const refresh = () => {
     setLoading(true);
-    fetch('/api/admin/formations', { headers: { 'x-admin-secret': 'neopay-admin-2024' } })
+    fetch('/api/admin/formations', { headers: { 'x-admin-secret': 'rena-admin-2024' } })
       .then(r => r.json())
       .then(data => setFormations(data.formations || []))
       .catch(() => {})
@@ -379,7 +379,7 @@ export const saveAdminFormation = async (data: Partial<Formation>, id?: string):
   const method = id ? 'PUT' : 'POST';
   const res = await fetch(url, {
     method,
-    headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'neopay-admin-2024' },
+    headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
     body: JSON.stringify(data)
   });
   if (!res.ok) {
@@ -391,7 +391,7 @@ export const saveAdminFormation = async (data: Partial<Formation>, id?: string):
 export const deleteAdminFormation = async (id: string): Promise<void> => {
   const res = await fetch(`/api/admin/formations/${id}`, {
     method: 'DELETE',
-    headers: { 'x-admin-secret': 'neopay-admin-2024' }
+    headers: { 'x-admin-secret': 'rena-admin-2024' }
   });
   if (!res.ok) throw new Error('Erreur lors de la suppression.');
 };

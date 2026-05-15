@@ -93,7 +93,7 @@ function sendAdminEmail(subject: string, text: string): void {
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
   });
   transporter.sendMail({
-    from: `"Neopay System" <${process.env.SMTP_USER}>`,
+    from: `"Rena System" <${process.env.SMTP_USER}>`,
     to: process.env.SMTP_USER,
     subject,
     text,
@@ -127,7 +127,7 @@ router.post('/api/notify-registration', async (req, res) => {
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
     });
     await transporter.sendMail({
-      from: `"Neopay System" <${process.env.SMTP_USER}>`,
+      from: `"Rena System" <${process.env.SMTP_USER}>`,
       to: process.env.SMTP_USER,
       subject: `Nouvelle demande d'inscription affilié : ${name}`,
       text: `Nouvelle demande d'inscription reçue !\n\nNom: ${name}\nEmail: ${email}\nTéléphone: ${phone || 'Non fourni'}\nMessage: ${message || 'Aucun message'}\nDate: ${date}\n\nConnectez-vous au tableau de bord administrateur pour approuver ou rejeter cette demande.`,
@@ -474,7 +474,7 @@ router.delete('/api/client/transactions/:clientId', requireDb, async (req, res) 
 
 // ── Admin: Wallet Stats ───────────────────────────────────────────────────────
 router.get('/api/admin/wallet/stats', requireDb, async (req, res) => {
-  if (req.headers['x-admin-secret'] !== 'neopay-admin-2024')
+  if (req.headers['x-admin-secret'] !== 'rena-admin-2024')
     return res.status(403).json({ error: 'Non autorisé.' });
   try {
     const [txSnap, clientsSnap] = await Promise.all([
@@ -913,7 +913,7 @@ router.get('/api/online-sub-services', requireDb, async (_req, res) => {
 });
 
 router.post('/api/admin/online-sub-services', requireDb, async (req, res) => {
-  if (req.headers['x-admin-secret'] !== 'neopay-admin-2024')
+  if (req.headers['x-admin-secret'] !== 'rena-admin-2024')
     return res.status(403).json({ error: 'Non autorisé.' });
   try {
     const { id, createdAt: _c, ...data } = req.body;
@@ -930,7 +930,7 @@ router.post('/api/admin/online-sub-services', requireDb, async (req, res) => {
 });
 
 router.delete('/api/admin/online-sub-services/:id', requireDb, async (req, res) => {
-  if (req.headers['x-admin-secret'] !== 'neopay-admin-2024')
+  if (req.headers['x-admin-secret'] !== 'rena-admin-2024')
     return res.status(403).json({ error: 'Non autorisé.' });
   try {
     await adminDb.collection('online_sub_services').doc(req.params.id).delete();
@@ -1242,7 +1242,7 @@ router.post('/api/formations/progress/position', async (req, res) => {
 
 // ── Admin secret guard ────────────────────────────────────────────────────────
 const requireAdminSecret = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  if (req.headers['x-admin-secret'] !== 'neopay-admin-2024')
+  if (req.headers['x-admin-secret'] !== 'rena-admin-2024')
     return res.status(403).json({ error: 'Non autorisé.' });
   next();
 };
@@ -1305,7 +1305,7 @@ router.post('/api/admin/verify-google', requireDb, async (req, res) => {
     }
     if (adminSnap.empty) {
       await adminDb.collection('admin_login_logs').add({ adminName: email, success: false, timestamp: FieldValue.serverTimestamp() });
-      return res.status(403).json({ error: `Accès refusé. L'adresse "${email}" n'est associée à aucun compte administrateur Neopay.` });
+      return res.status(403).json({ error: `Accès refusé. L'adresse "${email}" n'est associée à aucun compte administrateur Rena.` });
     }
 
     const adminDoc = adminSnap.docs[0];

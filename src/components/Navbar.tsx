@@ -106,14 +106,14 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
               onClick={() => handleNav('home')}
             >
               {settings?.logoUrl ? (
-                <img src={settings.logoUrl} alt="Neopay Logo" className="h-7 w-auto object-contain"
+                <img src={settings.logoUrl} alt="Rena Logo" className="h-7 w-auto object-contain"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
               ) : (
                 <div className="bg-primary p-1.5 rounded-lg">
                   <Package className="h-5 w-5 text-white" />
                 </div>
               )}
-              <span className="text-lg font-black tracking-tight text-gray-800 hidden sm:block">Neopay</span>
+              <span className="text-lg font-black tracking-tight text-gray-800 hidden sm:block">Rena</span>
             </div>
 
             {/* Desktop nav — always visible on md+ */}

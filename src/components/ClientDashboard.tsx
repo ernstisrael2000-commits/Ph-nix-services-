@@ -99,7 +99,7 @@ function VirtualCard({
       <div className="relative z-10 h-full flex flex-col justify-between p-5">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-violet-200/50 text-[9px] font-black uppercase tracking-[0.25em] mb-0.5">Neopay Wallet</p>
+            <p className="text-violet-200/50 text-[9px] font-black uppercase tracking-[0.25em] mb-0.5">Rena Wallet</p>
             <p className="text-white font-black text-sm leading-tight">{client.name}</p>
           </div>
           <div className="flex items-center gap-2">

@@ -37,18 +37,18 @@ export default function App() {
   const [showClientDashboard, setShowClientDashboard] = useState(false);
   
   const [loggedAdmin, setLoggedAdmin] = useState<AdminAccount | null>(() => {
-    const saved = localStorage.getItem('neopay_admin');
+    const saved = localStorage.getItem('rena_admin');
     return saved ? JSON.parse(saved) : null;
   });
 
   const handleAdminLogin = (admin: AdminAccount) => {
     setLoggedAdmin(admin);
-    localStorage.setItem('neopay_admin', JSON.stringify(admin));
+    localStorage.setItem('rena_admin', JSON.stringify(admin));
   };
 
   const handleAdminLogout = () => {
     setLoggedAdmin(null);
-    localStorage.removeItem('neopay_admin');
+    localStorage.removeItem('rena_admin');
     setView('home');
   };
 
@@ -61,7 +61,7 @@ export default function App() {
       } catch (error: any) {
         if (error?.message?.includes('offline') || error?.code === 'unavailable') {
           setIsOffline(true);
-          toast.error("Connexion perdue. Neopay fonctionne en mode hors-ligne.", {
+          toast.error("Connexion perdue. Rena fonctionne en mode hors-ligne.", {
             description: "Certaines fonctionnalités peuvent être limitées.",
             duration: Infinity,
             icon: <WifiOff className="h-4 w-4" />,
@@ -119,48 +119,48 @@ export default function App() {
   };
 
   const [loggedAffiliate, setLoggedAffiliate] = useState<Affiliate | null>(() => {
-    const saved = localStorage.getItem('neopay_affiliate');
+    const saved = localStorage.getItem('rena_affiliate');
     return saved ? JSON.parse(saved) : null;
   });
 
   const handleAffiliateLogin = (affiliate: Affiliate) => {
     setLoggedAffiliate(affiliate);
-    localStorage.setItem('neopay_affiliate', JSON.stringify(affiliate));
+    localStorage.setItem('rena_affiliate', JSON.stringify(affiliate));
   };
 
   const handleAffiliateLogout = () => {
     setLoggedAffiliate(null);
-    localStorage.removeItem('neopay_affiliate');
+    localStorage.removeItem('rena_affiliate');
   };
 
   const [loggedAgent, setLoggedAgent] = useState<Agent | null>(() => {
-    const saved = localStorage.getItem('neopay_agent');
+    const saved = localStorage.getItem('rena_agent');
     return saved ? JSON.parse(saved) : null;
   });
 
   const handleAgentLogin = (agent: Agent) => {
     setLoggedAgent(agent);
-    localStorage.setItem('neopay_agent', JSON.stringify(agent));
+    localStorage.setItem('rena_agent', JSON.stringify(agent));
   };
 
   const handleAgentLogout = () => {
     setLoggedAgent(null);
-    localStorage.removeItem('neopay_agent');
+    localStorage.removeItem('rena_agent');
   };
 
   const [loggedClient, setLoggedClient] = useState<Client | null>(() => {
-    const saved = localStorage.getItem('neopay_client');
+    const saved = localStorage.getItem('rena_client');
     return saved ? JSON.parse(saved) : null;
   });
 
   const handleClientLogin = (client: Client) => {
     setLoggedClient(client);
-    localStorage.setItem('neopay_client', JSON.stringify(client));
+    localStorage.setItem('rena_client', JSON.stringify(client));
   };
 
   const handleClientLogout = () => {
     setLoggedClient(null);
-    localStorage.removeItem('neopay_client');
+    localStorage.removeItem('rena_client');
     setShowClientDashboard(false);
   };
 
@@ -173,7 +173,7 @@ export default function App() {
       if (snap.exists()) {
         const updated = { id: snap.id, ...snap.data() } as Client;
         setLoggedClient(updated);
-        localStorage.setItem('neopay_client', JSON.stringify(updated));
+        localStorage.setItem('rena_client', JSON.stringify(updated));
       }
     });
     return () => { if (clientUnsub.current) clientUnsub.current(); };
@@ -184,7 +184,7 @@ export default function App() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <Loader2 className="h-10 w-10 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-subtext font-medium">Initialisation de Neopay...</p>
+          <p className="text-subtext font-medium">Initialisation de Rena...</p>
         </div>
       </div>
     );
@@ -228,7 +228,7 @@ export default function App() {
                           Annonce Spéciale
                         </h3>
                         <p className="text-[10px] uppercase font-black text-primary/60 tracking-widest mt-1">
-                          Neopay Intelligence
+                          Rena Intelligence
                         </p>
                       </div>
                     </div>
@@ -371,10 +371,10 @@ export default function App() {
               <div className="bg-muted p-1.5 rounded-md">
                 <Package className="h-5 w-5 text-subtext" />
               </div>
-              <span className="text-xl font-bold text-dark">Neopay</span>
+              <span className="text-xl font-bold text-dark">Rena</span>
             </div>
             <p className="text-subtext text-sm">
-              © {new Date().getFullYear()} Neopay Logistics. Tous droits réservés.
+              © {new Date().getFullYear()} Rena Logistics. Tous droits réservés.
             </p>
             <div className="flex justify-center gap-6 mt-6 text-sm text-subtext/60">
               <a href="#" className="hover:text-subtext transition-colors">Confidentialité</a>

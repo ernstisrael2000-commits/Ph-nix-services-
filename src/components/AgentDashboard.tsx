@@ -95,7 +95,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
       <div className="max-w-md mx-auto mt-20 text-center space-y-4">
         <XCircle className="h-16 w-16 text-red-500 mx-auto" />
         <h2 className="text-2xl font-black">Accès Refusé</h2>
-        <p className="text-gray-500">Vous n'êtes pas enregistré en tant qu'agent Neopay.</p>
+        <p className="text-gray-500">Vous n'êtes pas enregistré en tant qu'agent Rena.</p>
         <Button onClick={onLogout} variant="outline" className="rounded-2xl h-12 w-full">Retour au Login</Button>
       </div>
     );

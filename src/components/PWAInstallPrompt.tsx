@@ -8,7 +8,7 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
-const DISMISSED_KEY = 'neopay_pwa_dismissed';
+const DISMISSED_KEY = 'rena_pwa_dismissed';
 
 export default function PWAInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -99,7 +99,7 @@ export default function PWAInstallPrompt() {
                       </svg>
                     </div>
                     <div>
-                      <p className="text-white font-black text-base leading-tight">Installer Neopay</p>
+                      <p className="text-white font-black text-base leading-tight">Installer Rena</p>
                       <p className="text-violet-200 text-xs mt-0.5">Application gratuite & complète</p>
                     </div>
                   </div>

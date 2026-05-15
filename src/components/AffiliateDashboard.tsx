@@ -393,7 +393,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
             <Users className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">NEOPAY Affilié</h1>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">RENA Affilié</h1>
             <p className="text-gray-500 font-medium flex items-center gap-2">
               {affiliate.name} 
               <span className="text-gray-300">•</span> 
@@ -550,7 +550,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                     <Wallet className="h-5 w-5 text-white" />
                   </div>
                   <div>
-                    <p className="text-emerald-600 text-[10px] font-black uppercase tracking-[0.4em] drop-shadow-sm leading-none">NEOPAY BANK</p>
+                    <p className="text-emerald-600 text-[10px] font-black uppercase tracking-[0.4em] drop-shadow-sm leading-none">RENA BANK</p>
                     <p className="text-[8px] font-bold text-gray-400 mt-1 uppercase tracking-widest">Premium Affiliate Account</p>
                   </div>
                 </div>

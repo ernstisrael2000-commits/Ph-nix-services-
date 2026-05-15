@@ -169,7 +169,7 @@ export default function AgentLogin({ onLogin }: AgentLoginProps) {
           </form>
           <div className="mt-10 pt-8 border-t border-gray-50 text-center">
             <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-              Système de Sécurité Neopay
+              Système de Sécurité Rena
             </p>
           </div>
         </CardContent>

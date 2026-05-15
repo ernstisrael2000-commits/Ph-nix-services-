@@ -59,7 +59,7 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
             </div>
             <CardTitle className="text-2xl font-black text-dark">Accès Administrateur</CardTitle>
             <CardDescription className="text-gray-500 font-medium pt-1">
-              Connectez-vous pour gérer la plateforme Neopay.
+              Connectez-vous pour gérer la plateforme Rena.
             </CardDescription>
           </CardHeader>
 

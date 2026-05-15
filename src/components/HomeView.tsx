@@ -604,7 +604,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                       alt={product.name} 
                       className="product-image w-full h-full object-cover"
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/neopay/400/400';
+                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/400/400';
                       }}
                     />
                   </div>
@@ -897,7 +897,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                   <div className="flex items-center gap-3 p-4 rounded-2xl bg-accent-light/30 border border-primary/10">
                     < LucideIcons.Info className="h-5 w-5 text-primary shrink-0" />
                     <p className="text-sm text-dark font-medium leading-relaxed">
-                      {selectedProduct.description || "Profitez de ce service exceptionnel avec Neopay. Qualité garantie et livraison ultra-rapide."}
+                      {selectedProduct.description || "Profitez de ce service exceptionnel avec Rena. Qualité garantie et livraison ultra-rapide."}
                     </p>
                   </div>
                   
