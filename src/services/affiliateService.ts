@@ -20,7 +20,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { handleFirestoreError } from '../lib/firebase-errors';
-import { Affiliate, WithdrawalRequest, AffiliateRequest, AffiliateNotification, Client } from '../types';
+import { Affiliate, WithdrawalRequest, AffiliateRequest, AffiliateNotification, Client, WalletTransaction } from '../types';
 
 export const loginAffiliate = async (username: string, password: string): Promise<Affiliate | null> => {
   const q = query(
@@ -485,35 +485,26 @@ export const usePendingCounts = (enabled: boolean = false) => {
       return;
     }
 
+    const countsRef = { reg: 0, with: 0, dep: 0 };
+    const update = () => setCounts({
+      registrations: countsRef.reg,
+      withdrawals: countsRef.with,
+      deposits: countsRef.dep,
+      total: countsRef.reg + countsRef.with + countsRef.dep
+    });
+
     const qReg = query(collection(db, 'affiliate_requests'), where('status', '==', 'pending'));
     const qWith = query(collection(db, 'withdrawals'), where('status', '==', 'pending'));
     const qDep = query(collection(db, 'wallet_transactions'), where('type', '==', 'deposit'), where('status', '==', 'pending'));
 
-    const unsubReg = onSnapshot(qReg, (snapReg) => {
-      const regCount = snapReg.size;
-      const unsubWith = onSnapshot(qWith, (snapWith) => {
-        const withCount = snapWith.size;
-        const unsubDep = onSnapshot(qDep, (snapDep) => {
-          const depCount = snapDep.size;
-          setCounts({
-            registrations: regCount,
-            withdrawals: withCount,
-            deposits: depCount,
-            total: regCount + withCount + depCount
-          });
-        }, (error) => {
-          console.error("Error fetching pending deposits:", error);
-        });
-        return () => unsubDep();
-      }, (error) => {
-        console.error("Error fetching pending withdrawals:", error);
-      });
-      return () => unsubWith();
-    }, (error) => {
-      console.error("Error fetching pending registrations:", error);
-    });
+    const unsubReg = onSnapshot(qReg, (snap) => { countsRef.reg = snap.size; update(); },
+      (error) => { console.error("Error fetching pending registrations:", error); });
+    const unsubWith = onSnapshot(qWith, (snap) => { countsRef.with = snap.size; update(); },
+      (error) => { console.error("Error fetching pending withdrawals:", error); });
+    const unsubDep = onSnapshot(qDep, (snap) => { countsRef.dep = snap.size; update(); },
+      (error) => { console.error("Error fetching pending deposits:", error); });
 
-    return () => unsubReg();
+    return () => { unsubReg(); unsubWith(); unsubDep(); };
   }, [enabled]);
 
   return counts;
@@ -1266,8 +1257,6 @@ export const submitDepositRequest = async (affiliate: Affiliate, amount: number,
 /**
  * Unified way to get all wallet transactions.
  */
-import { WalletTransaction } from '../types';
-
 export const useWalletTransactions = (affiliateId: string | null) => {
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [loading, setLoading] = useState(true);

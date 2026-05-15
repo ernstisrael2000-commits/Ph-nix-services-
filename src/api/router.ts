@@ -479,21 +479,6 @@ router.post('/api/client/transfer', requireDb, async (req, res) => {
   }
 });
 
-// ── Delete client transaction history ────────────────────────────────────────
-router.delete('/api/client/transactions/:clientId', requireDb, async (req, res) => {
-  try {
-    const { clientId } = req.params;
-    if (!clientId) return res.status(400).json({ error: 'clientId requis.' });
-    const snap = await adminDb.collection('client_transactions')
-      .where('clientId', '==', clientId).limit(200).get();
-    const batch = adminDb.batch();
-    snap.docs.forEach(d => batch.delete(d.ref));
-    await batch.commit();
-    res.json({ success: true, deleted: snap.size });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
-});
 
 // ── Admin: Wallet Stats ───────────────────────────────────────────────────────
 router.get('/api/admin/wallet/stats', requireDb, async (req, res) => {
