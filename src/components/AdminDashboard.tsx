@@ -1992,6 +1992,9 @@ const AffiliateEditForm = ({
 
   const [notifFilter, setNotifFilter] = useState<'all' | 'registration' | 'withdrawal' | 'deposit' | 'client_tx'>('all');
   const [notifSearch, setNotifSearch] = useState('');
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearingHistory, setClearingHistory] = useState(false);
+  const [pendingTypeFilter, setPendingTypeFilter] = useState<'all' | 'registration' | 'withdrawal' | 'deposit'>('all');
   const deferredNotifSearch = useDeferredValue(notifSearch);
   const [affiliateSearch, setAffiliateSearch] = useState('');
   const deferredAffiliateSearch = useDeferredValue(affiliateSearch);
@@ -6174,15 +6177,39 @@ const AffiliateEditForm = ({
                       Tout marquer lu
                     </button>
                   )}
-                  <button
-                    onClick={async () => {
-                      if (confirm('Effacer tout l\'historique des notifications ? Cette action est irréversible.')) {
-                        await clearAllAdminNotifications();
-                      }
-                    }}
-                    className="text-[11px] font-bold text-red-400 hover:text-red-300 underline underline-offset-2 transition-colors flex items-center gap-1">
-                    🗑 Effacer l'historique
-                  </button>
+                  {confirmClear ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] text-red-300">Confirmer ?</span>
+                      <button
+                        disabled={clearingHistory}
+                        onClick={async () => {
+                          setClearingHistory(true);
+                          try {
+                            await clearAllAdminNotifications();
+                            toast.success('Historique effacé avec succès');
+                          } catch {
+                            toast.error('Erreur lors de la suppression');
+                          } finally {
+                            setClearingHistory(false);
+                            setConfirmClear(false);
+                          }
+                        }}
+                        className="text-[11px] font-black text-red-400 hover:text-red-200 px-2 py-0.5 rounded bg-red-500/20 hover:bg-red-500/30 transition-colors disabled:opacity-50">
+                        {clearingHistory ? '...' : 'Oui, effacer'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmClear(false)}
+                        className="text-[11px] font-bold text-gray-400 hover:text-gray-200 transition-colors">
+                        Annuler
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmClear(true)}
+                      className="text-[11px] font-bold text-red-400 hover:text-red-300 underline underline-offset-2 transition-colors flex items-center gap-1">
+                      🗑 Effacer l'historique
+                    </button>
+                  )}
                   <button onClick={() => setActiveTab('clients-tx')}
                     className="text-[11px] font-bold text-amber-400 hover:text-amber-300 transition-colors">
                     Voir transactions →
@@ -6283,9 +6310,33 @@ const AffiliateEditForm = ({
               </div>
             </div>
 
+            {/* Filter pills */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {([
+                { key: 'all', label: 'Toutes', color: 'bg-gray-800 text-white', inactive: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
+                { key: 'deposit', label: '↓ Dépôts', color: 'bg-emerald-600 text-white', inactive: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' },
+                { key: 'withdrawal', label: '↑ Retraits', color: 'bg-red-600 text-white', inactive: 'bg-red-50 text-red-700 hover:bg-red-100' },
+                { key: 'registration', label: '👤 Inscriptions', color: 'bg-violet-600 text-white', inactive: 'bg-violet-50 text-violet-700 hover:bg-violet-100' },
+              ] as const).map(pill => (
+                <button
+                  key={pill.key}
+                  onClick={() => setPendingTypeFilter(pill.key)}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] font-black transition-all ${pendingTypeFilter === pill.key ? pill.color : pill.inactive}`}
+                >
+                  {pill.label}
+                </button>
+              ))}
+            </div>
+
             {allPendingRequests.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                {allPendingRequests.map((req) => {
+                {allPendingRequests.filter(req => {
+                  if (pendingTypeFilter === 'all') return true;
+                  if (pendingTypeFilter === 'registration') return req.type === 'registration';
+                  if (pendingTypeFilter === 'withdrawal') return req.type === 'withdrawal' || req.type === 'client_withdrawal_req';
+                  if (pendingTypeFilter === 'deposit') return req.type === 'deposit_request' || req.type === 'client_deposit_req';
+                  return true;
+                }).map((req) => {
                   const isRegistration = req.type === 'registration';
                   const isWithdrawal = req.type === 'withdrawal';
                   const isClientWithdrawal = req.type === 'client_withdrawal_req';
