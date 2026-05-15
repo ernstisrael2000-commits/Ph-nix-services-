@@ -235,6 +235,25 @@ export const submitClientWithdrawal = async (
   });
 };
 
+// ─── Client-to-Client Transfer ───────────────────────────────────────────────
+
+export const submitClientTransfer = async (
+  senderClientId: string,
+  recipientWalletId: string,
+  amount: number,
+  message?: string
+): Promise<{ recipientName: string; amount: number }> => {
+  if (amount <= 0) throw new Error("Montant invalide.");
+  if (!recipientWalletId.trim()) throw new Error("ID Wallet du destinataire requis.");
+  const data = await apiPost('/api/client/transfer', {
+    senderClientId,
+    recipientWalletId: recipientWalletId.trim(),
+    amount,
+    ...(message && { message }),
+  });
+  return { recipientName: data.recipientName || '', amount: data.amount || amount };
+};
+
 // ─── Purchase (pending — requires admin approval) ─────────────────────────────
 
 export const submitClientPurchase = async (

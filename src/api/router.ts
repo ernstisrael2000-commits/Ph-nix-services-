@@ -366,6 +366,93 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
   }
 });
 
+// ── Lookup wallet by walletId (for transfer preview) ─────────────────────────
+router.get('/api/client/lookup-wallet', requireDb, async (req, res) => {
+  try {
+    const walletId = (req.query.walletId as string || '').trim();
+    if (!walletId) return res.status(400).json({ error: 'walletId requis.' });
+    const snap = await adminDb.collection('clients')
+      .where('walletId', '==', walletId).limit(1).get();
+    if (snap.empty) return res.status(404).json({ error: 'Introuvable.' });
+    const data = snap.docs[0].data();
+    res.json({ name: data.name || '', found: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Client-to-client transfer ─────────────────────────────────────────────────
+router.post('/api/client/transfer', requireDb, async (req, res) => {
+  try {
+    const { senderClientId, recipientWalletId, amount, message } = req.body;
+    if (!senderClientId || !recipientWalletId || !amount)
+      return res.status(400).json({ error: 'Paramètres manquants.' });
+    const usd = Number(amount);
+    if (isNaN(usd) || usd <= 0)
+      return res.status(400).json({ error: 'Montant invalide.' });
+
+    // Load sender
+    const senderRef = adminDb.collection('clients').doc(senderClientId);
+    const senderSnap = await senderRef.get();
+    if (!senderSnap.exists) return res.status(404).json({ error: 'Expéditeur introuvable.' });
+    const senderData = senderSnap.data()!;
+    if ((senderData.balance || 0) < usd)
+      return res.status(400).json({ error: 'Solde insuffisant.' });
+
+    // Find recipient by walletId
+    const recipSnap = await adminDb.collection('clients')
+      .where('walletId', '==', recipientWalletId.trim()).limit(1).get();
+    if (recipSnap.empty)
+      return res.status(404).json({ error: 'Aucun wallet trouvé avec cet ID.' });
+    const recipDoc = recipSnap.docs[0];
+    if (recipDoc.id === senderClientId)
+      return res.status(400).json({ error: 'Vous ne pouvez pas vous transférer à vous-même.' });
+    const recipData = recipDoc.data()!;
+
+    const batch = adminDb.batch();
+    // Debit sender
+    batch.update(senderRef, {
+      balance: Math.max(0, (senderData.balance || 0) - usd),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    // Credit recipient
+    batch.update(recipDoc.ref, {
+      balance: (recipData.balance || 0) + usd,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    // Sender tx
+    const senderTxRef = adminDb.collection('client_transactions').doc();
+    batch.set(senderTxRef, {
+      clientId: senderClientId, clientName: senderData.name || '',
+      type: 'withdrawal', amount: usd, usdAmount: usd,
+      status: 'completed', method: 'Transfert Wallet',
+      description: `Transfert vers ${recipData.name || recipientWalletId}${message ? ` — ${message}` : ''}`,
+      recipientWalletId: recipientWalletId.trim(),
+      recipientName: recipData.name || '',
+      ...(message && { message }),
+      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+    // Recipient tx
+    const recipTxRef = adminDb.collection('client_transactions').doc();
+    batch.set(recipTxRef, {
+      clientId: recipDoc.id, clientName: recipData.name || '',
+      type: 'transfer_received', amount: usd, usdAmount: usd,
+      status: 'completed', method: 'Transfert Wallet',
+      description: `Reçu de ${senderData.name || senderClientId}${message ? ` — ${message}` : ''}`,
+      senderWalletId: senderData.walletId || '',
+      senderName: senderData.name || '',
+      ...(message && { message }),
+      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    res.json({ success: true, recipientName: recipData.name || '', amount: usd });
+  } catch (e: any) {
+    console.error('[transfer]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
 // ── Delete client transaction history ────────────────────────────────────────
 router.delete('/api/client/transactions/:clientId', requireDb, async (req, res) => {
   try {

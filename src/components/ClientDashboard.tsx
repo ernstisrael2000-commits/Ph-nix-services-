@@ -4,8 +4,8 @@ import {
   LogOut, Loader2, X, Copy, CheckCircle2, AlertCircle,
   Clock, XCircle, Shield, Trash2,
   TrendingUp, Globe, Smartphone, CreditCard as CardIcon,
-  Building2, Bitcoin, Zap, Info, ChevronDown,
-  Eye, EyeOff
+  Building2, Bitcoin, Info, ChevronDown,
+  Eye, EyeOff, Send, User
 } from 'lucide-react';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { CaptchaWidget } from './CaptchaWidget';
@@ -17,7 +17,10 @@ import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { useClientData, useClientTransactions, submitClientDeposit, submitClientWithdrawal } from '../services/clientService';
+import {
+  useClientData, useClientTransactions,
+  submitClientDeposit, submitClientWithdrawal, submitClientTransfer,
+} from '../services/clientService';
 import { useSettings } from '../services/parcelService';
 import { Client, PaymentMethod, DEFAULT_PAYMENT_METHODS } from '../types';
 
@@ -32,10 +35,10 @@ const WHATSAPP_NUMBER = '+50944813185';
 const RECAPTCHA_SITE_KEY = process.env.RECAPTCHA_SITE_KEY || '';
 
 const statusConfig = {
-  pending:   { label: 'En attente', color: 'bg-amber-100 text-amber-700 border border-amber-200',    icon: <Clock className="h-3 w-3" /> },
+  pending:   { label: 'En attente', color: 'bg-amber-100 text-amber-700 border border-amber-200',     icon: <Clock className="h-3 w-3" /> },
   approved:  { label: 'Approuvé',   color: 'bg-emerald-100 text-emerald-700 border border-emerald-200', icon: <CheckCircle2 className="h-3 w-3" /> },
-  rejected:  { label: 'Refusé',     color: 'bg-red-100 text-red-600 border border-red-200',          icon: <XCircle className="h-3 w-3" /> },
-  completed: { label: 'Complété',   color: 'bg-blue-100 text-blue-700 border border-blue-200',       icon: <CheckCircle2 className="h-3 w-3" /> },
+  rejected:  { label: 'Refusé',     color: 'bg-red-100 text-red-600 border border-red-200',           icon: <XCircle className="h-3 w-3" /> },
+  completed: { label: 'Complété',   color: 'bg-blue-100 text-blue-700 border border-blue-200',        icon: <CheckCircle2 className="h-3 w-3" /> },
 };
 
 const typeLabel: Record<string, string> = {
@@ -82,22 +85,18 @@ function VirtualCard({
         background: 'linear-gradient(135deg, #4C1D95 0%, #6D28D9 35%, #7C3AED 62%, #5B21B6 100%)',
       }}
     >
-      {/* Shine */}
       <div className="absolute inset-0"
         style={{ background: 'radial-gradient(ellipse at 15% 15%, rgba(255,255,255,0.18) 0%, transparent 55%)' }} />
-      {/* Grid */}
       <div className="absolute inset-0 opacity-[0.07]"
         style={{
           backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
           backgroundSize: '32px 32px',
         }} />
-      {/* Circles */}
       <div className="absolute -right-10 -top-10 w-44 h-44 rounded-full border border-white/10" />
       <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full border border-white/10" />
       <div className="absolute right-6 bottom-6 w-12 h-12 rounded-full bg-white/5" />
 
       <div className="relative z-10 h-full flex flex-col justify-between p-5">
-        {/* Top row */}
         <div className="flex items-start justify-between">
           <div>
             <p className="text-violet-200/50 text-[9px] font-black uppercase tracking-[0.25em] mb-0.5">Neopay Wallet</p>
@@ -107,7 +106,6 @@ function VirtualCard({
             <button onClick={onToggleHide} className="text-white/40 hover:text-white/70 transition-colors">
               {hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
             </button>
-            {/* Chip */}
             <div className="h-6 w-9 rounded-md bg-gradient-to-br from-amber-300 to-amber-500 shadow-md flex items-center justify-center">
               <div className="grid grid-cols-2 gap-[2px] p-1 w-full h-full">
                 {[...Array(4)].map((_, i) => <div key={i} className="rounded-[1px] bg-amber-700/40" />)}
@@ -116,7 +114,6 @@ function VirtualCard({
           </div>
         </div>
 
-        {/* Balance */}
         <div>
           <p className="text-violet-300/50 text-[9px] font-black uppercase tracking-[0.2em] mb-1">Solde disponible</p>
           {hidden ? (
@@ -134,7 +131,6 @@ function VirtualCard({
           )}
         </div>
 
-        {/* Bottom row */}
         <div className="flex items-end justify-between">
           <button onClick={onCopy} className="flex items-center gap-1.5 group">
             <span className="text-white/30 text-[10px] font-mono tracking-widest group-hover:text-white/50 transition-colors">
@@ -177,9 +173,11 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   const [historyOpen,       setHistoryOpen]       = useState(false);
   const [isDepositOpen,     setIsDepositOpen]     = useState(false);
   const [isWithdrawOpen,    setIsWithdrawOpen]    = useState(false);
+  const [isTransferOpen,    setIsTransferOpen]    = useState(false);
   const [actionLoading,     setActionLoading]     = useState(false);
   const [isDeletingHistory, setIsDeletingHistory] = useState(false);
 
+  // Deposit state
   const [depositMethod,       setDepositMethod]       = useState<PaymentMethod | null>(null);
   const [htgAmount,           setHtgAmount]           = useState('');
   const [depositTxId,         setDepositTxId]         = useState('');
@@ -187,6 +185,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   const [depositCaptchaToken, setDepositCaptchaToken] = useState<string | null>(null);
   const depositCaptchaRef = useRef<ReCAPTCHA>(null);
 
+  // Withdrawal state
   const [withdrawMethod,       setWithdrawMethod]       = useState<PaymentMethod | null>(null);
   const [withdrawUSD,          setWithdrawUSD]          = useState('');
   const [withdrawAccount,      setWithdrawAccount]      = useState('');
@@ -195,8 +194,16 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   const [withdrawCaptchaToken, setWithdrawCaptchaToken] = useState<string | null>(null);
   const withdrawCaptchaRef = useRef<ReCAPTCHA>(null);
 
+  // Transfer state
+  const [transferWalletId,  setTransferWalletId]  = useState('');
+  const [transferUSD,       setTransferUSD]       = useState('');
+  const [transferMessage,   setTransferMessage]   = useState('');
+  const [transferPreview,   setTransferPreview]   = useState<string | null>(null);
+  const [lookupLoading,     setLookupLoading]     = useState(false);
+
   const usdPreview = htgAmount && !isNaN(parseFloat(htgAmount)) ? parseFloat(htgAmount) / rate : 0;
   const htgPreview = withdrawUSD && !isNaN(parseFloat(withdrawUSD)) ? parseFloat(withdrawUSD) * rate : 0;
+  const transferHtgPreview = transferUSD && !isNaN(parseFloat(transferUSD)) ? parseFloat(transferUSD) * rate : 0;
 
   const minDeposit  = settings?.minDepositUSD    || 0.01;
   const maxDeposit  = settings?.maxDepositUSD    || 10000;
@@ -225,6 +232,26 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   const resetWithdraw = () => {
     setWithdrawUSD(''); setWithdrawAccount(''); setWithdrawAccountName('');
     setWithdrawMessage(''); setWithdrawCaptchaToken(null); withdrawCaptchaRef.current?.reset();
+  };
+
+  const resetTransfer = () => {
+    setTransferWalletId(''); setTransferUSD(''); setTransferMessage(''); setTransferPreview(null);
+  };
+
+  // Lookup recipient name as user types wallet ID
+  const handleWalletIdChange = async (val: string) => {
+    setTransferWalletId(val);
+    setTransferPreview(null);
+    if (val.trim().length < 4) return;
+    setLookupLoading(true);
+    try {
+      const res = await fetch(`/api/client/lookup-wallet?walletId=${encodeURIComponent(val.trim())}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.name) setTransferPreview(data.name);
+      }
+    } catch { /* silent */ }
+    finally { setLookupLoading(false); }
   };
 
   const handleDeposit = async (e: React.FormEvent) => {
@@ -290,6 +317,27 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     } finally { setActionLoading(false); }
   };
 
+  const handleTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const usd = parseFloat(transferUSD);
+    if (isNaN(usd) || usd <= 0)      { toast.error('Montant invalide.'); return; }
+    if (usd > balance)                { toast.error('Solde insuffisant.'); return; }
+    if (!transferWalletId.trim())     { toast.error('Entrez l\'ID Wallet du destinataire.'); return; }
+    if (transferWalletId.trim() === client?.walletId) {
+      toast.error('Vous ne pouvez pas vous transférer à vous-même.'); return;
+    }
+    setActionLoading(true);
+    try {
+      const result = await submitClientTransfer(
+        clientId, transferWalletId.trim(), usd, transferMessage || undefined
+      );
+      toast.success(`$${result.amount.toFixed(2)} envoyé à ${result.recipientName || 'destinataire'} !`);
+      setIsTransferOpen(false); resetTransfer();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally { setActionLoading(false); }
+  };
+
   const handleDeleteHistory = async () => {
     if (!window.confirm("Supprimer tout l'historique ? Action irréversible.")) return;
     setIsDeletingHistory(true);
@@ -307,7 +355,6 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
 
   return (
     <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center">
-      {/* Backdrop */}
       <motion.div
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -321,7 +368,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
         transition={{ type: 'spring', damping: 28, stiffness: 280 }}
         className="relative z-10 w-full max-w-md bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] max-h-[95vh] overflow-hidden flex flex-col shadow-2xl shadow-black/20"
       >
-        {/* ── Top bar */}
+        {/* Top bar */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="h-8 w-8 rounded-2xl bg-violet-100 flex items-center justify-center">
@@ -337,7 +384,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
           </button>
         </div>
 
-        {/* ── Card section */}
+        {/* Card */}
         <div className="px-4 pb-4 shrink-0">
           {loading ? (
             <div className="w-full rounded-[1.75rem] bg-violet-100 animate-pulse" style={{ aspectRatio: '1.75 / 1' }} />
@@ -376,11 +423,11 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
           )}
         </div>
 
-        {/* ── Scrollable content */}
+        {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto no-scrollbar">
           <div className="px-4 pb-4 space-y-3">
 
-            {/* Action buttons */}
+            {/* ── Action buttons: Déposer + Retirer */}
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => { setDepositMethod(depositMethods[0] || null); setIsDepositOpen(true); }}
@@ -406,6 +453,20 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                 <p className="text-white/70 text-[10px]">En USD</p>
               </button>
             </div>
+
+            {/* ── Transfer button */}
+            <button
+              onClick={() => { resetTransfer(); setIsTransferOpen(true); }}
+              className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border-2 border-violet-200 bg-violet-50 hover:bg-violet-100 transition-all active:scale-95 group"
+            >
+              <div className="h-8 w-8 rounded-xl bg-violet-600 flex items-center justify-center shadow shadow-violet-300 group-hover:shadow-md transition-shadow">
+                <Send className="h-4 w-4 text-white" />
+              </div>
+              <div className="text-left">
+                <p className="font-black text-violet-700 text-sm leading-tight">Transfert Wallet</p>
+                <p className="text-violet-400 text-[10px]">Envoyer des fonds à un autre utilisateur</p>
+              </div>
+            </button>
 
             {/* Payment Methods */}
             {depositMethods.length > 0 && (
@@ -445,7 +506,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               </p>
             </div>
 
-            {/* Transaction History */}
+            {/* History */}
             <div className="rounded-2xl border border-gray-100 overflow-hidden bg-white">
               <button
                 onClick={() => setHistoryOpen(v => !v)}
@@ -497,16 +558,25 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                             const isCredit = tx.type === 'deposit' || tx.type === 'transfer_received' || tx.type === 'refund';
                             const usdAmt = tx.usdAmount ?? tx.amount;
                             const htgEq  = tx.htgAmount ?? tx.htgEquivalent;
+                            const isTransfer = tx.type === 'transfer_received' || (tx.method === 'Transfert Wallet');
                             return (
                               <div key={tx.id}
                                 className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
-                                <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${isCredit ? 'bg-emerald-100' : 'bg-red-100'}`}>
-                                  {isCredit
-                                    ? <ArrowDownToLine className="h-4 w-4 text-emerald-600" />
-                                    : <ArrowUpFromLine className="h-4 w-4 text-red-500" />}
+                                <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${
+                                  isTransfer ? 'bg-violet-100' : isCredit ? 'bg-emerald-100' : 'bg-red-100'
+                                }`}>
+                                  {isTransfer
+                                    ? <Send className="h-4 w-4 text-violet-600" />
+                                    : isCredit
+                                      ? <ArrowDownToLine className="h-4 w-4 text-emerald-600" />
+                                      : <ArrowUpFromLine className="h-4 w-4 text-red-500" />}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="font-bold text-sm text-gray-800 truncate">{typeLabel[tx.type] || tx.type}</p>
+                                  <p className="font-bold text-sm text-gray-800 truncate">
+                                    {tx.method === 'Transfert Wallet' && !isCredit
+                                      ? 'Transfert envoyé'
+                                      : typeLabel[tx.type] || tx.type}
+                                  </p>
                                   <p className="text-[10px] text-gray-400 truncate">{tx.description || tx.method || ''}</p>
                                   {tx.createdAt?.toDate && (
                                     <p className="text-[10px] text-gray-300 mt-0.5">
@@ -541,7 +611,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
           </div>
         </div>
 
-        {/* ── Footer */}
+        {/* Footer */}
         <div className="px-4 py-3 border-t border-gray-100 bg-white shrink-0">
           <Button
             variant="ghost"
@@ -553,7 +623,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
         </div>
       </motion.div>
 
-      {/* ── Deposit Modal ──────────────────────────────────────────────────────── */}
+      {/* ── DEPOSIT MODAL ──────────────────────────────────────────────────────── */}
       <Dialog open={isDepositOpen} onOpenChange={v => { if (!v) resetDeposit(); setIsDepositOpen(v); }}>
         <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl p-0 overflow-hidden max-h-[90vh] flex flex-col">
           <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 p-5 text-white shrink-0">
@@ -676,7 +746,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
         </DialogContent>
       </Dialog>
 
-      {/* ── Withdraw Modal ────────────────────────────────────────────────────── */}
+      {/* ── WITHDRAW MODAL ────────────────────────────────────────────────────── */}
       <Dialog open={isWithdrawOpen} onOpenChange={v => { if (!v) resetWithdraw(); setIsWithdrawOpen(v); }}>
         <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl p-0 overflow-hidden max-h-[90vh] flex flex-col">
           <div className="bg-gradient-to-br from-red-500 to-rose-700 p-5 text-white shrink-0">
@@ -768,6 +838,110 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               disabled={actionLoading || !withdrawMethod || (!!RECAPTCHA_SITE_KEY && !withdrawCaptchaToken)}
               className="w-full h-12 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black">
               {actionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Soumettre la demande'}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── TRANSFER MODAL ────────────────────────────────────────────────────── */}
+      <Dialog open={isTransferOpen} onOpenChange={v => { if (!v) resetTransfer(); setIsTransferOpen(v); }}>
+        <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl p-0 overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="bg-gradient-to-br from-violet-600 to-purple-700 p-5 text-white shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                <Send className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-black text-white">Transfert Wallet</DialogTitle>
+                <DialogDescription className="text-violet-200/70 text-xs">
+                  Solde disponible: <strong>${balance.toFixed(2)} USD</strong>
+                </DialogDescription>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleTransfer} className="p-5 space-y-4 bg-white overflow-y-auto flex-1">
+
+            {/* Recipient Wallet ID */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                ID Wallet du destinataire
+              </Label>
+              <div className="relative">
+                <Input
+                  value={transferWalletId}
+                  onChange={e => handleWalletIdChange(e.target.value)}
+                  placeholder="Ex: NP-XXXX-XXXX"
+                  className="h-12 rounded-xl font-mono pr-10"
+                  required
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  {lookupLoading
+                    ? <Loader2 className="h-4 w-4 animate-spin text-gray-300" />
+                    : transferPreview
+                      ? <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      : <User className="h-4 w-4 text-gray-300" />}
+                </div>
+              </div>
+              {/* Recipient preview */}
+              <AnimatePresence>
+                {transferPreview && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+                    className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-100"
+                  >
+                    <div className="h-7 w-7 rounded-full bg-emerald-200 flex items-center justify-center text-emerald-700 font-black text-xs shrink-0">
+                      {transferPreview.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-emerald-800">{transferPreview}</p>
+                      <p className="text-[10px] text-emerald-500">Destinataire trouvé ✓</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Amount */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant à envoyer (USD)</Label>
+              <Input type="number" value={transferUSD} onChange={e => setTransferUSD(e.target.value)}
+                placeholder="Ex: 5.00" className="h-12 rounded-xl text-lg font-black"
+                min="0.01" max={balance} step="0.01" required />
+              {transferHtgPreview > 0 && (
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-violet-50 border border-violet-100">
+                  <TrendingUp className="h-3.5 w-3.5 text-violet-600 shrink-0" />
+                  <p className="text-xs font-black text-violet-700">
+                    ≈ <span className="text-base">{Math.round(transferHtgPreview).toLocaleString()} HTG</span>
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Message */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Note (optionnel)</Label>
+              <textarea value={transferMessage} onChange={e => setTransferMessage(e.target.value)}
+                placeholder="Ex: Remboursement, cadeau..."
+                className="w-full min-h-[60px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-300 transition-all"
+                maxLength={200} />
+              <p className="text-[10px] text-gray-400">{transferMessage.length}/200</p>
+            </div>
+
+            {/* Warning */}
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-100">
+              <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-700">
+                Les transferts entre wallets sont <strong>instantanés et irréversibles</strong>. Vérifiez bien l'ID du destinataire.
+              </p>
+            </div>
+
+            <Button type="submit"
+              disabled={actionLoading || !transferWalletId.trim() || !transferUSD}
+              className="w-full h-12 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-black">
+              {actionLoading
+                ? <Loader2 className="h-5 w-5 animate-spin" />
+                : <><Send className="h-4 w-4 mr-2" />Envoyer maintenant</>}
             </Button>
           </form>
         </DialogContent>
