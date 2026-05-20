@@ -74,29 +74,12 @@ export default function App() {
     testConnection();
   }, []);
 
-  // Bootstrap Super Admin
+  // Bootstrap Super Admin via API (idempotent — creates only if no admin exists)
   useEffect(() => {
-    const bootstrapAdmin = async () => {
-      const { checkAdminLogin, saveAdminAccount } = await import('./services/adminService');
-      const { collection, getDocs, query, where } = await import('firebase/firestore');
-      const { db } = await import('./lib/firebase');
-      
-      const q = query(collection(db, 'admin_accounts'), where('fullName', '==', 'Ernst israel'));
-      const snap = await getDocs(q);
-      
-      if (snap.empty) {
-        await saveAdminAccount({
-          fullName: 'Ernst israel',
-          password: '$Ernst509@$',
-          loginCode: 'ER-2026',
-          isSuperAdmin: true,
-          permissions: ['all'],
-          failedAttempts: 0
-        });
-        console.log("Super Admin bootstrapped.");
-      }
-    };
-    bootstrapAdmin();
+    fetch('/api/admin/bootstrap', { method: 'POST' })
+      .then(r => r.json())
+      .then(d => { if (d.bootstrapped) console.log('[Bootstrap] Super Admin créé.'); })
+      .catch(e => console.warn('[Bootstrap] Non critique:', e.message));
   }, []);
   
   const handleViewChange = (newView: typeof view) => {

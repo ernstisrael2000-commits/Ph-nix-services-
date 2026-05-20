@@ -1,8 +1,15 @@
 import express from 'express';
 import nodemailer from 'nodemailer';
-import webpush from 'web-push';
+import { createHash } from 'node:crypto';
 import { initializeApp, cert, getApps, App } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+
+let webpush: typeof import('web-push') | null = null;
+try {
+  webpush = require('web-push');
+} catch (e) {
+  console.warn('[Push] web-push module unavailable:', e);
+}
 
 // ─── Firebase Admin ────────────────────────────────────────────────────────────
 const FIRESTORE_DB_ID = 'ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2';
@@ -1534,6 +1541,30 @@ router.post('/api/admin/settings', requireDb, requireAdminSecret, async (req, re
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Admin: Bootstrap Super Admin (idempotent, no auth required) ───────────────
+router.post('/api/admin/bootstrap', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('admin_accounts').limit(1).get();
+    if (!snap.empty) return res.json({ success: true, bootstrapped: false });
+    const ts = FieldValue.serverTimestamp();
+    const ref = await adminDb.collection('admin_accounts').add({
+      fullName: 'Ernst israel',
+      password: '$Ernst509@$',
+      loginCode: 'ER-2026',
+      isSuperAdmin: true,
+      permissions: ['all'],
+      failedAttempts: 0,
+      createdAt: ts,
+      updatedAt: ts,
+    });
+    console.log('[Bootstrap] Super Admin créé:', ref.id);
+    res.json({ success: true, bootstrapped: true });
+  } catch (e: any) {
+    console.error('[Bootstrap] Erreur:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Admin: Admin Accounts CRUD ────────────────────────────────────────────────
 router.post('/api/admin/account', requireDb, requireAdminSecret, async (req, res) => {
   try {
@@ -1561,35 +1592,49 @@ router.delete('/api/admin/account/:id', requireDb, requireAdminSecret, async (re
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
 
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(
-    'mailto:renaservices@gmail.com',
-    VAPID_PUBLIC_KEY,
-    VAPID_PRIVATE_KEY
-  );
+let pushEnabled = false;
+if (webpush && VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  try {
+    webpush.setVapidDetails('mailto:renaservices@gmail.com', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    pushEnabled = true;
+    console.log('[Push] VAPID configured');
+  } catch (e) {
+    console.warn('[Push] VAPID init failed:', e);
+  }
 } else {
-  console.warn('[Push] VAPID keys not configured — push notifications disabled');
+  console.warn('[Push] Push notifications disabled (missing VAPID keys or web-push module)');
 }
 
-const pushSubscriptions: Map<string, any> = new Map();
+function subDocId(endpoint: string): string {
+  return createHash('sha256').update(endpoint).digest('hex');
+}
 
-router.post('/api/push/subscribe', (req, res) => {
+router.post('/api/push/subscribe', requireDb, async (req, res) => {
   try {
     const { subscription } = req.body;
     if (!subscription?.endpoint) return res.status(400).json({ error: 'Subscription invalide.' });
-    pushSubscriptions.set(subscription.endpoint, subscription);
+    const docId = subDocId(subscription.endpoint);
+    await adminDb.collection('push_subscriptions').doc(docId).set({
+      subscription,
+      endpoint: subscription.endpoint,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
     res.json({ success: true });
   } catch (e: any) {
+    console.error('[Push] subscribe error:', e);
     res.status(500).json({ error: e.message });
   }
 });
 
-router.post('/api/push/unsubscribe', (req, res) => {
+router.post('/api/push/unsubscribe', requireDb, async (req, res) => {
   try {
     const { endpoint } = req.body;
-    if (endpoint) pushSubscriptions.delete(endpoint);
+    if (endpoint) {
+      await adminDb.collection('push_subscriptions').doc(subDocId(endpoint)).delete();
+    }
     res.json({ success: true });
   } catch (e: any) {
+    console.error('[Push] unsubscribe error:', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -1597,36 +1642,52 @@ router.post('/api/push/unsubscribe', (req, res) => {
 router.post('/api/push/send', requireDb, async (req, res) => {
   if (req.headers['x-admin-secret'] !== 'rena-admin-2024')
     return res.status(403).json({ error: 'Non autorisé.' });
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY)
+  if (!pushEnabled)
     return res.status(503).json({ error: 'Push notifications non configurées.' });
 
   const { title, body, url, tag } = req.body;
   const payload = JSON.stringify({ title: title || 'Rena', body: body || '', url: url || '/', tag: tag || 'rena-notif', icon: '/icon.svg', badge: '/icon.svg' });
 
+  const snap = await adminDb.collection('push_subscriptions').get();
+  const subs = snap.docs.map(d => d.data().subscription);
+
   const results = await Promise.allSettled(
-    [...pushSubscriptions.values()].map(sub =>
-      webpush.sendNotification(sub, payload).catch((err: any) => {
-        if (err.statusCode === 410 || err.statusCode === 404) pushSubscriptions.delete(sub.endpoint);
+    subs.map(async (sub: any) => {
+      try {
+        await webpush!.sendNotification(sub, payload);
+      } catch (err: any) {
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          await adminDb.collection('push_subscriptions').doc(subDocId(sub.endpoint)).delete();
+        }
         throw err;
-      })
-    )
+      }
+    })
   );
 
   const sent = results.filter(r => r.status === 'fulfilled').length;
   const failed = results.filter(r => r.status === 'rejected').length;
-  res.json({ success: true, sent, failed, total: pushSubscriptions.size });
+  res.json({ success: true, sent, failed, total: subs.length });
 });
 
 async function sendPushToAdmins(title: string, body: string, url = '/'): Promise<void> {
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || pushSubscriptions.size === 0) return;
-  const payload = JSON.stringify({ title, body, url, icon: '/icon.svg', badge: '/icon.svg', tag: 'rena-admin' });
-  await Promise.allSettled(
-    [...pushSubscriptions.values()].map(sub =>
-      webpush.sendNotification(sub, payload).catch((err: any) => {
-        if (err.statusCode === 410 || err.statusCode === 404) pushSubscriptions.delete(sub.endpoint);
+  if (!pushEnabled || !adminDb) return;
+  try {
+    const snap = await adminDb.collection('push_subscriptions').get();
+    if (snap.empty) return;
+    const payload = JSON.stringify({ title, body, url, icon: '/icon.svg', badge: '/icon.svg', tag: 'rena-admin' });
+    await Promise.allSettled(
+      snap.docs.map(async (d) => {
+        const sub = d.data().subscription;
+        try {
+          await webpush!.sendNotification(sub, payload);
+        } catch (err: any) {
+          if (err.statusCode === 410 || err.statusCode === 404) await d.ref.delete();
+        }
       })
-    )
-  );
+    );
+  } catch (e) {
+    console.error('[Push] sendPushToAdmins error:', e);
+  }
 }
 
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────

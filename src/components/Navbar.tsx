@@ -314,6 +314,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
         onClientLogin={(client) => { onClientLogin(client); setShowAuthModal(false); }}
         onAdminLogin={(admin) => { onAdminLogin(admin); onViewChange('admin'); setShowAuthModal(false); }}
         onAffiliateAccess={() => onViewChange('affiliate')}
+        onAdminPasswordLogin={() => { onViewChange('admin'); setShowAuthModal(false); }}
       />
 
       <Dialog open={showLoginErrorDialog} onOpenChange={setShowLoginErrorDialog}>

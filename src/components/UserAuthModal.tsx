@@ -25,6 +25,7 @@ interface UserAuthModalProps {
   onClientLogin: (client: Client) => void;
   onAdminLogin: (admin: AdminAccount) => void;
   onAffiliateAccess: () => void;
+  onAdminPasswordLogin?: () => void;
 }
 
 // Plain Google icon — no motion, no framer
@@ -86,7 +87,7 @@ const IframeGoogleWarning = () => {
 };
 
 export default function UserAuthModal({
-  open, onOpenChange, onClientLogin, onAdminLogin, onAffiliateAccess
+  open, onOpenChange, onClientLogin, onAdminLogin, onAffiliateAccess, onAdminPasswordLogin
 }: UserAuthModalProps) {
   const [view, setView] = useState<ModalView>('choice');
   const [loading, setLoading] = useState(false);
@@ -351,8 +352,18 @@ export default function UserAuthModal({
                     <p className="text-xs text-red-700 leading-relaxed">{googleError}</p>
                   </div>
                 )}
+                {onAdminPasswordLogin && (
+                  <button
+                    type="button"
+                    onClick={onAdminPasswordLogin}
+                    className="w-full flex items-center justify-center gap-2 h-11 rounded-xl border-2 border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition-all text-sm font-semibold text-slate-600"
+                  >
+                    <Lock className="h-4 w-4" />
+                    Connexion par identifiants
+                  </button>
+                )}
                 <p className="text-[10px] text-gray-400 text-center leading-relaxed">
-                  Seuls les emails autorisés par Rena peuvent accéder au tableau de bord admin.
+                  Seuls les comptes autorisés par Rena peuvent accéder au tableau de bord admin.
                 </p>
               </div>
               <Divider />
