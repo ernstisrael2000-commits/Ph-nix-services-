@@ -193,14 +193,17 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
   // ── Purchase ─────────────────────────────────────────────────────────────────
   const handleWalletPurchase = async (formation: Formation) => {
     if (!loggedClient) { onOpenWallet(); return; }
-    if ((loggedClient.balance ?? 0) < (formation.price ?? 0)) {
-      toast.error(`Solde insuffisant. Vous avez ${(loggedClient.balance ?? 0).toLocaleString()} HTG.`); return;
+    const rate = settings?.exchangeRate || 146;
+    const balanceHTG = Math.round((loggedClient.balance ?? 0) * rate);
+    if (balanceHTG < (formation.price ?? 0)) {
+      toast.error(`Solde insuffisant. Vous avez ${balanceHTG.toLocaleString()} HTG.`); return;
     }
     setPurchasing(true);
+    const priceUSD = (formation.price ?? 0) / rate;
     try {
       const res = await fetch('/api/formations/purchases/wallet', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: loggedClient.id, clientName: loggedClient.name, formationId: formation.id, formationTitle: formation.title, amount: formation.price }),
+        body: JSON.stringify({ clientId: loggedClient.id, clientName: loggedClient.name, formationId: formation.id, formationTitle: formation.title, amount: priceUSD }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Erreur lors de l\'achat.');
@@ -1150,7 +1153,8 @@ function PurchaseCard({
   onOpenWallet, moncashNumber, natcashNumber, discount, progressPct
 }: any) {
 
-  const hasWalletFunds = loggedClient && (loggedClient.balance ?? 0) >= (formation.price ?? 0);
+  const rate = settings?.exchangeRate || 146;
+  const hasWalletFunds = loggedClient && Math.round((loggedClient.balance ?? 0) * rate) >= (formation.price ?? 0);
 
   if (paymentStep === 'done') {
     return (

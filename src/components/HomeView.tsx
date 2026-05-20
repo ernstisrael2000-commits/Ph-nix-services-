@@ -42,21 +42,24 @@ interface WalletPayButtonProps {
   purchaseLoading: boolean;
   setPurchaseLoading: (v: boolean) => void;
   onSuccess: () => void;
+  exchangeRate: number;
 }
 
 const WalletPayButton = ({
-  client, price, productName, hasPendingPurchase, purchaseLoading, setPurchaseLoading, onSuccess
+  client, price, productName, hasPendingPurchase, purchaseLoading, setPurchaseLoading, onSuccess, exchangeRate
 }: WalletPayButtonProps) => {
   const numericPrice = parseFloat(String(price ?? '0').replace(/[^\d.]/g, ''));
-  const currentBalance = client.balance ?? 0;
-  const hasBalance = !isNaN(numericPrice) && numericPrice > 0 && currentBalance >= numericPrice;
+  const balanceUSD = client.balance ?? 0;
+  const balanceHTG = Math.round(balanceUSD * exchangeRate);
+  const hasBalance = !isNaN(numericPrice) && numericPrice > 0 && balanceHTG >= numericPrice;
 
   const handlePay = async () => {
     if (purchaseLoading) return;
-    if (!hasBalance) { toast.error(`Solde insuffisant. Vous avez ${currentBalance.toLocaleString()} HTG`); return; }
+    if (!hasBalance) { toast.error(`Solde insuffisant. Vous avez ${balanceHTG.toLocaleString()} HTG`); return; }
     setPurchaseLoading(true);
+    const priceUSD = numericPrice / exchangeRate;
     try {
-      await submitClientPurchase(client, productName ?? '', String(price ?? ''), numericPrice);
+      await submitClientPurchase(client, productName ?? '', String(price ?? ''), priceUSD);
       toast.success(`✅ Achat effectué ! ${numericPrice.toLocaleString()} HTG débité de votre compte.`);
       onSuccess();
 
@@ -98,8 +101,8 @@ const WalletPayButton = ({
         <>
           <Wallet className="h-5 w-5" />
           {hasBalance
-            ? `Payer avec mon solde (${currentBalance.toLocaleString()} HTG)`
-            : `Solde insuffisant (${currentBalance.toLocaleString()} HTG)`
+            ? `Payer avec mon solde (${balanceHTG.toLocaleString()} HTG)`
+            : `Solde insuffisant (${balanceHTG.toLocaleString()} HTG)`
           }
         </>
       )}
@@ -1012,6 +1015,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                           purchaseLoading={purchaseLoading}
                           setPurchaseLoading={setPurchaseLoading}
                           onSuccess={() => setIsProductDetailOpen(false)}
+                          exchangeRate={exchangeRate}
                         />
                       )}
                     </>
@@ -1357,13 +1361,14 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
               {/* Wallet pay option */}
               {effectiveClient && (() => {
                 const usd = parseFloat(rechargeAmountUSD || '0');
-                const costHTG = usd * (settings?.exchangeRate || 146);
+                const rate = settings?.exchangeRate || 146;
                 const bal = effectiveClient.balance ?? 0;
-                const canPay = bal >= costHTG && costHTG > 0;
+                const balHTG = Math.round(bal * rate);
+                const canPay = bal >= usd && usd > 0;
                 return (
                   <button
                     onClick={() => {
-                      if (!canPay) { toast.error(`Solde insuffisant. Vous avez ${bal.toLocaleString()} HTG.`); return; }
+                      if (!canPay) { toast.error(`Solde insuffisant. Vous avez $${bal.toFixed(2)} USD (${balHTG.toLocaleString()} HTG).`); return; }
                       handleFinalRechargePayment('Solde Wallet');
                     }}
                     className={`group flex items-center justify-between p-6 rounded-[1.5rem] border-2 transition-all hover:scale-[1.02] active:scale-[0.98] ${canPay ? 'bg-emerald-50 border-emerald-100 hover:shadow-lg' : 'bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed'}`}
@@ -1375,7 +1380,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                       <div className="text-left">
                         <span className="block text-xl font-black text-dark uppercase tracking-tight">Mon Compte</span>
                         <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">
-                          Solde: {bal.toLocaleString()} HTG {canPay ? `· Suffisant ✓` : `· Insuffisant`}
+                          Solde: {balHTG.toLocaleString()} HTG {canPay ? `· Suffisant ✓` : `· Insuffisant`}
                         </span>
                       </div>
                     </div>
