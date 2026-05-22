@@ -16,31 +16,48 @@ const FIRESTORE_DB_ID = 'ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2';
 
 let adminApp: App;
 let adminDb: ReturnType<typeof getFirestore>;
+let _initError: string | null = null;
+let _initAttempted = false;
+
+function parseServiceAccount(raw: string): any {
+  let json = raw.trim();
+  // Support base64-encoded JSON (common Vercel workaround)
+  if (!json.startsWith('{')) {
+    try {
+      const decoded = Buffer.from(json, 'base64').toString('utf8').trim();
+      if (decoded.startsWith('{')) json = decoded;
+    } catch {}
+  }
+  // Re-check after potential base64 decode
+  if (!json.startsWith('{')) json = '{' + json;
+  const sa = JSON.parse(json);
+  if (sa.private_key) {
+    // Handle both single-escaped (\n) and double-escaped (\\n) newlines
+    sa.private_key = sa.private_key.replace(/\\n/g, '\n');
+  }
+  return sa;
+}
 
 function initFirebaseAdmin() {
+  _initAttempted = true;
   try {
     if (getApps().length > 0) {
       adminApp = getApps()[0];
     } else {
       const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
       if (!raw) {
+        _initError = 'FIREBASE_SERVICE_ACCOUNT non défini';
         console.error('[Admin] FIREBASE_SERVICE_ACCOUNT not set — admin routes disabled');
         return;
       }
-      let json = raw.trim();
-      if (!json.startsWith('{')) json = '{' + json;
-      const serviceAccount = JSON.parse(json);
-      if (serviceAccount.private_key) {
-        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
-      }
-      adminApp = initializeApp({
-        credential: cert(serviceAccount),
-        databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`,
-      });
+      const serviceAccount = parseServiceAccount(raw);
+      adminApp = initializeApp({ credential: cert(serviceAccount) });
     }
     adminDb = getFirestore(adminApp, FIRESTORE_DB_ID);
+    _initError = null;
     console.log('[Admin] Firebase Admin SDK initialized');
-  } catch (e) {
+  } catch (e: any) {
+    _initError = e?.message || String(e);
     console.error('[Admin] Initialization failed:', e);
   }
 }
@@ -111,7 +128,11 @@ function sendAdminEmail(subject: string, text: string): void {
 // ─── Guards ───────────────────────────────────────────────────────────────────
 
 const requireDb = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  if (!adminDb) return res.status(503).json({ error: 'Firebase Admin non initialisé. Contactez le support.' });
+  if (!adminDb) initFirebaseAdmin();
+  if (!adminDb) {
+    const detail = _initError ? ` Erreur: ${_initError}` : '';
+    return res.status(503).json({ error: `Firebase Admin non initialisé.${detail}` });
+  }
   next();
 };
 
@@ -121,6 +142,29 @@ const router = express.Router();
 
 // ── Health ───────────────────────────────────────────────────────────────────
 router.get('/api/health', (_req, res) => res.json({ ok: true }));
+
+// ── Debug (diagnostic Vercel — protégé par x-admin-secret) ───────────────────
+router.get('/api/debug', (req, res) => {
+  if (req.headers['x-admin-secret'] !== 'rena-admin-2024')
+    return res.status(403).json({ error: 'Non autorisé.' });
+  res.json({
+    adminDbReady: !!adminDb,
+    initAttempted: _initAttempted,
+    initError: _initError,
+    envVars: {
+      FIREBASE_SERVICE_ACCOUNT: !!process.env.FIREBASE_SERVICE_ACCOUNT,
+      FIREBASE_SERVICE_ACCOUNT_length: process.env.FIREBASE_SERVICE_ACCOUNT?.length ?? 0,
+      FIREBASE_SERVICE_ACCOUNT_starts: process.env.FIREBASE_SERVICE_ACCOUNT?.trim().slice(0, 3) ?? '',
+      SMTP_USER: !!process.env.SMTP_USER,
+      SMTP_PASS: !!process.env.SMTP_PASS,
+      RECAPTCHA_SECRET_KEY: !!process.env.RECAPTCHA_SECRET_KEY,
+      VAPID_PUBLIC_KEY: !!process.env.VAPID_PUBLIC_KEY,
+      VAPID_PRIVATE_KEY: !!process.env.VAPID_PRIVATE_KEY,
+    },
+    nodeEnv: process.env.NODE_ENV,
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // ── Affiliate registration email notification ─────────────────────────────────
 router.post('/api/notify-registration', async (req, res) => {
