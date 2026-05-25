@@ -27,6 +27,9 @@ export default defineConfig(({ mode }) => {
           },
         },
       },
+      target: 'es2020',
+      minify: 'esbuild',
+      cssMinify: true,
     },
     server: {
       hmr: process.env.REPLIT_DEV_DOMAIN

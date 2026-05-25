@@ -64,8 +64,30 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+
+    // Cache immutable hashed assets for 1 year
+    app.use('/assets', express.static(path.join(distPath, 'assets'), {
+      maxAge: '1y',
+      immutable: true,
+    }));
+
+    // Cache PWA/static files for 1 day; no-cache for HTML
+    app.use(express.static(distPath, {
+      setHeaders(res, filePath) {
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        } else if (
+          filePath.endsWith('.webmanifest') ||
+          filePath.endsWith('robots.txt') ||
+          filePath.endsWith('sitemap.xml')
+        ) {
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+        }
+      },
+    }));
+
     app.get('*', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

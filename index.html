@@ -3,17 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Rena</title>
+    <title>Rena — Logistique, Paiements &amp; Services Digitaux en Haïti</title>
 
-    <!-- PWA Meta Tags -->
-    <meta name="description" content="Votre plateforme de logistique et paiements en ligne" />
-    <meta name="theme-color" content="#7C3AED" />
+    <!-- Primary SEO -->
+    <meta name="description" content="Rena : logistique, paiements mobiles, recharges de cartes, top-up jeux et formations en ligne en Haïti. Suivi de colis, dépôts MonCash &amp; NatCash." />
+    <meta name="keywords" content="rena, logistique haïti, paiement mobile, moncash, natcash, suivi colis, recharge carte, top-up jeux, formations en ligne, wallet haïti" />
+    <meta name="robots" content="index, follow" />
+    <meta name="author" content="Rena" />
+
+    <!-- PWA / App Meta -->
+    <meta name="theme-color" content="#1d4ed8" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Rena" />
     <meta name="application-name" content="Rena" />
-    <meta name="msapplication-TileColor" content="#7C3AED" />
+    <meta name="msapplication-TileColor" content="#1d4ed8" />
 
     <!-- Manifest -->
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -24,9 +29,41 @@
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Rena" />
-    <meta property="og:description" content="Votre plateforme de logistique et paiements en ligne" />
+    <meta property="og:site_name" content="Rena" />
+    <meta property="og:locale" content="fr_HT" />
+    <meta property="og:title" content="Rena — Logistique, Paiements &amp; Services Digitaux en Haïti" />
+    <meta property="og:description" content="Plateforme de logistique, paiements mobiles, recharges de cartes, top-up jeux et formations en ligne en Haïti." />
     <meta property="og:image" content="/icon.svg" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Rena — Logistique &amp; Paiements en Haïti" />
+    <meta name="twitter:description" content="Logistique, paiements mobiles, recharges cartes, top-up jeux et formations. MonCash, NatCash." />
+    <meta name="twitter:image" content="/icon.svg" />
+
+    <!-- Performance: preconnect to critical origins -->
+    <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://firebase.googleapis.com" crossorigin />
+    <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin />
+    <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
+    <link rel="dns-prefetch" href="https://storage.googleapis.com" />
+
+    <!-- Structured Data — Organization -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Rena",
+      "description": "Plateforme de logistique, paiements mobiles et services digitaux en Haïti",
+      "logo": "/icon.svg",
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "telephone": "+50944813185",
+        "contactType": "customer service",
+        "availableLanguage": "French"
+      }
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
