@@ -33,7 +33,7 @@ export default function BottomNav({
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-[100] bg-white/97 backdrop-blur-2xl border-t border-gray-100"
+      className="fixed bottom-0 left-0 right-0 z-[300] bg-white/97 backdrop-blur-2xl border-t border-gray-100"
       style={{
         boxShadow: '0 -8px 40px rgba(0,0,0,0.07)',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',

@@ -272,7 +272,7 @@ export default function App() {
           />
         )}
 
-        <main className="animate-in fade-in duration-500 pt-14 flex-grow relative">
+        <main className={`animate-in fade-in duration-500 pt-14 flex-grow relative ${!['admin', 'affiliate', 'agent'].includes(view) ? 'pb-[74px]' : ''}`}>
           {/* Back button only for utility views (tracking, shipping) */}
           {['tracking', 'shipping'].includes(view) && (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">

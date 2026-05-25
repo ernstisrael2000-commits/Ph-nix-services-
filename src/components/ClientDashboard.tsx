@@ -354,7 +354,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center">
+    <div className="fixed inset-x-0 top-0 bottom-[58px] sm:inset-0 z-[200] flex items-end sm:items-center justify-center">
       <motion.div
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -366,7 +366,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 80, scale: 0.96 }}
         transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-        className="relative z-10 w-full max-w-md bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] max-h-[95vh] overflow-hidden flex flex-col shadow-2xl shadow-black/20"
+        className="relative z-10 w-full max-w-md bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] max-h-full sm:max-h-[95vh] overflow-hidden flex flex-col shadow-2xl shadow-black/20"
       >
         {/* Top bar */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
