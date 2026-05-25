@@ -596,33 +596,33 @@ function CourseCard({ formation, i, owned, fav, disc, onOpen, onFav }: {
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: i * 0.05, duration: 0.35 }}
+      transition={{ delay: i * 0.06, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       onClick={onOpen}
-      className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden group flex flex-col"
+      className="bg-white rounded-[24px] border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer overflow-hidden group flex flex-col"
     >
       {/* Cover */}
-      <div className="relative h-44 overflow-hidden shrink-0">
+      <div className="relative h-48 overflow-hidden shrink-0">
         {formation.coverImage ? (
-          <img src={formation.coverImage} alt={formation.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+          <img src={formation.coverImage} alt={formation.title} className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-700" />
         ) : (
           <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${levelGradients[formation.level] || 'from-violet-500 to-purple-700'}`}>
             <GraduationCap className="h-16 w-16 text-white/20" />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
         {/* Badges */}
         <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
           {formation.price === 0 && (
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-500 text-white">Gratuit</span>
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-500 text-white shadow-lg shadow-emerald-500/30">Gratuit</span>
           )}
           {disc > 0 && (
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-500 text-white">-{disc}%</span>
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-500 text-white shadow-lg shadow-rose-500/30">-{disc}%</span>
           )}
           {formation.hasCertificate && (
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 flex items-center gap-1">
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-400/90 text-amber-900 backdrop-blur-sm flex items-center gap-1 shadow-sm">
               <BadgeCheck className="h-2.5 w-2.5" /> Certifiant
             </span>
           )}
@@ -630,42 +630,47 @@ function CourseCard({ formation, i, owned, fav, disc, onOpen, onFav }: {
 
         {/* Favorite */}
         <button onClick={onFav}
-          className={`absolute top-3 right-3 h-8 w-8 rounded-full flex items-center justify-center backdrop-blur-sm transition-all ${fav ? 'bg-rose-500 text-white' : 'bg-black/30 text-white/70 hover:bg-black/50'}`}>
+          className={`absolute top-3 right-3 h-8 w-8 rounded-full flex items-center justify-center backdrop-blur-md transition-all shadow-sm ${fav ? 'bg-rose-500 text-white scale-110' : 'bg-black/25 text-white/80 hover:bg-black/40 hover:scale-110'}`}>
           <Heart className={`h-3.5 w-3.5 ${fav ? 'fill-white' : ''}`} />
         </button>
 
         {/* Owned badge */}
         {owned && (
-          <div className="absolute bottom-3 left-3 bg-emerald-500 text-white px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1">
-            <CheckCircle2 className="h-2.5 w-2.5" /> Accès activé
+          <div className="absolute bottom-3 left-3 bg-emerald-500 text-white px-3 py-1.5 rounded-full text-[10px] font-black flex items-center gap-1.5 shadow-lg shadow-emerald-500/30">
+            <CheckCircle2 className="h-3 w-3 fill-white" /> Accès activé
           </div>
         )}
 
         {/* Play hover */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          <div className="bg-white/90 backdrop-blur-sm rounded-full p-3.5 shadow-xl">
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
+          <div className="bg-white/95 backdrop-blur-sm rounded-full p-4 shadow-2xl scale-75 group-hover:scale-100 transition-transform duration-300">
             <Play className="h-6 w-6 text-violet-700 fill-violet-700" />
           </div>
         </div>
       </div>
 
       {/* Body */}
-      <div className="p-4 flex flex-col flex-1">
+      <div className="p-5 flex flex-col flex-1">
         {formation.category && (
-          <span className="text-[10px] font-black text-violet-600 uppercase tracking-widest mb-1.5">{formation.category}</span>
+          <span className="text-[10px] font-black text-violet-500 uppercase tracking-widest mb-2">{formation.category}</span>
         )}
-        <h3 className="font-black text-gray-900 text-sm mb-1.5 line-clamp-2 leading-snug">{formation.title}</h3>
+        <h3 className="font-black text-gray-900 text-sm mb-2 line-clamp-2 leading-snug">{formation.title}</h3>
         {formation.instructor && (
-          <p className="text-xs text-gray-500 mb-2 truncate">{formation.instructor}</p>
+          <p className="text-xs text-gray-400 mb-2.5 truncate flex items-center gap-1">
+            <span className="h-4 w-4 rounded-full bg-gray-100 inline-flex items-center justify-center shrink-0">
+              <User className="h-2.5 w-2.5 text-gray-400" />
+            </span>
+            {formation.instructor}
+          </p>
         )}
-        <div className="flex items-center gap-3 text-xs text-gray-400 mb-2">
-          {formation.totalDuration && <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{formation.totalDuration}</span>}
-          <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" />{(formation.modules || []).length} modules</span>
+        <div className="flex items-center gap-3 text-xs text-gray-400 mb-2.5">
+          {formation.totalDuration && <span className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-full"><Clock className="h-3 w-3 text-violet-400" />{formation.totalDuration}</span>}
+          <span className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-full"><BookOpen className="h-3 w-3 text-violet-400" />{(formation.modules || []).length} modules</span>
         </div>
         <div className="mb-3">
           <StarRating rating={formation.rating || 0} size="xs" />
         </div>
-        <div className="mt-auto flex items-end justify-between">
+        <div className="mt-auto flex items-center justify-between pt-3 border-t border-gray-50">
           <div>
             <span className="text-base font-black text-violet-700">
               {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
@@ -674,8 +679,8 @@ function CourseCard({ formation, i, owned, fav, disc, onOpen, onFav }: {
               <span className="text-xs text-gray-400 line-through ml-1.5">{formation.originalPrice.toLocaleString()}</span>
             )}
           </div>
-          <span className="text-xs font-bold text-violet-600 flex items-center gap-0.5 group-hover:gap-1.5 transition-all">
-            Voir <ChevronRight className="h-3.5 w-3.5" />
+          <span className="h-8 w-8 rounded-full bg-violet-50 flex items-center justify-center group-hover:bg-violet-100 group-hover:scale-110 transition-all">
+            <ChevronRight className="h-4 w-4 text-violet-600" />
           </span>
         </div>
       </div>
@@ -862,7 +867,7 @@ function FormationDetailPage({
   formation, isOwned, isFav, loggedClient, onBack, onPlay, onFavorite, onOpenWallet,
   paymentStep, setPaymentStep, selectedPayMethod, setSelectedPayMethod,
   payFormData, setPayFormData, purchasing, submittingPayment,
-  onWalletPurchase, onExternalSubmit, moncashNumber, natcashNumber, discount, progressPct
+  onWalletPurchase, onExternalSubmit, moncashNumber, natcashNumber, discount, progressPct, settings
 }: DetailPageProps) {
 
   const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
@@ -1112,6 +1117,7 @@ function FormationDetailPage({
                 natcashNumber={natcashNumber}
                 discount={discount}
                 progressPct={progressPct}
+                settings={settings}
               />
             </div>
           </div>
@@ -1150,7 +1156,7 @@ function PurchaseCard({
   formation, isOwned, loggedClient, paymentStep, setPaymentStep,
   selectedPayMethod, setSelectedPayMethod, payFormData, setPayFormData,
   purchasing, submittingPayment, onPlay, onWalletPurchase, onExternalSubmit,
-  onOpenWallet, moncashNumber, natcashNumber, discount, progressPct
+  onOpenWallet, moncashNumber, natcashNumber, discount, progressPct, settings
 }: any) {
 
   const rate = settings?.exchangeRate || 146;

@@ -243,10 +243,9 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
     if (!selectedCardForRecharge || !rechargeAmountUSD) return;
     
     const usd = parseFloat(rechargeAmountUSD);
-    const gold = usd * (selectedCardForRecharge.goldRate || 1);
     const gourdes = usd * (settings?.exchangeRate || 146);
     
-    const message = `Bonjour Rena,\n\nJe souhaite recharger ma carte :\n👤 Client : *${customerName || 'Non spécifié'}*\n💳 Carte : *${selectedCardForRecharge.name}*\n💵 Montant USD : *${usd}$*\n💰 Équivalent Gold : *${gold} Gold*\n🇭🇹 Montant en Gourdes : *${gourdes.toLocaleString()} HTG*\n\n💳 Moyen de paiement : *${method}*\n\nMerci de valider ma recharge.`;
+    const message = `Bonjour Rena,\n\nJe souhaite recharger ma carte :\n👤 Client : *${customerName || 'Non spécifié'}*\n💳 Carte : *${selectedCardForRecharge.name}*\n💵 Montant USD : *${usd}$*\n🇭🇹 Équivalent en Gourdes : *${gourdes.toLocaleString()} HTG*\n\n💳 Moyen de paiement : *${method}*\n\nMerci de valider ma recharge.`;
     
     openWhatsApp(message);
     setIsPaymentMethodDialogOpen(false);
@@ -370,36 +369,48 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
             className="relative w-full px-2 md:px-0"
           >
             <div
-              className="relative w-full rounded-[32px] bg-white border border-gray-100 shadow-[0_8px_40px_-8px_rgba(0,0,0,0.12)] p-6 md:p-8 overflow-hidden cursor-pointer group"
+              className="relative w-full rounded-[32px] overflow-hidden cursor-pointer group"
               onClick={onOpenWallet}
+              style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 45%, #4f46e5 100%)' }}
             >
-              {/* Subtle violet glow top-right */}
-              <div className="absolute top-0 right-0 w-64 h-64 bg-primary/8 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none" />
+              {/* Mesh decoration */}
+              <div className="absolute top-0 right-0 w-72 h-72 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none" />
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-400/20 rounded-full blur-2xl translate-y-1/2 -translate-x-1/4 pointer-events-none" />
+              <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
 
-              <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center gap-5">
-                {/* Avatar */}
-                <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-2xl font-black text-primary shrink-0 group-hover:scale-105 transition-transform">
-                  {(effectiveClient?.name || loggedClient.name || '?').charAt(0).toUpperCase()}
-                </div>
-
-                {/* Identity + balance */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-0.5">Bonjour</p>
-                  <p className="text-xl font-black text-gray-900 leading-tight truncate">{effectiveClient?.name || loggedClient.name}</p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="text-2xl font-black text-primary tabular-nums">{balanceHTG.toLocaleString()} HTG</span>
-                    <span className="text-sm text-gray-400 font-semibold">≈ ${balanceUSD}</span>
+              <div className="relative z-10 p-6 md:p-8">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
+                  {/* Avatar */}
+                  <div className="h-14 w-14 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center text-2xl font-black text-white shrink-0 group-hover:scale-105 transition-transform backdrop-blur-sm">
+                    {(effectiveClient?.name || loggedClient.name || '?').charAt(0).toUpperCase()}
                   </div>
+
+                  {/* Identity + balance */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-0.5">Bonjour 👋</p>
+                    <p className="text-xl font-black text-white leading-tight truncate">{effectiveClient?.name || loggedClient.name}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-2xl font-black text-white tabular-nums">{balanceHTG.toLocaleString()} <span className="text-lg font-bold text-white/70">HTG</span></span>
+                      <span className="px-2 py-0.5 rounded-full bg-white/15 text-white/80 text-xs font-bold">≈ ${balanceUSD}</span>
+                    </div>
+                  </div>
+
+                  {/* CTA */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onOpenWallet?.(); }}
+                    className="flex items-center gap-2 shrink-0 h-12 px-6 rounded-2xl bg-white hover:bg-white/90 active:scale-95 text-primary font-black text-sm transition-all shadow-xl"
+                  >
+                    <Wallet className="h-4 w-4" />
+                    Mon Wallet
+                  </button>
                 </div>
 
-                {/* CTA */}
-                <button
-                  onClick={(e) => { e.stopPropagation(); onOpenWallet?.(); }}
-                  className="flex items-center gap-2 shrink-0 h-12 px-6 rounded-2xl bg-primary hover:bg-primary/90 active:scale-95 text-white font-bold text-sm transition-all shadow-lg shadow-primary/25"
-                >
-                  <Wallet className="h-4 w-4" />
-                  Mon Wallet
-                </button>
+                {hasPendingPurchase && (
+                  <div className="mt-4 px-4 py-2.5 rounded-xl bg-amber-400/20 border border-amber-300/30 flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                    <p className="text-xs font-bold text-amber-200">Achat en attente de validation</p>
+                  </div>
+                )}
               </div>
             </div>
           </motion.section>
@@ -482,99 +493,99 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
       ) : null}
 
       {/* Services Section */}
-      <section ref={servicesRef} id="services" className="space-y-8">
-        <div className="text-center">
-          <h2 className="text-3xl font-bold text-dark">Nos Services</h2>
-          <div className="h-1 w-20 bg-primary mx-auto mt-4 rounded-full" />
+      <section ref={servicesRef} id="services" className="space-y-6">
+        <div className="flex items-end justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-dark">Nos Services</h2>
+            <p className="text-sm text-gray-500 mt-1">Solutions rapides et sécurisées</p>
+          </div>
+          <div className="h-1 w-16 bg-primary rounded-full mb-1" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           {/* Card 1 — Recharge carte */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}>
-            <Card className="bg-emerald-50 border-2 border-emerald-100 hover:shadow-lg transition-all group h-full flex flex-col">
-              <CardHeader>
-                <div className="mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <CreditCard className="h-8 w-8 text-emerald-600" />
+            <div
+              onClick={() => setIsCardsDialogOpen(true)}
+              className="relative group rounded-[28px] overflow-hidden cursor-pointer h-full"
+              style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 60%, #34d399 100%)' }}
+            >
+              <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-300/20 rounded-full blur-xl translate-y-1/2 -translate-x-1/2" />
+              <div className="relative z-10 p-7">
+                <div className="h-14 w-14 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
+                  <CreditCard className="h-7 w-7 text-white" />
                 </div>
-                <CardTitle className="text-xl">Recharge carte</CardTitle>
-                <CardDescription className="text-gray-600">
-                  Rechargez vos cartes de crédit ou prépayées rapidement.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="mt-auto">
-                <Button
-                  onClick={() => setIsCardsDialogOpen(true)}
-                  className="w-full bg-white text-gray-900 border-2 border-transparent hover:border-gray-900 hover:bg-gray-900 hover:text-white transition-all"
-                >
-                  Voir les cartes
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </CardContent>
-            </Card>
+                <h3 className="text-xl font-black text-white mb-1.5">Recharge Carte</h3>
+                <p className="text-sm text-white/75 leading-relaxed mb-5">
+                  Rechargez vos cartes de crédit ou prépayées en quelques clics.
+                </p>
+                <div className="flex items-center gap-2 text-white font-black text-sm">
+                  Choisir une carte
+                  <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+            </div>
           </motion.div>
 
           {/* Card 2 — Services en ligne (expandable) */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-            <Card className="bg-accent-light border-2 border-accent-light/50 hover:shadow-lg transition-all h-full flex flex-col">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="mb-4 group-hover:scale-110 transition-transform duration-300">
-                    <Globe className="h-8 w-8 text-primary" />
-                  </div>
+            <div className="rounded-[28px] border border-gray-100 bg-white shadow-sm hover:shadow-md transition-all h-full overflow-hidden">
+              <div className="p-7">
+                <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/15 flex items-center justify-center mb-5">
+                  <Globe className="h-7 w-7 text-primary" />
                 </div>
-                <CardTitle className="text-xl">Services en ligne</CardTitle>
-                <CardDescription className="text-gray-600">
+                <h3 className="text-xl font-black text-dark mb-1.5">Services en ligne</h3>
+                <p className="text-sm text-gray-500 leading-relaxed mb-5">
                   Expédition, suivi de colis et plus — accédez à tous nos services numériques.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="mt-auto space-y-3">
-                <Button
+                </p>
+                <button
                   onClick={() => setShowOnlineServices(v => !v)}
-                  className="w-full bg-white text-gray-900 border-2 border-transparent hover:border-gray-900 hover:bg-gray-900 hover:text-white transition-all"
+                  className="flex items-center gap-2 h-11 px-5 rounded-2xl bg-primary/10 hover:bg-primary/15 text-primary font-black text-sm transition-all"
                 >
-                  {showOnlineServices ? 'Masquer les services' : 'Voir les services'}
-                  <ChevronDown className={`ml-2 h-4 w-4 transition-transform duration-300 ${showOnlineServices ? 'rotate-180' : ''}`} />
-                </Button>
+                  {showOnlineServices ? 'Masquer' : 'Voir les services'}
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${showOnlineServices ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
 
-                <AnimatePresence>
-                  {showOnlineServices && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                      className="overflow-hidden"
-                    >
-                      <div className="pt-2 space-y-2">
-                        {effectiveOnlineSubServices.map((sub) => {
-                          const IconComp = (LucideIcons as any)[sub.icon] || Package;
-                          const handleSubClick = () => {
-                            if (sub.target === 'tracking') { onTrackingClick(); setShowOnlineServices(false); }
-                            else if (sub.target === 'shipping') { onViewChange('shipping'); setShowOnlineServices(false); }
-                            else if (sub.target === 'url' && sub.url) { window.open(sub.url, '_blank'); }
-                          };
-                          return (
-                            <button
-                              key={sub.id}
-                              onClick={handleSubClick}
-                              className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/80 hover:bg-white border border-white/50 hover:border-primary/20 hover:shadow-sm transition-all text-left group/sub"
-                            >
-                              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover/sub:bg-primary/20 transition-colors">
-                                <IconComp className="h-4 w-4 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-bold text-sm text-dark">{sub.label}</p>
-                                {sub.description && <p className="text-xs text-gray-500 truncate">{sub.description}</p>}
-                              </div>
-                              <ArrowRight className="h-4 w-4 text-gray-400 group-hover/sub:text-primary transition-colors shrink-0" />
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </CardContent>
-            </Card>
+              <AnimatePresence>
+                {showOnlineServices && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-5 pb-5 space-y-2 border-t border-gray-50 pt-4">
+                      {effectiveOnlineSubServices.map((sub) => {
+                        const IconComp = (LucideIcons as any)[sub.icon] || Package;
+                        const handleSubClick = () => {
+                          if (sub.target === 'tracking') { onTrackingClick(); setShowOnlineServices(false); }
+                          else if (sub.target === 'shipping') { onViewChange('shipping'); setShowOnlineServices(false); }
+                          else if (sub.target === 'url' && sub.url) { window.open(sub.url, '_blank'); }
+                        };
+                        return (
+                          <button
+                            key={sub.id}
+                            onClick={handleSubClick}
+                            className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-gray-50 hover:bg-primary/5 border border-gray-100 hover:border-primary/20 transition-all text-left group/sub"
+                          >
+                            <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover/sub:bg-primary/20 transition-colors">
+                              <IconComp className="h-4 w-4 text-primary" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-sm text-dark">{sub.label}</p>
+                              {sub.description && <p className="text-xs text-gray-400 truncate">{sub.description}</p>}
+                            </div>
+                            <ArrowRight className="h-4 w-4 text-gray-300 group-hover/sub:text-primary transition-colors shrink-0" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </motion.div>
         </div>
       </section>
@@ -1271,17 +1282,28 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
               )}
             </div>
 
-            <div className="p-6 rounded-[2rem] bg-emerald-50 border border-emerald-100 flex flex-col items-center justify-center text-center space-y-1">
-              <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Valeur en Gold</p>
-              <div className="flex items-center gap-2">
-                <Zap className="h-5 w-5 text-emerald-600 fill-emerald-600" />
-                <span className="text-3xl font-black text-emerald-950">
-                  {rechargeAmountUSD ? (parseFloat(rechargeAmountUSD) * (selectedCardForRecharge?.goldRate || 1)).toLocaleString() : '0'} Gold
-                </span>
+            <div className="rounded-[2rem] border border-emerald-100 overflow-hidden">
+              <div className="bg-emerald-600 px-5 py-3 flex items-center gap-2">
+                <Zap className="h-4 w-4 text-white fill-white" />
+                <p className="text-[10px] font-black text-white uppercase tracking-widest">Calculateur intelligent</p>
               </div>
-              <p className="text-[9px] text-emerald-600/60 font-bold uppercase tracking-tighter">
-                Taux: 1$ = {selectedCardForRecharge?.goldRate || 1} Gold
-              </p>
+              <div className="bg-emerald-50 p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-emerald-700 font-semibold">Montant USD</span>
+                  <span className="text-xl font-black text-emerald-900">${rechargeAmountUSD || '0'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-emerald-700 font-semibold">Taux de change</span>
+                  <span className="text-sm font-black text-emerald-600">1$ = {settings?.exchangeRate || 146} HTG</span>
+                </div>
+                <div className="h-px bg-emerald-200" />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-black text-emerald-900">Équivalent Gourdes</span>
+                  <span className="text-2xl font-black text-emerald-700">
+                    {rechargeAmountUSD ? (parseFloat(rechargeAmountUSD) * (settings?.exchangeRate || 146)).toLocaleString() : '0'} HTG
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
           

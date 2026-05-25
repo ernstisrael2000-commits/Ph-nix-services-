@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import {
   UserPlus, LogIn, ShieldCheck, Loader2, Eye, EyeOff,
-  ArrowLeft, User, Phone, Mail, Lock, Hash, Wallet,
+  ArrowLeft, ArrowRight, User, Phone, Mail, Lock, Hash, Wallet,
   AlertCircle, Users, ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -281,43 +281,51 @@ export default function UserAuthModal({
         {/* ── CHOICE ── */}
         {view === 'choice' && (
           <div>
-            <div className="bg-gradient-to-br from-primary to-[#1B4FD8] p-8 text-white text-center">
-              <div className="h-16 w-16 rounded-[20px] bg-white/20 backdrop-blur-md flex items-center justify-center mx-auto mb-4 border border-white/30">
-                <Wallet className="h-8 w-8 text-white" />
+            <div className="relative overflow-hidden p-8 text-white text-center" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #4f46e5 100%)' }}>
+              <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-400/20 rounded-full blur-xl translate-y-1/2 -translate-x-1/2" />
+              <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '20px 20px' }} />
+              <div className="relative z-10">
+                <div className="h-16 w-16 rounded-[20px] bg-white/15 backdrop-blur-md flex items-center justify-center mx-auto mb-4 border border-white/25 shadow-xl">
+                  <Wallet className="h-8 w-8 text-white" />
+                </div>
+                <DialogTitle className="text-2xl font-black text-white">Bienvenue sur Rena</DialogTitle>
+                <DialogDescription className="text-white/70 text-sm mt-1.5">Votre plateforme de services digitaux</DialogDescription>
               </div>
-              <DialogTitle className="text-2xl font-black text-white">Accès Rena</DialogTitle>
-              <DialogDescription className="text-white/80 text-sm mt-1">Choisissez votre type d'accès</DialogDescription>
             </div>
-            <div className="p-6 space-y-3 bg-white">
+            <div className="p-5 space-y-2.5 bg-white">
               <button onClick={() => setView('client-login')}
-                className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 hover:border-primary/30 hover:bg-orange-50/30 transition-all group text-left active:scale-[0.98]">
-                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-                  <LogIn className="h-6 w-6 text-primary" />
+                className="w-full flex items-center gap-4 p-4 rounded-2xl border border-gray-100 hover:border-primary/25 hover:bg-blue-50/40 hover:shadow-sm transition-all group text-left active:scale-[0.98]">
+                <div className="h-11 w-11 rounded-xl bg-blue-100 flex items-center justify-center shrink-0 group-hover:bg-blue-200 transition-colors">
+                  <LogIn className="h-5 w-5 text-primary" />
                 </div>
-                <div>
-                  <p className="font-bold text-dark">Se connecter</p>
-                  <p className="text-xs text-gray-500">Accéder à votre wallet client</p>
+                <div className="flex-1">
+                  <p className="font-black text-dark text-sm">Se connecter</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Accéder à votre wallet client</p>
                 </div>
+                <ArrowRight className="h-4 w-4 text-gray-300 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
               </button>
               <button onClick={() => setView('client-register')}
-                className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 hover:border-emerald-300 hover:bg-emerald-50/30 transition-all group text-left active:scale-[0.98]">
-                <div className="h-12 w-12 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0 group-hover:bg-emerald-200 transition-colors">
-                  <UserPlus className="h-6 w-6 text-emerald-600" />
+                className="w-full flex items-center gap-4 p-4 rounded-2xl border border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/40 hover:shadow-sm transition-all group text-left active:scale-[0.98]">
+                <div className="h-11 w-11 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0 group-hover:bg-emerald-200 transition-colors">
+                  <UserPlus className="h-5 w-5 text-emerald-600" />
                 </div>
-                <div>
-                  <p className="font-bold text-dark">Créer un compte</p>
-                  <p className="text-xs text-gray-500">Nouveau chez Rena ? Inscrivez-vous</p>
+                <div className="flex-1">
+                  <p className="font-black text-dark text-sm">Créer un compte</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Nouveau chez Rena ? Inscrivez-vous</p>
                 </div>
+                <ArrowRight className="h-4 w-4 text-gray-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all shrink-0" />
               </button>
+              <div className="h-px bg-gray-50 my-1" />
               <button onClick={() => setView('admin-access')}
-                className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-gray-100 hover:border-amber-300 hover:bg-amber-50/30 transition-all group text-left active:scale-[0.98]">
-                <div className="h-12 w-12 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 group-hover:bg-amber-200 transition-colors">
-                  <ShieldCheck className="h-6 w-6 text-amber-600" />
+                className="w-full flex items-center gap-4 p-3.5 rounded-2xl hover:bg-gray-50 transition-all group text-left active:scale-[0.98]">
+                <div className="h-9 w-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 group-hover:bg-amber-200 transition-colors">
+                  <ShieldCheck className="h-4 w-4 text-amber-600" />
                 </div>
-                <div>
-                  <p className="font-bold text-dark">Accès Admin / Affilié</p>
-                  <p className="text-xs text-gray-500">Espace professionnel Rena</p>
+                <div className="flex-1">
+                  <p className="font-bold text-gray-500 text-xs">Espace Admin / Affilié</p>
                 </div>
+                <ArrowRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-gray-500 transition-all shrink-0" />
               </button>
             </div>
           </div>
