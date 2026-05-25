@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import Navbar from './components/Navbar';
+import BottomNav from './components/BottomNav';
 import TrackingView from './components/TrackingView';
 import AdminDashboard from './components/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
 import HomeView from './components/HomeView';
 import ShippingView from './components/ShippingView';
 import FormationsView from './components/FormationsView';
+import ProductsView from './components/ProductsView';
+import ServicesView from './components/ServicesView';
 import AffiliateLogin from './components/AffiliateLogin';
 import AffiliateDashboard from './components/AffiliateDashboard';
 import AgentLogin from './components/AgentLogin';
@@ -15,6 +18,7 @@ import PWAInstallPrompt from './components/PWAInstallPrompt';
 import LoadingScreen from './components/LoadingScreen';
 import { Toaster } from './components/ui/sonner';
 import AccessChoice from './components/AccessChoice';
+import UserAuthModal from './components/UserAuthModal';
 import { useAuth } from './hooks/useAuth';
 import { useSettings } from './services/parcelService';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -27,8 +31,8 @@ import { db } from './lib/firebase';
 import { toast } from 'sonner';
 
 export default function App() {
-  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent' | 'formations'>('home');
-  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent' | 'formations')[]>(['home']);
+  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent' | 'formations' | 'products' | 'services'>('home');
+  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent' | 'formations' | 'products' | 'services')[]>(['home']);
   const [formationsTab, setFormationsTab] = useState<'all' | 'my'>('all');
   const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'admin' | 'agent' | null>(null);
   const { loading } = useAuth();
@@ -36,6 +40,7 @@ export default function App() {
   const [showAnnouncement, setShowAnnouncement] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
   const [showClientDashboard, setShowClientDashboard] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   
   const [loggedAdmin, setLoggedAdmin] = useState<AdminAccount | null>(() => {
     const saved = localStorage.getItem('rena_admin');
@@ -256,8 +261,20 @@ export default function App() {
           )}
         </AnimatePresence>
         
+        {/* ── Bottom Nav — hidden on dashboard views ── */}
+        {!['admin', 'affiliate', 'agent'].includes(view) && (
+          <BottomNav
+            currentView={view}
+            onViewChange={handleViewChange}
+            loggedClient={loggedClient}
+            onOpenWallet={() => setShowClientDashboard(true)}
+            onRequestAuth={() => setShowAuthModal(true)}
+          />
+        )}
+
         <main className="animate-in fade-in duration-500 pt-14 flex-grow relative">
-          {view !== 'home' && (
+          {/* Back button only for utility views (tracking, shipping) */}
+          {['tracking', 'shipping'].includes(view) && (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
               <Button 
                 variant="ghost" 
@@ -277,6 +294,21 @@ export default function App() {
               onViewChange={handleViewChange}
               loggedClient={loggedClient}
               onOpenWallet={() => setShowClientDashboard(true)}
+            />
+          )}
+
+          {view === 'products' && (
+            <ProductsView
+              loggedClient={loggedClient}
+              onOpenWallet={() => setShowClientDashboard(true)}
+              onViewChange={handleViewChange}
+            />
+          )}
+
+          {view === 'services' && (
+            <ServicesView
+              onTrackingClick={() => handleViewChange('tracking')}
+              onViewChange={handleViewChange}
             />
           )}
           
@@ -342,24 +374,27 @@ export default function App() {
 
         </main>
 
-        <footer className="py-12 border-t mt-auto bg-white">
-          <div className="max-w-7xl mx-auto px-4 text-center">
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <div className="bg-muted p-1.5 rounded-md">
-                <Package className="h-5 w-5 text-subtext" />
+        {/* Footer — only on non-dashboard views */}
+        {!['admin', 'affiliate', 'agent'].includes(view) && (
+          <footer className="py-12 border-t mt-auto bg-white pb-24">
+            <div className="max-w-7xl mx-auto px-4 text-center">
+              <div className="flex items-center justify-center gap-2 mb-4">
+                <div className="bg-muted p-1.5 rounded-md">
+                  <Package className="h-5 w-5 text-subtext" />
+                </div>
+                <span className="text-xl font-bold text-dark">Rena</span>
               </div>
-              <span className="text-xl font-bold text-dark">Rena</span>
+              <p className="text-subtext text-sm">
+                © {new Date().getFullYear()} Rena Logistics. Tous droits réservés.
+              </p>
+              <div className="flex justify-center gap-6 mt-6 text-sm text-subtext/60">
+                <a href="#" className="hover:text-subtext transition-colors">Confidentialité</a>
+                <a href="#" className="hover:text-subtext transition-colors">Conditions d'utilisation</a>
+                <a href="mailto:renaservices509@gmail.com" className="hover:text-subtext transition-colors">Support</a>
+              </div>
             </div>
-            <p className="text-subtext text-sm">
-              © {new Date().getFullYear()} Rena Logistics. Tous droits réservés.
-            </p>
-            <div className="flex justify-center gap-6 mt-6 text-sm text-subtext/60">
-              <a href="#" className="hover:text-subtext transition-colors">Confidentialité</a>
-              <a href="#" className="hover:text-subtext transition-colors">Conditions d'utilisation</a>
-              <a href="mailto:renaservices509@gmail.com" className="hover:text-subtext transition-colors">Support</a>
-            </div>
-          </div>
-        </footer>
+          </footer>
+        )}
 
         <Toaster position="top-right" />
 
@@ -374,6 +409,16 @@ export default function App() {
             />
           )}
         </AnimatePresence>
+
+        {/* Auth modal triggered from BottomNav Wallet tab */}
+        <UserAuthModal
+          open={showAuthModal}
+          onOpenChange={setShowAuthModal}
+          onClientLogin={(client) => { handleClientLogin(client); setShowAuthModal(false); }}
+          onAdminLogin={(admin) => { handleAdminLogin(admin); handleViewChange('admin'); setShowAuthModal(false); }}
+          onAffiliateAccess={() => handleViewChange('affiliate')}
+          onAdminPasswordLogin={() => { handleViewChange('admin'); setShowAuthModal(false); }}
+        />
 
         {/* PWA Install Prompt */}
         <PWAInstallPrompt />

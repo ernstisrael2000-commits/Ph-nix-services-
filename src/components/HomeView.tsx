@@ -1,391 +1,158 @@
 import React from 'react';
-import { motion } from 'motion/react';
-import { Package, CreditCard, Gamepad2, Truck, MessageCircle, ArrowRight, CircleCheck as CheckCircle2, Info, ArrowUp, Circle as HelpCircle, Globe, ChevronDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  Package, Truck, Users, ArrowRight,
+  ShoppingBag, Globe, GraduationCap, Wallet,
+  MessageCircle, ArrowUp, ChevronRight,
+} from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
-import ReCAPTCHA from 'react-google-recaptcha';
-import { CaptchaWidget } from './CaptchaWidget';
 import { Button } from './ui/button';
-import { useState, useEffect, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { useProducts, useGames, useCardTopups, useSliderImages, useNavButtons, useSettings, useOnlineServices } from '../services/parcelService';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import { AnimatePresence } from 'motion/react';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogDescription,
-  DialogFooter,
-  DialogClose
-} from './ui/dialog';
-import { Badge } from './ui/badge';
-import { Label } from './ui/label';
-import { Input } from './ui/input';
-import { Loader as Loader2, ShieldCheck, Zap, Star, Headphones, QrCode, Wallet, Smartphone, Landmark, X, ArrowDownToLine, ArrowUpFromLine, TrendingUp, Copy, CircleCheck as CheckCircle, ChevronRight, Clock, DollarSign, GraduationCap, BookOpen, Play } from 'lucide-react';
-import { submitClientPurchase, useClientData, useClientTransactions, submitClientDeposit, submitClientWithdrawal, useClientPendingPurchase } from '../services/clientService';
+import { useState, useEffect } from 'react';
+import {
+  useSliderImages, useNavButtons, useSettings,
+} from '../services/parcelService';
+import { useClientData, useClientTransactions } from '../services/clientService';
 import { Client } from '../types';
-import { toast } from 'sonner';
 
-const WHATSAPP_NUMBER = "+50944813185";
-const RECAPTCHA_SITE_KEY = process.env.RECAPTCHA_SITE_KEY || '';
+const SLIDER_IMAGES = [
+  'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=2832&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1614850523296-62c09279446a?q=80&w=2070&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2070&auto=format&fit=crop',
+];
 
-// ── WalletPayButton — extracted as a proper React component to avoid DOM reconciliation
-// errors that occur when an IIFE returns different element types (div vs button) during
-// simultaneous state transitions while a Dialog is closing.
-interface WalletPayButtonProps {
-  client: Client;
-  price: string | number | undefined;
-  productName: string | undefined;
-  hasPendingPurchase: boolean;
-  purchaseLoading: boolean;
-  setPurchaseLoading: (v: boolean) => void;
-  onSuccess: () => void;
-  exchangeRate: number;
-}
-
-const WalletPayButton = ({
-  client, price, productName, hasPendingPurchase, purchaseLoading, setPurchaseLoading, onSuccess, exchangeRate
-}: WalletPayButtonProps) => {
-  const numericPrice = parseFloat(String(price ?? '0').replace(/[^\d.]/g, ''));
-  const balanceUSD = client.balance ?? 0;
-  const balanceHTG = Math.round(balanceUSD * exchangeRate);
-  const hasBalance = !isNaN(numericPrice) && numericPrice > 0 && balanceHTG >= numericPrice;
-
-  const handlePay = async () => {
-    if (purchaseLoading) return;
-    if (!hasBalance) { toast.error(`Solde insuffisant. Vous avez ${balanceHTG.toLocaleString()} HTG`); return; }
-    setPurchaseLoading(true);
-    const priceUSD = numericPrice / exchangeRate;
-    try {
-      await submitClientPurchase(client, productName ?? '', String(price ?? ''), priceUSD);
-      toast.success(`✅ Achat effectué ! ${numericPrice.toLocaleString()} HTG débité de votre compte.`);
-      onSuccess();
-
-      // Open WhatsApp to notify admin
-      const adminNum = (window as any).__renaAdminPhone || WHATSAPP_NUMBER;
-      const now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-      const msg =
-        `🛍️ *ACHAT EFFECTUÉ — Rena*\n\n` +
-        `👤 Client: *${client.name}*\n` +
-        `🔑 ID Wallet: *#${client.walletId || '—'}*\n` +
-        `📱 Téléphone: *${client.phone || '—'}*\n` +
-        `🛒 Service: *${productName || '—'}*\n` +
-        `💰 Montant payé: *${numericPrice.toLocaleString()} HTG*\n` +
-        `💳 Méthode: *Solde Wallet*\n` +
-        `📅 Date: *${now}*\n\n` +
-        `✅ Paiement traité automatiquement. Veuillez activer le service.`;
-      window.open(`https://wa.me/${adminNum.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
-    } catch (err: any) {
-      toast.error(err.message || "Erreur lors de l'achat.");
-    } finally {
-      setPurchaseLoading(false);
-    }
-  };
-
-  return (
-    <button
-      type="button"
-      disabled={purchaseLoading || !hasBalance}
-      onClick={handlePay}
-      className={`w-full h-14 rounded-2xl border-2 font-black text-base flex items-center justify-center gap-3 transition-all
-        ${hasBalance
-          ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-400 active:scale-95'
-          : 'border-red-200 text-red-400 cursor-not-allowed opacity-60'
-        }`}
-    >
-      {purchaseLoading ? (
-        <Loader2 className="h-5 w-5 animate-spin" />
-      ) : (
-        <>
-          <Wallet className="h-5 w-5" />
-          {hasBalance
-            ? `Payer avec mon solde (${balanceHTG.toLocaleString()} HTG)`
-            : `Solde insuffisant (${balanceHTG.toLocaleString()} HTG)`
-          }
-        </>
-      )}
-    </button>
-  );
-};
-
-const LucideIcon = ({ name, className, color }: { name: string, className?: string, color?: string }) => {
+const HelpCircle = LucideIcons.Circle;
+const LucideIcon = ({ name, className, color }: { name: string; className?: string; color?: string }) => {
   const Icon = (LucideIcons as any)[name] || HelpCircle;
   return <Icon className={className} style={{ color }} />;
 };
 
-const SLIDER_IMAGES = [
-  "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=2832&auto=format&fit=crop", // Fintech/Crypto abstract
-  "https://images.unsplash.com/photo-1614850523296-62c09279446a?q=80&w=2070&auto=format&fit=crop", // Abstract gradients
-  "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2070&auto=format&fit=crop", // Tech/Security
+interface HomeViewProps {
+  onTrackingClick: () => void;
+  onViewChange: (view: any) => void;
+  loggedClient?: Client | null;
+  onOpenWallet?: () => void;
+}
+
+const SECTION_CARDS = [
+  {
+    key: 'products',
+    title: 'Produits',
+    subtitle: 'Cartes, jeux, services digitaux',
+    icon: ShoppingBag,
+    gradient: 'from-indigo-600 via-purple-600 to-pink-500',
+    glow: 'shadow-purple-200',
+  },
+  {
+    key: 'services',
+    title: 'Services',
+    subtitle: 'Suivi colis, expédition, en ligne',
+    icon: Globe,
+    gradient: 'from-teal-500 via-emerald-500 to-cyan-400',
+    glow: 'shadow-emerald-200',
+  },
+  {
+    key: 'formations',
+    title: 'Formations',
+    subtitle: 'Développez vos compétences',
+    icon: GraduationCap,
+    gradient: 'from-amber-500 via-orange-500 to-rose-400',
+    glow: 'shadow-orange-200',
+  },
 ];
 
-const typeLabel: Record<string, string> = {
-  deposit: 'Dépôt',
-  withdrawal: 'Retrait',
-  purchase: 'Achat',
-  transfer_received: 'Reçu',
-  refund: 'Remboursement',
-};
-
-export default function HomeView({ onTrackingClick, onViewChange, loggedClient, onOpenWallet }: { onTrackingClick: () => void, onViewChange: (view: any) => void, loggedClient?: Client | null, onOpenWallet?: () => void }) {
-  const { products, loading: productsLoading } = useProducts();
-  const { games, loading: gamesLoading } = useGames();
-  const { cards, loading: cardsLoading } = useCardTopups();
-  const { sliderImages, loading: sliderLoading } = useSliderImages();
+export default function HomeView({ onTrackingClick, onViewChange, loggedClient, onOpenWallet }: HomeViewProps) {
+  const { sliderImages } = useSliderImages();
   const { buttons, loading: buttonsLoading } = useNavButtons();
   const { settings } = useSettings();
-  const { services: onlineSubServices } = useOnlineServices();
-  // Expose admin phone globally so WalletPayButton can use it
-  React.useEffect(() => {
-    if (settings?.whatsappAdminNumber) {
-      (window as any).__renaAdminPhone = settings.whatsappAdminNumber;
-    }
-  }, [settings?.whatsappAdminNumber]);
-  const [isGamesDialogOpen, setIsGamesDialogOpen] = React.useState(false);
-  const [isCardsDialogOpen, setIsCardsDialogOpen] = React.useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  const [selectedPlan, setSelectedPlan] = useState<any>(null);
-  const [isProductDetailOpen, setIsProductDetailOpen] = useState(false);
-  const [customAmountUSD, setCustomAmountUSD] = useState<string>('');
-  const [showScrollTop, setShowScrollTop] = useState(false);
-  const [purchaseLoading, setPurchaseLoading] = useState(false);
-  const [showOnlineServices, setShowOnlineServices] = useState(false);
 
-  // Live client wallet data
   const { client: liveClient } = useClientData(loggedClient?.id || null);
   const { transactions: clientTx } = useClientTransactions(loggedClient?.id || null);
-  const recentTx = clientTx.slice(0, 3);
   const effectiveClient = liveClient || loggedClient;
-  const hasPendingPurchase = useClientPendingPurchase(loggedClient?.id || null);
+
   const exchangeRate = settings?.exchangeRate || 146;
-  const balanceUSD_raw = effectiveClient?.balance ?? 0;
-  const balanceHTG = Math.round(balanceUSD_raw * exchangeRate);
-  const balanceUSD = balanceUSD_raw.toFixed(2);
+  const balanceHTG = Math.round((effectiveClient?.balance ?? 0) * exchangeRate);
+  const balanceUSD = (effectiveClient?.balance ?? 0).toFixed(2);
+  const recentTx = clientTx.slice(0, 3);
 
-  const [previewFormations, setPreviewFormations] = useState<any[]>([]);
+  React.useEffect(() => {
+    if (settings?.whatsappAdminNumber) (window as any).__renaAdminPhone = settings.whatsappAdminNumber;
+  }, [settings?.whatsappAdminNumber]);
 
-  useEffect(() => {
-    const loadPreviewFormations = async () => {
-      try {
-        const res = await fetch('/api/formations');
-        if (!res.ok) throw new Error('api_fail');
-        const data = await res.json();
-        if (!Array.isArray(data.formations)) throw new Error('api_fail');
-        setPreviewFormations(data.formations.slice(0, 3));
-      } catch {
-        try {
-          const q = query(
-            collection(db, 'formations'),
-            where('published', '==', true),
-            orderBy('createdAt', 'desc')
-          );
-          const snap = await getDocs(q);
-          setPreviewFormations(snap.docs.map(d => ({ id: d.id, ...d.data() })).slice(0, 3));
-        } catch {
-          // silent fallback — preview is non-critical
-        }
-      }
-    };
-    loadPreviewFormations();
-  }, []);
-  // Card Recharge States
-  const [isRechargeDialogOpen, setIsRechargeDialogOpen] = useState(false);
-  const [selectedCardForRecharge, setSelectedCardForRecharge] = useState<any>(null);
-  const [rechargeAmountUSD, setRechargeAmountUSD] = useState<string>('');
-  const [customerName, setCustomerName] = useState<string>('');
-  const [isPaymentMethodDialogOpen, setIsPaymentMethodDialogOpen] = useState(false);
-
-  // Payment Modal States
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [paymentTarget, setPaymentTarget] = useState<{ name: string, price: string, type: string } | null>(null);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'moncash' | 'natcash' | 'admi' | null>('moncash');
-  const [paymentTransactionInfo, setPaymentTransactionInfo] = useState('');
-
-  const handleProductClick = (product: any) => {
-    setSelectedProduct(product);
-    setSelectedPlan(product.plans && product.plans.length > 0 ? product.plans[0] : null);
-    setCustomAmountUSD('');
-    setIsProductDetailOpen(true);
-  };
-
-  const handleCardClick = (card: any) => {
-    setSelectedCardForRecharge(card);
-    setRechargeAmountUSD(card.presets && card.presets.length > 0 ? card.presets[0].toString() : '');
-    setIsRechargeDialogOpen(true);
-  };
-
-  const handleBuyRequested = (item: { name: string, price: string, type: string }) => {
-    setPaymentTarget(item);
-    setIsPaymentModalOpen(true);
-    setSelectedPaymentMethod('moncash');
-  };
-
-  const handleFinalPaymentSubmit = () => {
-    if (!paymentTarget || !selectedPaymentMethod) return;
-
-    const methodLabel = selectedPaymentMethod === 'moncash' ? 'Mon Cash' : selectedPaymentMethod === 'natcash' ? 'Natcash' : 'Admi';
-    const message = `Bonjour Rena,\n\nJe souhaite commander :\n📦 *${paymentTarget.name}*\n💰 Prix : *${paymentTarget.price}*\n\n💳 Mode de paiement : *${methodLabel}*\n📝 Infos Transaction : *${paymentTransactionInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`;
-    
-    openWhatsApp(message);
-    setIsPaymentModalOpen(false);
-    setPaymentTransactionInfo('');
-  };
-
-  const handleRechargeSubmit = () => {
-    if (!selectedCardForRecharge || !rechargeAmountUSD) return;
-    setIsRechargeDialogOpen(false);
-    setIsPaymentMethodDialogOpen(true);
-  };
-
-  const handleFinalRechargePayment = (method: string) => {
-    if (!selectedCardForRecharge || !rechargeAmountUSD) return;
-    
-    const usd = parseFloat(rechargeAmountUSD);
-    const gourdes = usd * (settings?.exchangeRate || 146);
-    
-    const message = `Bonjour Rena,\n\nJe souhaite recharger ma carte :\n👤 Client : *${customerName || 'Non spécifié'}*\n💳 Carte : *${selectedCardForRecharge.name}*\n💵 Montant USD : *${usd}$*\n🇭🇹 Équivalent en Gourdes : *${gourdes.toLocaleString()} HTG*\n\n💳 Moyen de paiement : *${method}*\n\nMerci de valider ma recharge.`;
-    
-    openWhatsApp(message);
-    setIsPaymentMethodDialogOpen(false);
-    setRechargeAmountUSD('');
-    setCustomerName('');
-    setSelectedCardForRecharge(null);
-  };
-  
-  const servicesRef = useRef<HTMLElement>(null);
-
-  const scrollToServices = () => {
-    servicesRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-  
-  // Slider State
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
-  const imagesToDisplay = sliderImages.length > 0 
-    ? sliderImages.map(img => ({ url: img.url, title: 'Rena', description: img.description || '' }))
-    : SLIDER_IMAGES.map(url => ({ url, title: 'Rena', description: 'Digital Services & Gift Cards' }));
+  const imagesToDisplay = sliderImages.length > 0
+    ? sliderImages.map(img => ({ url: img.url, description: img.description || '' }))
+    : SLIDER_IMAGES.map(url => ({ url, description: 'Rena Digital Services' }));
 
-  useEffect(() => {
-    const handleScroll = () => {
-      setShowScrollTop(window.scrollY > 400);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  // Auto-play slider
   useEffect(() => {
     if (imagesToDisplay.length <= 1) return;
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % imagesToDisplay.length);
-    }, 6000); 
+    const timer = setInterval(() => setCurrentSlide(prev => (prev + 1) % imagesToDisplay.length), 6000);
     return () => clearInterval(timer);
   }, [imagesToDisplay.length]);
 
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const openWhatsApp = (message: string) => {
-    const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
-  };
+  useEffect(() => {
+    const handleScroll = () => setShowScrollTop(window.scrollY > 400);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const resolveRedirection = (btn: any) => {
     const target = btn.targetUrl?.trim();
     const instruction = btn.redirectionInstruction?.toLowerCase() || '';
 
-    // If there's an explicit target, prioritize it
     if (target) {
-      if (target.startsWith('#')) {
-        const el = document.getElementById(target.substring(1));
-        el?.scrollIntoView({ behavior: 'smooth' });
-        return;
-      }
-      if (['tracking', 'shipping', 'affiliate'].includes(target)) {
-        onViewChange(target);
-        return;
-      }
-      // Check for common names in instruction if target is not a URL
+      if (['tracking', 'shipping', 'affiliate'].includes(target)) { onViewChange(target); return; }
+      if (['products', 'services', 'formations'].includes(target)) { onViewChange(target); return; }
+      if (target.startsWith('#')) { document.getElementById(target.substring(1))?.scrollIntoView({ behavior: 'smooth' }); return; }
       if (!target.includes('.') && !target.startsWith('/')) {
         const el = document.getElementById(target);
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth' });
-          return;
-        }
+        if (el) { el.scrollIntoView({ behavior: 'smooth' }); return; }
       }
       window.location.href = target;
       return;
     }
 
-    // Try to resolve based on instruction if target is empty
-    if (instruction) {
-      if (instruction.includes('jeu')) {
-        setIsGamesDialogOpen(true);
-        return;
-      }
-      if (instruction.includes('carte') || instruction.includes('recharge')) {
-        setIsCardsDialogOpen(true);
-        return;
-      }
-      if (instruction.includes('suivi') || instruction.includes('colis')) {
-        onViewChange('tracking');
-        return;
-      }
-      if (instruction.includes('shipping') || instruction.includes('envoi')) {
-        onViewChange('shipping');
-        return;
-      }
-      if (instruction.includes('service')) {
-        servicesRef.current?.scrollIntoView({ behavior: 'smooth' });
-        return;
-      }
-    }
+    if (instruction.includes('jeu'))                                              { onViewChange('products'); return; }
+    if (instruction.includes('carte') || instruction.includes('recharge'))        { onViewChange('products'); return; }
+    if (instruction.includes('produit') || instruction.includes('service'))       { onViewChange('products'); return; }
+    if (instruction.includes('suivi') || instruction.includes('colis'))           { onViewChange('tracking'); return; }
+    if (instruction.includes('shipping') || instruction.includes('envoi'))        { onViewChange('shipping'); return; }
+    if (instruction.includes('formation'))                                        { onViewChange('formations'); return; }
   };
 
-  const defaultOnlineSubServices = [
-    { id: '_default_tracking', label: 'Suivi de colis', description: "Suivez l'état de vos colis en temps réel.", icon: 'Package', target: 'tracking' as const, order: 1, active: true },
-    { id: '_default_shipping', label: 'Expédition', description: "Envoi et réception de colis partout.", icon: 'Truck', target: 'shipping' as const, order: 2, active: true },
-  ];
-  const effectiveOnlineSubServices = onlineSubServices.length > 0
-    ? onlineSubServices.filter(s => s.active)
-    : defaultOnlineSubServices;
+  const openWhatsApp = () => {
+    const num = settings?.whatsappAdminNumber || '+50944813185';
+    window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent('Bonjour Rena, je souhaite avoir plus de renseignements.')}`, '_blank');
+  };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 pt-8 pb-12 space-y-8">
+    <div className="max-w-7xl mx-auto px-4 pt-6 pb-28 space-y-8">
 
-      {/* Hero: Wallet summary card (if logged in) or Image Slider */}
+      {/* ── Hero: Wallet card or Slider ── */}
       <AnimatePresence mode="wait">
         {loggedClient ? (
-          /* ── WALLET SUMMARY CARD ── */
           <motion.section
             key="wallet-hero"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="relative w-full px-2 md:px-0"
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
           >
             <div
-              className="relative w-full rounded-[32px] overflow-hidden cursor-pointer group"
               onClick={onOpenWallet}
+              className="relative w-full rounded-[32px] overflow-hidden cursor-pointer group"
               style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 45%, #4f46e5 100%)' }}
             >
-              {/* Mesh decoration */}
               <div className="absolute top-0 right-0 w-72 h-72 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none" />
               <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-400/20 rounded-full blur-2xl translate-y-1/2 -translate-x-1/4 pointer-events-none" />
               <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
 
               <div className="relative z-10 p-6 md:p-8">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-                  {/* Avatar */}
                   <div className="h-14 w-14 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center text-2xl font-black text-white shrink-0 group-hover:scale-105 transition-transform backdrop-blur-sm">
                     {(effectiveClient?.name || loggedClient.name || '?').charAt(0).toUpperCase()}
                   </div>
-
-                  {/* Identity + balance */}
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-0.5">Bonjour 👋</p>
                     <p className="text-xl font-black text-white leading-tight truncate">{effectiveClient?.name || loggedClient.name}</p>
@@ -394,60 +161,69 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                       <span className="px-2 py-0.5 rounded-full bg-white/15 text-white/80 text-xs font-bold">≈ ${balanceUSD}</span>
                     </div>
                   </div>
-
-                  {/* CTA */}
                   <button
-                    onClick={(e) => { e.stopPropagation(); onOpenWallet?.(); }}
-                    className="flex items-center gap-2 shrink-0 h-12 px-6 rounded-2xl bg-white hover:bg-white/90 active:scale-95 text-primary font-black text-sm transition-all shadow-xl"
+                    onClick={e => { e.stopPropagation(); onOpenWallet?.(); }}
+                    className="flex items-center gap-2 shrink-0 h-10 px-5 rounded-2xl bg-white hover:bg-white/90 active:scale-95 text-primary font-black text-sm transition-all shadow-xl"
                   >
                     <Wallet className="h-4 w-4" />
                     Mon Wallet
                   </button>
                 </div>
 
-                {hasPendingPurchase && (
-                  <div className="mt-4 px-4 py-2.5 rounded-xl bg-amber-400/20 border border-amber-300/30 flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
-                    <p className="text-xs font-bold text-amber-200">Achat en attente de validation</p>
+                {/* Recent transactions */}
+                {recentTx.length > 0 && (
+                  <div className="mt-5 pt-4 border-t border-white/10 grid grid-cols-3 gap-2">
+                    {recentTx.map(tx => {
+                      const isCredit = tx.type === 'deposit' || tx.type === 'transfer_received' || tx.type === 'refund';
+                      const usdAmt = tx.usdAmount ?? tx.amount;
+                      return (
+                        <div key={tx.id} className="flex flex-col gap-0.5 bg-white/10 rounded-xl p-2.5 border border-white/10">
+                          <span className={`text-xs font-black ${isCredit ? 'text-emerald-300' : 'text-red-300'}`}>
+                            {isCredit ? '+' : '-'}${usdAmt.toFixed(2)}
+                          </span>
+                          <span className="text-[9px] text-white/50 truncate capitalize">
+                            {tx.type === 'deposit' ? 'Dépôt' : tx.type === 'withdrawal' ? 'Retrait' : tx.type === 'purchase' ? 'Achat' : 'Reçu'}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             </div>
           </motion.section>
         ) : (
-          /* ── SLIDER ── */
           <motion.section
             key="slider"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="relative w-full overflow-visible group px-2 md:px-0"
+            className="relative w-full overflow-visible group px-1 md:px-0"
           >
             <div className="absolute -inset-4 bg-primary/20 rounded-[50px] blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-            <div className="relative h-[240px] md:h-[360px] w-full rounded-[40px] overflow-hidden bg-black shadow-[0_45px_70px_-15px_rgba(0,0,0,0.4)] border border-white/5">
-              <div className="absolute inset-0 z-10 pointer-events-none overflow-hidden rounded-[40px]">
-                <motion.div animate={{ rotate: [0, 360] }} transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                  className="absolute -inset-[150%] opacity-20 group-hover:opacity-40 transition-opacity duration-1000"
-                  style={{ background: "conic-gradient(from 0deg, transparent 0 340deg, var(--color-primary) 360deg)", backgroundSize: "cover" }} />
-              </div>
+            <div className="relative h-[220px] md:h-[340px] w-full rounded-[36px] overflow-hidden bg-black shadow-[0_40px_60px_-15px_rgba(0,0,0,0.35)] border border-white/5">
               <div className="absolute inset-0 w-full h-full z-0">
                 <AnimatePresence mode="wait">
-                  <motion.div key={currentSlide} initial={{ opacity: 0, scale: 1.1 }} animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
-                    className="absolute inset-0 w-full h-full will-change-transform overflow-hidden">
-                    <motion.div initial={{ scale: 1.2, x: -20, y: -20 }} animate={{ scale: 1, x: 0, y: 0 }}
-                      transition={{ duration: 10, ease: "linear", repeat: Infinity, repeatType: "reverse" }}
+                  <motion.div
+                    key={currentSlide}
+                    initial={{ opacity: 0, scale: 1.08 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
+                    className="absolute inset-0"
+                  >
+                    <div
                       className="absolute inset-0 bg-cover bg-center"
-                      style={{ backgroundImage: `url(${imagesToDisplay[currentSlide]?.url || ''})` }} />
-                    <div className="absolute inset-0 bg-gradient-to-tr from-black via-black/40 to-transparent opacity-60" />
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40" />
+                      style={{ backgroundImage: `url(${imagesToDisplay[currentSlide]?.url || ''})` }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-tr from-black via-black/30 to-transparent opacity-55" />
                   </motion.div>
                 </AnimatePresence>
               </div>
-              <div className="absolute bottom-8 right-8 z-30 flex gap-3 bg-black/20 backdrop-blur-md p-2 px-3 rounded-full border border-white/10">
+              <div className="absolute bottom-6 right-6 z-30 flex gap-2.5 bg-black/20 backdrop-blur-md p-1.5 px-2.5 rounded-full border border-white/10">
                 {imagesToDisplay.map((_, i) => (
                   <button key={i} onClick={() => setCurrentSlide(i)} className="relative h-2 flex items-center justify-center transition-all duration-500">
-                    <div className={`h-full rounded-full transition-all duration-500 ${currentSlide === i ? 'bg-primary w-10' : 'bg-white/30 w-2 hover:bg-white/50'}`} />
+                    <div className={`h-full rounded-full transition-all duration-500 ${currentSlide === i ? 'bg-primary w-8' : 'bg-white/30 w-2 hover:bg-white/50'}`} />
                   </button>
                 ))}
               </div>
@@ -456,27 +232,20 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
         )}
       </AnimatePresence>
 
-      {/* Quick Navigation Category Bar */}
-      {!buttonsLoading && buttons.length > 0 ? (
-        <div className="w-full overflow-hidden pt-2">
-          <div className="flex items-center gap-3 md:gap-4 overflow-x-auto pb-2 px-1 custom-scrollbar scroll-smooth">
-            {buttons.map((btn) => (
+      {/* ── Quick nav buttons (DB-driven) ── */}
+      {!buttonsLoading && buttons.length > 0 && (
+        <div className="w-full overflow-hidden">
+          <div className="flex items-center gap-3 overflow-x-auto pb-1 px-0.5 no-scrollbar">
+            {buttons.map(btn => (
               <Button
                 key={btn.id}
                 variant="ghost"
-                className="flex-shrink-0 bg-white border border-gray-100 rounded-[16px] px-6 h-[54px] shadow-sm hover:bg-accent-light/50 hover:-translate-y-0.5 transition-all group"
+                className="flex-shrink-0 bg-white border border-gray-100 rounded-[16px] px-5 h-12 shadow-sm hover:bg-primary/5 hover:-translate-y-0.5 transition-all group"
                 onClick={() => resolveRedirection(btn)}
               >
                 <div className="flex items-center gap-2">
-                  <LucideIcon 
-                    name={btn.iconName} 
-                    className="h-5 w-5 transition-colors group-hover:text-primary" 
-                    color={btn.color || '#2563EB'} 
-                  />
-                  <span 
-                    className="font-heading font-bold text-sm md:text-base transition-colors group-hover:text-primary"
-                    style={{ color: btn.color || '#2563EB' }}
-                  >
+                  <LucideIcon name={btn.iconName} className="h-4 w-4 transition-colors group-hover:text-primary" color={btn.color || '#2563EB'} />
+                  <span className="font-bold text-sm transition-colors group-hover:text-primary" style={{ color: btn.color || '#2563EB' }}>
                     {btn.label}
                   </span>
                 </div>
@@ -484,944 +253,101 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
             ))}
           </div>
         </div>
-      ) : buttonsLoading ? (
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="h-[54px] w-32 bg-gray-100 animate-pulse rounded-[16px] flex-shrink-0" />
-          ))}
+      )}
+      {buttonsLoading && (
+        <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+          {[1, 2, 3].map(i => <div key={i} className="h-12 w-28 bg-gray-100 animate-pulse rounded-2xl shrink-0" />)}
         </div>
-      ) : null}
-
-      {/* Services Section */}
-      <section ref={servicesRef} id="services" className="space-y-6">
-        <div className="flex items-end justify-between">
-          <div>
-            <h2 className="text-2xl font-black text-dark">Nos Services</h2>
-            <p className="text-sm text-gray-500 mt-1">Solutions rapides et sécurisées</p>
-          </div>
-          <div className="h-1 w-16 bg-primary rounded-full mb-1" />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          {/* Card 1 — Recharge carte */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}>
-            <div
-              onClick={() => setIsCardsDialogOpen(true)}
-              className="relative group rounded-[28px] overflow-hidden cursor-pointer h-full"
-              style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 60%, #34d399 100%)' }}
-            >
-              <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
-              <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-300/20 rounded-full blur-xl translate-y-1/2 -translate-x-1/2" />
-              <div className="relative z-10 p-7">
-                <div className="h-14 w-14 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
-                  <CreditCard className="h-7 w-7 text-white" />
-                </div>
-                <h3 className="text-xl font-black text-white mb-1.5">Recharge Carte</h3>
-                <p className="text-sm text-white/75 leading-relaxed mb-5">
-                  Rechargez vos cartes de crédit ou prépayées en quelques clics.
-                </p>
-                <div className="flex items-center gap-2 text-white font-black text-sm">
-                  Choisir une carte
-                  <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Card 2 — Services en ligne (expandable) */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-            <div className="rounded-[28px] border border-gray-100 bg-white shadow-sm hover:shadow-md transition-all h-full overflow-hidden">
-              <div className="p-7">
-                <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/15 flex items-center justify-center mb-5">
-                  <Globe className="h-7 w-7 text-primary" />
-                </div>
-                <h3 className="text-xl font-black text-dark mb-1.5">Services en ligne</h3>
-                <p className="text-sm text-gray-500 leading-relaxed mb-5">
-                  Expédition, suivi de colis et plus — accédez à tous nos services numériques.
-                </p>
-                <button
-                  onClick={() => setShowOnlineServices(v => !v)}
-                  className="flex items-center gap-2 h-11 px-5 rounded-2xl bg-primary/10 hover:bg-primary/15 text-primary font-black text-sm transition-all"
-                >
-                  {showOnlineServices ? 'Masquer' : 'Voir les services'}
-                  <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${showOnlineServices ? 'rotate-180' : ''}`} />
-                </button>
-              </div>
-
-              <AnimatePresence>
-                {showOnlineServices && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                    className="overflow-hidden"
-                  >
-                    <div className="px-5 pb-5 space-y-2 border-t border-gray-50 pt-4">
-                      {effectiveOnlineSubServices.map((sub) => {
-                        const IconComp = (LucideIcons as any)[sub.icon] || Package;
-                        const handleSubClick = () => {
-                          if (sub.target === 'tracking') { onTrackingClick(); setShowOnlineServices(false); }
-                          else if (sub.target === 'shipping') { onViewChange('shipping'); setShowOnlineServices(false); }
-                          else if (sub.target === 'url' && sub.url) { window.open(sub.url, '_blank'); }
-                        };
-                        return (
-                          <button
-                            key={sub.id}
-                            onClick={handleSubClick}
-                            className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-gray-50 hover:bg-primary/5 border border-gray-100 hover:border-primary/20 transition-all text-left group/sub"
-                          >
-                            <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover/sub:bg-primary/20 transition-colors">
-                              <IconComp className="h-4 w-4 text-primary" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-bold text-sm text-dark">{sub.label}</p>
-                              {sub.description && <p className="text-xs text-gray-400 truncate">{sub.description}</p>}
-                            </div>
-                            <ArrowRight className="h-4 w-4 text-gray-300 group-hover/sub:text-primary transition-colors shrink-0" />
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Dynamic Products Section */}
-      <section id="products" className="space-y-10">
-        <div className="text-center">
-          <h2 className="text-3xl font-bold text-dark">Nos Produits / Services</h2>
-          <div className="h-1 w-20 bg-primary mx-auto mt-4 rounded-full" />
-        </div>
-        
-        {productsLoading ? (
-          <div className="flex justify-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
-          </div>
-        ) : products.length > 0 ? (
-          <div className="product-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {products.map((product, idx) => (
-              <motion.div
-                key={product.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: idx * 0.1 }}
-                className="mobile-product-card-wrapper cursor-pointer"
-                onClick={() => handleProductClick(product)}
-              >
-                <Card className="product-card overflow-hidden border-0 bg-white h-full flex flex-col pt-0 hover:shadow-xl transition-shadow">
-                  <div className="aspect-[16/10] relative overflow-hidden bg-gray-50">
-                    <img 
-                      src={product.image} 
-                      alt={product.name} 
-                      className="product-image w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/400/400';
-                      }}
-                    />
-                  </div>
-                  <div className="product-card-content">
-                    <div className="mb-2">
-                      <h3 className="product-name">{product.name}</h3>
-                      <p className="product-subtitle truncate">Livraison rapide / Rena</p>
-                    </div>
-                    
-                    <div className="product-footer flex items-center justify-between">
-                      <span className="product-price">{product.price}</span>
-                      <div className="flex items-center gap-1.5 text-primary text-[10px] font-black uppercase tracking-widest group-hover:translate-x-1 transition-transform">
-                        Détails
-                        <ArrowRight className="h-3 w-3" />
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-20 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
-            <Info className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">Aucun produit ou service supplémentaire disponible pour le moment.</p>
-          </div>
-        )}
-      </section>
-
-      {/* ── FORMATIONS PREVIEW SECTION ── */}
-      {previewFormations.length > 0 && (
-        <section className="py-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-2xl font-black text-dark">Nos Formations</h2>
-              <p className="text-sm text-subtext mt-1">Développez vos compétences à votre rythme</p>
-            </div>
-            <button
-              onClick={() => onViewChange('formations')}
-              className="flex items-center gap-1.5 text-sm font-bold text-primary hover:underline"
-            >
-              Voir tous les cours <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {previewFormations.map((f: any, i: number) => (
-              <motion.div
-                key={f.id}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.07 }}
-                onClick={() => onViewChange('formations')}
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden group"
-              >
-                <div className="relative h-36 overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-700 shrink-0">
-                  {f.coverImage ? (
-                    <img src={f.coverImage} alt={f.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <GraduationCap className="h-14 w-14 text-white/30" />
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                  <div className="absolute bottom-2 left-3">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white backdrop-blur-sm">
-                      {f.level === 'debutant' ? 'Débutant' : f.level === 'intermediaire' ? 'Intermédiaire' : 'Avancé'}
-                    </span>
-                  </div>
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="bg-white/90 rounded-full p-3 shadow-lg">
-                      <Play className="h-5 w-5 text-primary fill-primary" />
-                    </div>
-                  </div>
-                </div>
-                <div className="p-4">
-                  <h3 className="font-black text-dark text-sm line-clamp-2 mb-1">{f.title}</h3>
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center gap-1 text-xs text-subtext">
-                      <BookOpen className="h-3 w-3" />
-                      {(f.modules || []).length} modules
-                    </div>
-                    <span className="text-sm font-black text-primary">
-                      {f.price === 0 ? 'Gratuit' : `${(f.price || 0).toLocaleString()} HTG`}
-                    </span>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-          <div className="text-center mt-6">
-            <button
-              onClick={() => onViewChange('formations')}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-primary text-white font-bold text-sm hover:bg-blue-700 transition-colors shadow-lg shadow-primary/20"
-            >
-              <GraduationCap className="h-4 w-4" />
-              Voir tous les cours
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        </section>
       )}
 
-      {/* Games Dialog */}
-      <Dialog open={isGamesDialogOpen} onOpenChange={setIsGamesDialogOpen}>
-        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto relative">
-          <DialogHeader>
-            <div className="flex items-center justify-between">
-              <DialogTitle className="text-2xl flex items-center gap-2">
-                <Gamepad2 className="h-6 w-6 text-purple-600" />
-                Top-up Jeux
-              </DialogTitle>
-              <DialogClose className="rounded-full bg-gray-100 p-2 hover:bg-gray-200 transition-colors">
-                <LucideIcons.X className="h-5 w-5 text-gray-500" />
-              </DialogClose>
-            </div>
-            <DialogDescription>
-              Choisissez votre jeu préféré pour effectuer une recharge.
-            </DialogDescription>
-          </DialogHeader>
-          
-          {gamesLoading ? (
-            <div className="flex justify-center py-10">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600" />
-            </div>
-          ) : games.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
-              {games.map((game) => (
-                <Card key={game.id} className="overflow-hidden border-gray-100 hover:shadow-md transition-shadow pt-0">
-                  <div className="aspect-[16/10] relative bg-gray-50">
-                    <img 
-                      src={game.image} 
-                      alt={game.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/game/400/400';
-                      }}
-                    />
-                    <div className="absolute top-2 right-2">
-                      <Badge className="bg-purple-600">{game.priceRange}</Badge>
-                    </div>
+      {/* ── Section access cards ── */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-black text-dark">Accès rapide</h2>
+          <div className="h-0.5 w-12 bg-primary rounded-full" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {SECTION_CARDS.map((card, i) => {
+            const Icon = card.icon;
+            return (
+              <motion.button
+                key={card.key}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.08 }}
+                onClick={() => onViewChange(card.key)}
+                className={`relative group w-full text-left rounded-3xl overflow-hidden shadow-lg ${card.glow} shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300`}
+              >
+                <div className={`absolute inset-0 bg-gradient-to-br ${card.gradient}`} />
+                <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
+                <div className="relative z-10 p-5">
+                  <div className="h-11 w-11 rounded-2xl bg-white/20 border border-white/25 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
+                    <Icon className="h-5 w-5 text-white" />
                   </div>
-                  <CardHeader className="p-4">
-                    <CardTitle className="text-lg">{game.name}</CardTitle>
-                    <CardDescription className="text-xs line-clamp-2">
-                      {game.description}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0 space-y-4">
-                    {/* Catalog Section */}
-                    {game.catalog && game.catalog.length > 0 ? (
-                      <div className="space-y-2">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Catalogue de prix</p>
-                        <div className="grid grid-cols-1 gap-2 md:max-h-[160px] md:overflow-y-auto pr-1 custom-scrollbar">
-                          {game.catalog.map((item) => (
-                            <div key={item.id} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100 hover:border-purple-200 transition-colors group">
-                              <div className="min-w-0">
-                                <p className="text-xs font-bold text-gray-800 truncate">{item.name}</p>
-                                <p className="text-[10px] text-purple-600 font-bold">{item.price}</p>
-                              </div>
-                              <Button 
-                                size="sm" 
-                                onClick={() => handleBuyRequested({ name: `${game.name} - ${item.name}`, price: item.price, type: 'game' })}
-                                className="h-8 px-4 text-[10px] font-bold bg-purple-600 text-white hover:bg-purple-700 shadow-md rounded-full transition-all active:scale-95 border-0"
-                              >
-                                Commander
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <Button 
-                        onClick={() => openWhatsApp(game.whatsappMessage || `Bonjour, je souhaite faire un top-up pour le jeu : ${game.name}.`)}
-                        className="w-full bg-purple-600 hover:bg-purple-700 text-white text-sm h-9"
-                      >
-                        <MessageCircle className="h-4 w-4 mr-2" />
-                        Commander
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-10 text-gray-500">
-              <p>Aucun jeu disponible pour le moment.</p>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-      
-      {/* Cards Dialog */}
-      <Dialog open={isCardsDialogOpen} onOpenChange={setIsCardsDialogOpen}>
-        <DialogContent className="sm:max-w-4xl" showCloseButton={false}>
-          <DialogHeader className="p-8 pb-4 bg-gray-50/50 border-b border-gray-100">
-            <div className="flex items-center justify-between">
-              <DialogTitle className="text-3xl font-black flex items-center gap-3">
-                <div className="h-12 w-12 rounded-2xl bg-emerald-100 flex items-center justify-center">
-                  <CreditCard className="h-7 w-7 text-emerald-600" />
+                  <h3 className="text-lg font-black text-white leading-none">{card.title}</h3>
+                  <p className="text-white/70 text-xs mt-1 leading-relaxed">{card.subtitle}</p>
+                  <div className="flex items-center gap-1 mt-3 text-white/90 text-xs font-black">
+                    Explorer
+                    <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
                 </div>
-                Recharge Cartes
-              </DialogTitle>
-              <DialogClose className="rounded-full bg-black/5 p-2 hover:bg-black/10 transition-all group active:scale-90">
-                <LucideIcons.X className="h-5 w-5 text-gray-500 group-hover:text-gray-900" />
-              </DialogClose>
-            </div>
-            <DialogDescription className="text-xs font-bold uppercase tracking-widening text-emerald-600/60 pl-1">
-              Choisissez une carte pour recharger votre compte instantanément.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="p-8">
-            {cardsLoading ? (
-            <div className="flex justify-center py-10">
-              <Loader2 className="h-10 w-10 animate-spin text-emerald-600" />
-            </div>
-          ) : cards.length > 0 ? (
-            <div className="product-grid grid grid-cols-2 sm:grid-cols-2 gap-2 py-4">
-              {cards.map((card) => (
-                <Card key={card.id} className="product-card overflow-hidden border-gray-100 hover:shadow-md transition-shadow flex flex-col h-full pt-0">
-                  <div className="aspect-[16/10] relative bg-gray-50">
-                    <img 
-                      src={card.image} 
-                      alt={card.name}
-                      className="product-image w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/card/400/400';
-                      }}
-                    />
-                    <div className="absolute top-2 right-2">
-                      <Badge className="bg-emerald-600 text-[10px] h-5 px-1.5">{card.price}</Badge>
-                    </div>
-                  </div>
-                  <div className="product-card-content p-2 flex-grow flex flex-col">
-                    <div className="mb-1">
-                      <h3 className="product-name line-clamp-1">{card.name}</h3>
-                      <p className="product-subtitle truncate">Activation instantanée</p>
-                    </div>
-                    
-                    <div className="product-footer mt-auto pt-2">
-                      <Button 
-                        size="sm"
-                        onClick={() => handleCardClick(card)}
-                        className="product-buy-button w-full justify-center text-[10px] py-1 h-7"
-                      >
-                        ⚡ Recharger
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-10 text-gray-500">
-              <p>Aucune carte disponible pour le moment.</p>
-            </div>
-          )}
-          </div>
-        </DialogContent>
-      </Dialog>
-      {/* Product Detail Dialog */}
-      <Dialog open={isProductDetailOpen} onOpenChange={setIsProductDetailOpen}>
-        <DialogContent className="sm:max-w-3xl border-0 shadow-2xl relative" showCloseButton={false}>
-          <DialogClose className="absolute top-6 left-6 z-20 rounded-full bg-black/30 backdrop-blur-xl p-3 hover:bg-black/50 transition-all text-white group active:scale-90 border border-white/10 shadow-lg">
-            <LucideIcons.X className="h-6 w-6" />
-          </DialogClose>
-          {selectedProduct && (
-            <div className="flex flex-col">
-              <div className="relative aspect-video">
-                <img 
-                  src={selectedProduct.image} 
-                  alt={selectedProduct.name}
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="absolute top-4 right-4">
-                  <Badge className="bg-primary text-white text-lg font-black px-4 py-1 rounded-full shadow-lg">
-                    {selectedPlan ? selectedPlan.price : selectedProduct.price}
-                  </Badge>
-                </div>
+              </motion.button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── Why Rena ── */}
+      <section className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+        <h2 className="text-base font-black text-dark mb-4">Pourquoi choisir Rena ?</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { icon: LucideIcons.Zap, label: 'Rapide', desc: 'Traitement en quelques minutes', color: 'text-amber-500 bg-amber-50' },
+            { icon: LucideIcons.ShieldCheck, label: 'Sécurisé', desc: 'Transactions protégées', color: 'text-emerald-500 bg-emerald-50' },
+            { icon: LucideIcons.Clock, label: '24/7', desc: 'Support disponible en tout temps', color: 'text-blue-500 bg-blue-50' },
+            { icon: LucideIcons.Star, label: 'Fiable', desc: 'Des milliers de clients satisfaits', color: 'text-purple-500 bg-purple-50' },
+          ].map(item => (
+            <div key={item.label} className="flex flex-col items-center text-center gap-2 p-3 rounded-2xl bg-gray-50">
+              <div className={`h-9 w-9 rounded-xl ${item.color} flex items-center justify-center`}>
+                <item.icon className="h-4 w-4" />
               </div>
-              
-              <div className="p-8 space-y-6">
-                <div>
-                  <h2 className="text-3xl font-black text-dark leading-tight">{selectedProduct.name}</h2>
-                  <p className="text-gray-400 font-medium">Service Premium • Rena Digital</p>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 p-4 rounded-2xl bg-accent-light/30 border border-primary/10">
-                    < LucideIcons.Info className="h-5 w-5 text-primary shrink-0" />
-                    <p className="text-sm text-dark font-medium leading-relaxed">
-                      {selectedProduct.description || "Profitez de ce service exceptionnel avec Rena. Qualité garantie et livraison ultra-rapide."}
-                    </p>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 rounded-2xl bg-gray-50 flex items-center gap-2">
-                      <LucideIcons.Clock className="h-4 w-4 text-emerald-500" />
-                      <span className="text-[10px] font-bold text-gray-500 uppercase">Livraison <br/>24/7</span>
-                    </div>
-                    <div className="p-3 rounded-2xl bg-gray-50 flex items-center gap-2">
-                       <LucideIcons.ShieldCheck className="h-4 w-4 text-primary" />
-                       <span className="text-[10px] font-bold text-gray-500 uppercase">Paiement <br/>Sécurisé</span>
-                    </div>
-                  </div>
-
-                  {selectedProduct.plans && selectedProduct.plans.length > 0 && (
-                    <div className="space-y-3 pt-2">
-                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Choissisez votre plan</Label>
-                      <div className="grid grid-cols-1 gap-2">
-                        {selectedProduct.plans.map((plan: any) => (
-                          <button
-                            key={plan.id}
-                            onClick={() => setSelectedPlan(plan)}
-                            className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all group ${
-                              selectedPlan?.id === plan.id 
-                                ? 'border-primary bg-primary/5 shadow-md shadow-primary/5' 
-                                : 'border-gray-100 hover:border-gray-200 bg-white'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors ${selectedPlan?.id === plan.id ? 'border-primary' : 'border-gray-300 group-hover:border-gray-400'}`}>
-                                {selectedPlan?.id === plan.id && (
-                                  <motion.div 
-                                    layoutId="plan-indicator"
-                                    className="h-2.5 w-2.5 rounded-full bg-primary" 
-                                  />
-                                )}
-                              </div>
-                              <span className={`font-bold transition-colors ${selectedPlan?.id === plan.id ? 'text-primary' : 'text-dark'}`}>{plan.name}</span>
-                            </div>
-                            <span className={`font-black tracking-tight transition-colors ${selectedPlan?.id === plan.id ? 'text-primary' : 'text-gray-400'}`}>{plan.price}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedProduct.allowCustomAmount && (
-                    <div className="space-y-2 pt-2">
-                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Montant personnalisé</Label>
-                      <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-gray-400 text-lg">$</span>
-                        <Input
-                          type="number"
-                          value={customAmountUSD}
-                          onChange={e => setCustomAmountUSD(e.target.value)}
-                          placeholder="0.00"
-                          className="h-14 rounded-2xl text-lg font-black pl-10 border-2 focus:border-primary"
-                          min="0.01"
-                          step="0.01"
-                        />
-                      </div>
-                      {customAmountUSD && !isNaN(parseFloat(customAmountUSD)) && parseFloat(customAmountUSD) > 0 && (
-                        <div className="flex items-center gap-2 p-3 rounded-xl bg-primary/5 border border-primary/10">
-                          <DollarSign className="h-4 w-4 text-primary shrink-0" />
-                          <p className="text-sm font-black text-primary">
-                            = {Math.round(parseFloat(customAmountUSD) * (selectedProduct.customExchangeRate || exchangeRate)).toLocaleString()} HTG
-                            <span className="text-xs font-normal text-gray-400 ml-2">
-                              (taux: {selectedProduct.customExchangeRate || exchangeRate} HTG/$)
-                            </span>
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {(() => {
-                  const effectiveRate = selectedProduct.customExchangeRate || exchangeRate;
-                  const customHTG = selectedProduct.allowCustomAmount && customAmountUSD && !isNaN(parseFloat(customAmountUSD))
-                    ? Math.round(parseFloat(customAmountUSD) * effectiveRate)
-                    : null;
-                  const displayPrice = customHTG !== null
-                    ? `${customHTG} HTG`
-                    : (selectedPlan ? selectedPlan.price : selectedProduct.price);
-                  const displayName = selectedPlan
-                    ? `${selectedProduct.name} (${selectedPlan.name})`
-                    : selectedProduct.name;
-                  const customLabel = customHTG !== null
-                    ? `$${customAmountUSD} USD = ${customHTG.toLocaleString()} HTG`
-                    : null;
-                  return (
-                    <>
-                      <Button 
-                        onClick={() => handleBuyRequested({ 
-                          name: customLabel ? `${displayName} — ${customLabel}` : displayName, 
-                          price: displayPrice, 
-                          type: 'product' 
-                        })}
-                        className="w-full h-14 rounded-2xl bg-primary hover:bg-[#1D4ED8] text-white font-black text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-3 active:scale-95 transition-all"
-                      >
-                        <LucideIcons.ArrowRight className="h-6 w-6" />
-                        Continuer via WhatsApp
-                      </Button>
-
-                      {loggedClient && (
-                        <WalletPayButton
-                          client={effectiveClient || loggedClient}
-                          price={displayPrice}
-                          productName={customLabel ? `${displayName} — ${customLabel}` : displayName}
-                          hasPendingPurchase={hasPendingPurchase}
-                          purchaseLoading={purchaseLoading}
-                          setPurchaseLoading={setPurchaseLoading}
-                          onSuccess={() => setIsProductDetailOpen(false)}
-                          exchangeRate={exchangeRate}
-                        />
-                      )}
-                    </>
-                  );
-                })()}
-                
-                <p className="text-center text-[10px] text-gray-400 font-medium italic">
-                  *Un agent vous répondra instantanément sur WhatsApp
-                </p>
+              <div>
+                <p className="font-black text-dark text-sm leading-none">{item.label}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{item.desc}</p>
               </div>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+          ))}
+        </div>
+      </section>
 
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.5 }}
-        animate={{ opacity: showScrollTop ? 1 : 0, scale: showScrollTop ? 1 : 0 }}
-        className="fixed bottom-6 right-20 z-50 pointer-events-none"
-      >
-        <Button 
-          onClick={scrollToTop}
-          className="pointer-events-auto h-12 w-12 rounded-full bg-primary hover:bg-[#1D4ED8] text-white shadow-xl flex items-center justify-center p-0"
-        >
-          <ArrowUp className="h-6 w-6" />
-        </Button>
-      </motion.div>
+      {/* ── Scroll to top ── */}
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            className="fixed bottom-24 right-4 z-50"
+          >
+            <Button
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="h-11 w-11 rounded-full bg-primary hover:bg-blue-700 text-white shadow-xl flex items-center justify-center p-0"
+            >
+              <ArrowUp className="h-5 w-5" />
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Floating Chat Button */}
-      <div className="floating-chat-button-container">
+      {/* ── Floating WhatsApp chat ── */}
+      <div className="fixed bottom-24 right-4 z-40 pointer-events-none">
         <Button
-          onClick={() => openWhatsApp("Bonjour Rena, je souhaite avoir plus de renseignements sur Rena.")}
-          className="floating-chat-button"
+          onClick={openWhatsApp}
+          className="pointer-events-auto h-13 w-13 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white shadow-2xl shadow-emerald-500/30 flex items-center justify-center p-0 h-[52px] w-[52px]"
         >
           <MessageCircle className="h-6 w-6" />
         </Button>
       </div>
-
-      {/* Payment Modal */}
-      <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-        <DialogContent className="sm:max-w-2xl" showCloseButton={false}>
-          <div className="bg-primary p-8 text-white sticky top-0 z-10 rounded-t-[2.5rem]">
-            <DialogHeader>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-md">
-                     <ShieldCheck className="h-6 w-6 text-white" />
-                  </div>
-                  <div>
-                    <DialogTitle className="text-xl font-black uppercase tracking-tight">Finaliser Paiement</DialogTitle>
-                    <DialogDescription className="text-white/70 text-xs font-bold uppercase tracking-widest">Paiement Sécurisé Rena</DialogDescription>
-                  </div>
-                </div>
-                <DialogClose className="rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
-                  <LucideIcons.X className="h-5 w-5 text-white" />
-                </DialogClose>
-              </div>
-            </DialogHeader>
-
-            {paymentTarget && (
-              <div className="mt-4 p-4 rounded-2xl bg-black/20 border border-white/10 backdrop-blur-sm">
-                <p className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-1">Commande</p>
-                <p className="text-lg font-bold truncate">{paymentTarget.name}</p>
-                <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/10">
-                  <span className="text-xs font-bold text-white/60">Total à payer</span>
-                  <span className="text-2xl font-black text-white">{paymentTarget.price}</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="p-6 space-y-6">
-            <div className="space-y-3">
-              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Choisir le mode de paiement</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: 'moncash', label: 'Mon Cash', icon: Smartphone, color: 'text-rose-500', bg: 'bg-rose-50', border: 'border-rose-100' },
-                  { id: 'natcash', label: 'Natcash', icon: Smartphone, color: 'text-amber-500', bg: 'bg-amber-50', border: 'border-amber-100' },
-                  { id: 'admi', label: 'Admi', icon: Landmark, color: 'text-indigo-500', bg: 'bg-indigo-50', border: 'border-indigo-100' }
-                ].map(method => (
-                  <button
-                    key={method.id}
-                    onClick={() => setSelectedPaymentMethod(method.id as any)}
-                    className={`flex flex-col items-center justify-center p-3 rounded-2xl border-2 transition-all ${
-                      selectedPaymentMethod === method.id 
-                        ? `${method.border} ${method.bg} shadow-md scale-105` 
-                        : 'border-gray-50 bg-gray-50/50 grayscale hover:grayscale-0 hover:border-gray-100'
-                    }`}
-                  >
-                    <method.icon className={`h-6 w-6 ${method.color} mb-1`} />
-                    <span className="text-[10px] font-black uppercase text-dark">{method.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <AnimatePresence mode="wait">
-              {selectedPaymentMethod && (
-                <motion.div
-                  key={selectedPaymentMethod}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="p-5 rounded-[2rem] bg-gray-50 border border-gray-100 space-y-4 shadow-inner"
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-black text-primary uppercase tracking-widest">Infos de Paiement</p>
-                    <Badge variant="outline" className="text-[10px] font-black bg-white">{selectedPaymentMethod.toUpperCase()}</Badge>
-                  </div>
-
-                  <div className="flex flex-col items-center text-center space-y-3">
-                    <div className="space-y-1">
-                      <p className="text-gray-400 text-[10px] font-bold uppercase">Numéro de réception</p>
-                      <p className="text-2xl font-black text-dark tracking-tighter">
-                        {selectedPaymentMethod === 'moncash' ? (settings?.moncashNumber || 'Précisé sur WhatsApp') : 
-                         selectedPaymentMethod === 'natcash' ? (settings?.natcashNumber || 'Précisé sur WhatsApp') : 
-                         (settings?.admiNumber || 'Précisé sur WhatsApp')}
-                      </p>
-                    </div>
-
-                    {(settings?.[`${selectedPaymentMethod}QR` as keyof typeof settings]) && (
-                      <div className="relative group">
-                        <div className="absolute inset-0 bg-primary/5 rounded-2xl blur-xl group-hover:bg-primary/10 transition-colors" />
-                        <Card className="relative p-2 rounded-2xl border-2 border-white shadow-xl bg-white">
-                          <img 
-                            src={settings[`${selectedPaymentMethod}QR` as keyof typeof settings] as string} 
-                            alt="QR Code" 
-                            className="h-24 w-24 object-contain"
-                          />
-                          <div className="absolute -bottom-2 -right-2 bg-primary text-white p-1 rounded-lg">
-                            <QrCode className="h-4 w-4" />
-                          </div>
-                        </Card>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <div className="space-y-3">
-              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Détails de votre transaction</Label>
-              <div className="relative">
-                <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-300" />
-                <Input 
-                  placeholder="ID Transaction, Nom ou Numéro de l'expéditeur" 
-                  value={paymentTransactionInfo}
-                  onChange={(e) => setPaymentTransactionInfo(e.target.value)}
-                  className="pl-12 h-14 rounded-2xl border-gray-100 focus:ring-primary/20 bg-gray-50/50 font-bold"
-                />
-              </div>
-              <p className="text-[9px] text-gray-400 italic px-2 text-center">
-                Veuillez saisir les informations permettant d'identifier votre transfert pour une validation immédiate.
-              </p>
-            </div>
-          </div>
-
-          <DialogFooter className="p-6 bg-gray-50/50 border-t border-gray-100 sm:flex-col gap-3">
-            <Button 
-               onClick={handleFinalPaymentSubmit}
-               disabled={!paymentTransactionInfo.trim()}
-               className="w-full h-14 rounded-2xl bg-primary hover:bg-[#1D4ED8] text-white font-black text-lg shadow-xl shadow-primary/20 flex items-center justify-center gap-3 transition-all active:scale-95 disabled:grayscale disabled:opacity-50"
-            >
-               Envoyer et Payer
-               <ArrowRight className="h-5 w-5" />
-            </Button>
-            <p className="text-center text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-              En cliquant, vous serez redirigé vers WhatsApp pour finaliser
-            </p>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Card Recharge - Step 1: Details */}
-      <Dialog open={isRechargeDialogOpen} onOpenChange={setIsRechargeDialogOpen}>
-        <DialogContent className="sm:max-w-2xl border-0 bg-white shadow-2xl relative flex flex-col overflow-hidden" showCloseButton={false}>
-          <div className="bg-emerald-600 p-8 text-white relative overflow-hidden shrink-0">
-            <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
-            <DialogHeader>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-md">
-                    <CreditCard className="h-7 w-7 text-white" />
-                  </div>
-                  <div>
-                    <DialogTitle className="text-2xl font-black uppercase tracking-tight leading-none">Recharge de Carte</DialogTitle>
-                    <DialogDescription className="text-white/80 text-[10px] font-black uppercase tracking-widest mt-1">Étape 1: Configuration</DialogDescription>
-                  </div>
-                </div>
-                <DialogClose className="rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors z-50">
-                  <LucideIcons.X className="h-5 w-5 text-white" />
-                </DialogClose>
-              </div>
-            </DialogHeader>
-
-            {selectedCardForRecharge && (
-              <div className="mt-4 p-5 rounded-[1.5rem] bg-black/20 border border-white/10 backdrop-blur-sm flex items-center gap-4">
-                <div className="h-16 w-16 rounded-xl overflow-hidden bg-white/10 flex-shrink-0">
-                  <img src={selectedCardForRecharge.image} alt="" className="w-full h-full object-cover" />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Carte sélectionnée</p>
-                  <p className="text-lg font-bold leading-tight">{selectedCardForRecharge.name}</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-8 space-y-8 overscroll-contain">
-            <div className="space-y-4">
-              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Identifiant ou Nom complet</Label>
-              <div className="relative">
-                <LucideIcons.User className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-600" />
-                <Input 
-                  placeholder="Votre nom ou ID Wallet"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  className="pl-12 h-14 rounded-2xl border-gray-100 focus:ring-emerald-500/20 bg-gray-50/50 font-bold"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Définir le montant (USD)</Label>
-              
-              <div className="relative">
-                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-emerald-600">$</div>
-                <Input 
-                  type="number"
-                  placeholder="0.00"
-                  value={rechargeAmountUSD}
-                  onChange={(e) => setRechargeAmountUSD(e.target.value)}
-                  className="pl-12 h-16 text-2xl font-black rounded-2xl border-gray-100 focus:ring-emerald-500/20 bg-gray-50/50"
-                />
-              </div>
-
-              {selectedCardForRecharge?.presets && selectedCardForRecharge.presets.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {selectedCardForRecharge.presets.map((val: number) => (
-                    <button
-                      key={val}
-                      onClick={() => setRechargeAmountUSD(val.toString())}
-                      className={`px-6 py-3 rounded-2xl text-xs font-black transition-all ${
-                        rechargeAmountUSD === val.toString()
-                          ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 scale-105'
-                          : 'bg-gray-100 text-dark hover:bg-gray-200'
-                      }`}
-                    >
-                      ${val}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-[2rem] border border-emerald-100 overflow-hidden">
-              <div className="bg-emerald-600 px-5 py-3 flex items-center gap-2">
-                <Zap className="h-4 w-4 text-white fill-white" />
-                <p className="text-[10px] font-black text-white uppercase tracking-widest">Calculateur intelligent</p>
-              </div>
-              <div className="bg-emerald-50 p-5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-emerald-700 font-semibold">Montant USD</span>
-                  <span className="text-xl font-black text-emerald-900">${rechargeAmountUSD || '0'}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-emerald-700 font-semibold">Taux de change</span>
-                  <span className="text-sm font-black text-emerald-600">1$ = {settings?.exchangeRate || 146} HTG</span>
-                </div>
-                <div className="h-px bg-emerald-200" />
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-black text-emerald-900">Équivalent Gourdes</span>
-                  <span className="text-2xl font-black text-emerald-700">
-                    {rechargeAmountUSD ? (parseFloat(rechargeAmountUSD) * (settings?.exchangeRate || 146)).toLocaleString() : '0'} HTG
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="p-8 pt-4 shrink-0 bg-white border-t border-gray-100">
-            <Button
-              onClick={handleRechargeSubmit}
-              disabled={!rechargeAmountUSD || parseFloat(rechargeAmountUSD) <= 0 || !customerName.trim()}
-              className="w-full h-16 rounded-[1.5rem] bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xl shadow-xl shadow-emerald-600/20 flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-50"
-            >
-              Suivant
-              <ArrowRight className="h-6 w-6" />
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Card Recharge - Step 2: Payment Method */}
-      <Dialog open={isPaymentMethodDialogOpen} onOpenChange={setIsPaymentMethodDialogOpen}>
-        <DialogContent className="sm:max-w-2xl border-0 bg-white shadow-2xl relative flex flex-col overflow-hidden" showCloseButton={false}>
-          <div className="bg-emerald-800 p-8 text-white shrink-0">
-            <DialogHeader>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-md">
-                    <ShieldCheck className="h-7 w-7 text-white" />
-                  </div>
-                  <div>
-                    <DialogTitle className="text-2xl font-black uppercase tracking-tight leading-none">Moyen de Paiement</DialogTitle>
-                    <DialogDescription className="text-white/80 text-[10px] font-black uppercase tracking-widest mt-1">Étape 2: Choisir votre mode</DialogDescription>
-                  </div>
-                </div>
-                <DialogClose className="rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors z-50">
-                  <LucideIcons.X className="h-5 w-5 text-white" />
-                </DialogClose>
-              </div>
-            </DialogHeader>
-            
-            <div className="mt-4 p-6 rounded-[1.5rem] bg-white/10 border border-white/5 backdrop-blur-xl">
-               <div className="flex justify-between items-center mb-2">
-                 <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Montant total</span>
-                 <span className="text-3xl font-black text-white">${rechargeAmountUSD} USD</span>
-               </div>
-               <div className="flex justify-between items-center text-emerald-100/60">
-                 <span className="text-[10px] font-black uppercase tracking-tighter">Estimation Gourdes</span>
-                 <span className="text-md font-black">≈ {(parseFloat(rechargeAmountUSD || '0') * (settings?.exchangeRate || 146)).toLocaleString()} HTG</span>
-               </div>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-8 space-y-6 overscroll-contain">
-            <div className="grid grid-cols-1 gap-4">
-              {[
-                { id: 'MonCash', icon: Smartphone, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100', desc: 'Paiement mobile instantané' },
-                { id: 'NatCash', icon: Smartphone, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', desc: 'Sécurisé et rapide' },
-                { id: 'Admi', icon: Landmark, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', desc: 'Virement ou dépôt bancaire' }
-              ].map(method => (
-                <button
-                  key={method.id}
-                  onClick={() => handleFinalRechargePayment(method.id)}
-                  className={`group flex items-center justify-between p-6 rounded-[1.5rem] border-2 transition-all hover:scale-[1.02] active:scale-[0.98] ${method.bg} ${method.border} hover:shadow-lg`}
-                >
-                  <div className="flex items-center gap-5">
-                    <div className={`h-14 w-14 rounded-2xl bg-white shadow-sm flex items-center justify-center transition-transform group-hover:scale-110 ${method.color}`}>
-                      <method.icon className="h-7 w-7" />
-                    </div>
-                    <div className="text-left">
-                      <span className="block text-xl font-black text-dark uppercase tracking-tight">{method.id}</span>
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{method.desc}</span>
-                    </div>
-                  </div>
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center transition-colors ${method.color} group-hover:bg-white`}>
-                    <ArrowRight className="h-6 w-6" />
-                  </div>
-                </button>
-              ))}
-
-              {/* Wallet pay option */}
-              {effectiveClient && (() => {
-                const usd = parseFloat(rechargeAmountUSD || '0');
-                const rate = settings?.exchangeRate || 146;
-                const bal = effectiveClient.balance ?? 0;
-                const balHTG = Math.round(bal * rate);
-                const canPay = bal >= usd && usd > 0;
-                return (
-                  <button
-                    onClick={() => {
-                      if (!canPay) { toast.error(`Solde insuffisant. Vous avez $${bal.toFixed(2)} USD (${balHTG.toLocaleString()} HTG).`); return; }
-                      handleFinalRechargePayment('Solde Wallet');
-                    }}
-                    className={`group flex items-center justify-between p-6 rounded-[1.5rem] border-2 transition-all hover:scale-[1.02] active:scale-[0.98] ${canPay ? 'bg-emerald-50 border-emerald-100 hover:shadow-lg' : 'bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed'}`}
-                  >
-                    <div className="flex items-center gap-5">
-                      <div className={`h-14 w-14 rounded-2xl bg-white shadow-sm flex items-center justify-center transition-transform ${canPay ? 'group-hover:scale-110 text-emerald-600' : 'text-gray-400'}`}>
-                        <Wallet className="h-7 w-7" />
-                      </div>
-                      <div className="text-left">
-                        <span className="block text-xl font-black text-dark uppercase tracking-tight">Mon Compte</span>
-                        <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-600">
-                          Solde: {balHTG.toLocaleString()} HTG {canPay ? `· Suffisant ✓` : `· Insuffisant`}
-                        </span>
-                      </div>
-                    </div>
-                    <div className={`h-10 w-10 rounded-full flex items-center justify-center ${canPay ? 'text-emerald-600 group-hover:bg-white' : 'text-gray-300'}`}>
-                      <ArrowRight className="h-6 w-6" />
-                    </div>
-                  </button>
-                );
-              })()}
-            </div>
-            
-            <div className="text-center p-4 bg-gray-50 rounded-2xl mt-4">
-              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest leading-loose">
-                ✅ Une fois le paiement sélectionné, <br/>vous serez redirigé vers notre service client WhatsApp.
-              </p>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

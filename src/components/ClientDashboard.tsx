@@ -5,7 +5,7 @@ import {
   Clock, XCircle, Shield, Trash2,
   TrendingUp, Globe, Smartphone, CreditCard as CardIcon,
   Building2, Bitcoin, Info, ChevronDown,
-  Eye, EyeOff, Send, User
+  Eye, EyeOff, Send, User, QrCode
 } from 'lucide-react';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { CaptchaWidget } from './CaptchaWidget';
@@ -639,6 +639,49 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
           </div>
 
           <form onSubmit={handleDeposit} className="p-5 space-y-4 bg-white overflow-y-auto flex-1">
+
+            {/* ── Prominent account numbers banner ── */}
+            {depositMethods.filter(m => m.number || m.address).length > 0 && (
+              <div className="rounded-2xl overflow-hidden border border-emerald-100 bg-emerald-50">
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600">
+                  <Smartphone className="h-3.5 w-3.5 text-white" />
+                  <p className="text-[10px] font-black text-white uppercase tracking-widest">Numéros de dépôt</p>
+                </div>
+                <div className="p-3 space-y-2.5">
+                  {depositMethods.filter(m => m.number || m.address).map(m => (
+                    <div key={m.id} className="flex items-center justify-between gap-3 bg-white rounded-xl p-3 border border-emerald-100">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xl shrink-0">{m.icon}</span>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide leading-none">{m.name}</p>
+                          {m.accountName && <p className="text-[10px] text-gray-400 leading-none mt-0.5">{m.accountName}</p>}
+                          <p className="font-black text-gray-900 font-mono text-sm mt-0.5 truncate">{m.number || m.address}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(m.number || m.address || '');
+                          toast.success(`Numéro ${m.name} copié !`);
+                        }}
+                        className="shrink-0 h-9 w-9 flex items-center justify-center rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 hover:bg-emerald-100 transition-colors active:scale-95"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {depositMethods.find(m => m.instructions) && (
+                    <div className="flex items-start gap-2 p-2.5 rounded-xl bg-blue-50 border border-blue-100">
+                      <Info className="h-3.5 w-3.5 text-blue-500 mt-0.5 shrink-0" />
+                      <p className="text-[11px] text-blue-700 leading-relaxed">
+                        {depositMethods.find(m => m.instructions)?.instructions}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode de paiement</Label>
               {depositMethods.length === 0 ? (
@@ -663,37 +706,15 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               )}
             </div>
 
-            {depositMethod && (depositMethod.number || depositMethod.address || depositMethod.qrUrl || depositMethod.instructions) && (
-              <div className="p-3 rounded-2xl bg-gray-50 border border-gray-100 space-y-2">
-                {depositMethod.number && (
-                  <div className="flex items-center gap-2">
-                    <Smartphone className="h-4 w-4 text-gray-400" />
-                    <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase">Numéro</p>
-                      <p className="font-black text-gray-900 font-mono">{depositMethod.number}</p>
-                    </div>
-                    {depositMethod.qrUrl && (
-                      <img src={depositMethod.qrUrl} alt="QR" className="h-14 w-14 rounded-xl ml-auto border border-gray-200 object-cover"
-                        onError={e => (e.currentTarget.style.display = 'none')} />
-                    )}
+            {depositMethod && (depositMethod.qrUrl) && (
+              <div className="flex justify-center">
+                <div className="relative p-2 bg-white rounded-2xl border border-gray-200 shadow-sm">
+                  <img src={depositMethod.qrUrl} alt="QR Code" className="h-24 w-24 object-contain rounded-xl"
+                    onError={e => (e.currentTarget.style.display = 'none')} />
+                  <div className="absolute -bottom-2 -right-2 bg-emerald-600 text-white p-1 rounded-lg">
+                    <QrCode className="h-3.5 w-3.5" />
                   </div>
-                )}
-                {depositMethod.address && (
-                  <div>
-                    <p className="text-[10px] font-black text-gray-400 uppercase">Adresse</p>
-                    <p className="font-mono text-xs text-gray-800 break-all">{depositMethod.address}</p>
-                    {depositMethod.qrUrl && (
-                      <img src={depositMethod.qrUrl} alt="QR" className="h-20 w-20 rounded-xl mt-2 border border-gray-200 object-cover"
-                        onError={e => (e.currentTarget.style.display = 'none')} />
-                    )}
-                  </div>
-                )}
-                {depositMethod.accountName && (
-                  <p className="text-xs text-gray-500">Compte: <span className="font-bold text-gray-800">{depositMethod.accountName}</span></p>
-                )}
-                {depositMethod.instructions && (
-                  <p className="text-[11px] text-blue-700 bg-blue-50 rounded-xl p-2.5 border border-blue-100">{depositMethod.instructions}</p>
-                )}
+                </div>
               </div>
             )}
 
