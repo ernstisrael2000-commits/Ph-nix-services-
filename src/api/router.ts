@@ -2020,17 +2020,28 @@ router.get('/api/admin/formations/certificates', requireDb, requireAdminSecret, 
 // ── Certificates: issue (admin) ───────────────────────────────────────────────
 router.post('/api/admin/formations/certificate', requireDb, requireAdminSecret, async (req, res) => {
   try {
-    const { userId, userName, userEmail, formationId, formationTitle, issuedBy } = req.body;
+    const { userId, userName, userEmail, formationId, formationTitle, issuedBy, pdfUrl } = req.body;
     if (!userId || !formationId) return res.status(400).json({ error: 'userId et formationId requis.' });
     const existing = await adminDb.collection('formation_certificates')
       .where('userId', '==', userId).where('formationId', '==', formationId).limit(1).get();
     if (!existing.empty) return res.status(409).json({ error: 'Certificat déjà émis pour cet étudiant.' });
     const certificateCode = 'RENA-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
-    const ref = await adminDb.collection('formation_certificates').add({
+    const certData: any = {
       userId, userName, userEmail: userEmail || '', formationId, formationTitle,
       issuedBy, certificateCode, issuedAt: FieldValue.serverTimestamp(),
-    });
+    };
+    if (pdfUrl) certData.pdfUrl = pdfUrl;
+    const ref = await adminDb.collection('formation_certificates').add(certData);
     res.json({ success: true, id: ref.id, certificateCode });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Certificates: update pdfUrl (admin) ──────────────────────────────────────
+router.patch('/api/admin/formations/certificate/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { pdfUrl } = req.body;
+    await adminDb.collection('formation_certificates').doc(req.params.id).update({ pdfUrl: pdfUrl || '' });
+    res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

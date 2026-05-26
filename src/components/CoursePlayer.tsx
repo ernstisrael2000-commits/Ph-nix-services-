@@ -9,6 +9,7 @@ import {
 import { Formation, FormationModule, FormationChapter } from '../types';
 import { Client } from '../types';
 import { toast } from 'sonner';
+import { openCertificate } from '../lib/certificateGenerator';
 
 interface CoursePlayerProps {
   formation: Formation;
@@ -66,9 +67,10 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
   const [showQuiz, setShowQuiz] = useState(false);
   const [quizChapter, setQuizChapter] = useState<FormationChapter | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<number[]>([]);
+  const [quizShuffledMap, setQuizShuffledMap] = useState<number[]>([]); // shuffled position → original index
   const [quizSubmitting, setQuizSubmitting] = useState(false);
   const [quizResult, setQuizResult] = useState<{ score: number; passed: boolean; correct: number; total: number; passPercent: number } | null>(null);
-  const [certificate, setCertificate] = useState<{ certificateCode: string; issuedAt: any; issuedBy: string } | null>(null);
+  const [certificate, setCertificate] = useState<any>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const positionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -177,8 +179,16 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
 
   // ── Quiz helpers ───────────────────────────────────────────────────────────
   const openQuiz = useCallback((chapter: FormationChapter) => {
+    const qs = chapter.quiz?.questions || [];
+    // Fisher-Yates shuffle — give each student a different question order
+    const indices = [...Array(qs.length).keys()];
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
     setQuizChapter(chapter);
-    setQuizAnswers(new Array(chapter.quiz?.questions?.length ?? 0).fill(-1));
+    setQuizShuffledMap(indices);
+    setQuizAnswers(new Array(qs.length).fill(-1));
     setQuizResult(null);
     setShowQuiz(true);
   }, []);
@@ -187,9 +197,15 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
     if (!quizChapter || !loggedClient?.id || !formation.id) return;
     setQuizSubmitting(true);
     try {
+      // Remap answers from shuffled order back to original question order
+      const originalQuestions = quizChapter.quiz?.questions || [];
+      const remappedAnswers = new Array(originalQuestions.length).fill(-1);
+      quizShuffledMap.forEach((originalIdx, shuffledPos) => {
+        remappedAnswers[originalIdx] = quizAnswers[shuffledPos];
+      });
       const res = await fetch('/api/formations/quiz/submit', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: loggedClient.id, formationId: formation.id, chapterId: quizChapter.id, answers: quizAnswers }),
+        body: JSON.stringify({ userId: loggedClient.id, formationId: formation.id, chapterId: quizChapter.id, answers: remappedAnswers }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erreur');
@@ -198,8 +214,6 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
         ...prev,
         [quizChapter.id]: { passed: data.passed || prev[quizChapter.id]?.passed, score: data.score, attempts: (prev[quizChapter.id]?.attempts || 0) + 1 },
       }));
-      if (data.passed) toast.success(`🎉 Quiz réussi ! Score : ${data.score}%`);
-      else toast.error(`Quiz échoué — ${data.score}% (seuil: ${data.passPercent}%). Réessayez !`);
     } catch (e: any) { toast.error(e.message || 'Erreur de soumission.'); }
     finally { setQuizSubmitting(false); }
   };
@@ -806,6 +820,20 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                         </p>
                         <code className="text-[11px] font-mono text-amber-700 bg-amber-100 px-2 py-0.5 rounded mt-1 inline-block">{certificate.certificateCode}</code>
                       </div>
+                      <button
+                        onClick={() => openCertificate({
+                          userName: certificate.userName || loggedClient.name || 'Étudiant',
+                          formationTitle: certificate.formationTitle || formation.title,
+                          certificateCode: certificate.certificateCode,
+                          issuedBy: certificate.issuedBy,
+                          issuedAt: certificate.issuedAt,
+                          pdfUrl: certificate.pdfUrl,
+                        })}
+                        className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm shadow-amber-200"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Télécharger</span>
+                      </button>
                     </div>
                   ) : (
                     <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-5 flex items-center gap-4">
@@ -863,52 +891,74 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                     <div className={`h-20 w-20 mx-auto rounded-full flex items-center justify-center mb-4 ${quizResult.passed ? 'bg-emerald-100' : 'bg-red-100'}`}>
                       {quizResult.passed
                         ? <Award className="h-10 w-10 text-emerald-500" />
-                        : <ClipboardList className="h-10 w-10 text-red-400" />}
+                        : <BookOpen className="h-10 w-10 text-red-400" />}
                     </div>
-                    <h3 className={`text-2xl font-black ${quizResult.passed ? 'text-emerald-600' : 'text-red-500'}`}>
-                      {quizResult.passed ? '🎉 Réussi !' : 'Échoué'}
-                    </h3>
-                    <p className="text-4xl font-black text-gray-900 mt-2">{quizResult.score}%</p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {quizResult.correct} / {quizResult.total} bonnes réponses · Seuil : {quizResult.passPercent}%
-                    </p>
-                    {quizResult.passed && (
-                      <p className="text-sm text-emerald-600 font-semibold mt-3 bg-emerald-50 rounded-xl p-3">
-                        Le chapitre suivant est maintenant débloqué !
-                      </p>
+
+                    {quizResult.passed ? (
+                      <>
+                        <h3 className="text-2xl font-black text-emerald-600">🎉 Félicitations !</h3>
+                        <p className="text-base font-bold text-emerald-700 mt-1">Vous avez passé le cours</p>
+                        <p className="text-4xl font-black text-gray-900 mt-3">{quizResult.score}%</p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          {quizResult.correct} / {quizResult.total} bonnes réponses · Seuil : {quizResult.passPercent}%
+                        </p>
+                        <div className="mt-4 bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-left">
+                          <p className="text-sm font-bold text-emerald-700 flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 shrink-0" /> Chapitre suivant débloqué
+                          </p>
+                          <p className="text-xs text-emerald-600 mt-1">Vous pouvez continuer votre progression.</p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <h3 className="text-2xl font-black text-red-500">Quiz non réussi</h3>
+                        <p className="text-4xl font-black text-gray-900 mt-3">{quizResult.score}%</p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          {quizResult.correct} / {quizResult.total} bonnes réponses · Seuil requis : {quizResult.passPercent}%
+                        </p>
+                        <div className="mt-4 bg-red-50 border border-red-200 rounded-2xl p-4 text-left">
+                          <p className="text-sm font-bold text-red-700 flex items-center gap-2">
+                            <BookOpen className="h-4 w-4 shrink-0" /> Vous devez relire toute la formation pour continuer
+                          </p>
+                          <p className="text-xs text-red-600 mt-1">Révisez le contenu du chapitre et réessayez.</p>
+                        </div>
+                      </>
                     )}
                   </div>
                 ) : (
-                  /* Questions */
-                  (quizChapter.quiz?.questions || []).map((q, qi) => (
-                    <div key={q.id} className="space-y-2">
-                      <p className="text-sm font-bold text-gray-900">
-                        <span className="text-violet-500 mr-1">Q{qi + 1}.</span> {q.question}
-                      </p>
-                      <div className="space-y-2">
-                        {(q.options || []).map((opt, oi) => (
-                          <button
-                            key={oi}
-                            onClick={() => {
-                              const next = [...quizAnswers];
-                              next[qi] = oi;
-                              setQuizAnswers(next);
-                            }}
-                            className={`w-full text-left px-4 py-3 rounded-xl border-2 text-sm font-medium transition-all ${
-                              quizAnswers[qi] === oi
-                                ? 'border-violet-500 bg-violet-50 text-violet-800'
-                                : 'border-gray-100 bg-gray-50 hover:border-violet-200 hover:bg-violet-50/50 text-gray-700'
-                            }`}
-                          >
-                            <span className="inline-block w-6 h-6 rounded-full border-2 border-current mr-2 text-center text-xs leading-5 font-black shrink-0">
-                              {String.fromCharCode(65 + oi)}
-                            </span>
-                            {opt}
-                          </button>
-                        ))}
+                  /* Questions — displayed in shuffled order */
+                  quizShuffledMap.map((origIdx, qi) => {
+                    const q = quizChapter.quiz!.questions[origIdx];
+                    return (
+                      <div key={q.id + qi} className="space-y-2">
+                        <p className="text-sm font-bold text-gray-900">
+                          <span className="text-violet-500 mr-1">Q{qi + 1}.</span> {q.question}
+                        </p>
+                        <div className="space-y-2">
+                          {(q.options || []).map((opt, oi) => (
+                            <button
+                              key={oi}
+                              onClick={() => {
+                                const next = [...quizAnswers];
+                                next[qi] = oi;
+                                setQuizAnswers(next);
+                              }}
+                              className={`w-full text-left px-4 py-3 rounded-xl border-2 text-sm font-medium transition-all ${
+                                quizAnswers[qi] === oi
+                                  ? 'border-violet-500 bg-violet-50 text-violet-800'
+                                  : 'border-gray-100 bg-gray-50 hover:border-violet-200 hover:bg-violet-50/50 text-gray-700'
+                              }`}
+                            >
+                              <span className="inline-block w-6 h-6 rounded-full border-2 border-current mr-2 text-center text-xs leading-5 font-black shrink-0">
+                                {String.fromCharCode(65 + oi)}
+                              </span>
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
 
@@ -919,8 +969,8 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                     {!quizResult.passed && (
                       <button
                         onClick={() => {
-                          setQuizAnswers(new Array(quizChapter.quiz?.questions?.length ?? 0).fill(-1));
-                          setQuizResult(null);
+                          // Re-shuffle on retry so questions appear in a different order
+                          if (quizChapter) openQuiz(quizChapter);
                         }}
                         className="flex-1 py-3 rounded-2xl border-2 border-violet-200 text-violet-700 font-bold text-sm hover:bg-violet-50 transition-all"
                       >
@@ -941,7 +991,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
                     className="w-full py-3 rounded-2xl bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm transition-all flex items-center justify-center gap-2"
                   >
                     {quizSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
-                    Soumettre le quiz
+                    Valider les réponses
                   </button>
                 )}
                 {!quizResult && (

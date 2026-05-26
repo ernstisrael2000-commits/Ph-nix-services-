@@ -1103,6 +1103,9 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const [selectedCertFormationId, setSelectedCertFormationId] = useState<string>('');
   const [issuingCertId, setIssuingCertId] = useState<string>('');
   const [revokingCertId, setRevokingCertId] = useState<string>('');
+  const [certIssuanceForm, setCertIssuanceForm] = useState<{ student: any; pdfUrl: string } | null>(null);
+  const [updatingCertPdf, setUpdatingCertPdf] = useState<string>('');
+  const [editingCertPdf, setEditingCertPdf] = useState<{ id: string; pdfUrl: string } | null>(null);
 
   const fetchCertificates = async (fId?: string) => {
     setLoadingCertificates(true);
@@ -1125,10 +1128,11 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     finally { setLoadingCertStudents(false); }
   };
 
-  const handleIssueCertificate = async (student: any) => {
+  const handleIssueCertificate = async (student: any, pdfUrl?: string) => {
     if (!selectedCertFormationId) return;
     const formation = adminFormations.find((f: any) => f.id === selectedCertFormationId);
     setIssuingCertId(student.userId);
+    setCertIssuanceForm(null);
     try {
       const res = await fetch('/api/admin/formations/certificate', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
@@ -1136,6 +1140,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
           userId: student.userId, userName: student.userName, userEmail: student.userEmail,
           formationId: selectedCertFormationId, formationTitle: formation?.title || '',
           issuedBy: admin?.fullName || 'Admin',
+          ...(pdfUrl ? { pdfUrl } : {}),
         }),
       });
       const json = await res.json();
@@ -1154,6 +1159,21 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
       fetchCertificates(selectedCertFormationId || undefined);
     } catch { toast.error('Erreur lors de la révocation.'); }
     finally { setRevokingCertId(''); }
+  };
+
+  const handleUpdateCertPdf = async (certId: string, pdfUrl: string) => {
+    setUpdatingCertPdf(certId);
+    try {
+      const res = await fetch(`/api/admin/formations/certificate/${certId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
+        body: JSON.stringify({ pdfUrl }),
+      });
+      if (!res.ok) throw new Error('Erreur');
+      toast.success('Lien PDF mis à jour.');
+      setEditingCertPdf(null);
+      fetchCertificates(selectedCertFormationId || undefined);
+    } catch { toast.error('Erreur lors de la mise à jour.'); }
+    finally { setUpdatingCertPdf(''); }
   };
   const [formationTagInput, setFormationTagInput] = useState('');
 
@@ -4148,6 +4168,49 @@ const AffiliateEditForm = ({
             {selectedCertFormationId && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Students list */}
+                {/* ── Certificate issuance dialog ─────────────────────────────── */}
+                {certIssuanceForm && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="h-10 w-10 bg-amber-100 rounded-xl flex items-center justify-center">
+                          <LucideIcons.Award className="h-5 w-5 text-amber-500" />
+                        </div>
+                        <div>
+                          <h3 className="font-black text-sm text-dark">Émettre un certificat</h3>
+                          <p className="text-xs text-gray-400">{certIssuanceForm.student.userName}</p>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-xs font-semibold text-gray-500 mb-1 block">Lien PDF (optionnel)</label>
+                          <input
+                            type="url"
+                            placeholder="https://... (laissez vide pour un modèle auto-généré)"
+                            value={certIssuanceForm.pdfUrl}
+                            onChange={e => setCertIssuanceForm(prev => prev ? { ...prev, pdfUrl: e.target.value } : null)}
+                            className="w-full h-9 px-3 text-xs border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-300"
+                          />
+                          <p className="text-[10px] text-gray-400 mt-1">Si vide, l'étudiant pourra générer un certificat PDF depuis l'interface.</p>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <Button variant="ghost" size="sm" className="flex-1 h-9 text-xs" onClick={() => setCertIssuanceForm(null)}>
+                            Annuler
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="flex-1 h-9 text-xs bg-amber-500 hover:bg-amber-600 text-white"
+                            disabled={issuingCertId === certIssuanceForm.student.userId}
+                            onClick={() => handleIssueCertificate(certIssuanceForm.student, certIssuanceForm.pdfUrl || undefined)}
+                          >
+                            {issuingCertId === certIssuanceForm.student.userId ? <Loader2 className="h-3 w-3 animate-spin" /> : '🎓 Confirmer'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <Card className="shadow-sm border-gray-200">
                   <CardContent className="p-0">
                     <div className="p-4 border-b border-gray-100">
@@ -4177,7 +4240,7 @@ const AffiliateEditForm = ({
                                   size="sm"
                                   className="h-7 text-xs bg-amber-500 hover:bg-amber-600 text-white"
                                   disabled={issuingCertId === s.userId}
-                                  onClick={() => handleIssueCertificate(s)}
+                                  onClick={() => setCertIssuanceForm({ student: s, pdfUrl: '' })}
                                 >
                                   {issuingCertId === s.userId ? <Loader2 className="h-3 w-3 animate-spin" /> : '🎓 Émettre'}
                                 </Button>
@@ -4205,22 +4268,60 @@ const AffiliateEditForm = ({
                     ) : (
                       <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
                         {certificates.map((cert: any) => (
-                          <div key={cert.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
-                            <div>
-                              <p className="text-sm font-semibold text-dark">{cert.userName}</p>
-                              <code className="text-[10px] text-gray-400 font-mono">{cert.certificateCode}</code>
-                              <p className="text-[10px] text-gray-300 mt-0.5">
-                                {cert.issuedAt?.seconds ? new Date(cert.issuedAt.seconds * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                              </p>
+                          <div key={cert.id} className="px-4 py-3 hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-dark">{cert.userName}</p>
+                                <code className="text-[10px] text-gray-400 font-mono">{cert.certificateCode}</code>
+                                <p className="text-[10px] text-gray-300 mt-0.5">
+                                  {cert.issuedAt?.seconds ? new Date(cert.issuedAt.seconds * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                                </p>
+                                {cert.pdfUrl && (
+                                  <a href={cert.pdfUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-500 hover:underline flex items-center gap-0.5 mt-0.5 truncate max-w-[180px]">
+                                    <LucideIcons.Link className="h-2.5 w-2.5 shrink-0" /> PDF lié
+                                  </a>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button
+                                  variant="ghost" size="sm"
+                                  className="h-7 text-[10px] text-blue-400 hover:text-blue-600 hover:bg-blue-50 px-2"
+                                  onClick={() => setEditingCertPdf({ id: cert.id, pdfUrl: cert.pdfUrl || '' })}
+                                >
+                                  <LucideIcons.Link className="h-3 w-3 mr-1" />PDF
+                                </Button>
+                                <Button
+                                  variant="ghost" size="sm"
+                                  className="h-7 text-xs text-red-400 hover:text-red-600 hover:bg-red-50 px-2"
+                                  disabled={revokingCertId === cert.id}
+                                  onClick={() => handleRevokeCertificate(cert.id)}
+                                >
+                                  {revokingCertId === cert.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <LucideIcons.Trash2 className="h-3 w-3" />}
+                                </Button>
+                              </div>
                             </div>
-                            <Button
-                              variant="ghost" size="sm"
-                              className="h-7 text-xs text-red-400 hover:text-red-600 hover:bg-red-50"
-                              disabled={revokingCertId === cert.id}
-                              onClick={() => handleRevokeCertificate(cert.id)}
-                            >
-                              {revokingCertId === cert.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <LucideIcons.Trash2 className="h-3 w-3" />}
-                            </Button>
+                            {/* Inline PDF URL editor */}
+                            {editingCertPdf?.id === cert.id && (
+                              <div className="mt-2 flex gap-2">
+                                <input
+                                  type="url"
+                                  placeholder="https://... (lien PDF du certificat)"
+                                  value={editingCertPdf.pdfUrl}
+                                  onChange={e => setEditingCertPdf({ id: cert.id, pdfUrl: e.target.value })}
+                                  className="flex-1 h-8 px-2 text-xs border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-blue-400"
+                                />
+                                <Button
+                                  size="sm" className="h-8 text-xs bg-blue-500 hover:bg-blue-600 text-white px-3"
+                                  disabled={updatingCertPdf === cert.id}
+                                  onClick={() => handleUpdateCertPdf(cert.id, editingCertPdf.pdfUrl)}
+                                >
+                                  {updatingCertPdf === cert.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'OK'}
+                                </Button>
+                                <Button variant="ghost" size="sm" className="h-8 text-xs px-2" onClick={() => setEditingCertPdf(null)}>
+                                  ✕
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

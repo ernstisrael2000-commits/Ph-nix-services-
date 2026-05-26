@@ -390,6 +390,7 @@ export interface StudentCertificate {
   formationTitle: string;
   issuedBy: string;
   certificateCode: string;
+  pdfUrl?: string;
   issuedAt: any;
 }
 
