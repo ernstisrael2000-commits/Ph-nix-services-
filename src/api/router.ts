@@ -602,24 +602,42 @@ router.post('/api/client/transfer', requireDb, async (req, res) => {
       return res.status(400).json({ error: 'Vous ne pouvez pas vous transférer à vous-même.' });
     const recipData = recipDoc.data()!;
 
+    // Load transfer fee
+    const settSnap = await adminDb.collection('settings').doc('global').get();
+    const transferFeePercent = settSnap.exists ? (settSnap.data()!.transferFeePercent || 0) : 0;
+    const feeAmount = transferFeePercent > 0
+      ? parseFloat((usd * transferFeePercent / 100).toFixed(4))
+      : 0;
+    const netToRecipient = usd - feeAmount;
+
+    if ((senderData.balance || 0) < usd)
+      return res.status(400).json({ error: 'Solde insuffisant.' });
+
     const batch = adminDb.batch();
-    // Debit sender
+    // Debit sender (full amount)
     batch.update(senderRef, {
       balance: Math.max(0, (senderData.balance || 0) - usd),
       updatedAt: FieldValue.serverTimestamp(),
     });
-    // Credit recipient
+    // Credit recipient (net after fee)
     batch.update(recipDoc.ref, {
-      balance: (recipData.balance || 0) + usd,
+      balance: (recipData.balance || 0) + netToRecipient,
       updatedAt: FieldValue.serverTimestamp(),
     });
+    // Accumulate fee in settings
+    if (feeAmount > 0) {
+      batch.update(adminDb.collection('settings').doc('global'), {
+        feesBalance: FieldValue.increment(feeAmount),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
     // Sender tx
     const senderTxRef = adminDb.collection('client_transactions').doc();
     batch.set(senderTxRef, {
       clientId: senderClientId, clientName: senderData.name || '',
       type: 'withdrawal', amount: usd, usdAmount: usd,
       status: 'completed', method: 'Transfert Wallet',
-      description: `Transfert vers ${recipData.name || recipientWalletId}${message ? ` — ${message}` : ''}`,
+      description: `Transfert vers ${recipData.name || recipientWalletId}${feeAmount > 0 ? ` (frais: $${feeAmount.toFixed(2)})` : ''}${message ? ` — ${message}` : ''}`,
       recipientWalletId: recipientWalletId.trim(),
       recipientName: recipData.name || '',
       ...(message && { message }),
@@ -629,7 +647,7 @@ router.post('/api/client/transfer', requireDb, async (req, res) => {
     const recipTxRef = adminDb.collection('client_transactions').doc();
     batch.set(recipTxRef, {
       clientId: recipDoc.id, clientName: recipData.name || '',
-      type: 'transfer_received', amount: usd, usdAmount: usd,
+      type: 'transfer_received', amount: netToRecipient, usdAmount: netToRecipient,
       status: 'completed', method: 'Transfert Wallet',
       description: `Reçu de ${senderData.name || senderClientId}${message ? ` — ${message}` : ''}`,
       senderWalletId: senderData.walletId || '',
@@ -639,7 +657,7 @@ router.post('/api/client/transfer', requireDb, async (req, res) => {
     });
     await batch.commit();
 
-    res.json({ success: true, recipientName: recipData.name || '', amount: usd });
+    res.json({ success: true, recipientName: recipData.name || '', amount: netToRecipient, fee: feeAmount });
   } catch (e: any) {
     console.error('[transfer]', e);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
@@ -861,6 +879,21 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
           balance: (cd.balance || 0) + netAmount,
           updatedAt: FieldValue.serverTimestamp(),
         });
+      } else if (status === 'approved' && txData.type === 'withdrawal') {
+        // Apply withdrawal fee if configured
+        try {
+          const settingsSnap = await adminDb.collection('settings').doc('global').get();
+          const feePercent = settingsSnap.exists ? (settingsSnap.data()!.depositFeePercent || 0) : 0;
+          if (feePercent > 0) {
+            const feeAmount = parseFloat((txData.amount * feePercent / 100).toFixed(4));
+            if (feeAmount > 0) {
+              batch.update(adminDb.collection('settings').doc('global'), {
+                feesBalance: FieldValue.increment(feeAmount),
+                updatedAt: FieldValue.serverTimestamp(),
+              });
+            }
+          }
+        } catch {}
       } else if (status === 'rejected' && txData.type === 'withdrawal') {
         batch.update(clientRef, {
           balance: (cd.balance || 0) + txData.amount,
@@ -873,6 +906,25 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
   } catch (e: any) {
     console.error('[transaction/status]', e);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Admin: delete all transaction history ────────────────────────────────────
+router.delete('/api/admin/transactions/all', requireDb, async (req, res) => {
+  try {
+    let total = 0;
+    let snap = await adminDb.collection('client_transactions').limit(400).get();
+    while (!snap.empty) {
+      const batch = adminDb.batch();
+      snap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      total += snap.size;
+      if (snap.size < 400) break;
+      snap = await adminDb.collection('client_transactions').limit(400).get();
+    }
+    res.json({ success: true, deleted: total });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 

@@ -1884,18 +1884,6 @@ const AffiliateEditForm = ({
       ]
     },
     {
-      title: "Gestion des Fonds",
-      items: [
-        { value: 'client-requests', label: 'Demandes Clients', icon: Bell, permission: 'affiliates' },
-        { value: 'agents', label: 'Gestion des Agents', icon: UserCheck, permission: 'affiliates' },
-        { value: 'transfers', label: 'Transferts', icon: ArrowRightLeft, permission: 'affiliates' },
-        { value: 'withdrawals', label: 'Retraits', icon: ArrowUp, permission: 'affiliates' },
-        { value: 'wallet-tx', label: 'Dépôts & Flux', icon: CreditCard, permission: 'affiliates' },
-        { value: 'clients-tx', label: 'Paiements Clients', icon: Wallet, permission: 'affiliates' },
-        { value: 'wallet-management', label: 'Gestion Wallet', icon: DollarSign, permission: 'settings' },
-      ]
-    },
-    {
       title: "Administration & Paramètres",
       items: [
         { value: 'admins', label: 'Administrateurs', icon: Shield, permission: 'super_admin_only' },
@@ -4445,10 +4433,6 @@ const AffiliateEditForm = ({
           </Dialog>
         </TabsContent>
 
-        <TabsContent value="agents" className="space-y-6 pt-6 px-6 pb-20 custom-scrollbar overflow-y-auto h-full">
-          {renderAgents()}
-        </TabsContent>
-
         <TabsContent value="transfers" className="space-y-6 pt-6 px-6 pb-20 custom-scrollbar overflow-y-auto h-full">
           {renderTransfers()}
         </TabsContent>
@@ -5426,7 +5410,11 @@ const AffiliateEditForm = ({
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
-                        <span className="text-sm font-black text-dark">{notif.amount.toLocaleString()} HTG</span>
+                        <span className="text-sm font-black text-dark">
+                          {isDeposit || isWithdrawal
+                            ? `$${(notif.amount || 0).toFixed(2)}`
+                            : `${(notif.amount || 0).toLocaleString()} HTG`}
+                        </span>
                         {notif.method && (
                           <span className="text-[11px] text-gray-500 font-medium">via {notif.method}</span>
                         )}
@@ -6263,7 +6251,11 @@ const AffiliateEditForm = ({
                             )}
                           </div>
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
-                            <span className="font-black text-dark text-sm">{notif.amount?.toLocaleString()} HTG</span>
+                            <span className="font-black text-dark text-sm">
+                              {isDeposit || isWithdrawal
+                                ? `$${(notif.amount || 0).toFixed(2)}`
+                                : `${(notif.amount || 0).toLocaleString()} HTG`}
+                            </span>
                             {isPurchase && (notif as any).productName && (
                               <span className="text-[11px] font-bold text-primary">{(notif as any).productName}</span>
                             )}

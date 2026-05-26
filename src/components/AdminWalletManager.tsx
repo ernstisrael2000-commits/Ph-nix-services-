@@ -3,7 +3,7 @@ import {
   DollarSign, Settings, Smartphone, Bitcoin, Building2, Globe, CreditCard,
   CheckCircle2, XCircle, Clock, ArrowDownToLine, ArrowUpFromLine, ShoppingBag,
   TrendingUp, Users, Wallet, Save, Plus, Trash2, Edit2, X, ToggleLeft, ToggleRight,
-  Loader2, RefreshCw, Filter, Search, ChevronDown, Info
+  Loader2, RefreshCw, Filter, Search, ChevronDown, Info, AlertTriangle, History, Download
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -204,6 +204,8 @@ export default function AdminWalletManager() {
   const [txType, setTxType] = useState('all');
   const [txStatus, setTxStatus] = useState('all');
   const [txMethod, setTxMethod] = useState('all');
+  const [isDeletingHistory, setIsDeletingHistory] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (settings) {
@@ -486,14 +488,46 @@ export default function AdminWalletManager() {
       </div>
 
       {/* ── Transaction History ── */}
-      <div>
-        <h2 className="text-xl font-black text-dark mb-4 flex items-center gap-2">
-          <Filter className="h-5 w-5 text-primary" />
-          Historique complet des transactions
-        </h2>
+      <div className="space-y-4">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-primary/10">
+              <History className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-dark">Historique des Transactions</h2>
+              <p className="text-xs text-gray-400 font-medium">{transactions.length} transaction(s) au total</p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={transactions.length === 0}
+            className="rounded-xl h-10 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 font-bold text-xs flex items-center gap-2 shrink-0"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Supprimer l'historique
+          </Button>
+        </div>
+
+        {/* Summary pills */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: 'Dépôts', count: transactions.filter(t => t.type === 'deposit').length, color: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+            { label: 'Retraits', count: transactions.filter(t => t.type === 'withdrawal').length, color: 'bg-red-50 text-red-700 border-red-100' },
+            { label: 'Transferts', count: transactions.filter(t => t.type === 'transfer_received' || t.type === 'transfer_sent').length, color: 'bg-teal-50 text-teal-700 border-teal-100' },
+            { label: 'Achats', count: transactions.filter(t => t.type === 'purchase').length, color: 'bg-blue-50 text-blue-700 border-blue-100' },
+          ].map(({ label, count, color }) => (
+            <div key={label} className={`rounded-2xl border px-4 py-3 flex items-center justify-between ${color}`}>
+              <span className="text-xs font-bold">{label}</span>
+              <span className="text-lg font-black">{count}</span>
+            </div>
+          ))}
+        </div>
 
         {/* Filters */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="relative col-span-2 sm:col-span-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input value={txSearch} onChange={e => setTxSearch(e.target.value)}
@@ -506,6 +540,7 @@ export default function AdminWalletManager() {
               <SelectItem value="deposit">Dépôt</SelectItem>
               <SelectItem value="withdrawal">Retrait</SelectItem>
               <SelectItem value="purchase">Achat</SelectItem>
+              <SelectItem value="transfer_received">Transfert reçu</SelectItem>
               <SelectItem value="refund">Remboursement</SelectItem>
             </SelectContent>
           </Select>
@@ -528,68 +563,114 @@ export default function AdminWalletManager() {
           </Select>
         </div>
 
-        <div className="text-xs text-subtext mb-2 font-semibold">{filteredTx.length} transaction(s)</div>
+        <p className="text-xs text-gray-400 font-semibold">{filteredTx.length} résultat(s)</p>
 
-        <Card className="border-gray-100 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="px-4 py-3 text-left text-[10px] font-black text-subtext uppercase tracking-widest">Date</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-black text-subtext uppercase tracking-widest">Client</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-black text-subtext uppercase tracking-widest">Type</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-black text-subtext uppercase tracking-widest">Méthode</th>
-                  <th className="px-4 py-3 text-right text-[10px] font-black text-subtext uppercase tracking-widest">Montant</th>
-                  <th className="px-4 py-3 text-center text-[10px] font-black text-subtext uppercase tracking-widest">Statut</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {txLoading ? (
-                  <tr><td colSpan={6} className="py-10 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" /></td></tr>
-                ) : filteredTx.length === 0 ? (
-                  <tr><td colSpan={6} className="py-10 text-center text-subtext text-sm">Aucune transaction trouvée.</td></tr>
-                ) : filteredTx.slice(0, 100).map(tx => {
-                  const usd = tx.usdAmount ?? tx.amount;
-                  const htg = tx.htgAmount ?? tx.htgEquivalent;
-                  const isCredit = tx.type === 'deposit' || tx.type === 'transfer_received' || tx.type === 'refund';
-                  return (
-                    <tr key={tx.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-3 text-xs text-subtext whitespace-nowrap">
-                        {tx.createdAt?.toDate ? format(tx.createdAt.toDate(), 'dd/MM/yy HH:mm', { locale: fr }) : '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="font-bold text-dark text-xs">{tx.clientName || '—'}</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5">
-                          {typeIcons[tx.type] || <Wallet className="h-4 w-4 text-gray-400" />}
-                          <span className="text-xs font-semibold capitalize">{tx.type}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-xs text-subtext">{tx.method || '—'}</span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <p className={`font-black text-sm ${isCredit ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {isCredit ? '+' : '-'}${usd.toFixed(2)}
-                        </p>
-                        {htg && htg > 0 && (
-                          <p className="text-[10px] text-gray-400">≈ {Math.round(htg).toLocaleString()} HTG</p>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${statusColors[tx.status] || 'bg-gray-100 text-gray-600'}`}>
-                          {tx.status}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        {/* Transaction cards */}
+        {txLoading ? (
+          <div className="py-16 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+        ) : filteredTx.length === 0 ? (
+          <div className="py-16 text-center">
+            <History className="h-10 w-10 text-gray-200 mx-auto mb-3" />
+            <p className="text-gray-400 font-medium">Aucune transaction trouvée.</p>
           </div>
-        </Card>
+        ) : (
+          <div className="space-y-2">
+            {filteredTx.slice(0, 100).map(tx => {
+              const usd = tx.usdAmount ?? tx.amount;
+              const htg = tx.htgAmount ?? tx.htgEquivalent;
+              const isCredit = tx.type === 'deposit' || tx.type === 'transfer_received' || tx.type === 'refund';
+              return (
+                <div key={tx.id} className="bg-white border border-gray-100 rounded-2xl px-5 py-4 hover:border-gray-200 hover:shadow-sm transition-all flex items-center gap-4">
+                  {/* Type icon */}
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    isCredit ? 'bg-emerald-50' : 'bg-red-50'
+                  }`}>
+                    {typeIcons[tx.type] || <Wallet className="h-4 w-4 text-gray-400" />}
+                  </div>
+
+                  {/* Main info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-black text-dark text-sm truncate">{tx.clientName || '—'}</p>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${statusColors[tx.status] || 'bg-gray-100 text-gray-600'}`}>
+                        {tx.status === 'approved' ? 'Approuvé' : tx.status === 'pending' ? 'En attente' : tx.status === 'rejected' ? 'Refusé' : tx.status === 'completed' ? 'Complété' : tx.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                      <span className="text-[11px] text-gray-400 capitalize">{tx.type?.replace('_', ' ')}</span>
+                      {tx.method && <span className="text-[11px] text-gray-500">· {tx.method}</span>}
+                      <span className="text-[11px] text-gray-400">
+                        {tx.createdAt?.toDate ? format(tx.createdAt.toDate(), 'dd MMM yyyy, HH:mm', { locale: fr }) : '—'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Amount */}
+                  <div className="text-right shrink-0">
+                    <p className={`font-black text-base ${isCredit ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {isCredit ? '+' : '-'}${usd.toFixed(2)}
+                    </p>
+                    {htg && htg > 0 && (
+                      <p className="text-[10px] text-gray-400">≈ {Math.round(htg).toLocaleString()} HTG</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {filteredTx.length > 100 && (
+              <p className="text-center text-xs text-gray-400 py-3 font-medium">
+                Affichage des 100 premières sur {filteredTx.length} transactions
+              </p>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* ── Delete History Confirm Dialog ── */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="max-w-sm rounded-3xl">
+          <DialogHeader>
+            <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-red-50 border border-red-100 mx-auto mb-2">
+              <AlertTriangle className="h-8 w-8 text-red-500" />
+            </div>
+            <DialogTitle className="font-black text-dark text-center text-xl">Supprimer l'historique</DialogTitle>
+            <DialogDescription className="text-center text-sm text-gray-500">
+              Cette action va <span className="font-black text-red-600">supprimer définitivement</span> les{' '}
+              <span className="font-black">{transactions.length}</span> transactions enregistrées.
+              <br /><br />
+              Cette action est irréversible.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 mt-2">
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} className="flex-1 rounded-2xl h-12">
+              Annuler
+            </Button>
+            <Button
+              disabled={isDeletingHistory}
+              onClick={async () => {
+                setIsDeletingHistory(true);
+                try {
+                  const res = await fetch('/api/admin/transactions/all', { method: 'DELETE' });
+                  const data = await res.json();
+                  if (data.success) {
+                    toast.success(`${data.deleted} transaction(s) supprimées.`);
+                    setShowDeleteConfirm(false);
+                  } else {
+                    toast.error(data.error || "Erreur lors de la suppression.");
+                  }
+                } catch {
+                  toast.error("Erreur réseau.");
+                } finally {
+                  setIsDeletingHistory(false);
+                }
+              }}
+              className="flex-1 rounded-2xl h-12 bg-red-600 hover:bg-red-700 text-white font-black border-0"
+            >
+              {isDeletingHistory ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Supprimer tout'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Method dialog */}
       <Dialog open={!!editingMethod} onOpenChange={v => { if (!v) setEditingMethod(null); }}>
