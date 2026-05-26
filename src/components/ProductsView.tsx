@@ -115,6 +115,15 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange 
   const [isProductDetailOpen, setIsProductDetailOpen] = useState(false);
   const [customAmountUSD, setCustomAmountUSD] = useState('');
 
+  // Game catalog
+  const [selectedGame, setSelectedGame] = useState<any>(null);
+  const [isGameCatalogOpen, setIsGameCatalogOpen] = useState(false);
+
+  const handleGameClick = (game: any) => {
+    setSelectedGame(game);
+    setIsGameCatalogOpen(true);
+  };
+
   // Payment modal (for games + products via WhatsApp)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentTarget, setPaymentTarget] = useState<{ name: string; price: string; type: string } | null>(null);
@@ -289,7 +298,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange 
                 </div>
                 <div>
                   <h2 className="font-black text-dark text-base leading-none">Top-up Jeux</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">Rechargez votre compte de jeu</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Cliquez sur un jeu pour voir le catalogue</p>
                 </div>
               </div>
               {gamesLoading ? (
@@ -302,69 +311,46 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange 
                   <p className="text-gray-400 text-sm">Aucun jeu disponible pour le moment.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
                   {games.map((game, i) => (
-                    <motion.div
+                    <motion.button
                       key={game.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.07 }}
-                      className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm"
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: i * 0.05 }}
+                      onClick={() => handleGameClick(game)}
+                      className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all text-left group w-full"
                     >
-                      <div className="flex items-center gap-4 p-4 border-b border-gray-50">
-                        <div className="h-16 w-16 rounded-xl overflow-hidden bg-gray-100 shrink-0">
-                          <img
-                            src={game.image}
-                            alt={game.name}
-                            className="w-full h-full object-cover"
-                            onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/game/100/100'; }}
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-black text-dark text-base leading-tight">{game.name}</h3>
-                          {game.description && <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{game.description}</p>}
-                          {game.priceRange && (
-                            <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 text-[10px] font-black">
-                              <Star className="h-2.5 w-2.5 fill-current" />
-                              {game.priceRange}
-                            </span>
-                          )}
+                      <div className="relative aspect-square overflow-hidden bg-gray-100">
+                        <img
+                          src={game.image}
+                          alt={game.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/game/400/400'; }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                        {(game.catalog?.length > 0) && (
+                          <div className="absolute top-2 right-2 bg-purple-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full">
+                            {game.catalog.length} offres
+                          </div>
+                        )}
+                        <div className="absolute bottom-2 left-2 right-2">
+                          <p className="text-white font-black text-xs leading-tight line-clamp-2 drop-shadow">{game.name}</p>
                         </div>
                       </div>
-                      {game.catalog && game.catalog.length > 0 ? (
-                        <div className="p-3 space-y-2">
-                          <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider px-1">Catalogue</p>
-                          {game.catalog.map((item: any) => (
-                            <div
-                              key={item.id}
-                              className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100 hover:border-purple-200 transition-colors"
-                            >
-                              <div>
-                                <p className="text-sm font-bold text-gray-800">{item.name}</p>
-                                <p className="text-xs text-purple-600 font-black">{item.price}</p>
-                              </div>
-                              <Button
-                                size="sm"
-                                onClick={() => handleBuyRequested({ name: `${game.name} — ${item.name}`, price: item.price, type: 'game' })}
-                                className="h-8 px-4 text-xs font-black bg-purple-600 text-white hover:bg-purple-700 rounded-xl border-0 shadow-sm"
-                              >
-                                Commander
-                              </Button>
-                            </div>
-                          ))}
+                      <div className="p-2.5">
+                        {game.priceRange && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-50 text-purple-600 text-[9px] font-black">
+                            <Star className="h-2.5 w-2.5 fill-current" />
+                            {game.priceRange}
+                          </span>
+                        )}
+                        <div className="flex items-center gap-1 mt-1.5 text-[9px] text-purple-600 font-black">
+                          <ArrowRight className="h-3 w-3" />
+                          Voir catalogue
                         </div>
-                      ) : (
-                        <div className="p-3">
-                          <Button
-                            onClick={() => openWhatsApp(game.whatsappMessage || `Bonjour, je souhaite faire un top-up pour le jeu : ${game.name}.`)}
-                            className="w-full h-10 bg-purple-600 hover:bg-purple-700 text-white text-sm font-black rounded-xl border-0"
-                          >
-                            <MessageCircle className="h-4 w-4 mr-2" />
-                            Commander via WhatsApp
-                          </Button>
-                        </div>
-                      )}
-                    </motion.div>
+                      </div>
+                    </motion.button>
                   ))}
                 </div>
               )}
@@ -393,42 +379,41 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange 
                   <p className="text-gray-400 text-sm">Aucun produit disponible pour le moment.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   {products.map((product, i) => (
                     <motion.div
                       key={product.id}
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: i * 0.07 }}
+                      transition={{ delay: i * 0.06 }}
                       onClick={() => handleProductClick(product)}
-                      className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group"
+                      className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer group active:scale-[0.98]"
                     >
-                      <div className="relative aspect-video overflow-hidden bg-gray-100">
+                      <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
                         <img
                           src={product.image}
                           alt={product.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/400/300'; }}
                         />
-                        <div className="absolute top-3 right-3">
-                          <span className="px-3 py-1 rounded-full text-xs font-black bg-primary text-white shadow-lg">
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
+                        <div className="absolute top-2 right-2">
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-primary text-white shadow-md">
                             {product.price}
                           </span>
                         </div>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="absolute bottom-2 left-2 right-2">
+                          <p className="text-white font-black text-[11px] leading-tight line-clamp-2 drop-shadow">{product.name}</p>
+                        </div>
                       </div>
-                      <div className="p-4">
-                        <h3 className="font-black text-dark text-sm leading-tight">{product.name}</h3>
-                        <p className="text-[11px] text-gray-400 mt-1 line-clamp-2">{product.description || 'Service digital Rena — Livraison rapide'}</p>
-                        <div className="flex items-center justify-between mt-3">
-                          <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
-                            <Clock className="h-3 w-3" />
-                            Livraison 24/7
-                          </div>
-                          <div className="flex items-center gap-1 text-primary text-[10px] font-black group-hover:translate-x-0.5 transition-transform">
-                            Voir détails
-                            <ArrowRight className="h-3 w-3" />
-                          </div>
+                      <div className="p-2.5">
+                        <p className="text-[10px] text-gray-400 line-clamp-2 leading-relaxed">{product.description || 'Service digital Rena'}</p>
+                        <div className="flex items-center gap-1 mt-2 text-[9px] text-primary font-black">
+                          <Clock className="h-2.5 w-2.5" />
+                          <span>24/7</span>
+                          <span className="ml-auto flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                            Détails <ArrowRight className="h-2.5 w-2.5" />
+                          </span>
                         </div>
                       </div>
                     </motion.div>
@@ -440,6 +425,115 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange 
 
         </AnimatePresence>
       </div>
+
+      {/* ── Game Catalog Dialog ── */}
+      <Dialog open={isGameCatalogOpen} onOpenChange={setIsGameCatalogOpen}>
+        <DialogContent className="sm:max-w-lg border-0 bg-white shadow-2xl flex flex-col overflow-hidden p-0 max-h-[90vh]" showCloseButton={false}>
+          {selectedGame && (
+            <>
+              {/* Header with game image */}
+              <div className="relative h-44 shrink-0 overflow-hidden bg-gray-900">
+                <img
+                  src={selectedGame.image}
+                  alt={selectedGame.name}
+                  className="w-full h-full object-cover opacity-80"
+                  onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/game/600/300'; }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 via-gray-900/30 to-transparent" />
+                <button
+                  onClick={() => setIsGameCatalogOpen(false)}
+                  className="absolute top-3 right-3 h-8 w-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/60 transition-colors border border-white/10"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                <div className="absolute bottom-4 left-4 right-14">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2 py-0.5 rounded-full bg-purple-600 text-white text-[9px] font-black uppercase tracking-wider">
+                      {selectedGame.catalog?.length > 0 ? `${selectedGame.catalog.length} offres` : 'Top-up'}
+                    </span>
+                  </div>
+                  <h2 className="text-xl font-black text-white leading-tight">{selectedGame.name}</h2>
+                  {selectedGame.description && (
+                    <p className="text-white/60 text-xs mt-0.5 line-clamp-1">{selectedGame.description}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Catalogue body */}
+              <div className="flex-1 overflow-y-auto">
+                {selectedGame.catalog && selectedGame.catalog.length > 0 ? (
+                  <div className="p-4 space-y-3">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Choisissez votre offre</p>
+                    <div className="grid grid-cols-1 gap-2.5">
+                      {selectedGame.catalog.map((item: any, idx: number) => (
+                        <motion.div
+                          key={item.id || idx}
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: idx * 0.04 }}
+                          className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 border border-gray-100 hover:border-purple-200 hover:bg-purple-50/30 transition-all group"
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className="h-10 w-10 rounded-xl bg-purple-100 flex items-center justify-center shrink-0">
+                              <Gamepad2 className="h-5 w-5 text-purple-600" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-black text-gray-900 leading-tight">{item.name}</p>
+                              <p className="text-base font-black text-purple-600 mt-0.5">{item.price}</p>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setIsGameCatalogOpen(false);
+                              handleBuyRequested({ name: `${selectedGame.name} — ${item.name}`, price: item.price, type: 'game' });
+                            }}
+                            className="h-9 px-4 text-xs font-black bg-purple-600 text-white hover:bg-purple-700 rounded-xl border-0 shadow-md shadow-purple-200 shrink-0 ml-3 group-hover:shadow-purple-300 transition-all"
+                          >
+                            Commander
+                          </Button>
+                        </motion.div>
+                      ))}
+                    </div>
+
+                    {/* Wallet pay note if logged in */}
+                    {loggedClient && (
+                      <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+                        <Wallet className="h-4 w-4 text-emerald-600 shrink-0" />
+                        <p className="text-[10px] text-emerald-700 font-bold">
+                          Solde disponible : {Math.round((effectiveClient?.balance ?? loggedClient.balance ?? 0) * exchangeRate).toLocaleString()} HTG
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-6 space-y-4">
+                    <p className="text-sm text-gray-500 text-center">Contactez-nous sur WhatsApp pour commander.</p>
+                    <Button
+                      onClick={() => {
+                        setIsGameCatalogOpen(false);
+                        openWhatsApp(selectedGame.whatsappMessage || `Bonjour Rena, je souhaite faire un top-up pour le jeu : ${selectedGame.name}.`);
+                      }}
+                      className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-2xl border-0 flex items-center justify-center gap-2"
+                    >
+                      <MessageCircle className="h-5 w-5" />
+                      Commander via WhatsApp
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer note */}
+              <div className="px-4 py-3 border-t border-gray-100 bg-gray-50 shrink-0">
+                <p className="text-[10px] text-gray-400 text-center font-bold flex items-center justify-center gap-1.5">
+                  <ShieldCheck className="h-3 w-3 text-primary" />
+                  Paiement sécurisé · Livraison rapide · Support 24/7
+                </p>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ── Card Recharge — Step 1 ── */}
       <Dialog open={isRechargeDialogOpen} onOpenChange={setIsRechargeDialogOpen}>
