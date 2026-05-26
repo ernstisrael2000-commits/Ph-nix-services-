@@ -118,9 +118,11 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange 
   // Game catalog
   const [selectedGame, setSelectedGame] = useState<any>(null);
   const [isGameCatalogOpen, setIsGameCatalogOpen] = useState(false);
+  const [gamePlayerId, setGamePlayerId] = useState('');
 
   const handleGameClick = (game: any) => {
     setSelectedGame(game);
+    setGamePlayerId('');
     setIsGameCatalogOpen(true);
   };
 
@@ -144,10 +146,12 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange 
   const handleFinalPaymentSubmit = () => {
     if (!paymentTarget || !selectedPaymentMethod) return;
     const methodLabel = selectedPaymentMethod === 'moncash' ? 'Mon Cash' : selectedPaymentMethod === 'natcash' ? 'Natcash' : 'Admi';
-    const message = `Bonjour Rena,\n\nJe souhaite commander :\n📦 *${paymentTarget.name}*\n💰 Prix : *${paymentTarget.price}*\n\n💳 Mode de paiement : *${methodLabel}*\n📝 Infos Transaction : *${paymentTransactionInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`;
+    const playerIdLine = (paymentTarget.type === 'game' && gamePlayerId.trim()) ? `\n🎮 ID Joueur : *${gamePlayerId.trim()}*` : '';
+    const message = `Bonjour Rena,\n\nJe souhaite commander :\n📦 *${paymentTarget.name}*\n💰 Prix : *${paymentTarget.price}*${playerIdLine}\n\n💳 Mode de paiement : *${methodLabel}*\n📝 Infos Transaction : *${paymentTransactionInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`;
     openWhatsApp(message);
     setIsPaymentModalOpen(false);
     setPaymentTransactionInfo('');
+    setGamePlayerId('');
   };
 
   const handleCardClick = (card: any) => {
@@ -461,6 +465,23 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange 
 
               {/* Catalogue body */}
               <div className="flex-1 overflow-y-auto">
+                {/* Votre ID */}
+                <div className="px-4 pt-4 pb-2">
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">
+                    Votre ID
+                  </label>
+                  <div className="relative">
+                    <LucideIcons.Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400" />
+                    <input
+                      type="text"
+                      value={gamePlayerId}
+                      onChange={e => setGamePlayerId(e.target.value)}
+                      placeholder="Entrez votre ID de joueur"
+                      className="w-full pl-10 pr-4 h-11 rounded-2xl border border-gray-200 bg-gray-50 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-300 transition-all"
+                    />
+                  </div>
+                </div>
+
                 {selectedGame.catalog && selectedGame.catalog.length > 0 ? (
                   <div className="p-4 space-y-3">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Choisissez votre offre</p>

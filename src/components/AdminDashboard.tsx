@@ -8378,7 +8378,7 @@ const AffiliateEditForm = ({
               </div>
               <div className="space-y-3">
                 {(formationFormData.chapters || []).map((chapter, idx) => {
-                  const hasQuiz = !!(chapter.quiz?.questions?.length);
+                  const hasQuiz = !!(chapter.quiz);
                   const quizEnabled = hasQuiz || false;
                   return (
                     <div key={chapter.id} className="rounded-2xl bg-gray-50 border border-gray-100 overflow-hidden">

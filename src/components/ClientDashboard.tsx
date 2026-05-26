@@ -640,8 +640,43 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
 
           <form onSubmit={handleDeposit} className="p-5 space-y-4 bg-white overflow-y-auto flex-1">
 
-            {/* ── Prominent account numbers banner ── */}
-            {depositMethods.filter(m => m.number || m.address).length > 0 && (
+            {/* ── Account info for selected method ── */}
+            {depositMethod && (depositMethod.number || depositMethod.address) ? (
+              <div className="rounded-2xl overflow-hidden border border-emerald-100 bg-emerald-50">
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600">
+                  <Smartphone className="h-3.5 w-3.5 text-white" />
+                  <p className="text-[10px] font-black text-white uppercase tracking-widest">Compte {depositMethod.name}</p>
+                </div>
+                <div className="p-3 space-y-2.5">
+                  <div className="flex items-center justify-between gap-3 bg-white rounded-xl p-3 border border-emerald-100">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xl shrink-0">{depositMethod.icon}</span>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide leading-none">{depositMethod.name}</p>
+                        {depositMethod.accountName && <p className="text-[10px] text-gray-400 leading-none mt-0.5">{depositMethod.accountName}</p>}
+                        <p className="font-black text-gray-900 font-mono text-sm mt-0.5 truncate">{depositMethod.number || depositMethod.address}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(depositMethod.number || depositMethod.address || '');
+                        toast.success(`Numéro ${depositMethod.name} copié !`);
+                      }}
+                      className="shrink-0 h-9 w-9 flex items-center justify-center rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 hover:bg-emerald-100 transition-colors active:scale-95"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {depositMethod.instructions && (
+                    <div className="flex items-start gap-2 p-2.5 rounded-xl bg-blue-50 border border-blue-100">
+                      <Info className="h-3.5 w-3.5 text-blue-500 mt-0.5 shrink-0" />
+                      <p className="text-[11px] text-blue-700 leading-relaxed">{depositMethod.instructions}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : !depositMethod && depositMethods.filter(m => m.number || m.address).length > 0 ? (
               <div className="rounded-2xl overflow-hidden border border-emerald-100 bg-emerald-50">
                 <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600">
                   <Smartphone className="h-3.5 w-3.5 text-white" />
@@ -670,17 +705,9 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                       </button>
                     </div>
                   ))}
-                  {depositMethods.find(m => m.instructions) && (
-                    <div className="flex items-start gap-2 p-2.5 rounded-xl bg-blue-50 border border-blue-100">
-                      <Info className="h-3.5 w-3.5 text-blue-500 mt-0.5 shrink-0" />
-                      <p className="text-[11px] text-blue-700 leading-relaxed">
-                        {depositMethods.find(m => m.instructions)?.instructions}
-                      </p>
-                    </div>
-                  )}
                 </div>
               </div>
-            )}
+            ) : null}
 
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode de paiement</Label>

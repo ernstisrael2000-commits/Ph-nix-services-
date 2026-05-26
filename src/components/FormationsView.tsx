@@ -8,8 +8,9 @@ import {
   ChevronDown, ChevronUp, Video, Download, ExternalLink,
   Smartphone, CreditCard, Send, AlertCircle, Search,
   Heart, Trophy, BarChart3, Sparkles, Filter, Grid,
-  BookMarked, ArrowRight, Shield
+  BookMarked, ArrowRight, Shield, LogIn
 } from 'lucide-react';
+import { Dialog, DialogContent } from './ui/dialog';
 import CoursePlayer from './CoursePlayer';
 import { Button } from './ui/button';
 import { Formation, FormationModule, FormationChapter } from '../types';
@@ -180,8 +181,17 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
     setFavorites(newFavs);
   };
 
+  // ── Login prompt ─────────────────────────────────────────────────────────────
+  const [pendingFormation, setPendingFormation] = useState<Formation | null>(null);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+
   // ── Open detail ─────────────────────────────────────────────────────────────
   const openDetail = (f: Formation) => {
+    if (!loggedClient) {
+      setPendingFormation(f);
+      setShowLoginPrompt(true);
+      return;
+    }
     setSelected(f);
     setPaymentStep('detail');
     setSelectedPayMethod(null);
@@ -300,6 +310,48 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
   // ── Render: Catalog ─────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50">
+
+      {/* ── Login prompt dialog ─────────────────────────────────────────────── */}
+      <Dialog open={showLoginPrompt} onOpenChange={open => { setShowLoginPrompt(open); if (!open) setPendingFormation(null); }}>
+        <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl p-0 overflow-hidden">
+          <div className="bg-gradient-to-br from-violet-600 to-purple-700 p-6 text-white text-center">
+            <div className="h-14 w-14 rounded-2xl bg-white/20 flex items-center justify-center mx-auto mb-3">
+              <GraduationCap className="h-7 w-7 text-white" />
+            </div>
+            <h2 className="text-lg font-black text-white">Connexion requise</h2>
+            <p className="text-white/70 text-xs mt-1">Connectez-vous pour accéder aux formations</p>
+          </div>
+          <div className="p-6 space-y-4 bg-white">
+            {pendingFormation && (
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-violet-50 border border-violet-100">
+                <div className={`h-10 w-10 rounded-xl overflow-hidden shrink-0 bg-gradient-to-br ${levelGradients[pendingFormation.level] || 'from-violet-500 to-purple-700'} flex items-center justify-center`}>
+                  {pendingFormation.coverImage
+                    ? <img src={pendingFormation.coverImage} alt="" className="w-full h-full object-cover" />
+                    : <GraduationCap className="h-5 w-5 text-white/40" />}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-black text-gray-900 text-sm truncate">{pendingFormation.title}</p>
+                  <p className="text-xs text-violet-600 font-semibold">
+                    {pendingFormation.price === 0 ? 'Gratuit' : `${(pendingFormation.price || 0).toLocaleString()} HTG`}
+                  </p>
+                </div>
+              </div>
+            )}
+            <button
+              onClick={() => { setShowLoginPrompt(false); onOpenWallet(); }}
+              className="w-full h-12 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-black text-sm flex items-center justify-center gap-2 transition-colors shadow-lg shadow-violet-500/20"
+            >
+              <LogIn className="h-4 w-4" /> Se connecter avec Google
+            </button>
+            <button
+              onClick={() => setShowLoginPrompt(false)}
+              className="w-full h-10 rounded-xl border border-gray-200 text-gray-500 text-sm font-semibold hover:bg-gray-50 transition-colors"
+            >
+              Annuler
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── HERO ────────────────────────────────────────────────────────────── */}
       <div className="relative bg-gradient-to-br from-slate-900 via-violet-950 to-slate-900 overflow-hidden">
