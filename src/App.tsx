@@ -269,6 +269,8 @@ export default function App() {
             loggedClient={loggedClient}
             onOpenWallet={() => setShowClientDashboard(true)}
             onRequestAuth={() => setShowAuthModal(true)}
+            formationsTab={formationsTab}
+            onFormationsTabChange={setFormationsTab}
           />
         )}
 

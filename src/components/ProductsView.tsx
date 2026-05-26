@@ -100,7 +100,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange 
     if (settings?.whatsappAdminNumber) (window as any).__renaAdminPhone = settings.whatsappAdminNumber;
   }, [settings?.whatsappAdminNumber]);
 
-  const [activeTab, setActiveTab] = useState<TabKey>('cards');
+  const [activeTab, setActiveTab] = useState<TabKey>('products');
 
   // Card recharge
   const [selectedCardForRecharge, setSelectedCardForRecharge] = useState<any>(null);

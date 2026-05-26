@@ -43,6 +43,10 @@ function getNoteKey(formationId: string, moduleId: string) {
 }
 
 export default function CoursePlayer({ formation, loggedClient, onBack }: CoursePlayerProps) {
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, []);
+
   const [completedIds, setCompletedIds] = useState<string[]>([]);
   const [currentModuleId, setCurrentModuleId] = useState<string | null>(null);
   const [lastPositionSeconds, setLastPositionSeconds] = useState(0);
