@@ -2067,6 +2067,7 @@ const AffiliateEditForm = ({
   const [isAgentDialogOpen, setIsAgentDialogOpen] = useState(false);
   const [agentName, setAgentName] = useState('');
   const [agentPhone, setAgentPhone] = useState('');
+  const [agentEmail, setAgentEmail] = useState('');
   const [isAgentBalanceDialogOpen, setIsAgentBalanceDialogOpen] = useState(false);
   const [isAutoApproveOn, setIsAutoApproveOn] = useState(true);
   const [nextAutoApproveIn, setNextAutoApproveIn] = useState(60);
@@ -2851,17 +2852,18 @@ const AffiliateEditForm = ({
   };
 
   const handleAddAgent = async () => {
-    if (!agentName || !agentPhone) {
-      toast.error("Veuillez remplir tous les champs.");
+    if (!agentName || !agentEmail) {
+      toast.error("Le nom et l'email Google sont requis.");
       return;
     }
     setIsSaving(true);
     try {
-      const code = await createAgent(agentName, agentPhone);
-      toast.success(`Agent créé avec succès ! Code: ${code}`);
+      const code = await createAgent(agentName, agentPhone, agentEmail.trim().toLowerCase());
+      toast.success(`Agent créé ! Code: ${code}. L'agent peut maintenant se connecter avec Google.`);
       setIsAgentDialogOpen(false);
       setAgentName('');
       setAgentPhone('');
+      setAgentEmail('');
     } catch (error) {
       toast.error("Erreur lors de la création de l'agent.");
     } finally {
@@ -3245,18 +3247,31 @@ const AffiliateEditForm = ({
               Un code unique de 8 chiffres sera généré automatiquement. L'agent peut l'utiliser pour valider les dépôts physiques.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-6 pt-4">
+          <div className="space-y-5 pt-4">
+            <div className="p-3 rounded-2xl bg-blue-50 border border-blue-100 text-xs text-blue-700 font-medium">
+              L'agent se connectera uniquement via son compte Google. L'email doit correspondre exactement.
+            </div>
             <div className="space-y-2">
-              <Label className="text-xs font-black uppercase tracking-widest text-gray-500 ml-1">Nom de l'Agent</Label>
+              <Label className="text-xs font-black uppercase tracking-widest text-gray-500 ml-1">Nom de l'Agent *</Label>
               <Input 
                 value={agentName}
                 onChange={(e) => setAgentName(e.target.value)}
-                placeholder="Ex: Jean Agent"
+                placeholder="Ex: Jean Pierre"
                 className="h-14 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-black uppercase tracking-widest text-gray-500 ml-1">Numéro de Téléphone</Label>
+              <Label className="text-xs font-black uppercase tracking-widest text-gray-500 ml-1">Email Google de l'Agent *</Label>
+              <Input 
+                type="email"
+                value={agentEmail}
+                onChange={(e) => setAgentEmail(e.target.value)}
+                placeholder="agent@gmail.com"
+                className="h-14 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-widest text-gray-500 ml-1">Téléphone (optionnel)</Label>
               <Input 
                 value={agentPhone}
                 onChange={(e) => setAgentPhone(e.target.value)}
@@ -3266,7 +3281,7 @@ const AffiliateEditForm = ({
             </div>
           </div>
           <DialogFooter className="mt-8 flex gap-3">
-            <Button variant="ghost" onClick={() => setIsAgentDialogOpen(false)} className="rounded-2xl h-12 flex-1">Annuler</Button>
+            <Button variant="ghost" onClick={() => { setIsAgentDialogOpen(false); setAgentName(''); setAgentPhone(''); setAgentEmail(''); }} className="rounded-2xl h-12 flex-1">Annuler</Button>
             <Button 
               onClick={handleAddAgent}
               disabled={isSaving}
@@ -6781,6 +6796,85 @@ const AffiliateEditForm = ({
                       </CardContent>
                     </Card>
                   </div>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t">
+                  <h3 className="text-sm font-bold text-dark flex items-center gap-2">
+                    <span className="text-base">💰</span>
+                    Gestion des Frais
+                  </h3>
+
+                  {/* Fees balance display */}
+                  <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-5 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">Solde Frais Accumulés</p>
+                      <p className="text-3xl font-black text-emerald-700">
+                        ${((settings?.feesBalance || 0)).toFixed(2)}
+                      </p>
+                      <p className="text-xs text-emerald-600/70 font-medium mt-0.5">
+                        ≈ {((settings?.feesBalance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
+                      </p>
+                    </div>
+                    <Button
+                      disabled={!settings?.feesBalance || settings.feesBalance <= 0 || isSaving}
+                      onClick={async () => {
+                        if (!settings?.feesBalance || settings.feesBalance <= 0) return;
+                        setIsSaving(true);
+                        try {
+                          await fetch('/api/admin/fees/withdraw', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: settings.feesBalance }) });
+                          await updateSettings({ feesBalance: 0 });
+                          toast.success(`${settings.feesBalance.toFixed(2)}$ de frais retirés !`);
+                        } catch { toast.error("Erreur lors du retrait des frais."); }
+                        finally { setIsSaving(false); }
+                      }}
+                      className="rounded-2xl h-12 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-widest border-0 shadow-lg shadow-emerald-500/20 shrink-0 disabled:opacity-40"
+                    >
+                      Retirer
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-gray-500">Frais Dépôt (%)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="20"
+                        step="0.1"
+                        placeholder="0"
+                        value={pendingSettings?.depositFeePercent ?? settings?.depositFeePercent ?? ''}
+                        onChange={(e) => setPendingSettings(prev => ({ ...prev, depositFeePercent: parseFloat(e.target.value) || 0 }))}
+                        className="rounded-xl border-gray-100 font-bold text-center"
+                      />
+                      <p className="text-[10px] text-gray-400">Ex: 2 = 2% déduit à l'approbation</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-gray-500">Frais Transfert (%)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="20"
+                        step="0.1"
+                        placeholder="0"
+                        value={pendingSettings?.transferFeePercent ?? settings?.transferFeePercent ?? ''}
+                        onChange={(e) => setPendingSettings(prev => ({ ...prev, transferFeePercent: parseFloat(e.target.value) || 0 }))}
+                        className="rounded-xl border-gray-100 font-bold text-center"
+                      />
+                      <p className="text-[10px] text-gray-400">Ex: 1 = 1% déduit du montant</p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={async () => {
+                      await updateSettings({
+                        depositFeePercent: pendingSettings.depositFeePercent !== undefined ? pendingSettings.depositFeePercent : (settings?.depositFeePercent || 0),
+                        transferFeePercent: pendingSettings.transferFeePercent !== undefined ? pendingSettings.transferFeePercent : (settings?.transferFeePercent || 0),
+                      });
+                      toast.success("Frais mis à jour !");
+                    }}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl border-0"
+                  >
+                    Enregistrer les frais
+                  </Button>
                 </div>
 
                 <div className="space-y-2 pt-4 border-t">

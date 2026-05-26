@@ -24,12 +24,10 @@ import { Agent, WalletTransaction, Affiliate } from '../types';
 /**
  * Creates a new agent with an automatic 8-digit ID.
  */
-export const createAgent = async (name: string, phone: string) => {
+export const createAgent = async (name: string, phone: string, email?: string) => {
   try {
-    // Generate an 8-digit unique code
     let agentCode = '';
     let isUnique = false;
-    
     while (!isUnique) {
       agentCode = Math.floor(10000000 + Math.random() * 90000000).toString();
       const q = query(collection(db, 'agents'), where('agentCode', '==', agentCode));
@@ -41,6 +39,7 @@ export const createAgent = async (name: string, phone: string) => {
       agentCode,
       name,
       phone,
+      ...(email && { email }),
       balance: 0,
       status: 'active',
       walletId: `W-AGT-${agentCode}`,

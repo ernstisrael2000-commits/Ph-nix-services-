@@ -228,6 +228,10 @@ export interface AppSettings {
   maxDepositUSD?: number;
   minWithdrawalUSD?: number;
   maxWithdrawalUSD?: number;
+  // Fees
+  depositFeePercent?: number;
+  transferFeePercent?: number;
+  feesBalance?: number;
 }
 
 export interface Game {

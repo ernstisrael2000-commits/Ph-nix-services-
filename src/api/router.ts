@@ -840,8 +840,25 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
     if (clientSnap.exists) {
       const cd = clientSnap.data()!;
       if (status === 'approved' && txData.type === 'deposit') {
+        // Apply deposit fee if configured
+        let netAmount = txData.amount;
+        let feeAmount = 0;
+        try {
+          const settingsSnap = await adminDb.collection('settings').doc('global').get();
+          const feePercent = settingsSnap.exists ? (settingsSnap.data()!.depositFeePercent || 0) : 0;
+          if (feePercent > 0) {
+            feeAmount = parseFloat((txData.amount * feePercent / 100).toFixed(4));
+            netAmount = txData.amount - feeAmount;
+          }
+          if (feeAmount > 0) {
+            batch.update(adminDb.collection('settings').doc('global'), {
+              feesBalance: FieldValue.increment(feeAmount),
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+          }
+        } catch {}
         batch.update(clientRef, {
-          balance: (cd.balance || 0) + txData.amount,
+          balance: (cd.balance || 0) + netAmount,
           updatedAt: FieldValue.serverTimestamp(),
         });
       } else if (status === 'rejected' && txData.type === 'withdrawal') {
@@ -856,6 +873,30 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
   } catch (e: any) {
     console.error('[transaction/status]', e);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Admin: withdraw accumulated fees ────────────────────────────────────────
+router.post('/api/admin/fees/withdraw', requireDb, async (req, res) => {
+  try {
+    const { amount } = req.body;
+    const settingsRef = adminDb.collection('settings').doc('global');
+    const snap = await settingsRef.get();
+    const current = snap.exists ? (snap.data()!.feesBalance || 0) : 0;
+    if (current <= 0) return res.status(400).json({ error: 'Aucun frais à retirer.' });
+    await settingsRef.update({
+      feesBalance: 0,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    await adminDb.collection('admin_notifications').add({
+      type: 'fees_withdrawal',
+      amount: amount || current,
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    res.json({ success: true, withdrawn: current });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
