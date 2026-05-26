@@ -297,6 +297,41 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
         </div>
       </section>
 
+      {/* ── Product categories preview ── */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-black text-dark">Nos Produits</h2>
+          <button
+            onClick={() => onViewChange('products')}
+            className="flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+          >
+            Voir tout <ArrowRight className="h-3 w-3" />
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-2.5">
+          {[
+            { label: 'Cartes Cadeaux', icon: LucideIcons.CreditCard, color: 'from-rose-500 to-pink-600', bg: 'bg-rose-50', text: 'text-rose-600', desc: 'iTunes, Google Play…' },
+            { label: 'Recharge Jeux', icon: LucideIcons.Gamepad2, color: 'from-indigo-500 to-violet-600', bg: 'bg-indigo-50', text: 'text-indigo-600', desc: 'Free Fire, PUBG…' },
+            { label: 'Digitaux', icon: LucideIcons.Zap, color: 'from-amber-400 to-orange-500', bg: 'bg-amber-50', text: 'text-amber-600', desc: 'VPN, comptes…' },
+          ].map((cat, i) => (
+            <motion.button
+              key={cat.label}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.07 }}
+              onClick={() => onViewChange('products')}
+              className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 p-3 text-left"
+            >
+              <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${cat.color} flex items-center justify-center mb-2 group-hover:scale-110 transition-transform`}>
+                <cat.icon className="h-4.5 w-4.5 text-white h-[18px] w-[18px]" />
+              </div>
+              <p className="text-[11px] font-black text-dark leading-tight">{cat.label}</p>
+              <p className="text-[9px] text-gray-400 mt-0.5 leading-tight truncate">{cat.desc}</p>
+            </motion.button>
+          ))}
+        </div>
+      </section>
+
       {/* ── Why Rena ── */}
       <section className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
         <h2 className="text-base font-black text-dark mb-4">Pourquoi choisir Rena ?</h2>

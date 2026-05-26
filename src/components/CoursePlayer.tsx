@@ -295,12 +295,35 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
     const nextIdx = currentIdx + 1;
     if (isCompleted(currentModule!)) {
       if (!isLocked(next, nextIdx)) { setCurrentModuleId(next.id ?? null); scrollTop(); }
-      else { toast.error('🔒 La leçon suivante est verrouillée.'); }
+      else {
+        // If locked because the current chapter has an unplayed quiz, open it
+        const cur = currentModule!;
+        if (cur.chapterId && next.chapterId && cur.chapterId !== next.chapterId) {
+          const chapter = (formation.chapters || []).find(c => c.id === cur.chapterId);
+          if (chapter?.quiz?.questions?.length && !quizResults[chapter.id]?.passed) {
+            openQuiz(chapter);
+            return;
+          }
+        }
+        toast.error('🔒 La leçon suivante est verrouillée.');
+      }
       return;
     }
     if (!currentModule?.videoUrl) {
+      // Check ahead of time if completing this will trigger a quiz (to avoid advancing)
+      const willTriggerQuiz = (() => {
+        if (!currentModule?.chapterId) return false;
+        const chapterModules = modules.filter(m => m.chapterId === currentModule!.chapterId);
+        const isLast = chapterModules[chapterModules.length - 1]?.id === currentModuleId;
+        if (!isLast) return false;
+        const chapter = (formation.chapters || []).find(c => c.id === currentModule!.chapterId);
+        return !!(chapter?.quiz?.questions?.length && !quizResults[chapter.id]?.passed);
+      })();
       setNavigating(true);
-      try { await markComplete(currentModuleId ?? undefined, false); setCurrentModuleId(next.id ?? null); scrollTop(); }
+      try {
+        await markComplete(currentModuleId ?? undefined, false);
+        if (!willTriggerQuiz) { setCurrentModuleId(next.id ?? null); scrollTop(); }
+      }
       finally { setNavigating(false); }
       return;
     }

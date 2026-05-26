@@ -987,6 +987,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const { cards, loading: cardsLoading } = useCardTopups();
   const { sliderImages, loading: sliderLoading } = useSliderImages();
   const { buttons, loading: buttonsLoading } = useNavButtons();
+  const { services: onlineServices, loading: onlineServicesLoading } = useOnlineServices();
   const { settings, loading: settingsLoading } = useSettings();
   const { affiliates, loading: affiliatesLoading } = useAllAffiliates();
   const { withdrawals: allWithdrawals, loading: allWithdrawalsLoading } = useAllWithdrawals();
@@ -1009,6 +1010,44 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   });
 
   const [isLogsDialogOpen, setIsLogsDialogOpen] = useState(false);
+
+  // ── Online Services state ──────────────────────────────────────────────────
+  const [isServiceDialogOpen, setIsServiceDialogOpen] = useState(false);
+  const [editingService, setEditingService] = useState<any | null>(null);
+  const [serviceFormData, setServiceFormData] = useState({ label: '', description: '', icon: 'Globe', target: 'url' as 'tracking' | 'shipping' | 'url', url: '', order: 0, active: true });
+  const [savingService, setSavingService] = useState(false);
+  const [deletingServiceId, setDeletingServiceId] = useState<string | null>(null);
+
+  const handleOpenServiceDialog = (svc?: any) => {
+    if (svc) {
+      setEditingService(svc);
+      setServiceFormData({ label: svc.label || '', description: svc.description || '', icon: svc.icon || 'Globe', target: svc.target || 'url', url: svc.url || '', order: svc.order ?? 0, active: svc.active ?? true });
+    } else {
+      setEditingService(null);
+      setServiceFormData({ label: '', description: '', icon: 'Globe', target: 'url', url: '', order: (onlineServices?.length || 0) + 1, active: true });
+    }
+    setIsServiceDialogOpen(true);
+  };
+
+  const handleSaveService = async () => {
+    if (!serviceFormData.label.trim()) { toast.error('Le libellé est requis.'); return; }
+    setSavingService(true);
+    try {
+      await saveOnlineSubService({ ...serviceFormData }, editingService?.id);
+      toast.success(editingService ? 'Service mis à jour !' : 'Service ajouté !');
+      setIsServiceDialogOpen(false);
+    } catch { toast.error('Erreur lors de la sauvegarde.'); }
+    finally { setSavingService(false); }
+  };
+
+  const handleDeleteService = async (id: string) => {
+    setDeletingServiceId(id);
+    try {
+      await deleteOnlineSubService(id);
+      toast.success('Service supprimé.');
+    } catch { toast.error('Erreur lors de la suppression.'); }
+    finally { setDeletingServiceId(null); }
+  };
   
   const [searchTerm, setSearchTerm] = useState('');
   const deferredSearchTerm = useDeferredValue(searchTerm);
@@ -1945,6 +1984,7 @@ const AffiliateEditForm = ({
         { value: 'products', label: 'Catalogue', icon: LayoutGrid, permission: 'products' },
         { value: 'formations', label: 'Formations', icon: LucideIcons.GraduationCap, permission: 'products' },
         { value: 'formation_payments', label: 'Paiements Cours', icon: LucideIcons.CreditCard, permission: 'products' },
+        { value: 'online-services', label: 'Services', icon: Globe, permission: 'products' },
       ]
     },
     {
@@ -7216,6 +7256,150 @@ const AffiliateEditForm = ({
 
         <TabsContent value="shipping">
           <AdminShippingManager />
+        </TabsContent>
+
+        <TabsContent value="online-services" className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-dark">Gestion des Services</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Gérez les services affichés dans la section Services de l'application.</p>
+            </div>
+            <Button onClick={() => handleOpenServiceDialog()} className="w-full sm:w-auto bg-primary hover:bg-[#1D4ED8] text-white flex items-center justify-center gap-2 border-0">
+              <Plus className="h-4 w-4" />
+              Nouveau Service
+            </Button>
+          </div>
+
+          <Card className="shadow-sm border-gray-200">
+            <CardContent className="p-0">
+              {onlineServicesLoading ? (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                  <Loader2 className="h-7 w-7 animate-spin mb-2" />
+                  <p>Chargement…</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50/50">
+                        <TableHead>Ordre</TableHead>
+                        <TableHead>Libellé</TableHead>
+                        <TableHead>Icône</TableHead>
+                        <TableHead>Cible</TableHead>
+                        <TableHead>Statut</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(onlineServices || []).map((svc: any) => (
+                        <TableRow key={svc.id} className="hover:bg-gray-50/50 transition-colors">
+                          <TableCell className="font-mono text-sm text-gray-500">{svc.order}</TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-bold text-dark text-sm">{svc.label}</p>
+                              <p className="text-xs text-gray-400 truncate max-w-[200px]">{svc.description}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-500">{svc.icon}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={svc.target === 'url' ? 'text-blue-600 border-blue-200 bg-blue-50' : 'text-emerald-600 border-emerald-200 bg-emerald-50'}>
+                              {svc.target === 'tracking' ? 'Tracking' : svc.target === 'shipping' ? 'Expédition' : svc.url?.slice(0, 25) || 'URL'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={svc.active ? 'text-emerald-600 border-emerald-200 bg-emerald-50' : 'text-gray-500 border-gray-200 bg-gray-50'}>
+                              {svc.active ? 'Actif' : 'Inactif'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="sm" onClick={() => handleOpenServiceDialog(svc)} className="h-8 w-8 p-0">
+                                <Edit2 className="h-4 w-4 text-gray-500" />
+                              </Button>
+                              <Button
+                                variant="ghost" size="sm"
+                                disabled={deletingServiceId === svc.id}
+                                onClick={() => handleDeleteService(svc.id)}
+                                className="h-8 text-red-500 hover:text-red-600 hover:bg-red-50 bg-white/50 border border-transparent hover:border-red-100 px-2 font-medium text-xs"
+                              >
+                                {deletingServiceId === svc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5 mr-1" />}
+                                <span className="hidden sm:inline">Supprimer</span>
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {(onlineServices || []).length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={6} className="h-32 text-center text-gray-400">
+                            Aucun service ajouté. Cliquez sur "Nouveau Service" pour commencer.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Dialog add/edit service */}
+          <Dialog open={isServiceDialogOpen} onOpenChange={setIsServiceDialogOpen}>
+            <DialogContent className="max-w-lg rounded-2xl">
+              <DialogHeader>
+                <DialogTitle>{editingService ? 'Modifier le service' : 'Nouveau service'}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Libellé *</label>
+                    <Input value={serviceFormData.label} onChange={e => setServiceFormData(p => ({ ...p, label: e.target.value }))} placeholder="Ex: Suivi de Colis" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Description</label>
+                    <Input value={serviceFormData.description} onChange={e => setServiceFormData(p => ({ ...p, description: e.target.value }))} placeholder="Courte description du service" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Icône (nom Lucide)</label>
+                    <Input value={serviceFormData.icon} onChange={e => setServiceFormData(p => ({ ...p, icon: e.target.value }))} placeholder="Ex: Globe, Package, Truck…" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Ordre d'affichage</label>
+                    <Input type="number" value={serviceFormData.order} onChange={e => setServiceFormData(p => ({ ...p, order: Number(e.target.value) }))} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Cible</label>
+                    <select
+                      value={serviceFormData.target}
+                      onChange={e => setServiceFormData(p => ({ ...p, target: e.target.value as any }))}
+                      className="w-full h-10 rounded-xl border border-gray-200 px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      <option value="url">URL externe</option>
+                      <option value="tracking">Suivi de colis</option>
+                      <option value="shipping">Expédition</option>
+                    </select>
+                  </div>
+                  {serviceFormData.target === 'url' && (
+                    <div className="col-span-2">
+                      <label className="block text-xs font-bold text-gray-600 mb-1">URL</label>
+                      <Input value={serviceFormData.url} onChange={e => setServiceFormData(p => ({ ...p, url: e.target.value }))} placeholder="https://…" />
+                    </div>
+                  )}
+                  <div className="col-span-2 flex items-center gap-3">
+                    <input type="checkbox" id="svc-active" checked={serviceFormData.active} onChange={e => setServiceFormData(p => ({ ...p, active: e.target.checked }))} className="h-4 w-4 accent-primary" />
+                    <label htmlFor="svc-active" className="text-sm font-semibold text-gray-700 cursor-pointer">Service actif (visible sur l'app)</label>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsServiceDialogOpen(false)}>Annuler</Button>
+                <Button onClick={handleSaveService} disabled={savingService} className="bg-primary text-white border-0 hover:bg-[#1D4ED8]">
+                  {savingService ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  {editingService ? 'Enregistrer' : 'Ajouter'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="nav-buttons" className="space-y-6">

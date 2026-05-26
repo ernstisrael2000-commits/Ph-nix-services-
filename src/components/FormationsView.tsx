@@ -17,12 +17,14 @@ import { Formation, FormationModule, FormationChapter } from '../types';
 import { Client } from '../types';
 import { toast } from 'sonner';
 import { useSettings } from '../services/parcelService';
+import { loginClientWithGoogle } from '../services/clientService';
 import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 interface FormationsViewProps {
   loggedClient: Client | null;
   onOpenWallet: () => void;
+  onClientLogin?: (client: Client) => void;
   activeTab: 'all' | 'my';
   onTabChange: (tab: 'all' | 'my') => void;
 }
@@ -79,7 +81,7 @@ type PaymentStep = 'detail' | 'external-method' | 'form' | 'done';
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function FormationsView({ loggedClient, onOpenWallet, activeTab, onTabChange }: FormationsViewProps) {
+export default function FormationsView({ loggedClient, onOpenWallet, onClientLogin, activeTab, onTabChange }: FormationsViewProps) {
   const { settings } = useSettings();
 
   // Data
@@ -184,6 +186,32 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
   // ── Login prompt ─────────────────────────────────────────────────────────────
   const [pendingFormation, setPendingFormation] = useState<Formation | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const handleGoogleLogin = async () => {
+    setShowLoginPrompt(false);
+    await new Promise(r => setTimeout(r, 120));
+    setGoogleLoading(true);
+    try {
+      const result = await loginClientWithGoogle();
+      if ((result as any).noAccount) {
+        toast.error('Aucun compte trouvé. Créez un compte via le Wallet.');
+        onOpenWallet();
+        return;
+      }
+      if ((result as any).client) {
+        onClientLogin?.((result as any).client);
+        toast.success('Connexion réussie !');
+        setTimeout(() => {
+          if (pendingFormation) { openDetail(pendingFormation); setPendingFormation(null); }
+        }, 200);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erreur de connexion Google.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   // ── Open detail ─────────────────────────────────────────────────────────────
   const openDetail = (f: Formation) => {
@@ -338,10 +366,15 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
               </div>
             )}
             <button
-              onClick={() => { setShowLoginPrompt(false); onOpenWallet(); }}
-              className="w-full h-12 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-black text-sm flex items-center justify-center gap-2 transition-colors shadow-lg shadow-violet-500/20"
+              onClick={handleGoogleLogin}
+              disabled={googleLoading}
+              className="w-full h-12 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white font-black text-sm flex items-center justify-center gap-2 transition-colors shadow-lg shadow-violet-500/20"
             >
-              <LogIn className="h-4 w-4" /> Se connecter avec Google
+              {googleLoading
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <svg className="h-4 w-4" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+              }
+              {googleLoading ? 'Connexion…' : 'Se connecter avec Google'}
             </button>
             <button
               onClick={() => setShowLoginPrompt(false)}
@@ -353,60 +386,25 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
         </DialogContent>
       </Dialog>
 
-      {/* ── HERO ────────────────────────────────────────────────────────────── */}
-      <div className="relative bg-gradient-to-br from-slate-900 via-violet-950 to-slate-900 overflow-hidden">
-        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 25% 50%, #7C3AED 0%, transparent 50%), radial-gradient(circle at 75% 20%, #3B82F6 0%, transparent 50%)' }} />
-        <div className="absolute inset-0 opacity-5" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
-
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-          <div className="max-w-2xl">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="px-2.5 py-0.5 bg-violet-500/20 text-violet-300 text-xs font-bold rounded-full border border-violet-500/30 flex items-center gap-1.5">
-                <Sparkles className="h-3 w-3" /> Formations Rena
-              </span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight mb-2">
-              Élevez vos compétences{' '}
-              <span className="text-violet-400">vers l'excellence</span>
-            </h1>
-            <p className="text-gray-400 text-sm mb-5 max-w-lg">
-              Accédez à des formations conçues par les meilleurs experts de l'industrie.
-            </p>
-
-            {/* Search bar */}
-            <div className="flex gap-2 max-w-lg">
-              <div className="relative flex-1">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Design, Tech, Business..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 h-10 rounded-xl bg-white/10 backdrop-blur border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400/50 focus:bg-white/15 transition-all"
-                />
-              </div>
-              <button
-                onClick={() => {}}
-                className="h-10 px-5 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl transition-colors text-sm shrink-0"
-              >
-                Chercher
-              </button>
-            </div>
-
-            {/* Stats */}
-            <div className="flex flex-wrap gap-5 mt-5 text-sm">
-              {[
-                { label: 'Formations', value: formations.length + '+' },
-                { label: 'Cours gratuits', value: freeCourses.length + '' },
-                { label: 'Apprenants', value: formations.reduce((s, f) => s + (f.studentsCount || 0), 0).toLocaleString() + '+' },
-              ].map(s => (
-                <div key={s.label} className="flex items-center gap-1.5 text-gray-400">
-                  <span className="text-white font-black">{s.value}</span>
-                  <span className="text-xs">{s.label}</span>
-                </div>
-              ))}
-            </div>
+      {/* ── SEARCH BAR ──────────────────────────────────────────────────────── */}
+      <div className="bg-white border-b border-gray-100 px-4 py-4">
+        <div className="max-w-2xl mx-auto flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Rechercher une formation…"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 h-10 rounded-xl bg-gray-50 border border-gray-200 text-gray-800 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400/50 focus:bg-white focus:border-violet-300 transition-all"
+            />
           </div>
+          <button
+            onClick={() => {}}
+            className="h-10 px-5 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl transition-colors text-sm shrink-0"
+          >
+            Chercher
+          </button>
         </div>
       </div>
 
@@ -442,6 +440,58 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
           </div>
         </div>
       </div>
+
+      {/* ── STUDENT FEATURES BAR ─────────────────────────────────────────── */}
+      {loggedClient && (
+        <div className="bg-violet-50 border-b border-violet-100 px-4 py-3">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
+              {/* Stats pills */}
+              <div className="flex items-center gap-1.5 bg-white rounded-full px-3 py-1.5 border border-violet-100 shrink-0">
+                <BookMarked className="h-3.5 w-3.5 text-violet-500" />
+                <span className="text-xs font-black text-violet-700">{myCourses.length}</span>
+                <span className="text-[10px] text-gray-400 font-semibold">inscrits</span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-white rounded-full px-3 py-1.5 border border-violet-100 shrink-0">
+                <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+                <span className="text-xs font-black text-emerald-700">
+                  {myCourses.filter(f => (progressMap[f.id!] ?? 0) > 0 && (progressMap[f.id!] ?? 0) < 100).length}
+                </span>
+                <span className="text-[10px] text-gray-400 font-semibold">en cours</span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-white rounded-full px-3 py-1.5 border border-violet-100 shrink-0">
+                <Trophy className="h-3.5 w-3.5 text-amber-500" />
+                <span className="text-xs font-black text-amber-700">
+                  {myCourses.filter(f => (progressMap[f.id!] ?? 0) >= 100).length}
+                </span>
+                <span className="text-[10px] text-gray-400 font-semibold">terminés</span>
+              </div>
+              {/* Continue learning shortcut */}
+              {myCourses.find(f => (progressMap[f.id!] ?? 0) > 0 && (progressMap[f.id!] ?? 0) < 100) && (() => {
+                const inProgress = myCourses.find(f => (progressMap[f.id!] ?? 0) > 0 && (progressMap[f.id!] ?? 0) < 100)!;
+                return (
+                  <button
+                    onClick={() => { setPlayerFormation(inProgress); }}
+                    className="flex items-center gap-2 ml-auto bg-violet-600 hover:bg-violet-700 text-white rounded-full px-3 py-1.5 text-xs font-black shrink-0 transition-colors"
+                  >
+                    <Play className="h-3 w-3 fill-white" />
+                    Reprendre · {inProgress.title.slice(0, 20)}{inProgress.title.length > 20 ? '…' : ''}
+                    <span className="ml-1 opacity-80">{progressMap[inProgress.id!]}%</span>
+                  </button>
+                );
+              })()}
+              {/* Favorites shortcut */}
+              {favorites.length > 0 && (
+                <div className="flex items-center gap-1.5 bg-white rounded-full px-3 py-1.5 border border-rose-100 shrink-0">
+                  <Heart className="h-3.5 w-3.5 text-rose-500 fill-rose-500" />
+                  <span className="text-xs font-black text-rose-700">{favorites.length}</span>
+                  <span className="text-[10px] text-gray-400 font-semibold">favoris</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── CONTENT ─────────────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">

@@ -328,6 +328,7 @@ export default function App() {
             <FormationsView
               loggedClient={loggedClient}
               onOpenWallet={() => setShowClientDashboard(true)}
+              onClientLogin={handleClientLogin}
               activeTab={formationsTab}
               onTabChange={setFormationsTab}
             />
