@@ -458,6 +458,122 @@ router.get('/api/client/lookup-wallet', requireDb, async (req, res) => {
   }
 });
 
+// ── Agent: search client by phone ────────────────────────────────────────────
+router.get('/api/agent/client-by-phone', requireDb, async (req, res) => {
+  try {
+    const phone = (req.query.phone as string || '').trim();
+    const agentCode = (req.query.agentCode as string || '').trim();
+    if (!phone || !agentCode) return res.status(400).json({ error: 'phone et agentCode requis.' });
+
+    // Verify agent
+    const agentSnap = await adminDb.collection('agents').where('agentCode', '==', agentCode).limit(1).get();
+    if (agentSnap.empty) return res.status(403).json({ error: 'Code agent invalide.' });
+    const agentDoc = agentSnap.docs[0];
+    const agentData = agentDoc.data();
+    if (agentData.status === 'inactive') return res.status(403).json({ error: 'Agent inactif.' });
+
+    // Find client by phone
+    const clientSnap = await adminDb.collection('clients').where('phone', '==', phone).limit(1).get();
+    if (clientSnap.empty) return res.status(404).json({ error: 'Aucun client trouvé avec ce numéro.' });
+    const clientDoc = clientSnap.docs[0];
+    const clientData = clientDoc.data();
+    res.json({
+      found: true,
+      clientId: clientDoc.id,
+      name: clientData.name || '',
+      phone: clientData.phone || '',
+      walletId: clientData.walletId || '',
+      balance: clientData.balance || 0,
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Agent: direct client deposit or withdrawal ────────────────────────────────
+router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
+  try {
+    const { agentCode, clientId, type, amount, note } = req.body;
+    if (!agentCode || !clientId || !type || !amount)
+      return res.status(400).json({ error: 'Paramètres manquants.' });
+    const usd = Number(amount);
+    if (isNaN(usd) || usd <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+    if (!['deposit', 'withdrawal'].includes(type))
+      return res.status(400).json({ error: 'Type invalide.' });
+
+    // Verify agent
+    const agentSnap = await adminDb.collection('agents').where('agentCode', '==', agentCode).limit(1).get();
+    if (agentSnap.empty) return res.status(403).json({ error: 'Code agent invalide.' });
+    const agentRef = agentSnap.docs[0].ref;
+    const agentData = agentSnap.docs[0].data();
+    if (agentData.status === 'inactive') return res.status(403).json({ error: 'Agent inactif.' });
+
+    // Get client
+    const clientRef = adminDb.collection('clients').doc(clientId);
+    const clientSnap = await clientRef.get();
+    if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
+    const clientData = clientSnap.data()!;
+
+    // Balance checks
+    if (type === 'deposit' && (agentData.balance || 0) < usd)
+      return res.status(400).json({ error: 'Solde agent insuffisant pour effectuer ce dépôt.' });
+    if (type === 'withdrawal' && (clientData.balance || 0) < usd)
+      return res.status(400).json({ error: 'Solde client insuffisant pour ce retrait.' });
+
+    const label = type === 'deposit' ? 'Dépôt' : 'Retrait';
+    const txNote = note ? ` — ${note}` : '';
+
+    await adminDb.runTransaction(async (txn) => {
+      // Update client balance
+      const clientDelta = type === 'deposit' ? usd : -usd;
+      txn.update(clientRef, {
+        balance: FieldValue.increment(clientDelta),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      // Update agent balance
+      const agentDelta = type === 'deposit' ? -usd : usd;
+      txn.update(agentRef, {
+        balance: FieldValue.increment(agentDelta),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      // Record in client_transactions
+      const txRef = adminDb.collection('client_transactions').doc();
+      txn.set(txRef, {
+        clientId,
+        clientName: clientData.name || '',
+        type,
+        amount: usd,
+        status: 'approved',
+        method: `Agent: ${agentData.name}`,
+        agentCode,
+        agentName: agentData.name || '',
+        agentId: agentSnap.docs[0].id,
+        description: `${label} via Agent ${agentData.name}${txNote}`,
+        ...(note && { message: note }),
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      // Notification admin
+      const notifRef = adminDb.collection('admin_notifications').doc();
+      txn.set(notifRef, {
+        type: `agent_client_${type}`,
+        clientId,
+        clientName: clientData.name || '',
+        agentCode,
+        agentName: agentData.name || '',
+        amount: usd,
+        read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[agent/client-transaction]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
 // ── Client-to-client transfer ─────────────────────────────────────────────────
 router.post('/api/client/transfer', requireDb, async (req, res) => {
   try {

@@ -175,20 +175,22 @@ export default function App() {
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-background font-sans selection:bg-accent-light selection:text-dark flex flex-col">
-        <Navbar 
-          currentView={view}
-          onViewChange={handleViewChange}
-          loggedClient={loggedClient}
-          onClientLogin={handleClientLogin}
-          onClientLogout={handleClientLogout}
-          onOpenWallet={() => setShowClientDashboard(true)}
-          onAdminLogin={(admin) => {
-            handleAdminLogin(admin);
-            handleViewChange('admin');
-          }}
-          formationsTab={formationsTab}
-          onFormationsTabChange={setFormationsTab}
-        />
+        {view !== 'formations' && (
+          <Navbar 
+            currentView={view}
+            onViewChange={handleViewChange}
+            loggedClient={loggedClient}
+            onClientLogin={handleClientLogin}
+            onClientLogout={handleClientLogout}
+            onOpenWallet={() => setShowClientDashboard(true)}
+            onAdminLogin={(admin) => {
+              handleAdminLogin(admin);
+              handleViewChange('admin');
+            }}
+            formationsTab={formationsTab}
+            onFormationsTabChange={setFormationsTab}
+          />
+        )}
 
         <AnimatePresence>
           {settings?.showGlobalAnnouncement && settings?.globalAnnouncement && showAnnouncement && (
@@ -274,7 +276,7 @@ export default function App() {
           />
         )}
 
-        <main className={`animate-in fade-in duration-500 pt-14 flex-grow relative ${!['admin', 'affiliate', 'agent'].includes(view) ? 'pb-[74px]' : ''}`}>
+        <main className={`animate-in fade-in duration-500 ${view === 'formations' ? 'pt-0' : 'pt-14'} flex-grow relative ${!['admin', 'affiliate', 'agent'].includes(view) ? 'pb-[74px]' : ''}`}>
           {/* Back button only for utility views (tracking, shipping) */}
           {['tracking', 'shipping'].includes(view) && (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
