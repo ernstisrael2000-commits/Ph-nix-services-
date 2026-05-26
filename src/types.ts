@@ -350,11 +350,47 @@ export interface FormationModule {
   chapterId?: string;
 }
 
+export interface QuizQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  correctIndex: number;
+}
+
+export interface ChapterQuiz {
+  questions: QuizQuestion[];
+  passPercent: number;
+}
+
 export interface FormationChapter {
   id: string;
   title: string;
   order: number;
   description?: string;
+  quiz?: ChapterQuiz;
+}
+
+export interface QuizResult {
+  id?: string;
+  userId: string;
+  formationId: string;
+  chapterId: string;
+  score: number;
+  passed: boolean;
+  attempts: number;
+  completedAt: any;
+}
+
+export interface StudentCertificate {
+  id?: string;
+  userId: string;
+  userName: string;
+  userEmail?: string;
+  formationId: string;
+  formationTitle: string;
+  issuedBy: string;
+  certificateCode: string;
+  issuedAt: any;
 }
 
 export interface FormationResource {
@@ -370,6 +406,7 @@ export interface Formation {
   description: string;
   shortDescription: string;
   coverImage: string;
+  previewVideoUrl?: string;
   price: number;
   originalPrice?: number;
   level: FormationLevel;

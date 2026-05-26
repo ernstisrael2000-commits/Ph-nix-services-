@@ -474,29 +474,35 @@ export default function FormationsView({ loggedClient, onOpenWallet, activeTab, 
               ) : (
                 <>
                   {/* ── Les plus populaires */}
-                  <Section title="Les plus populaires" icon={<TrendingUp className="h-4 w-4 text-violet-600" />}>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {popularCourses.map((f, i) => <CourseCard key={f.id} formation={f} i={i} owned={isOwned(f)} fav={isFav(f)} disc={discount(f)} onOpen={() => openDetail(f)} onFav={(e) => toggleFavorite(f, e)} />)}
-                    </div>
-                  </Section>
+                  {popularCourses.length > 0 && (
+                    <Section title="Les plus populaires" icon={<TrendingUp className="h-4 w-4 text-violet-600" />}>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {popularCourses.map((f, i) => <CourseCard key={f.id} formation={f} i={i} owned={isOwned(f)} fav={isFav(f)} disc={discount(f)} onOpen={() => openDetail(f)} onFav={(e) => toggleFavorite(f, e)} />)}
+                      </div>
+                    </Section>
+                  )}
 
-                  {/* ── Cours gratuits */}
-                  {freeCourses.length > 0 && (
+                  {/* ── Cours gratuits (uniquement ceux pas déjà dans populaires) */}
+                  {freeCourses.filter(f => !popularCourses.find(p => p.id === f.id)).length > 0 && (
                     <Section title="Cours gratuits" icon={<Zap className="h-4 w-4 text-emerald-500" />}>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {freeCourses.slice(0, 6).map((f, i) => <CourseCard key={f.id} formation={f} i={i} owned={isOwned(f)} fav={isFav(f)} disc={discount(f)} onOpen={() => openDetail(f)} onFav={(e) => toggleFavorite(f, e)} />)}
+                        {freeCourses.filter(f => !popularCourses.find(p => p.id === f.id)).slice(0, 6).map((f, i) => <CourseCard key={f.id} formation={f} i={i} owned={isOwned(f)} fav={isFav(f)} disc={discount(f)} onOpen={() => openDetail(f)} onFav={(e) => toggleFavorite(f, e)} />)}
                       </div>
                     </Section>
                   )}
 
-                  {/* ── Nouveautés */}
-                  {newCourses.length > 0 && (
-                    <Section title="Nouveautés" icon={<Sparkles className="h-4 w-4 text-amber-500" />}>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {newCourses.map((f, i) => <CourseCard key={f.id} formation={f} i={i} owned={isOwned(f)} fav={isFav(f)} disc={discount(f)} onOpen={() => openDetail(f)} onFav={(e) => toggleFavorite(f, e)} />)}
-                      </div>
-                    </Section>
-                  )}
+                  {/* ── Nouveautés (uniquement ceux pas déjà affichés) */}
+                  {(() => {
+                    const shownIds = new Set([...popularCourses.map(f => f.id), ...freeCourses.map(f => f.id)]);
+                    const novelties = newCourses.filter(f => !shownIds.has(f.id));
+                    return novelties.length > 0 ? (
+                      <Section title="Nouveautés" icon={<Sparkles className="h-4 w-4 text-amber-500" />}>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {novelties.map((f, i) => <CourseCard key={f.id} formation={f} i={i} owned={isOwned(f)} fav={isFav(f)} disc={discount(f)} onOpen={() => openDetail(f)} onFav={(e) => toggleFavorite(f, e)} />)}
+                        </div>
+                      </Section>
+                    ) : null;
+                  })()}
 
                   {/* ── CTA Banner */}
                   <div className="mt-6 bg-gradient-to-br from-slate-900 to-violet-950 rounded-2xl p-6 sm:p-8 text-center text-white">
@@ -971,6 +977,54 @@ function FormationDetailPage({
                 )}
               </div>
             </div>
+
+            {/* Preview Video */}
+            {formation.previewVideoUrl && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-gray-50 flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+                    <Play className="h-3.5 w-3.5 text-emerald-600 fill-emerald-600" />
+                  </div>
+                  <div>
+                    <h2 className="font-black text-gray-900 text-sm">Aperçu gratuit du cours</h2>
+                    <p className="text-[11px] text-gray-400">Regardez sans inscription</p>
+                  </div>
+                </div>
+                {(() => {
+                  const ytMatch = formation.previewVideoUrl?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+                  const vimeoMatch = formation.previewVideoUrl?.match(/vimeo\.com\/(\d+)/);
+                  if (ytMatch) {
+                    return (
+                      <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
+                        <iframe
+                          src={`https://www.youtube.com/embed/${ytMatch[1]}?rel=0&modestbranding=1`}
+                          className="absolute inset-0 w-full h-full"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen title="Aperçu du cours"
+                        />
+                      </div>
+                    );
+                  }
+                  if (vimeoMatch) {
+                    return (
+                      <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
+                        <iframe
+                          src={`https://player.vimeo.com/video/${vimeoMatch[1]}?color=7C3AED`}
+                          className="absolute inset-0 w-full h-full"
+                          allow="autoplay; fullscreen; picture-in-picture"
+                          allowFullScreen title="Aperçu du cours"
+                        />
+                      </div>
+                    );
+                  }
+                  return (
+                    <video controls playsInline className="w-full aspect-video">
+                      <source src={formation.previewVideoUrl} />
+                    </video>
+                  );
+                })()}
+              </div>
+            )}
 
             {/* Description */}
             <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">

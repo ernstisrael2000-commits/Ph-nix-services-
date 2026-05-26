@@ -1086,7 +1086,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const [isFormationDeleteDialogOpen, setIsFormationDeleteDialogOpen] = useState(false);
   const [formationToDelete, setFormationToDelete] = useState<Formation | null>(null);
   const [formationFormData, setFormationFormData] = useState<Partial<Formation>>({
-    title: '', description: '', shortDescription: '', coverImage: '',
+    title: '', description: '', shortDescription: '', coverImage: '', previewVideoUrl: '',
     price: 0, originalPrice: undefined, level: 'debutant', published: false,
     modules: [], chapters: [], resources: [], pdfUrl: '',
     instructor: '', instructorBio: '', instructorAvatar: '',
@@ -1094,6 +1094,67 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     category: '', tags: [], prerequisites: '', enrollmentLimit: undefined,
     studentsCount: 0, rating: 0
   });
+
+  const [certificates, setCertificates] = useState<any[]>([]);
+  const [loadingCertificates, setLoadingCertificates] = useState(false);
+  const [certFormationFilter, setCertFormationFilter] = useState<string>('');
+  const [certStudents, setCertStudents] = useState<any[]>([]);
+  const [loadingCertStudents, setLoadingCertStudents] = useState(false);
+  const [selectedCertFormationId, setSelectedCertFormationId] = useState<string>('');
+  const [issuingCertId, setIssuingCertId] = useState<string>('');
+  const [revokingCertId, setRevokingCertId] = useState<string>('');
+
+  const fetchCertificates = async (fId?: string) => {
+    setLoadingCertificates(true);
+    try {
+      const url = fId ? `/api/admin/formations/certificates?formationId=${fId}` : '/api/admin/formations/certificates';
+      const res = await fetch(url, { headers: { 'x-admin-secret': 'rena-admin-2024' } });
+      const data = await res.json();
+      setCertificates(data.certificates || []);
+    } catch { toast.error('Impossible de charger les certificats.'); }
+    finally { setLoadingCertificates(false); }
+  };
+
+  const fetchCertStudents = async (fId: string) => {
+    setLoadingCertStudents(true);
+    try {
+      const res = await fetch(`/api/admin/formations/${fId}/students`, { headers: { 'x-admin-secret': 'rena-admin-2024' } });
+      const data = await res.json();
+      setCertStudents(data.students || []);
+    } catch { toast.error('Impossible de charger les étudiants.'); }
+    finally { setLoadingCertStudents(false); }
+  };
+
+  const handleIssueCertificate = async (student: any) => {
+    if (!selectedCertFormationId) return;
+    const formation = adminFormations.find((f: any) => f.id === selectedCertFormationId);
+    setIssuingCertId(student.userId);
+    try {
+      const res = await fetch('/api/admin/formations/certificate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
+        body: JSON.stringify({
+          userId: student.userId, userName: student.userName, userEmail: student.userEmail,
+          formationId: selectedCertFormationId, formationTitle: formation?.title || '',
+          issuedBy: admin?.fullName || 'Admin',
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Erreur');
+      toast.success(`Certificat émis pour ${student.userName} !`);
+      fetchCertificates(selectedCertFormationId);
+    } catch (e: any) { toast.error(e.message); }
+    finally { setIssuingCertId(''); }
+  };
+
+  const handleRevokeCertificate = async (certId: string) => {
+    setRevokingCertId(certId);
+    try {
+      await fetch(`/api/admin/formations/certificate/${certId}`, { method: 'DELETE', headers: { 'x-admin-secret': 'rena-admin-2024' } });
+      toast.success('Certificat révoqué.');
+      fetchCertificates(selectedCertFormationId || undefined);
+    } catch { toast.error('Erreur lors de la révocation.'); }
+    finally { setRevokingCertId(''); }
+  };
   const [formationTagInput, setFormationTagInput] = useState('');
 
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
@@ -1886,6 +1947,7 @@ const AffiliateEditForm = ({
     {
       title: "Administration & Paramètres",
       items: [
+        { value: 'wallet-management', label: 'Gestion Wallet', icon: Wallet, permission: 'settings' },
         { value: 'admins', label: 'Administrateurs', icon: Shield, permission: 'super_admin_only' },
         { value: 'settings', label: 'Paramètres Généraux', icon: SettingsIcon, permission: 'settings' },
       ]
@@ -4044,6 +4106,130 @@ const AffiliateEditForm = ({
               )}
             </CardContent>
           </Card>
+          {/* ── Certificats ── */}
+          <div className="space-y-4 pt-4 border-t border-gray-100">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-dark flex items-center gap-2">
+                  <LucideIcons.Award className="h-5 w-5 text-amber-500" /> Gestion des Certificats
+                </h2>
+                <p className="text-sm text-subtext mt-1">Émettez des certificats aux étudiants ayant terminé une formation</p>
+              </div>
+            </div>
+
+            {/* Formation selector */}
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+              <select
+                value={selectedCertFormationId}
+                onChange={e => {
+                  setSelectedCertFormationId(e.target.value);
+                  if (e.target.value) {
+                    fetchCertificates(e.target.value);
+                    fetchCertStudents(e.target.value);
+                  } else {
+                    setCertStudents([]);
+                    fetchCertificates();
+                  }
+                }}
+                className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[240px]"
+              >
+                <option value="">— Sélectionner une formation —</option>
+                {(adminFormations as any[]).map((f: any) => (
+                  <option key={f.id} value={f.id}>{f.title}</option>
+                ))}
+              </select>
+              {selectedCertFormationId && (
+                <Button variant="outline" size="sm" onClick={() => { fetchCertificates(selectedCertFormationId); fetchCertStudents(selectedCertFormationId); }} className="h-10 rounded-xl">
+                  <LucideIcons.RefreshCw className="h-4 w-4 mr-1" /> Actualiser
+                </Button>
+              )}
+            </div>
+
+            {selectedCertFormationId && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Students list */}
+                <Card className="shadow-sm border-gray-200">
+                  <CardContent className="p-0">
+                    <div className="p-4 border-b border-gray-100">
+                      <h3 className="font-bold text-sm text-dark">Étudiants inscrits</h3>
+                      <p className="text-xs text-gray-400 mt-0.5">Cliquez sur "Émettre" pour délivrer un certificat</p>
+                    </div>
+                    {loadingCertStudents ? (
+                      <div className="flex items-center justify-center py-10 text-gray-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                    ) : certStudents.length === 0 ? (
+                      <div className="py-10 text-center text-gray-400 text-sm">Aucun étudiant inscrit</div>
+                    ) : (
+                      <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+                        {certStudents.map((s: any) => {
+                          const alreadyIssued = certificates.some(c => c.userId === s.userId);
+                          return (
+                            <div key={s.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
+                              <div>
+                                <p className="text-sm font-semibold text-dark">{s.userName}</p>
+                                {s.userEmail && <p className="text-xs text-gray-400">{s.userEmail}</p>}
+                              </div>
+                              {alreadyIssued ? (
+                                <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">
+                                  <LucideIcons.Award className="h-3 w-3 mr-1" /> Certifié
+                                </Badge>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs bg-amber-500 hover:bg-amber-600 text-white"
+                                  disabled={issuingCertId === s.userId}
+                                  onClick={() => handleIssueCertificate(s)}
+                                >
+                                  {issuingCertId === s.userId ? <Loader2 className="h-3 w-3 animate-spin" /> : '🎓 Émettre'}
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Issued certificates */}
+                <Card className="shadow-sm border-gray-200">
+                  <CardContent className="p-0">
+                    <div className="p-4 border-b border-gray-100">
+                      <h3 className="font-bold text-sm text-dark flex items-center gap-2">
+                        <LucideIcons.Award className="h-4 w-4 text-amber-500" /> Certificats émis ({certificates.length})
+                      </h3>
+                    </div>
+                    {loadingCertificates ? (
+                      <div className="flex items-center justify-center py-10 text-gray-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                    ) : certificates.length === 0 ? (
+                      <div className="py-10 text-center text-gray-400 text-sm">Aucun certificat émis</div>
+                    ) : (
+                      <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+                        {certificates.map((cert: any) => (
+                          <div key={cert.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
+                            <div>
+                              <p className="text-sm font-semibold text-dark">{cert.userName}</p>
+                              <code className="text-[10px] text-gray-400 font-mono">{cert.certificateCode}</code>
+                              <p className="text-[10px] text-gray-300 mt-0.5">
+                                {cert.issuedAt?.seconds ? new Date(cert.issuedAt.seconds * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost" size="sm"
+                              className="h-7 text-xs text-red-400 hover:text-red-600 hover:bg-red-50"
+                              disabled={revokingCertId === cert.id}
+                              onClick={() => handleRevokeCertificate(cert.id)}
+                            >
+                              {revokingCertId === cert.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <LucideIcons.Trash2 className="h-3 w-3" />}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="games" className="space-y-6">
@@ -7951,6 +8137,13 @@ const AffiliateEditForm = ({
                     </div>
                   </div>
                 )}
+                <div className="grid grid-cols-1 sm:grid-cols-4 items-start sm:items-center gap-2">
+                  <Label className="sm:text-right text-xs font-bold text-gray-500">
+                    <span className="flex items-center gap-1"><LucideIcons.Play className="h-3 w-3 text-emerald-500" /> Vidéo de présentation</span>
+                    <span className="block text-[10px] font-normal text-gray-400 mt-0.5">Visible gratuitement</span>
+                  </Label>
+                  <Input value={formationFormData.previewVideoUrl || ''} onChange={e => setFormationFormData(p => ({ ...p, previewVideoUrl: e.target.value }))} className="sm:col-span-3 h-10 rounded-xl" placeholder="URL YouTube / Vimeo — aperçu gratuit du cours" />
+                </div>
               </div>
             </div>
 
@@ -8083,20 +8276,131 @@ const AffiliateEditForm = ({
                 </Button>
               </div>
               <div className="space-y-3">
-                {(formationFormData.chapters || []).map((chapter, idx) => (
-                  <div key={chapter.id} className="p-4 rounded-2xl bg-gray-50 border border-gray-100 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="text-[10px] font-black">Chapitre {idx + 1}</Badge>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => removeFormationChapter(chapter.id)} className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full">
-                        <LucideIcons.Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                {(formationFormData.chapters || []).map((chapter, idx) => {
+                  const hasQuiz = !!(chapter.quiz?.questions?.length);
+                  const quizEnabled = hasQuiz || false;
+                  return (
+                    <div key={chapter.id} className="rounded-2xl bg-gray-50 border border-gray-100 overflow-hidden">
+                      <div className="p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Badge variant="outline" className="text-[10px] font-black">Chapitre {idx + 1}</Badge>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeFormationChapter(chapter.id)} className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full">
+                            <LucideIcons.Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <Input value={chapter.title} onChange={e => updateFormationChapter(chapter.id, { title: e.target.value })} className="h-9 rounded-xl text-sm" placeholder="Titre du chapitre" />
+                          <Input value={chapter.description || ''} onChange={e => updateFormationChapter(chapter.id, { description: e.target.value })} className="h-9 rounded-xl text-sm" placeholder="Description (optionnel)" />
+                        </div>
+                      </div>
+
+                      {/* ── Quiz d'évaluation ── */}
+                      <div className="border-t border-gray-100 bg-violet-50/40 p-3 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-black text-violet-700 uppercase tracking-widest flex items-center gap-1.5">
+                            <LucideIcons.ClipboardList className="h-3.5 w-3.5" /> Quiz d'évaluation (seuil 80%)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (hasQuiz) {
+                                updateFormationChapter(chapter.id, { quiz: undefined });
+                              } else {
+                                updateFormationChapter(chapter.id, { quiz: { questions: [], passPercent: 80 } });
+                              }
+                            }}
+                            className={`text-[11px] font-bold px-3 py-1 rounded-lg transition-all ${hasQuiz ? 'bg-violet-200 text-violet-800 hover:bg-violet-300' : 'bg-white border border-violet-200 text-violet-600 hover:bg-violet-100'}`}
+                          >
+                            {hasQuiz ? '✓ Quiz activé' : '+ Activer le quiz'}
+                          </button>
+                        </div>
+
+                        {hasQuiz && (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500">Seuil de réussite :</span>
+                              <Input
+                                type="number" min={50} max={100}
+                                value={chapter.quiz?.passPercent ?? 80}
+                                onChange={e => updateFormationChapter(chapter.id, { quiz: { ...chapter.quiz!, passPercent: Number(e.target.value) } })}
+                                className="h-7 w-20 rounded-lg text-xs"
+                              />
+                              <span className="text-xs text-gray-400">%</span>
+                            </div>
+
+                            {(chapter.quiz?.questions || []).map((q, qi) => (
+                              <div key={q.id} className="bg-white rounded-xl p-3 border border-violet-100 space-y-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <Badge variant="outline" className="text-[10px] shrink-0 mt-0.5">Q{qi + 1}</Badge>
+                                  <Input
+                                    value={q.question}
+                                    onChange={e => {
+                                      const qs = [...(chapter.quiz?.questions || [])];
+                                      qs[qi] = { ...qs[qi], question: e.target.value };
+                                      updateFormationChapter(chapter.id, { quiz: { ...chapter.quiz!, questions: qs } });
+                                    }}
+                                    className="h-8 rounded-lg text-xs flex-1"
+                                    placeholder="Question..."
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const qs = (chapter.quiz?.questions || []).filter((_, i) => i !== qi);
+                                      updateFormationChapter(chapter.id, { quiz: { ...chapter.quiz!, questions: qs } });
+                                    }}
+                                    className="text-red-400 hover:text-red-600 shrink-0 p-1"
+                                  >
+                                    <LucideIcons.X className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-1.5">
+                                  {(q.options || ['', '', '', '']).map((opt, oi) => (
+                                    <div key={oi} className="flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const qs = [...(chapter.quiz?.questions || [])];
+                                          qs[qi] = { ...qs[qi], correctIndex: oi };
+                                          updateFormationChapter(chapter.id, { quiz: { ...chapter.quiz!, questions: qs } });
+                                        }}
+                                        className={`h-5 w-5 rounded-full shrink-0 border-2 transition-all ${q.correctIndex === oi ? 'bg-emerald-500 border-emerald-500' : 'border-gray-300 hover:border-emerald-400'}`}
+                                        title="Réponse correcte"
+                                      />
+                                      <Input
+                                        value={opt}
+                                        onChange={e => {
+                                          const qs = [...(chapter.quiz?.questions || [])];
+                                          const newOpts = [...(qs[qi].options || ['', '', '', ''])];
+                                          newOpts[oi] = e.target.value;
+                                          qs[qi] = { ...qs[qi], options: newOpts };
+                                          updateFormationChapter(chapter.id, { quiz: { ...chapter.quiz!, questions: qs } });
+                                        }}
+                                        className="h-7 rounded-lg text-xs flex-1"
+                                        placeholder={`Option ${String.fromCharCode(65 + oi)}`}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                                <p className="text-[10px] text-gray-400">● = réponse correcte</p>
+                              </div>
+                            ))}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newQ = { id: crypto.randomUUID?.() || Math.random().toString(36).slice(2), question: '', options: ['', '', '', ''], correctIndex: 0 };
+                                updateFormationChapter(chapter.id, { quiz: { ...chapter.quiz!, questions: [...(chapter.quiz?.questions || []), newQ] } });
+                              }}
+                              className="w-full text-xs text-violet-600 hover:text-violet-800 border border-dashed border-violet-200 hover:border-violet-400 rounded-xl py-2 transition-all"
+                            >
+                              + Ajouter une question
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <Input value={chapter.title} onChange={e => updateFormationChapter(chapter.id, { title: e.target.value })} className="h-9 rounded-xl text-sm" placeholder="Titre du chapitre" />
-                      <Input value={chapter.description || ''} onChange={e => updateFormationChapter(chapter.id, { description: e.target.value })} className="h-9 rounded-xl text-sm" placeholder="Description (optionnel)" />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {(formationFormData.chapters || []).length === 0 && (
                   <p className="text-sm text-gray-400 text-center py-4 border-2 border-dashed border-gray-100 rounded-2xl">Aucun chapitre — les modules seront affichés sans regroupement</p>
                 )}

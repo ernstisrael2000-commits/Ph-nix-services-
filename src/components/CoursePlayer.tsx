@@ -4,9 +4,9 @@ import {
   ChevronLeft, Play, CheckCircle2, Lock, Clock, Loader2,
   BookOpen, X, ChevronDown, ChevronUp,
   FileText, Download, Trophy,
-  Video, List, StickyNote
+  Video, List, StickyNote, ClipboardList, Award
 } from 'lucide-react';
-import { Formation, FormationModule } from '../types';
+import { Formation, FormationModule, FormationChapter } from '../types';
 import { Client } from '../types';
 import { toast } from 'sonner';
 
@@ -61,6 +61,15 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
   const [note, setNote] = useState('');
   const [noteSaved, setNoteSaved] = useState(false);
 
+  // ── Quiz system ────────────────────────────────────────────────────────────
+  const [quizResults, setQuizResults] = useState<Record<string, { passed: boolean; score: number; attempts: number }>>({});
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [quizChapter, setQuizChapter] = useState<FormationChapter | null>(null);
+  const [quizAnswers, setQuizAnswers] = useState<number[]>([]);
+  const [quizSubmitting, setQuizSubmitting] = useState(false);
+  const [quizResult, setQuizResult] = useState<{ score: number; passed: boolean; correct: number; total: number; passPercent: number } | null>(null);
+  const [certificate, setCertificate] = useState<{ certificateCode: string; issuedAt: any; issuedBy: string } | null>(null);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const positionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
@@ -78,8 +87,16 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
   const isLocked = useCallback((mod: FormationModule, idx: number): boolean => {
     if (idx === 0) return false;
     const prev = modules[idx - 1];
-    return !completedIds.includes(prev?.id ?? '');
-  }, [modules, completedIds]);
+    if (!completedIds.includes(prev?.id ?? '')) return true;
+    // If crossing chapter boundary, check if the previous chapter has an unpassed quiz
+    if (prev?.chapterId && mod?.chapterId && prev.chapterId !== mod.chapterId) {
+      const prevChapter = (formation.chapters || []).find(c => c.id === prev.chapterId);
+      if (prevChapter?.quiz?.questions?.length) {
+        return !quizResults[prev.chapterId]?.passed;
+      }
+    }
+    return false;
+  }, [modules, completedIds, quizResults, formation.chapters]);
 
   const isCompleted = (mod: FormationModule) => completedIds.includes(mod.id ?? '');
 
@@ -105,6 +122,30 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
       })
       .catch(() => { if (modules[0]) setCurrentModuleId(modules[0].id ?? null); })
       .finally(() => setLoadingProgress(false));
+  }, [loggedClient.id, formation.id]);
+
+  // ── Load quiz results ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!loggedClient?.id || !formation.id) return;
+    fetch(`/api/formations/quiz/results/${loggedClient.id}/${formation.id}`)
+      .then(r => r.json())
+      .then(data => {
+        const map: Record<string, { passed: boolean; score: number; attempts: number }> = {};
+        (data.results || []).forEach((r: any) => {
+          map[r.chapterId] = { passed: r.passed, score: r.score, attempts: r.attempts || 1 };
+        });
+        setQuizResults(map);
+      })
+      .catch(() => {});
+  }, [loggedClient.id, formation.id]);
+
+  // ── Load certificate ───────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!loggedClient?.id || !formation.id) return;
+    fetch(`/api/formations/certificate/${loggedClient.id}/${formation.id}`)
+      .then(r => r.json())
+      .then(data => { if (data.certificate) setCertificate(data.certificate); })
+      .catch(() => {});
   }, [loggedClient.id, formation.id]);
 
   // ── Load note for current module ───────────────────────────────────────────
@@ -134,6 +175,35 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
     }, 4000);
   }, [loggedClient.id, formation.id, currentModuleId]);
 
+  // ── Quiz helpers ───────────────────────────────────────────────────────────
+  const openQuiz = useCallback((chapter: FormationChapter) => {
+    setQuizChapter(chapter);
+    setQuizAnswers(new Array(chapter.quiz?.questions?.length ?? 0).fill(-1));
+    setQuizResult(null);
+    setShowQuiz(true);
+  }, []);
+
+  const submitQuiz = async () => {
+    if (!quizChapter || !loggedClient?.id || !formation.id) return;
+    setQuizSubmitting(true);
+    try {
+      const res = await fetch('/api/formations/quiz/submit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: loggedClient.id, formationId: formation.id, chapterId: quizChapter.id, answers: quizAnswers }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur');
+      setQuizResult(data);
+      setQuizResults(prev => ({
+        ...prev,
+        [quizChapter.id]: { passed: data.passed || prev[quizChapter.id]?.passed, score: data.score, attempts: (prev[quizChapter.id]?.attempts || 0) + 1 },
+      }));
+      if (data.passed) toast.success(`🎉 Quiz réussi ! Score : ${data.score}%`);
+      else toast.error(`Quiz échoué — ${data.score}% (seuil: ${data.passPercent}%). Réessayez !`);
+    } catch (e: any) { toast.error(e.message || 'Erreur de soumission.'); }
+    finally { setQuizSubmitting(false); }
+  };
+
   // ── Mark lesson complete ───────────────────────────────────────────────────
   const markComplete = useCallback(async (moduleId?: string, autoAdvance = true) => {
     const targetId = moduleId ?? currentModuleId;
@@ -145,8 +215,22 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: loggedClient.id, formationId: formation.id, moduleId: targetId }),
       });
-      setCompletedIds(prev => [...prev, targetId]);
+      const newCompleted = [...completedIds, targetId];
+      setCompletedIds(newCompleted);
       setJustCompleted(true);
+
+      // Check if this module is the last in its chapter and chapter has quiz
+      const completedMod = modules.find(m => m.id === targetId);
+      if (completedMod?.chapterId) {
+        const chapterModules = modules.filter(m => m.chapterId === completedMod.chapterId);
+        const isLastInChapter = chapterModules[chapterModules.length - 1]?.id === targetId;
+        const chapter = (formation.chapters || []).find(c => c.id === completedMod.chapterId);
+        if (isLastInChapter && chapter?.quiz?.questions?.length && !quizResults[chapter.id]?.passed) {
+          setTimeout(() => { openQuiz(chapter); setJustCompleted(false); }, 1000);
+          return;
+        }
+      }
+
       if (autoAdvance) {
         const idx = modules.findIndex(m => m.id === targetId);
         if (idx < modules.length - 1) {
@@ -155,7 +239,7 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
       }
     } catch { toast.error('Erreur lors de la mise à jour de la progression.'); }
     finally { setMarking(false); }
-  }, [currentModuleId, completedIds, loggedClient.id, formation.id, modules]);
+  }, [currentModuleId, completedIds, loggedClient.id, formation.id, modules, quizResults, openQuiz]);
 
   // ── YouTube end detection ──────────────────────────────────────────────────
   useEffect(() => {
@@ -709,23 +793,167 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
               {/* ── Certificate banner ─────────────────────────────────────── */}
               {formation.hasCertificate && progressPct === 100 && (
                 <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 pb-8">
-                  <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-5 flex items-center gap-4">
-                    <div className="h-12 w-12 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
-                      <Trophy className="h-6 w-6 text-amber-500" />
+                  {certificate ? (
+                    <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-5 flex items-center gap-4">
+                      <div className="h-12 w-12 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+                        <Award className="h-6 w-6 text-amber-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-amber-800 font-black text-sm">🎓 Certificat obtenu !</p>
+                        <p className="text-amber-600 text-xs mt-0.5">
+                          Émis le {certificate.issuedAt?.seconds ? new Date(certificate.issuedAt.seconds * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'}
+                          {certificate.issuedBy && ` par ${certificate.issuedBy}`}
+                        </p>
+                        <code className="text-[11px] font-mono text-amber-700 bg-amber-100 px-2 py-0.5 rounded mt-1 inline-block">{certificate.certificateCode}</code>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-amber-800 font-black text-sm">🎉 Félicitations ! Cours terminé</p>
-                      <p className="text-amber-600 text-xs mt-0.5">
-                        Votre certificat d'achèvement est disponible. Contactez Rena pour l'obtenir.
-                      </p>
+                  ) : (
+                    <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-5 flex items-center gap-4">
+                      <div className="h-12 w-12 bg-amber-100 rounded-xl flex items-center justify-center shrink-0">
+                        <Trophy className="h-6 w-6 text-amber-500" />
+                      </div>
+                      <div>
+                        <p className="text-amber-800 font-black text-sm">🎉 Félicitations ! Cours terminé</p>
+                        <p className="text-amber-600 text-xs mt-0.5">Votre certificat sera émis par l'équipe Rena.</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </>
           )}
         </div>
       </div>
+
+      {/* ── Quiz Modal ──────────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showQuiz && quizChapter && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.92, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.92, opacity: 0 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden"
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-br from-violet-600 to-indigo-700 p-6 text-white shrink-0">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="h-5 w-5" />
+                    <span className="text-xs font-black uppercase tracking-widest opacity-70">Quiz d'évaluation</span>
+                  </div>
+                  {!quizResult && (
+                    <button onClick={() => setShowQuiz(false)} className="rounded-full bg-white/10 hover:bg-white/20 p-1.5 transition-all">
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                <h2 className="text-xl font-black mt-2">{quizChapter.title}</h2>
+                <p className="text-white/70 text-xs mt-1">
+                  {quizChapter.quiz?.questions?.length} question{(quizChapter.quiz?.questions?.length ?? 0) > 1 ? 's' : ''} · Seuil de réussite : {quizChapter.quiz?.passPercent ?? 80}%
+                </p>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                {quizResult ? (
+                  /* Results screen */
+                  <div className="text-center py-4">
+                    <div className={`h-20 w-20 mx-auto rounded-full flex items-center justify-center mb-4 ${quizResult.passed ? 'bg-emerald-100' : 'bg-red-100'}`}>
+                      {quizResult.passed
+                        ? <Award className="h-10 w-10 text-emerald-500" />
+                        : <ClipboardList className="h-10 w-10 text-red-400" />}
+                    </div>
+                    <h3 className={`text-2xl font-black ${quizResult.passed ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {quizResult.passed ? '🎉 Réussi !' : 'Échoué'}
+                    </h3>
+                    <p className="text-4xl font-black text-gray-900 mt-2">{quizResult.score}%</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {quizResult.correct} / {quizResult.total} bonnes réponses · Seuil : {quizResult.passPercent}%
+                    </p>
+                    {quizResult.passed && (
+                      <p className="text-sm text-emerald-600 font-semibold mt-3 bg-emerald-50 rounded-xl p-3">
+                        Le chapitre suivant est maintenant débloqué !
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  /* Questions */
+                  (quizChapter.quiz?.questions || []).map((q, qi) => (
+                    <div key={q.id} className="space-y-2">
+                      <p className="text-sm font-bold text-gray-900">
+                        <span className="text-violet-500 mr-1">Q{qi + 1}.</span> {q.question}
+                      </p>
+                      <div className="space-y-2">
+                        {(q.options || []).map((opt, oi) => (
+                          <button
+                            key={oi}
+                            onClick={() => {
+                              const next = [...quizAnswers];
+                              next[qi] = oi;
+                              setQuizAnswers(next);
+                            }}
+                            className={`w-full text-left px-4 py-3 rounded-xl border-2 text-sm font-medium transition-all ${
+                              quizAnswers[qi] === oi
+                                ? 'border-violet-500 bg-violet-50 text-violet-800'
+                                : 'border-gray-100 bg-gray-50 hover:border-violet-200 hover:bg-violet-50/50 text-gray-700'
+                            }`}
+                          >
+                            <span className="inline-block w-6 h-6 rounded-full border-2 border-current mr-2 text-center text-xs leading-5 font-black shrink-0">
+                              {String.fromCharCode(65 + oi)}
+                            </span>
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-5 border-t border-gray-100 shrink-0">
+                {quizResult ? (
+                  <div className="flex gap-3">
+                    {!quizResult.passed && (
+                      <button
+                        onClick={() => {
+                          setQuizAnswers(new Array(quizChapter.quiz?.questions?.length ?? 0).fill(-1));
+                          setQuizResult(null);
+                        }}
+                        className="flex-1 py-3 rounded-2xl border-2 border-violet-200 text-violet-700 font-bold text-sm hover:bg-violet-50 transition-all"
+                      >
+                        Réessayer
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowQuiz(false)}
+                      className="flex-1 py-3 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm transition-all"
+                    >
+                      {quizResult.passed ? 'Continuer le cours' : 'Fermer'}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={submitQuiz}
+                    disabled={quizSubmitting || quizAnswers.some(a => a === -1)}
+                    className="w-full py-3 rounded-2xl bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm transition-all flex items-center justify-center gap-2"
+                  >
+                    {quizSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
+                    Soumettre le quiz
+                  </button>
+                )}
+                {!quizResult && (
+                  <p className="text-center text-xs text-gray-400 mt-2">
+                    {quizAnswers.filter(a => a !== -1).length} / {quizChapter.quiz?.questions?.length ?? 0} réponses
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

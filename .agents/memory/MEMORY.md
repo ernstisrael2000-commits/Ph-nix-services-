@@ -1,0 +1,1 @@
+- [Formations variable name](formations-variable.md) — adminFormations (not formations) is the local alias from useAdminFormations() hook in AdminDashboard

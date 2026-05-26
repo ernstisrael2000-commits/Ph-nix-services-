@@ -1943,6 +1943,116 @@ async function sendPushToAdmins(title: string, body: string, url = '/'): Promise
   }
 }
 
+// ── Quiz: submit answers ───────────────────────────────────────────────────────
+router.post('/api/formations/quiz/submit', requireDb, async (req, res) => {
+  try {
+    const { userId, formationId, chapterId, answers } = req.body;
+    if (!userId || !formationId || !chapterId || !Array.isArray(answers))
+      return res.status(400).json({ error: 'Données manquantes.' });
+
+    const formationSnap = await adminDb.collection('formations').doc(formationId).get();
+    if (!formationSnap.exists) return res.status(404).json({ error: 'Formation introuvable.' });
+    const formation = formationSnap.data() as any;
+    const chapter = (formation.chapters || []).find((c: any) => c.id === chapterId);
+    if (!chapter?.quiz?.questions?.length) return res.status(400).json({ error: 'Aucun quiz pour ce chapitre.' });
+
+    const questions = chapter.quiz.questions;
+    const passPercent = chapter.quiz.passPercent ?? 80;
+    let correct = 0;
+    questions.forEach((q: any, i: number) => { if (answers[i] === q.correctIndex) correct++; });
+    const score = Math.round((correct / questions.length) * 100);
+    const passed = score >= passPercent;
+
+    const existingSnap = await adminDb.collection('formation_quiz_results')
+      .where('userId', '==', userId).where('formationId', '==', formationId).where('chapterId', '==', chapterId)
+      .limit(1).get();
+
+    const ts = FieldValue.serverTimestamp();
+    if (!existingSnap.empty) {
+      const existing = existingSnap.docs[0];
+      const prevAttempts = existing.data().attempts || 1;
+      const prevPassed = existing.data().passed || false;
+      await existing.ref.update({ score, passed: passed || prevPassed, attempts: prevAttempts + 1, completedAt: ts });
+    } else {
+      await adminDb.collection('formation_quiz_results').add({
+        userId, formationId, chapterId, score, passed, attempts: 1, completedAt: ts,
+      });
+    }
+    res.json({ success: true, score, passed, correct, total: questions.length, passPercent });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Quiz: get results for user + formation ────────────────────────────────────
+router.get('/api/formations/quiz/results/:userId/:formationId', requireDb, async (req, res) => {
+  try {
+    const { userId, formationId } = req.params;
+    const snap = await adminDb.collection('formation_quiz_results')
+      .where('userId', '==', userId).where('formationId', '==', formationId).get();
+    const results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json({ results });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Certificates: get for user + formation ────────────────────────────────────
+router.get('/api/formations/certificate/:userId/:formationId', requireDb, async (req, res) => {
+  try {
+    const { userId, formationId } = req.params;
+    const snap = await adminDb.collection('formation_certificates')
+      .where('userId', '==', userId).where('formationId', '==', formationId).limit(1).get();
+    if (snap.empty) return res.json({ certificate: null });
+    res.json({ certificate: { id: snap.docs[0].id, ...snap.docs[0].data() } });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Certificates: list all (admin) ────────────────────────────────────────────
+router.get('/api/admin/formations/certificates', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { formationId } = req.query;
+    let query: any = adminDb.collection('formation_certificates').orderBy('issuedAt', 'desc');
+    if (formationId) query = adminDb.collection('formation_certificates')
+      .where('formationId', '==', formationId).orderBy('issuedAt', 'desc');
+    const snap = await query.get();
+    const certificates = snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+    res.json({ certificates });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Certificates: issue (admin) ───────────────────────────────────────────────
+router.post('/api/admin/formations/certificate', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { userId, userName, userEmail, formationId, formationTitle, issuedBy } = req.body;
+    if (!userId || !formationId) return res.status(400).json({ error: 'userId et formationId requis.' });
+    const existing = await adminDb.collection('formation_certificates')
+      .where('userId', '==', userId).where('formationId', '==', formationId).limit(1).get();
+    if (!existing.empty) return res.status(409).json({ error: 'Certificat déjà émis pour cet étudiant.' });
+    const certificateCode = 'RENA-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+    const ref = await adminDb.collection('formation_certificates').add({
+      userId, userName, userEmail: userEmail || '', formationId, formationTitle,
+      issuedBy, certificateCode, issuedAt: FieldValue.serverTimestamp(),
+    });
+    res.json({ success: true, id: ref.id, certificateCode });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Certificates: revoke (admin) ──────────────────────────────────────────────
+router.delete('/api/admin/formations/certificate/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    await adminDb.collection('formation_certificates').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Certificates: list purchases for a formation (admin — for issuance UI) ────
+router.get('/api/admin/formations/:formationId/students', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { formationId } = req.params;
+    const snap = await adminDb.collection('formation_purchases')
+      .where('formationId', '==', formationId).where('status', '==', 'active').get();
+    const students = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json({ students });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────
 router.all('/api/*', (_req, res) => {
   res.status(404).json({ error: 'Route API introuvable.' });
