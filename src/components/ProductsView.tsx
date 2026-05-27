@@ -552,10 +552,15 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange 
                                         } catch (err: any) { toast.error(err.message || 'Erreur paiement.'); }
                                         finally { setItemPurchaseLoading(false); }
                                       }}
-                                      className="h-11 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-black flex items-center justify-center gap-1.5 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+                                      className="h-14 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-black flex flex-col items-center justify-center gap-0.5 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
                                     >
-                                      {itemPurchaseLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wallet className="h-3.5 w-3.5" />}
-                                      Solde Wallet
+                                      <span className="flex items-center gap-1">
+                                        {itemPurchaseLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wallet className="h-3.5 w-3.5" />}
+                                        Solde Wallet
+                                      </span>
+                                      <span className="text-[9px] font-normal text-emerald-600 opacity-80">
+                                        {Math.round((effectiveClient?.balance ?? loggedClient.balance ?? 0) * exchangeRate).toLocaleString()} HTG
+                                      </span>
                                     </button>
                                   ) : (
                                     <button onClick={() => { setPayingItemKey(null); setIsGameCatalogOpen(false); onOpenWallet?.(); }} className="h-11 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-black flex items-center justify-center gap-1.5 hover:bg-emerald-100 transition-colors">
@@ -610,10 +615,15 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange 
                               } catch (err: any) { toast.error(err.message || 'Erreur paiement.'); }
                               finally { setItemPurchaseLoading(false); }
                             }}
-                            className="h-12 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-black flex items-center justify-center gap-2 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+                            className="h-16 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-black flex flex-col items-center justify-center gap-0.5 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
                           >
-                            {itemPurchaseLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
-                            Solde Wallet
+                            <span className="flex items-center gap-2">
+                              {itemPurchaseLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+                              Solde Wallet
+                            </span>
+                            <span className="text-[10px] font-normal text-emerald-600 opacity-80">
+                              {Math.round((effectiveClient?.balance ?? loggedClient.balance ?? 0) * exchangeRate).toLocaleString()} HTG disponible
+                            </span>
                           </button>
                         ) : (
                           <button onClick={() => { setIsGameCatalogOpen(false); onOpenWallet?.(); }} className="h-12 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-black flex items-center justify-center gap-2 hover:bg-emerald-100 transition-colors">

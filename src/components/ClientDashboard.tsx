@@ -640,75 +640,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
 
           <form onSubmit={handleDeposit} className="p-5 space-y-4 bg-white overflow-y-auto flex-1">
 
-            {/* ── Account info for selected method ── */}
-            {depositMethod && (depositMethod.number || depositMethod.address) ? (
-              <div className="rounded-2xl overflow-hidden border border-emerald-100 bg-emerald-50">
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600">
-                  <Smartphone className="h-3.5 w-3.5 text-white" />
-                  <p className="text-[10px] font-black text-white uppercase tracking-widest">Compte {depositMethod.name}</p>
-                </div>
-                <div className="p-3 space-y-2.5">
-                  <div className="flex items-center justify-between gap-3 bg-white rounded-xl p-3 border border-emerald-100">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-xl shrink-0">{depositMethod.icon}</span>
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide leading-none">{depositMethod.name}</p>
-                        {depositMethod.accountName && <p className="text-[10px] text-gray-400 leading-none mt-0.5">{depositMethod.accountName}</p>}
-                        <p className="font-black text-gray-900 font-mono text-sm mt-0.5 truncate">{depositMethod.number || depositMethod.address}</p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(depositMethod.number || depositMethod.address || '');
-                        toast.success(`Numéro ${depositMethod.name} copié !`);
-                      }}
-                      className="shrink-0 h-9 w-9 flex items-center justify-center rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 hover:bg-emerald-100 transition-colors active:scale-95"
-                    >
-                      <Copy className="h-4 w-4" />
-                    </button>
-                  </div>
-                  {depositMethod.instructions && (
-                    <div className="flex items-start gap-2 p-2.5 rounded-xl bg-blue-50 border border-blue-100">
-                      <Info className="h-3.5 w-3.5 text-blue-500 mt-0.5 shrink-0" />
-                      <p className="text-[11px] text-blue-700 leading-relaxed">{depositMethod.instructions}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : !depositMethod && depositMethods.filter(m => m.number || m.address).length > 0 ? (
-              <div className="rounded-2xl overflow-hidden border border-emerald-100 bg-emerald-50">
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600">
-                  <Smartphone className="h-3.5 w-3.5 text-white" />
-                  <p className="text-[10px] font-black text-white uppercase tracking-widest">Numéros de dépôt</p>
-                </div>
-                <div className="p-3 space-y-2.5">
-                  {depositMethods.filter(m => m.number || m.address).map(m => (
-                    <div key={m.id} className="flex items-center justify-between gap-3 bg-white rounded-xl p-3 border border-emerald-100">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xl shrink-0">{m.icon}</span>
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-black text-gray-500 uppercase tracking-wide leading-none">{m.name}</p>
-                          {m.accountName && <p className="text-[10px] text-gray-400 leading-none mt-0.5">{m.accountName}</p>}
-                          <p className="font-black text-gray-900 font-mono text-sm mt-0.5 truncate">{m.number || m.address}</p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(m.number || m.address || '');
-                          toast.success(`Numéro ${m.name} copié !`);
-                        }}
-                        className="shrink-0 h-9 w-9 flex items-center justify-center rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 hover:bg-emerald-100 transition-colors active:scale-95"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
+            {/* ── 1. Méthode de paiement ── */}
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode de paiement</Label>
               {depositMethods.length === 0 ? (
@@ -733,17 +665,74 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               )}
             </div>
 
-            {depositMethod && (depositMethod.qrUrl) && (
-              <div className="flex justify-center">
-                <div className="relative p-2 bg-white rounded-2xl border border-gray-200 shadow-sm">
-                  <img src={depositMethod.qrUrl} alt="QR Code" className="h-24 w-24 object-contain rounded-xl"
-                    onError={e => (e.currentTarget.style.display = 'none')} />
-                  <div className="absolute -bottom-2 -right-2 bg-emerald-600 text-white p-1 rounded-lg">
-                    <QrCode className="h-3.5 w-3.5" />
+            {/* ── 2. Infos compte + QR (s'affiche après sélection) ── */}
+            {(() => {
+              if (!depositMethod) return null;
+              const num = depositMethod.number || depositMethod.address
+                || (depositMethod.id === 'moncash' ? (settings as any)?.moncashNumber : null)
+                || (depositMethod.id === 'natcash' ? (settings as any)?.natcashNumber : null)
+                || (depositMethod.id === 'admi' ? (settings as any)?.admiNumber : null)
+                || null;
+              const qr = depositMethod.qrUrl
+                || (depositMethod.id === 'moncash' ? (settings as any)?.moncashQR : null)
+                || (depositMethod.id === 'natcash' ? (settings as any)?.natcashQR : null)
+                || (depositMethod.id === 'admi' ? (settings as any)?.admiQR : null)
+                || null;
+              const accountName = depositMethod.accountName || null;
+              if (!num && !qr) return null;
+              return (
+                <div className="rounded-2xl overflow-hidden border border-emerald-100">
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600">
+                    <Smartphone className="h-3.5 w-3.5 text-white" />
+                    <p className="text-[10px] font-black text-white uppercase tracking-widest">Compte {depositMethod.name}</p>
+                  </div>
+                  <div className="p-3 space-y-3 bg-emerald-50">
+                    {num && (
+                      <div className="flex items-center justify-between gap-3 bg-white rounded-xl p-3 border border-emerald-100">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-2xl shrink-0">{depositMethod.icon}</span>
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wide leading-none">{depositMethod.name}</p>
+                            {accountName && (
+                              <p className="text-[11px] font-bold text-gray-700 leading-tight mt-0.5">{accountName}</p>
+                            )}
+                            <p className="font-black text-gray-900 font-mono text-base mt-0.5 tracking-wider">{num}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { navigator.clipboard.writeText(num); toast.success(`Numéro ${depositMethod.name} copié !`); }}
+                          className="shrink-0 h-10 w-10 flex items-center justify-center rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 hover:bg-emerald-100 transition-colors active:scale-95"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
+                    {qr && (
+                      <div className="flex items-center gap-3 bg-white rounded-xl p-3 border border-emerald-100">
+                        <div className="relative shrink-0">
+                          <img src={qr} alt="QR Code" className="h-20 w-20 object-contain rounded-lg border border-gray-100"
+                            onError={e => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none'; }} />
+                          <div className="absolute -bottom-1.5 -right-1.5 bg-emerald-600 text-white p-1 rounded-md shadow">
+                            <QrCode className="h-3 w-3" />
+                          </div>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-wide">QR Code</p>
+                          <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">Scannez ce code pour envoyer le paiement directement</p>
+                        </div>
+                      </div>
+                    )}
+                    {depositMethod.instructions && (
+                      <div className="flex items-start gap-2 p-2.5 rounded-xl bg-blue-50 border border-blue-100">
+                        <Info className="h-3.5 w-3.5 text-blue-500 mt-0.5 shrink-0" />
+                        <p className="text-[11px] text-blue-700 leading-relaxed">{depositMethod.instructions}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             <div className="space-y-1.5">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant envoyé (HTG)</Label>
