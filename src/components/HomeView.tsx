@@ -32,6 +32,7 @@ interface HomeViewProps {
   onViewChange: (view: any) => void;
   loggedClient?: Client | null;
   onOpenWallet?: () => void;
+  onRequestAuth?: () => void;
 }
 
 const SECTION_CARDS = [
@@ -61,7 +62,7 @@ const SECTION_CARDS = [
   },
 ];
 
-export default function HomeView({ onTrackingClick, onViewChange, loggedClient, onOpenWallet }: HomeViewProps) {
+export default function HomeView({ onTrackingClick, onViewChange, loggedClient, onOpenWallet, onRequestAuth }: HomeViewProps) {
   const { sliderImages } = useSliderImages();
   const { buttons, loading: buttonsLoading } = useNavButtons();
   const { settings } = useSettings();
@@ -265,43 +266,6 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
         </div>
       )}
 
-      {/* ── Section access cards ── */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-black text-dark">Accès rapide</h2>
-          <div className="h-0.5 w-12 bg-primary rounded-full" />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {SECTION_CARDS.map((card, i) => {
-            const Icon = card.icon;
-            return (
-              <motion.button
-                key={card.key}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.08 }}
-                onClick={() => onViewChange(card.key)}
-                className={`relative group w-full text-left rounded-3xl overflow-hidden shadow-lg ${card.glow} shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300`}
-              >
-                <div className={`absolute inset-0 bg-gradient-to-br ${card.gradient}`} />
-                <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
-                <div className="relative z-10 p-5">
-                  <div className="h-11 w-11 rounded-2xl bg-white/20 border border-white/25 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
-                    <Icon className="h-5 w-5 text-white" />
-                  </div>
-                  <h3 className="text-lg font-black text-white leading-none">{card.title}</h3>
-                  <p className="text-white/70 text-xs mt-1 leading-relaxed">{card.subtitle}</p>
-                  <div className="flex items-center gap-1 mt-3 text-white/90 text-xs font-black">
-                    Explorer
-                    <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
-                  </div>
-                </div>
-              </motion.button>
-            );
-          })}
-        </div>
-      </section>
-
       {/* ── Nos Produits — real catalog preview ── */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -333,7 +297,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
 
             const handleItemClick = () => {
               if (!loggedClient) {
-                onOpenWallet?.();
+                onRequestAuth?.();
               } else {
                 onViewChange('products');
               }

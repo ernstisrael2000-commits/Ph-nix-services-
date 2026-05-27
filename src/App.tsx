@@ -298,6 +298,7 @@ export default function App() {
               onViewChange={handleViewChange}
               loggedClient={loggedClient}
               onOpenWallet={() => setShowClientDashboard(true)}
+              onRequestAuth={() => setShowAuthModal(true)}
             />
           )}
 

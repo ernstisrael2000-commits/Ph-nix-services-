@@ -79,70 +79,85 @@ function VirtualCard({
 }) {
   return (
     <div
-      className="relative w-full rounded-[1.75rem] overflow-hidden select-none"
+      className="relative w-full rounded-[1.75rem] overflow-hidden select-none shadow-2xl shadow-violet-900/40"
       style={{
         aspectRatio: '1.75 / 1',
-        background: 'linear-gradient(135deg, #4C1D95 0%, #6D28D9 35%, #7C3AED 62%, #5B21B6 100%)',
+        background: 'linear-gradient(135deg, #3B0F8C 0%, #5B1FD4 30%, #7C3AED 60%, #6027C0 100%)',
       }}
     >
+      {/* Radial glow top-left */}
       <div className="absolute inset-0"
-        style={{ background: 'radial-gradient(ellipse at 15% 15%, rgba(255,255,255,0.18) 0%, transparent 55%)' }} />
-      <div className="absolute inset-0 opacity-[0.07]"
+        style={{ background: 'radial-gradient(ellipse at 20% 20%, rgba(160,130,255,0.25) 0%, transparent 60%)' }} />
+      {/* Grid overlay */}
+      <div className="absolute inset-0"
         style={{
-          backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
-          backgroundSize: '32px 32px',
+          backgroundImage: 'linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
         }} />
-      <div className="absolute -right-10 -top-10 w-44 h-44 rounded-full border border-white/10" />
-      <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full border border-white/10" />
-      <div className="absolute right-6 bottom-6 w-12 h-12 rounded-full bg-white/5" />
+      {/* Large decorative arcs */}
+      <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full border border-white/[0.06]" />
+      <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full border border-white/[0.08]" />
+      <div className="absolute -right-2 bottom-0 w-28 h-28 rounded-full border border-white/[0.05]" />
+      {/* Bottom-right glow */}
+      <div className="absolute bottom-0 right-0 w-32 h-20 rounded-tl-full"
+        style={{ background: 'radial-gradient(ellipse at 80% 90%, rgba(120,80,255,0.3) 0%, transparent 70%)' }} />
 
       <div className="relative z-10 h-full flex flex-col justify-between p-5">
+        {/* Top row */}
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-violet-200/50 text-[9px] font-black uppercase tracking-[0.25em] mb-0.5">Rena Wallet</p>
-            <p className="text-white font-black text-sm leading-tight">{client.name}</p>
+            <p className="text-white/40 text-[9px] font-black uppercase tracking-[0.3em] mb-1">Rena Wallet</p>
+            <p className="text-white font-black text-base leading-tight tracking-wide">{client.name}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={onToggleHide} className="text-white/40 hover:text-white/70 transition-colors">
-              {hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          <div className="flex items-center gap-2.5">
+            <button onClick={onToggleHide} className="text-white/35 hover:text-white/65 transition-colors">
+              {hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
-            <div className="h-6 w-9 rounded-md bg-gradient-to-br from-amber-300 to-amber-500 shadow-md flex items-center justify-center">
-              <div className="grid grid-cols-2 gap-[2px] p-1 w-full h-full">
-                {[...Array(4)].map((_, i) => <div key={i} className="rounded-[1px] bg-amber-700/40" />)}
+            {/* Chip */}
+            <div className="h-7 w-10 rounded-lg overflow-hidden shadow-lg"
+              style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 50%, #F59E0B 100%)' }}>
+              <div className="w-full h-full grid grid-cols-2 gap-[1.5px] p-[3px]">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="rounded-[2px]"
+                    style={{ background: 'rgba(120,60,0,0.35)' }} />
+                ))}
               </div>
             </div>
           </div>
         </div>
 
+        {/* Balance */}
         <div>
-          <p className="text-violet-300/50 text-[9px] font-black uppercase tracking-[0.2em] mb-1">Solde disponible</p>
+          <p className="text-white/40 text-[8px] font-black uppercase tracking-[0.3em] mb-1.5">Solde disponible</p>
           {hidden ? (
-            <p className="text-white font-black text-3xl tracking-widest leading-none">••••••</p>
+            <p className="text-white font-black text-4xl tracking-widest leading-none">••••••</p>
           ) : (
-            <p className="text-white font-black text-3xl leading-none">
+            <p className="text-white font-black leading-none" style={{ fontSize: '2rem' }}>
               ${balance.toFixed(2)}
-              <span className="text-white/40 text-sm font-semibold ml-1.5">USD</span>
+              <span className="text-white/50 text-base font-bold ml-2">USD</span>
             </p>
           )}
           {!hidden && (
-            <p className="text-white/30 text-[10px] mt-0.5">
+            <p className="text-white/35 text-[10px] font-semibold mt-1">
               ≈ {Math.round(balance * rate).toLocaleString()} HTG
             </p>
           )}
         </div>
 
+        {/* Bottom row */}
         <div className="flex items-end justify-between">
-          <button onClick={onCopy} className="flex items-center gap-1.5 group">
-            <span className="text-white/30 text-[10px] font-mono tracking-widest group-hover:text-white/50 transition-colors">
+          <button onClick={onCopy} className="flex items-center gap-2 group">
+            <span className="text-white/30 text-[10px] font-mono tracking-[0.2em] group-hover:text-white/55 transition-colors">
               {client.walletId?.match(/.{1,4}/g)?.join(' ') || client.walletId}
             </span>
             {copied
-              ? <CheckCircle2 className="h-3 w-3 text-emerald-300" />
-              : <Copy className="h-3 w-3 text-white/25 group-hover:text-white/60 transition-colors" />}
+              ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
+              : <Copy className="h-3.5 w-3.5 text-white/25 group-hover:text-white/60 transition-colors" />}
           </button>
-          <div className="flex -space-x-2">
-            <div className="h-7 w-7 rounded-full bg-red-500/80 shadow" />
-            <div className="h-7 w-7 rounded-full bg-amber-400/80 shadow" />
+          {/* Mastercard circles */}
+          <div className="flex -space-x-3">
+            <div className="h-9 w-9 rounded-full shadow-lg" style={{ background: 'rgba(220,38,38,0.85)' }} />
+            <div className="h-9 w-9 rounded-full shadow-lg" style={{ background: 'rgba(251,191,36,0.9)' }} />
           </div>
         </div>
       </div>
