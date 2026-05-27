@@ -10,6 +10,7 @@ import { Button } from './ui/button';
 import { useState, useEffect } from 'react';
 import {
   useSliderImages, useNavButtons, useSettings,
+  useProducts, useGames, useCardTopups,
 } from '../services/parcelService';
 import { useClientData, useClientTransactions } from '../services/clientService';
 import { Client } from '../types';
@@ -64,6 +65,10 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const { sliderImages } = useSliderImages();
   const { buttons, loading: buttonsLoading } = useNavButtons();
   const { settings } = useSettings();
+
+  const { products, loading: productsLoading } = useProducts();
+  const { games, loading: gamesLoading } = useGames();
+  const { cards, loading: cardsLoading } = useCardTopups();
 
   const { client: liveClient } = useClientData(loggedClient?.id || null);
   const { transactions: clientTx } = useClientTransactions(loggedClient?.id || null);
@@ -297,7 +302,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
         </div>
       </section>
 
-      {/* ── Product categories preview ── */}
+      {/* ── Nos Produits — real catalog preview ── */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-black text-dark">Nos Produits</h2>
@@ -308,28 +313,84 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
             Voir tout <ArrowRight className="h-3 w-3" />
           </button>
         </div>
-        <div className="grid grid-cols-3 gap-2.5">
-          {[
-            { label: 'Cartes Cadeaux', icon: LucideIcons.CreditCard, color: 'from-rose-500 to-pink-600', bg: 'bg-rose-50', text: 'text-rose-600', desc: 'iTunes, Google Play…' },
-            { label: 'Recharge Jeux', icon: LucideIcons.Gamepad2, color: 'from-indigo-500 to-violet-600', bg: 'bg-indigo-50', text: 'text-indigo-600', desc: 'Free Fire, PUBG…' },
-            { label: 'Digitaux', icon: LucideIcons.Zap, color: 'from-amber-400 to-orange-500', bg: 'bg-amber-50', text: 'text-amber-600', desc: 'VPN, comptes…' },
-          ].map((cat, i) => (
-            <motion.button
-              key={cat.label}
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.07 }}
-              onClick={() => onViewChange('products')}
-              className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 p-3 text-left"
-            >
-              <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${cat.color} flex items-center justify-center mb-2 group-hover:scale-110 transition-transform`}>
-                <cat.icon className="h-4.5 w-4.5 text-white h-[18px] w-[18px]" />
+        {(productsLoading || gamesLoading || cardsLoading) ? (
+          <div className="flex gap-3 overflow-hidden">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="w-32 shrink-0 h-40 rounded-2xl bg-gray-100 animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          (() => {
+            const allItems = [
+              ...products.map(p => ({ id: p.id, name: p.name, image: p.image, price: p.price, type: 'product' })),
+              ...games.map(g => ({ id: g.id, name: g.name, image: g.image, price: g.priceRange, type: 'game' })),
+              ...cards.map(c => ({ id: c.id, name: c.name, image: c.image, price: c.price, type: 'card' })),
+            ].slice(0, 12);
+
+            if (allItems.length === 0) return (
+              <div className="text-center py-8 text-gray-400 text-sm">Aucun produit disponible.</div>
+            );
+
+            const handleItemClick = () => {
+              if (!loggedClient) {
+                onOpenWallet?.();
+              } else {
+                onViewChange('products');
+              }
+            };
+
+            return (
+              <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory scrollbar-none">
+                {allItems.map((item, i) => (
+                  <motion.button
+                    key={`${item.type}-${item.id}`}
+                    initial={{ opacity: 0, scale: 0.93 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.04 }}
+                    onClick={handleItemClick}
+                    className="relative w-32 shrink-0 snap-start rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all group bg-white text-left"
+                  >
+                    <div className="relative h-24 bg-gray-100 overflow-hidden">
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={e => { (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/rena/200/200'; }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+                      {!loggedClient && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                          <div className="h-7 w-7 rounded-full bg-white/90 flex items-center justify-center shadow">
+                            <LucideIcons.Lock className="h-3.5 w-3.5 text-gray-700" />
+                          </div>
+                        </div>
+                      )}
+                      {item.price && (
+                        <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-primary text-white shadow-sm leading-none">
+                          {item.price}
+                        </span>
+                      )}
+                    </div>
+                    <div className="p-2">
+                      <p className="text-[11px] font-black text-dark leading-tight line-clamp-2">{item.name}</p>
+                      <p className="text-[9px] text-gray-400 mt-0.5 capitalize">{item.type === 'game' ? 'Jeu' : item.type === 'card' ? 'Carte' : 'Produit'}</p>
+                    </div>
+                  </motion.button>
+                ))}
+                <motion.button
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.5 }}
+                  onClick={() => onViewChange('products')}
+                  className="w-28 shrink-0 snap-start rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-2 text-gray-400 hover:border-primary hover:text-primary transition-colors"
+                >
+                  <ArrowRight className="h-5 w-5" />
+                  <span className="text-[10px] font-black">Voir tout</span>
+                </motion.button>
               </div>
-              <p className="text-[11px] font-black text-dark leading-tight">{cat.label}</p>
-              <p className="text-[9px] text-gray-400 mt-0.5 leading-tight truncate">{cat.desc}</p>
-            </motion.button>
-          ))}
-        </div>
+            );
+          })()
+        )}
       </section>
 
       {/* ── Why Rena ── */}

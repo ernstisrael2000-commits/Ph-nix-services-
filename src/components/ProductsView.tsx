@@ -119,10 +119,13 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange 
   const [selectedGame, setSelectedGame] = useState<any>(null);
   const [isGameCatalogOpen, setIsGameCatalogOpen] = useState(false);
   const [gamePlayerId, setGamePlayerId] = useState('');
+  const [payingItemKey, setPayingItemKey] = useState<string | null>(null);
+  const [itemPurchaseLoading, setItemPurchaseLoading] = useState(false);
 
   const handleGameClick = (game: any) => {
     setSelectedGame(game);
     setGamePlayerId('');
+    setPayingItemKey(null);
     setIsGameCatalogOpen(true);
   };
 
@@ -486,35 +489,92 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange 
                   <div className="p-4 space-y-3">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Choisissez votre offre</p>
                     <div className="grid grid-cols-1 gap-2.5">
-                      {selectedGame.catalog.map((item: any, idx: number) => (
+                      {selectedGame.catalog.map((item: any, idx: number) => {
+                        const itemKey = item.id || String(idx);
+                        const isExpanded = payingItemKey === itemKey;
+                        return (
                         <motion.div
                           key={item.id || idx}
                           initial={{ opacity: 0, y: 6 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: idx * 0.04 }}
-                          className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 border border-gray-100 hover:border-purple-200 hover:bg-purple-50/30 transition-all group"
+                          className="rounded-2xl bg-gray-50 border border-gray-100 overflow-hidden transition-all"
                         >
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <div className="h-10 w-10 rounded-xl bg-purple-100 flex items-center justify-center shrink-0">
-                              <Gamepad2 className="h-5 w-5 text-purple-600" />
+                          <div className="flex items-center justify-between p-4">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className="h-10 w-10 rounded-xl bg-purple-100 flex items-center justify-center shrink-0">
+                                <Gamepad2 className="h-5 w-5 text-purple-600" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-black text-gray-900 leading-tight">{item.name}</p>
+                                <p className="text-base font-black text-purple-600 mt-0.5">{item.price}</p>
+                              </div>
                             </div>
-                            <div className="min-w-0">
-                              <p className="text-sm font-black text-gray-900 leading-tight">{item.name}</p>
-                              <p className="text-base font-black text-purple-600 mt-0.5">{item.price}</p>
-                            </div>
+                            {isExpanded ? (
+                              <button onClick={() => setPayingItemKey(null)} className="text-xs text-gray-400 hover:text-gray-600 font-semibold ml-3 shrink-0">Annuler</button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                onClick={() => setPayingItemKey(itemKey)}
+                                className="h-9 px-4 text-xs font-black bg-purple-600 text-white hover:bg-purple-700 rounded-xl border-0 shadow-md shadow-purple-200 shrink-0 ml-3 transition-all"
+                              >
+                                Payer
+                              </Button>
+                            )}
                           </div>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setIsGameCatalogOpen(false);
-                              handleBuyRequested({ name: `${selectedGame.name} — ${item.name}`, price: item.price, type: 'game' });
-                            }}
-                            className="h-9 px-4 text-xs font-black bg-purple-600 text-white hover:bg-purple-700 rounded-xl border-0 shadow-md shadow-purple-200 shrink-0 ml-3 group-hover:shadow-purple-300 transition-all"
-                          >
-                            Commander
-                          </Button>
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="px-4 pb-4 grid grid-cols-2 gap-2">
+                                  {loggedClient ? (
+                                    <button
+                                      disabled={itemPurchaseLoading}
+                                      onClick={async () => {
+                                        const price = parseFloat(String(item.price).replace(/[^\d.]/g, ''));
+                                        const balHTG = Math.round((effectiveClient?.balance ?? loggedClient.balance ?? 0) * exchangeRate);
+                                        if (!gamePlayerId.trim()) { toast.error('Entrez votre ID de joueur.'); return; }
+                                        if (isNaN(price) || price <= 0 || balHTG < price) { toast.error(`Solde insuffisant. Vous avez ${balHTG.toLocaleString()} HTG`); return; }
+                                        setItemPurchaseLoading(true);
+                                        const priceUSD = price / exchangeRate;
+                                        try {
+                                          await submitClientPurchase(loggedClient, `${selectedGame.name} — ${item.name}`, item.price, priceUSD);
+                                          toast.success(`✅ ${price.toLocaleString()} HTG débité.`);
+                                          setIsGameCatalogOpen(false); setPayingItemKey(null);
+                                          const adminNum = (window as any).__renaAdminPhone || WHATSAPP_NUMBER;
+                                          const msg = `🎮 *TOP-UP JEUX — Rena*\n\n👤 Client: *${loggedClient.name}*\n🔑 Wallet: *#${loggedClient.walletId || '—'}*\n🎮 Jeu: *${selectedGame.name}*\n📦 Offre: *${item.name}*\n🎯 ID Joueur: *${gamePlayerId.trim()}*\n💰 Montant: *${price.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n\n✅ Paiement auto. Veuillez activer.`;
+                                          window.open(`https://wa.me/${adminNum.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+                                        } catch (err: any) { toast.error(err.message || 'Erreur paiement.'); }
+                                        finally { setItemPurchaseLoading(false); }
+                                      }}
+                                      className="h-11 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-black flex items-center justify-center gap-1.5 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+                                    >
+                                      {itemPurchaseLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wallet className="h-3.5 w-3.5" />}
+                                      Solde Wallet
+                                    </button>
+                                  ) : (
+                                    <button onClick={() => { setPayingItemKey(null); setIsGameCatalogOpen(false); onOpenWallet?.(); }} className="h-11 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-black flex items-center justify-center gap-1.5 hover:bg-emerald-100 transition-colors">
+                                      <Wallet className="h-3.5 w-3.5" /> Se connecter
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => { setPayingItemKey(null); setIsGameCatalogOpen(false); handleBuyRequested({ name: `${selectedGame.name} — ${item.name}`, price: item.price, type: 'game' }); }}
+                                    className="h-11 rounded-xl border border-purple-200 bg-purple-50 text-purple-700 text-xs font-black flex items-center justify-center gap-1.5 hover:bg-purple-100 transition-colors"
+                                  >
+                                    <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+                                  </button>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </motion.div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     {/* Wallet pay note if logged in */}
@@ -529,17 +589,53 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange 
                   </div>
                 ) : (
                   <div className="p-6 space-y-4">
-                    <p className="text-sm text-gray-500 text-center">Contactez-nous sur WhatsApp pour commander.</p>
-                    <Button
-                      onClick={() => {
-                        setIsGameCatalogOpen(false);
-                        openWhatsApp(selectedGame.whatsappMessage || `Bonjour Rena, je souhaite faire un top-up pour le jeu : ${selectedGame.name}.`);
-                      }}
-                      className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-2xl border-0 flex items-center justify-center gap-2"
-                    >
-                      <MessageCircle className="h-5 w-5" />
-                      Commander via WhatsApp
-                    </Button>
+                    <p className="text-sm text-gray-500 text-center">Choisissez votre méthode de paiement.</p>
+                    {payingItemKey === '__nocatalog' ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        {loggedClient ? (
+                          <button
+                            disabled={itemPurchaseLoading}
+                            onClick={async () => {
+                              if (!gamePlayerId.trim()) { toast.error('Entrez votre ID de joueur.'); return; }
+                              const price = parseFloat(String(selectedGame.priceRange).replace(/[^\d.]/g, ''));
+                              if (isNaN(price) || price <= 0) { toast.error('Prix invalide pour le paiement wallet.'); return; }
+                              const balHTG = Math.round((effectiveClient?.balance ?? loggedClient.balance ?? 0) * exchangeRate);
+                              if (balHTG < price) { toast.error(`Solde insuffisant. Vous avez ${balHTG.toLocaleString()} HTG`); return; }
+                              setItemPurchaseLoading(true);
+                              const priceUSD = price / exchangeRate;
+                              try {
+                                await submitClientPurchase(loggedClient, selectedGame.name, String(price), priceUSD);
+                                toast.success(`✅ Achat effectué !`);
+                                setIsGameCatalogOpen(false); setPayingItemKey(null);
+                              } catch (err: any) { toast.error(err.message || 'Erreur paiement.'); }
+                              finally { setItemPurchaseLoading(false); }
+                            }}
+                            className="h-12 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-black flex items-center justify-center gap-2 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+                          >
+                            {itemPurchaseLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+                            Solde Wallet
+                          </button>
+                        ) : (
+                          <button onClick={() => { setIsGameCatalogOpen(false); onOpenWallet?.(); }} className="h-12 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-black flex items-center justify-center gap-2 hover:bg-emerald-100 transition-colors">
+                            <Wallet className="h-4 w-4" /> Se connecter
+                          </button>
+                        )}
+                        <button
+                          onClick={() => { setIsGameCatalogOpen(false); setPayingItemKey(null); openWhatsApp(selectedGame.whatsappMessage || `Bonjour Rena, je souhaite faire un top-up pour le jeu : ${selectedGame.name}. ID Joueur: ${gamePlayerId.trim() || 'Non spécifié'}`); }}
+                          className="h-12 bg-purple-600 hover:bg-purple-700 text-white text-sm font-black rounded-2xl border-0 flex items-center justify-center gap-2 transition-colors"
+                        >
+                          <MessageCircle className="h-4 w-4" /> WhatsApp
+                        </button>
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={() => setPayingItemKey('__nocatalog')}
+                        className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-2xl border-0 flex items-center justify-center gap-2"
+                      >
+                        <DollarSign className="h-5 w-5" />
+                        Payer
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
