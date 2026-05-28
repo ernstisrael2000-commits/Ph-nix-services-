@@ -114,13 +114,19 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
   const [activeSection, setActiveSection] = useState<ActiveSection>('overview');
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Direct tx state (deposit/withdraw by phone)
-  const [phoneSearch, setPhoneSearch] = useState('');
+  // Direct tx state (deposit/withdraw by phone, name or wallet ID)
+  const [clientSearch, setClientSearch] = useState('');
   const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<FoundClient[]>([]);
   const [foundClient, setFoundClient] = useState<FoundClient | null>(null);
   const [txAmount, setTxAmount] = useState('');
   const [txNote, setTxNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Withdrawal confirmation state
+  const [withdrawInitiated, setWithdrawInitiated] = useState<{ confirmId: string; clientName: string; amount: number } | null>(null);
+  const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
+  const [loadingPendingW, setLoadingPendingW] = useState(false);
 
   // Client withdrawal requests
   const [withdrawRequests, setWithdrawRequests] = useState<ClientWithdrawRequest[]>([]);
@@ -156,6 +162,18 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
       if (res.ok) setWithdrawRequests(data.requests || []);
     } catch {}
     finally { setLoadingRequests(false); }
+  }, [agent?.agentCode]);
+
+  // Load pending withdrawal confirmations (initiated by agent, awaiting client)
+  const loadPendingWithdrawals = useCallback(async () => {
+    if (!agent?.agentCode) return;
+    setLoadingPendingW(true);
+    try {
+      const res = await fetch(`/api/agent/pending-withdrawals/${encodeURIComponent(agent.agentCode)}`);
+      const data = await res.json();
+      if (res.ok) setPendingWithdrawals(data.confirmations || []);
+    } catch {}
+    finally { setLoadingPendingW(false); }
   }, [agent?.agentCode]);
 
   // Load full tx history
@@ -198,12 +216,14 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
     if (!agent) return;
     loadWithdrawRequests();
     loadStats();
+    loadPendingWithdrawals();
   }, [agent?.agentCode]);
 
   useEffect(() => {
     if (activeSection === 'commissions') loadFeeRecords();
     if (activeSection === 'clients' || activeSection === 'overview') loadTransactions();
     if (activeSection === 'requests') loadWithdrawRequests();
+    if (activeSection === 'withdraw') loadPendingWithdrawals();
   }, [activeSection, agent?.agentCode]);
 
   // Approve affiliate deposit
@@ -266,53 +286,87 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
     finally { setIsProcessing(false); }
   };
 
-  // Search client by phone
+  // Search client by phone, name or wallet ID
   const handleSearchClient = async () => {
-    const phone = phoneSearch.trim();
-    if (!phone) { toast.error('Entrez un numéro de téléphone.'); return; }
+    const q = clientSearch.trim();
+    if (!q) { toast.error('Entrez un téléphone, un nom ou un ID Wallet.'); return; }
     if (!agent?.agentCode) return;
     setSearching(true);
     setFoundClient(null);
+    setSearchResults([]);
     try {
-      const res = await fetch(`/api/agent/client-by-phone?phone=${encodeURIComponent(phone)}&agentCode=${encodeURIComponent(agent.agentCode)}`);
+      const res = await fetch(`/api/agent/client-search?q=${encodeURIComponent(q)}&agentCode=${encodeURIComponent(agent.agentCode)}`);
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || 'Client introuvable.'); return; }
-      setFoundClient(data);
+      if (data.results?.length > 1) {
+        setSearchResults(data.results);
+      } else {
+        setFoundClient(data.client || data.results?.[0] || null);
+      }
     } catch { toast.error('Erreur réseau.'); }
     finally { setSearching(false); }
   };
 
-  // Submit direct transaction (deposit or withdraw)
-  const handleSubmitTx = async (txType: 'deposit' | 'withdrawal') => {
+  // Submit direct deposit (instant, no confirmation needed)
+  const handleSubmitDeposit = async () => {
     if (!foundClient || !agent?.agentCode) return;
     const usd = parseFloat(txAmount);
     if (isNaN(usd) || usd <= 0) { toast.error('Montant invalide.'); return; }
-    if (txType === 'deposit' && agent.balance < usd) {
-      toast.error('Solde agent insuffisant pour ce dépôt.'); return;
-    }
-    if (txType === 'withdrawal' && foundClient.balance < usd) {
-      toast.error('Solde client insuffisant.'); return;
-    }
+    if (agent.balance < usd) { toast.error('Solde agent insuffisant pour ce dépôt.'); return; }
     setSubmitting(true);
     try {
       const res = await fetch('/api/agent/client-transaction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agentCode: agent.agentCode,
-          clientId: foundClient.clientId,
-          type: txType,
-          amount: usd,
-          note: txNote.trim() || undefined,
-        }),
+        body: JSON.stringify({ agentCode: agent.agentCode, clientId: foundClient.clientId, type: 'deposit', amount: usd, note: txNote.trim() || undefined }),
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
-      toast.success(`${txType === 'deposit' ? 'Dépôt' : 'Retrait'} de $${usd.toFixed(2)} effectué pour ${foundClient.name} !`);
-      setFoundClient(null); setPhoneSearch(''); setTxAmount(''); setTxNote('');
+      toast.success(`Dépôt de $${usd.toFixed(2)} effectué pour ${foundClient.name} !`);
+      setFoundClient(null); setClientSearch(''); setSearchResults([]); setTxAmount(''); setTxNote('');
       await loadStats();
     } catch { toast.error('Erreur réseau.'); }
     finally { setSubmitting(false); }
+  };
+
+  // Initiate withdrawal — sends confirmation request to client
+  const handleInitiateWithdrawal = async () => {
+    if (!foundClient || !agent?.agentCode) return;
+    const usd = parseFloat(txAmount);
+    if (isNaN(usd) || usd <= 0) { toast.error('Montant invalide.'); return; }
+    if (foundClient.balance < usd) { toast.error('Solde client insuffisant.'); return; }
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/agent/initiate-withdrawal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentCode: agent.agentCode, clientId: foundClient.clientId, amount: usd, note: txNote.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
+      toast.success(`Demande de retrait envoyée à ${foundClient.name}. En attente de sa confirmation.`);
+      setWithdrawInitiated({ confirmId: data.confirmId, clientName: data.clientName, amount: data.amount });
+      setFoundClient(null); setClientSearch(''); setSearchResults([]); setTxAmount(''); setTxNote('');
+      await loadPendingWithdrawals();
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setSubmitting(false); }
+  };
+
+  // Cancel a pending withdrawal confirmation
+  const handleCancelWithdrawal = async (confirmId: string) => {
+    if (!agent?.agentCode) return;
+    try {
+      const res = await fetch(`/api/agent/cancel-withdrawal/${confirmId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentCode: agent.agentCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
+      toast.success('Demande de retrait annulée.');
+      if (withdrawInitiated?.confirmId === confirmId) setWithdrawInitiated(null);
+      await loadPendingWithdrawals();
+    } catch { toast.error('Erreur réseau.'); }
   };
 
   // Unique clients from tx history
@@ -691,9 +745,11 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
               type="deposit"
               agent={agent}
               rate={rate}
-              phoneSearch={phoneSearch}
-              setPhoneSearch={setPhoneSearch}
+              clientSearch={clientSearch}
+              setClientSearch={setClientSearch}
               searching={searching}
+              searchResults={searchResults}
+              setSearchResults={setSearchResults}
               foundClient={foundClient}
               setFoundClient={setFoundClient}
               txAmount={txAmount}
@@ -702,12 +758,12 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
               setTxNote={setTxNote}
               submitting={submitting}
               onSearch={handleSearchClient}
-              onSubmit={() => handleSubmitTx('deposit')}
+              onSubmit={handleSubmitDeposit}
             />
           </motion.div>
         )}
 
-        {/* ── WITHDRAW (direct) ── */}
+        {/* ── WITHDRAW (with client confirmation) ── */}
         {activeSection === 'withdraw' && (
           <motion.div key="withdraw" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
             <h3 className="text-lg font-black text-dark flex items-center gap-2 px-1">
@@ -718,17 +774,48 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
             <div className="bg-rose-50 border border-rose-100 rounded-2xl p-3.5 flex items-start gap-3">
               <ShieldCheck className="h-4 w-4 text-rose-500 mt-0.5 shrink-0" />
               <p className="text-xs text-rose-700 leading-relaxed">
-                Le montant sera <strong>déduit du solde client</strong>. Vous recevrez la valeur digitale en échange du cash remis.
+                Le client recevra une <strong>notification de confirmation</strong> avant que le retrait ne soit effectué. Il doit valider dans son tableau de bord.
               </p>
             </div>
+
+            {/* Pending withdrawal confirmations */}
+            {(loadingPendingW ? (
+              <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-rose-300" /></div>
+            ) : pendingWithdrawals.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-black text-gray-500 uppercase tracking-widest px-1">En attente de confirmation client</p>
+                {pendingWithdrawals.map((pw: any) => (
+                  <div key={pw.id} className="flex items-center justify-between gap-3 p-4 bg-amber-50 border-2 border-amber-200 rounded-2xl">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                        <Clock className="h-4 w-4 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className="font-black text-dark text-sm">{pw.clientName}</p>
+                        <p className="text-xs text-amber-600 font-bold">${Number(pw.amount).toFixed(2)} — En attente</p>
+                        <p className="text-[10px] text-gray-400">{fmtDate(pw.createdAt)}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleCancelWithdrawal(pw.id)}
+                      className="text-[10px] font-black text-red-500 hover:text-red-700 uppercase tracking-widest bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-xl transition-colors"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ))}
 
             <DirectTxForm
               type="withdrawal"
               agent={agent}
               rate={rate}
-              phoneSearch={phoneSearch}
-              setPhoneSearch={setPhoneSearch}
+              clientSearch={clientSearch}
+              setClientSearch={setClientSearch}
               searching={searching}
+              searchResults={searchResults}
+              setSearchResults={setSearchResults}
               foundClient={foundClient}
               setFoundClient={setFoundClient}
               txAmount={txAmount}
@@ -737,7 +824,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
               setTxNote={setTxNote}
               submitting={submitting}
               onSearch={handleSearchClient}
-              onSubmit={() => handleSubmitTx('withdrawal')}
+              onSubmit={handleInitiateWithdrawal}
             />
           </motion.div>
         )}
@@ -938,9 +1025,11 @@ interface DirectTxFormProps {
   type: 'deposit' | 'withdrawal';
   agent: Agent;
   rate: number;
-  phoneSearch: string;
-  setPhoneSearch: (v: string) => void;
+  clientSearch: string;
+  setClientSearch: (v: string) => void;
   searching: boolean;
+  searchResults: FoundClient[];
+  setSearchResults: (v: FoundClient[]) => void;
   foundClient: FoundClient | null;
   setFoundClient: (v: FoundClient | null) => void;
   txAmount: string;
@@ -954,7 +1043,8 @@ interface DirectTxFormProps {
 
 function DirectTxForm({
   type, agent, rate,
-  phoneSearch, setPhoneSearch, searching,
+  clientSearch, setClientSearch, searching,
+  searchResults, setSearchResults,
   foundClient, setFoundClient,
   txAmount, setTxAmount,
   txNote, setTxNote,
@@ -968,17 +1058,17 @@ function DirectTxForm({
   return (
     <Card className="rounded-[2rem] border-0 shadow-sm border border-gray-100">
       <CardContent className="p-5 space-y-4">
-        {/* Phone search */}
+        {/* Multi-field client search */}
         <div>
           <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 block">
-            Numéro de téléphone du client
+            Rechercher le client (téléphone, nom ou ID Wallet)
           </Label>
           <div className="flex gap-2">
             <Input
-              value={phoneSearch}
-              onChange={e => setPhoneSearch(e.target.value)}
+              value={clientSearch}
+              onChange={e => setClientSearch(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && onSearch()}
-              placeholder="+509..."
+              placeholder="Ex: +509..., Jean Dupont, W-..."
               className="h-12 rounded-2xl bg-gray-50 border-0 font-bold flex-1"
             />
             <Button onClick={onSearch} disabled={searching}
@@ -987,6 +1077,28 @@ function DirectTxForm({
             </Button>
           </div>
         </div>
+
+        {/* Multiple results list */}
+        <AnimatePresence>
+          {searchResults.length > 1 && !foundClient && (
+            <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-2">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sélectionnez un client</p>
+              {searchResults.map(r => (
+                <button key={r.clientId} onClick={() => { setFoundClient(r); setSearchResults([]); }}
+                  className="w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 border-gray-100 hover:border-primary/40 hover:bg-primary/5 text-left transition-all">
+                  <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center font-black text-primary text-sm shrink-0">
+                    {r.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-black text-dark text-sm truncate">{r.name}</p>
+                    <p className="text-[10px] text-gray-400 font-mono">{r.phone} · {r.walletId}</p>
+                  </div>
+                  <p className="text-sm font-black text-emerald-600 shrink-0">${r.balance.toFixed(2)}</p>
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {foundClient && (
@@ -1073,11 +1185,18 @@ function DirectTxForm({
                 ) : (
                   <>
                     {isDeposit ? <ArrowDownLeft className="h-4 w-4 mr-2" /> : <ArrowUpRight className="h-4 w-4 mr-2" />}
-                    Confirmer le {isDeposit ? 'dépôt' : 'retrait'}
-                    {txAmount && !isNaN(parseFloat(txAmount)) ? ` — $${parseFloat(txAmount).toFixed(2)}` : ''}
+                    {isDeposit
+                      ? `Confirmer le dépôt${txAmount && !isNaN(parseFloat(txAmount)) ? ` — $${parseFloat(txAmount).toFixed(2)}` : ''}`
+                      : `Envoyer la demande${txAmount && !isNaN(parseFloat(txAmount)) ? ` — $${parseFloat(txAmount).toFixed(2)}` : ''}`
+                    }
                   </>
                 )}
               </Button>
+              {!isDeposit && (
+                <p className="text-[10px] text-center text-rose-400 font-medium">
+                  Le retrait sera effectué uniquement après confirmation du client.
+                </p>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

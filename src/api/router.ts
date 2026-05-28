@@ -602,6 +602,48 @@ router.get('/api/agent/client-by-phone', requireDb, async (req, res) => {
   }
 });
 
+// ── Agent/Affiliate: multi-field client search (phone, name, walletId) ───────
+router.get('/api/agent/client-search', requireDb, async (req, res) => {
+  try {
+    const q = (req.query.q as string || '').trim();
+    const agentCode = (req.query.agentCode as string || '').trim();
+    const affiliateId = (req.query.affiliateId as string || '').trim();
+    if (!q) return res.status(400).json({ error: 'Requête de recherche manquante.' });
+    if (!agentCode && !affiliateId) return res.status(400).json({ error: 'agentCode ou affiliateId requis.' });
+
+    if (agentCode) {
+      const agentSnap = await adminDb.collection('agents').where('agentCode', '==', agentCode).limit(1).get();
+      if (agentSnap.empty) return res.status(403).json({ error: 'Code agent invalide.' });
+      if (agentSnap.docs[0].data().status === 'inactive') return res.status(403).json({ error: 'Agent inactif.' });
+    } else {
+      const affSnap = await adminDb.collection('affiliates').doc(affiliateId).get();
+      if (!affSnap.exists) return res.status(403).json({ error: 'Affilié introuvable.' });
+    }
+
+    const [byPhone, byWallet, byName] = await Promise.all([
+      adminDb.collection('clients').where('phone', '==', q).limit(5).get(),
+      adminDb.collection('clients').where('walletId', '==', q).limit(5).get(),
+      adminDb.collection('clients').where('name', '>=', q).where('name', '<=', q + '\uf8ff').limit(5).get(),
+    ]);
+
+    const seen = new Set<string>();
+    const results: any[] = [];
+    for (const snap of [byPhone, byWallet, byName]) {
+      for (const doc of snap.docs) {
+        if (seen.has(doc.id)) continue;
+        seen.add(doc.id);
+        const d = doc.data();
+        results.push({ clientId: doc.id, name: d.name || '', phone: d.phone || '', walletId: d.walletId || '', balance: d.balance || 0 });
+      }
+    }
+
+    if (results.length === 0) return res.status(404).json({ error: 'Aucun client trouvé.' });
+    res.json({ found: true, results, client: results[0] });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Agent: direct client deposit or withdrawal ────────────────────────────────
 router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
   try {
@@ -905,6 +947,230 @@ router.post('/api/client/agent-withdrawal', requireDb, async (req, res) => {
     res.json({ success: true, agentName: resolvedName, transactionId: txDocRef.id });
   } catch (e: any) {
     console.error('[client/agent-withdrawal]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Agent: initiate withdrawal requiring client confirmation ──────────────────
+router.post('/api/agent/initiate-withdrawal', requireDb, async (req, res) => {
+  try {
+    const { agentCode, clientId, amount, note } = req.body;
+    if (!agentCode || !clientId || !amount) return res.status(400).json({ error: 'Paramètres manquants.' });
+    const usd = Number(amount);
+    if (isNaN(usd) || usd <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+
+    const agentSnap = await adminDb.collection('agents').where('agentCode', '==', agentCode).limit(1).get();
+    if (agentSnap.empty) return res.status(403).json({ error: 'Code agent invalide.' });
+    const agentDoc = agentSnap.docs[0];
+    const agentData = agentDoc.data();
+    if (agentData.status === 'inactive') return res.status(403).json({ error: 'Agent inactif.' });
+
+    const clientRef = adminDb.collection('clients').doc(clientId);
+    const clientSnap = await clientRef.get();
+    if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
+    const clientData = clientSnap.data()!;
+    if ((clientData.balance || 0) < usd) return res.status(400).json({ error: 'Solde client insuffisant.' });
+
+    const pendingCheck = await adminDb.collection('agent_withdrawal_confirmations')
+      .where('clientId', '==', clientId).where('status', '==', 'pending').limit(1).get();
+    if (!pendingCheck.empty) return res.status(400).json({ error: 'Une demande de retrait est déjà en attente de confirmation pour ce client.' });
+
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    const confirmRef = adminDb.collection('agent_withdrawal_confirmations').doc();
+    await confirmRef.set({
+      agentId: agentDoc.id, agentCode, agentName: agentData.name || '',
+      clientId, clientName: clientData.name || '',
+      amount: usd, ...(note && { note }),
+      status: 'pending',
+      expiresAt,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    await adminDb.collection('client_notifications').add({
+      clientId,
+      type: 'withdrawal_confirmation_required',
+      title: '⚠️ Confirmation de retrait requise',
+      message: `L'agent ${agentData.name} souhaite effectuer un retrait de $${usd.toFixed(2)} depuis votre compte. Confirmez ou refusez dans votre tableau de bord.`,
+      amount: usd, agentName: agentData.name || '', confirmId: confirmRef.id,
+      read: false, createdAt: FieldValue.serverTimestamp(),
+    });
+
+    try {
+      const fcm = getFcmMessaging();
+      if (clientData.fcmToken && fcm) {
+        await fcm.send({
+          token: clientData.fcmToken,
+          notification: {
+            title: '⚠️ Confirmation de retrait requise',
+            body: `L'agent ${agentData.name} souhaite retirer $${usd.toFixed(2)} de votre compte. Ouvrez l'app pour confirmer.`,
+          },
+        });
+      }
+    } catch (pushErr) {
+      console.warn('[initiate-withdrawal] Push failed:', pushErr);
+    }
+
+    res.json({ success: true, confirmId: confirmRef.id, clientName: clientData.name || '', amount: usd });
+  } catch (e: any) {
+    console.error('[agent/initiate-withdrawal]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Agent: get pending withdrawal confirmations ───────────────────────────────
+router.get('/api/agent/pending-withdrawals/:agentCode', requireDb, async (req, res) => {
+  try {
+    const { agentCode } = req.params;
+    const snap = await adminDb.collection('agent_withdrawal_confirmations')
+      .where('agentCode', '==', agentCode).where('status', '==', 'pending')
+      .orderBy('createdAt', 'desc').limit(20).get();
+    res.json({ confirmations: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Agent: cancel pending withdrawal confirmation ─────────────────────────────
+router.post('/api/agent/cancel-withdrawal/:confirmId', requireDb, async (req, res) => {
+  try {
+    const { confirmId } = req.params;
+    const { agentCode } = req.body;
+    if (!confirmId || !agentCode) return res.status(400).json({ error: 'Paramètres manquants.' });
+    const confirmRef = adminDb.collection('agent_withdrawal_confirmations').doc(confirmId);
+    const confirmSnap = await confirmRef.get();
+    if (!confirmSnap.exists) return res.status(404).json({ error: 'Demande introuvable.' });
+    if (confirmSnap.data()!.agentCode !== agentCode) return res.status(403).json({ error: 'Non autorisé.' });
+    if (confirmSnap.data()!.status !== 'pending') return res.status(400).json({ error: 'Déjà traitée.' });
+    await confirmRef.update({ status: 'cancelled', updatedAt: FieldValue.serverTimestamp() });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Client: get pending withdrawal confirmations ──────────────────────────────
+router.get('/api/client/pending-confirmations/:clientId', requireDb, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const snap = await adminDb.collection('agent_withdrawal_confirmations')
+      .where('clientId', '==', clientId).where('status', '==', 'pending')
+      .orderBy('createdAt', 'desc').limit(10).get();
+    res.json({ confirmations: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Client: confirm agent withdrawal ─────────────────────────────────────────
+router.post('/api/client/confirm-withdrawal/:confirmId', requireDb, async (req, res) => {
+  try {
+    const { confirmId } = req.params;
+    const { clientId } = req.body;
+    if (!confirmId || !clientId) return res.status(400).json({ error: 'Paramètres manquants.' });
+
+    const confirmRef = adminDb.collection('agent_withdrawal_confirmations').doc(confirmId);
+    const confirmSnap = await confirmRef.get();
+    if (!confirmSnap.exists) return res.status(404).json({ error: 'Demande introuvable.' });
+    const confirmData = confirmSnap.data()!;
+    if (confirmData.clientId !== clientId) return res.status(403).json({ error: 'Non autorisé.' });
+    if (confirmData.status !== 'pending') return res.status(400).json({ error: 'Cette demande a déjà été traitée.' });
+
+    const expiresAt = confirmData.expiresAt?.toDate ? confirmData.expiresAt.toDate() : new Date(confirmData.expiresAt);
+    if (new Date() > expiresAt) {
+      await confirmRef.update({ status: 'expired', updatedAt: FieldValue.serverTimestamp() });
+      return res.status(400).json({ error: 'Cette demande a expiré. Demandez à l\'agent de renouveler.' });
+    }
+
+    const amount = Number(confirmData.amount);
+    const settingsSnap = await adminDb.collection('settings').doc('global').get();
+    const feeSettings = settingsSnap.exists ? settingsSnap.data()! : {};
+    const agentWithdrawPct = Number(feeSettings.agentWithdrawPercent || 0);
+    const agentWithdrawAgentSharePct = Number(feeSettings.agentWithdrawAgentSharePercent ?? 100);
+    const totalFee = parseFloat((amount * agentWithdrawPct / 100).toFixed(4));
+    const agentShareFee = parseFloat((totalFee * agentWithdrawAgentSharePct / 100).toFixed(4));
+    const adminShareFee = parseFloat((totalFee - agentShareFee).toFixed(4));
+
+    const agentSnap = await adminDb.collection('agents').where('agentCode', '==', confirmData.agentCode).limit(1).get();
+    if (agentSnap.empty) return res.status(404).json({ error: 'Agent introuvable.' });
+    const agentRef = agentSnap.docs[0].ref;
+    const agentData = agentSnap.docs[0].data();
+    const agentId = agentSnap.docs[0].id;
+    const clientRef = adminDb.collection('clients').doc(clientId);
+
+    await adminDb.runTransaction(async (txn) => {
+      const cSnap = await txn.get(clientRef);
+      if (!cSnap.exists) throw new Error('Client introuvable.');
+      if ((cSnap.data()!.balance || 0) < amount) throw new Error('Solde client insuffisant.');
+
+      txn.update(clientRef, { balance: FieldValue.increment(-amount), updatedAt: FieldValue.serverTimestamp() });
+      txn.update(agentRef, {
+        balance: FieldValue.increment(amount - adminShareFee),
+        commissionBalance: FieldValue.increment(agentShareFee),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      if (adminShareFee > 0) {
+        txn.update(adminDb.collection('settings').doc('global'), { feesBalance: FieldValue.increment(adminShareFee) });
+      }
+
+      const txRef = adminDb.collection('client_transactions').doc();
+      txn.set(txRef, {
+        clientId, clientName: confirmData.clientName || '',
+        type: 'withdrawal', amount, status: 'approved',
+        method: `Agent: ${agentData.name}`,
+        agentCode: confirmData.agentCode, agentName: agentData.name || '', agentId,
+        source: 'agent_confirmed_withdrawal',
+        description: `Retrait confirmé par client via Agent ${agentData.name}${confirmData.note ? ` — ${confirmData.note}` : ''}`,
+        ...(confirmData.note && { message: confirmData.note }),
+        ...(totalFee > 0 && { fee: totalFee, agentFeeShare: agentShareFee, adminFeeShare: adminShareFee }),
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      if (totalFee > 0) {
+        txn.set(adminDb.collection('agent_fee_records').doc(), {
+          agentId, agentCode: confirmData.agentCode, agentName: agentData.name || '',
+          clientId, clientName: confirmData.clientName || '',
+          operationType: 'withdrawal', baseAmount: amount,
+          feeTotal: totalFee, agentShare: agentShareFee, adminShare: adminShareFee,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      txn.update(confirmRef, { status: 'confirmed', confirmedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+
+      txn.set(adminDb.collection('admin_notifications').doc(), {
+        type: 'agent_withdrawal_confirmed_by_client',
+        clientId, clientName: confirmData.clientName || '',
+        agentCode: confirmData.agentCode, agentName: agentData.name || '',
+        amount, read: false, createdAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    res.json({ success: true, amount });
+  } catch (e: any) {
+    console.error('[client/confirm-withdrawal]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Client: reject agent withdrawal ──────────────────────────────────────────
+router.post('/api/client/reject-withdrawal/:confirmId', requireDb, async (req, res) => {
+  try {
+    const { confirmId } = req.params;
+    const { clientId } = req.body;
+    if (!confirmId || !clientId) return res.status(400).json({ error: 'Paramètres manquants.' });
+
+    const confirmRef = adminDb.collection('agent_withdrawal_confirmations').doc(confirmId);
+    const confirmSnap = await confirmRef.get();
+    if (!confirmSnap.exists) return res.status(404).json({ error: 'Demande introuvable.' });
+    const confirmData = confirmSnap.data()!;
+    if (confirmData.clientId !== clientId) return res.status(403).json({ error: 'Non autorisé.' });
+    if (confirmData.status !== 'pending') return res.status(400).json({ error: 'Déjà traitée.' });
+
+    await confirmRef.update({ status: 'rejected', rejectedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[client/reject-withdrawal]', e);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
   }
 });
@@ -1369,7 +1635,7 @@ router.patch('/api/admin/affiliate-requests/:id', requireDb, async (req, res) =>
   }
 });
 
-// ── Affiliate as Agent: search client by phone ────────────────────────────────
+// ── Affiliate as Agent: search client by phone (legacy) ──────────────────────
 router.get('/api/affiliate/client-by-phone', requireDb, async (req, res) => {
   try {
     const phone = (req.query.phone as string || '').trim();
@@ -1391,6 +1657,40 @@ router.get('/api/affiliate/client-by-phone', requireDb, async (req, res) => {
       walletId: clientData.walletId || '',
       balance: clientData.balance || 0,
     });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Affiliate as Agent: multi-field client search ─────────────────────────────
+router.get('/api/affiliate/client-search', requireDb, async (req, res) => {
+  try {
+    const q = (req.query.q as string || '').trim();
+    const affiliateId = (req.query.affiliateId as string || '').trim();
+    if (!q || !affiliateId) return res.status(400).json({ error: 'q et affiliateId requis.' });
+
+    const affSnap = await adminDb.collection('affiliates').doc(affiliateId).get();
+    if (!affSnap.exists) return res.status(403).json({ error: 'Affilié introuvable.' });
+
+    const [byPhone, byWallet, byName] = await Promise.all([
+      adminDb.collection('clients').where('phone', '==', q).limit(5).get(),
+      adminDb.collection('clients').where('walletId', '==', q).limit(5).get(),
+      adminDb.collection('clients').where('name', '>=', q).where('name', '<=', q + '\uf8ff').limit(5).get(),
+    ]);
+
+    const seen = new Set<string>();
+    const results: any[] = [];
+    for (const snap of [byPhone, byWallet, byName]) {
+      for (const doc of snap.docs) {
+        if (seen.has(doc.id)) continue;
+        seen.add(doc.id);
+        const d = doc.data();
+        results.push({ clientId: doc.id, name: d.name || '', phone: d.phone || '', walletId: d.walletId || '', balance: d.balance || 0 });
+      }
+    }
+
+    if (results.length === 0) return res.status(404).json({ error: 'Aucun client trouvé.' });
+    res.json({ found: true, results, client: results[0] });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

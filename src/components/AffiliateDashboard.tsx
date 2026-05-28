@@ -209,15 +209,15 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
 
   // Phone search for direct transactions
   const handlePhoneSearch = async () => {
-    const phone = phoneInput.trim();
-    if (!phone) { toast.error('Entrez un numéro de téléphone.'); return; }
+    const q = phoneInput.trim();
+    if (!q) { toast.error('Entrez un téléphone, nom ou ID Wallet.'); return; }
     setPhoneLoading(true);
     setPhoneClient(null);
     try {
-      const res = await fetch(`/api/affiliate/client-by-phone?phone=${encodeURIComponent(phone)}&affiliateId=${encodeURIComponent(affiliateId)}`);
+      const res = await fetch(`/api/affiliate/client-search?q=${encodeURIComponent(q)}&affiliateId=${encodeURIComponent(affiliateId)}`);
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || 'Client introuvable.'); return; }
-      setPhoneClient(data);
+      setPhoneClient(data.client || data.results?.[0] || null);
     } catch { toast.error('Erreur réseau.'); }
     finally { setPhoneLoading(false); }
   };
@@ -1135,14 +1135,14 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                     </div>
                   </div>
 
-                  {/* Phone search */}
+                  {/* Multi-field client search */}
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Téléphone du Client</Label>
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Téléphone, nom ou ID Wallet</Label>
                     <div className="flex gap-2">
                       <div className="relative flex-1">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <Input
-                          placeholder="+509 ..."
+                          placeholder="Ex: +509..., Jean Dupont, W-..."
                           value={phoneInput}
                           onChange={e => { setPhoneInput(e.target.value); setPhoneClient(null); }}
                           onKeyDown={e => e.key === 'Enter' && handlePhoneSearch()}
@@ -1216,14 +1216,14 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                     </div>
                   </div>
 
-                  {/* Phone search */}
+                  {/* Multi-field client search */}
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Téléphone du Client</Label>
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Téléphone, nom ou ID Wallet</Label>
                     <div className="flex gap-2">
                       <div className="relative flex-1">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <Input
-                          placeholder="+509 ..."
+                          placeholder="Ex: +509..., Jean Dupont, W-..."
                           value={phoneInput}
                           onChange={e => { setPhoneInput(e.target.value); setPhoneClient(null); }}
                           onKeyDown={e => e.key === 'Enter' && handlePhoneSearch()}
