@@ -756,6 +756,347 @@ router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
   }
 });
 
+// ── Agent: lookup by code (client-facing, for withdrawal flow) ───────────────
+router.get('/api/agent/lookup', requireDb, async (req, res) => {
+  try {
+    const code = (req.query.code as string || '').trim();
+    if (!code) return res.status(400).json({ error: 'code requis.' });
+    const snap = await adminDb.collection('agents').where('agentCode', '==', code).limit(1).get();
+    if (snap.empty) return res.status(404).json({ error: 'Aucun agent trouvé avec ce code.' });
+    const d = snap.docs[0].data();
+    res.json({
+      found: true,
+      agentCode: d.agentCode,
+      name: d.name || '',
+      phone: d.phone || '',
+      status: d.status || 'inactive',
+      available: d.status === 'active',
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Client: submit agent withdrawal request (creates pending, no immediate debit) ──
+router.post('/api/client/agent-withdrawal', requireDb, async (req, res) => {
+  try {
+    const { clientId, clientName, amount, agentCode, message } = req.body;
+    if (!clientId || !clientName || !amount || !agentCode)
+      return res.status(400).json({ error: 'Paramètres manquants.' });
+    const usd = Number(amount);
+    if (isNaN(usd) || usd <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+
+    // Validate agent
+    const agentSnap = await adminDb.collection('agents').where('agentCode', '==', agentCode).limit(1).get();
+    if (agentSnap.empty) return res.status(404).json({ error: 'Agent introuvable.' });
+    const agentDoc = agentSnap.docs[0];
+    const agentData = agentDoc.data();
+    if (agentData.status === 'inactive') return res.status(400).json({ error: 'Cet agent est inactif.' });
+
+    // Validate client & balance
+    const clientRef = adminDb.collection('clients').doc(clientId);
+    const clientSnap = await clientRef.get();
+    if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
+    const clientData = clientSnap.data()!;
+    if ((clientData.balance || 0) < usd) return res.status(400).json({ error: 'Solde client insuffisant.' });
+
+    // Anti-double: block pending agent withdrawal for this client
+    const pendingCheck = await adminDb.collection('client_transactions')
+      .where('clientId', '==', clientId)
+      .where('type', '==', 'withdrawal')
+      .where('status', '==', 'pending')
+      .where('source', '==', 'agent_withdrawal_request')
+      .limit(1).get();
+    if (!pendingCheck.empty)
+      return res.status(400).json({ error: 'Une demande de retrait via agent est déjà en cours. Veuillez patienter.' });
+
+    // Settings min/max validation
+    try {
+      const settingsSnap = await adminDb.collection('settings').doc('global').get();
+      if (settingsSnap.exists) {
+        const s = settingsSnap.data()!;
+        if (s.minWithdrawalUSD && usd < s.minWithdrawalUSD)
+          return res.status(400).json({ error: `Montant minimum: $${s.minWithdrawalUSD.toFixed(2)} USD` });
+        if (s.maxWithdrawalUSD && usd > s.maxWithdrawalUSD)
+          return res.status(400).json({ error: `Montant maximum: $${s.maxWithdrawalUSD.toFixed(2)} USD` });
+      }
+    } catch {}
+
+    const batch = adminDb.batch();
+
+    // Create pending transaction (no balance debit yet — done at agent confirmation)
+    const txDocRef = adminDb.collection('client_transactions').doc();
+    batch.set(txDocRef, {
+      clientId,
+      clientName,
+      type: 'withdrawal',
+      amount: usd,
+      usdAmount: usd,
+      status: 'pending',
+      method: 'Agent',
+      agentCode,
+      agentId: agentDoc.id,
+      agentName: agentData.name || '',
+      source: 'agent_withdrawal_request',
+      description: `Retrait via Agent ${agentData.name} (code: ${agentCode})${message ? ` — ${message}` : ''}`,
+      ...(message && { message }),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // Admin notification
+    batch.set(adminDb.collection('admin_notifications').doc(), {
+      type: 'agent_withdrawal_request',
+      clientId,
+      clientName,
+      agentCode,
+      agentName: agentData.name || '',
+      amount: usd,
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+    res.json({ success: true, agentName: agentData.name || '', transactionId: txDocRef.id });
+  } catch (e: any) {
+    console.error('[client/agent-withdrawal]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Agent: get pending client withdrawal requests ─────────────────────────────
+router.get('/api/agent/withdrawal-requests/:agentCode', requireDb, async (req, res) => {
+  try {
+    const { agentCode } = req.params;
+    if (!agentCode) return res.status(400).json({ error: 'agentCode requis.' });
+    const snap = await adminDb.collection('client_transactions')
+      .where('agentCode', '==', agentCode)
+      .where('source', '==', 'agent_withdrawal_request')
+      .where('status', '==', 'pending')
+      .orderBy('createdAt', 'desc')
+      .limit(50).get();
+    res.json({ requests: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Agent: confirm client withdrawal request ──────────────────────────────────
+// Atomic: debit client, credit agent (they receive digital value for giving cash), fees
+router.post('/api/agent/withdrawal-request/:txId/confirm', requireDb, async (req, res) => {
+  try {
+    const { txId } = req.params;
+    const { agentCode } = req.body;
+    if (!agentCode) return res.status(400).json({ error: 'agentCode requis.' });
+
+    const txRef = adminDb.collection('client_transactions').doc(txId);
+    const txSnap = await txRef.get();
+    if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const txData = txSnap.data()!;
+    if (txData.agentCode !== agentCode) return res.status(403).json({ error: 'Non autorisé.' });
+    if (txData.status !== 'pending') return res.status(400).json({ error: 'Cette demande a déjà été traitée.' });
+    if (txData.source !== 'agent_withdrawal_request') return res.status(400).json({ error: 'Type de transaction invalide.' });
+
+    const agentSnap = await adminDb.collection('agents').where('agentCode', '==', agentCode).limit(1).get();
+    if (agentSnap.empty) return res.status(404).json({ error: 'Agent introuvable.' });
+    const agentRef = agentSnap.docs[0].ref;
+    const agentData = agentSnap.docs[0].data();
+    const agentId = agentSnap.docs[0].id;
+    const amount = Number(txData.amount || txData.usdAmount || 0);
+
+    // Load fee settings
+    const settingsSnap = await adminDb.collection('settings').doc('global').get();
+    const feeSettings = settingsSnap.exists ? settingsSnap.data()! : {};
+    const agentWithdrawPct = Number(feeSettings.agentWithdrawPercent || 0);
+    const agentWithdrawAgentSharePct = Number(feeSettings.agentWithdrawAgentSharePercent ?? 100);
+    const totalFee = parseFloat((amount * agentWithdrawPct / 100).toFixed(4));
+    const agentShareFee = parseFloat((totalFee * agentWithdrawAgentSharePct / 100).toFixed(4));
+    const adminShareFee = parseFloat((totalFee - agentShareFee).toFixed(4));
+
+    await adminDb.runTransaction(async (txn) => {
+      // Re-fetch client balance inside transaction
+      const clientRef = adminDb.collection('clients').doc(txData.clientId);
+      const clientSnap = await txn.get(clientRef);
+      if (!clientSnap.exists) throw new Error('Client introuvable.');
+      const clientBalance = clientSnap.data()!.balance || 0;
+      if (clientBalance < amount) throw new Error('Solde client insuffisant pour ce retrait.');
+
+      // Debit client balance
+      txn.update(clientRef, {
+        balance: FieldValue.increment(-amount),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      // Credit agent balance (they receive the digital value for cash they give)
+      txn.update(agentRef, {
+        balance: FieldValue.increment(amount - adminShareFee),
+        commissionBalance: FieldValue.increment(agentShareFee),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      // Admin fee
+      if (adminShareFee > 0) {
+        txn.update(adminDb.collection('settings').doc('global'), {
+          feesBalance: FieldValue.increment(adminShareFee),
+        });
+      }
+
+      // Approve tx
+      txn.update(txRef, {
+        status: 'approved',
+        agentConfirmedAt: FieldValue.serverTimestamp(),
+        ...(totalFee > 0 && { fee: totalFee, agentFeeShare: agentShareFee, adminFeeShare: adminShareFee }),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      // Fee record
+      if (totalFee > 0) {
+        txn.set(adminDb.collection('agent_fee_records').doc(), {
+          agentId, agentCode, agentName: agentData.name || '',
+          clientId: txData.clientId, clientName: txData.clientName || '',
+          operationType: 'withdrawal', baseAmount: amount,
+          feeTotal: totalFee, agentShare: agentShareFee, adminShare: adminShareFee,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Client notification
+      txn.set(adminDb.collection('client_notifications').doc(), {
+        clientId: txData.clientId,
+        type: 'withdrawal_approved',
+        title: '✅ Retrait confirmé par l\'agent',
+        message: `Votre retrait de $${amount.toFixed(2)} via l'agent ${agentData.name} a été confirmé. Récupérez vos fonds auprès de l'agent.`,
+        amount, read: false, createdAt: FieldValue.serverTimestamp(),
+      });
+
+      // Admin notification
+      txn.set(adminDb.collection('admin_notifications').doc(), {
+        type: 'agent_withdrawal_confirmed',
+        clientId: txData.clientId, clientName: txData.clientName || '',
+        agentCode, agentName: agentData.name || '', amount,
+        read: false, createdAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    sendFcmToClient(
+      txData.clientId,
+      '✅ Retrait confirmé',
+      `Votre retrait de $${amount.toFixed(2)} a été confirmé par l'agent ${agentData.name}. Vous pouvez récupérer vos fonds.`,
+      { type: 'withdrawal_approved', txId }
+    );
+
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[agent/withdrawal-request/confirm]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Agent: reject client withdrawal request ───────────────────────────────────
+router.post('/api/agent/withdrawal-request/:txId/reject', requireDb, async (req, res) => {
+  try {
+    const { txId } = req.params;
+    const { agentCode, reason } = req.body;
+    if (!agentCode) return res.status(400).json({ error: 'agentCode requis.' });
+
+    const txRef = adminDb.collection('client_transactions').doc(txId);
+    const txSnap = await txRef.get();
+    if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const txData = txSnap.data()!;
+    if (txData.agentCode !== agentCode) return res.status(403).json({ error: 'Non autorisé.' });
+    if (txData.status !== 'pending') return res.status(400).json({ error: 'Cette demande a déjà été traitée.' });
+
+    const agentSnap = await adminDb.collection('agents').where('agentCode', '==', agentCode).limit(1).get();
+    if (agentSnap.empty) return res.status(404).json({ error: 'Agent introuvable.' });
+    const agentData = agentSnap.docs[0].data();
+    const amount = Number(txData.amount || txData.usdAmount || 0);
+
+    const batch = adminDb.batch();
+    // Reject tx (no balance changes since balance wasn't debited at request time)
+    batch.update(txRef, {
+      status: 'rejected',
+      ...(reason && { rejectionReason: reason }),
+      agentRejectedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    // Client notification
+    batch.set(adminDb.collection('client_notifications').doc(), {
+      clientId: txData.clientId,
+      type: 'withdrawal_rejected',
+      title: '❌ Demande de retrait refusée',
+      message: `Votre demande de retrait de $${amount.toFixed(2)} via l'agent ${agentData.name} a été refusée.${reason ? ` Raison: ${reason}` : ''}`,
+      amount, read: false, createdAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    sendFcmToClient(
+      txData.clientId,
+      '❌ Retrait refusé',
+      `Votre demande de retrait de $${amount.toFixed(2)} a été refusée par l'agent ${agentData.name}.`,
+      { type: 'withdrawal_rejected', txId }
+    );
+
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[agent/withdrawal-request/reject]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Agent: full transaction history ──────────────────────────────────────────
+router.get('/api/agent/transactions/:agentCode', requireDb, async (req, res) => {
+  try {
+    const { agentCode } = req.params;
+    const snap = await adminDb.collection('client_transactions')
+      .where('agentCode', '==', agentCode)
+      .orderBy('createdAt', 'desc')
+      .limit(200).get();
+    res.json({ transactions: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Agent: commission / fee records ──────────────────────────────────────────
+router.get('/api/agent/fee-records/:agentId', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('agent_fee_records')
+      .where('agentId', '==', req.params.agentId)
+      .orderBy('createdAt', 'desc')
+      .limit(100).get();
+    res.json({ records: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Agent: stats ──────────────────────────────────────────────────────────────
+router.get('/api/agent/stats/:agentCode', requireDb, async (req, res) => {
+  try {
+    const { agentCode } = req.params;
+    const snap = await adminDb.collection('client_transactions')
+      .where('agentCode', '==', agentCode)
+      .where('status', '==', 'approved')
+      .get();
+    let totalDeposits = 0, totalWithdrawals = 0, totalCommissions = 0, depositCount = 0, withdrawalCount = 0;
+    snap.docs.forEach(doc => {
+      const d = doc.data();
+      if (d.type === 'deposit') {
+        totalDeposits += d.amount || 0;
+        totalCommissions += d.agentCommission || 0;
+        depositCount++;
+      } else if (d.type === 'withdrawal') {
+        totalWithdrawals += d.amount || 0;
+        totalCommissions += d.agentFeeShare || 0;
+        withdrawalCount++;
+      }
+    });
+    res.json({ totalDeposits, totalWithdrawals, totalCommissions, depositCount, withdrawalCount, totalTransactions: snap.size });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Client-to-client transfer ─────────────────────────────────────────────────
 router.post('/api/client/transfer', requireDb, async (req, res) => {
   try {

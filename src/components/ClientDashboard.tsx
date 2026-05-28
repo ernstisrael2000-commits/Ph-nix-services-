@@ -5,7 +5,7 @@ import {
   Clock, XCircle, Shield, Trash2,
   TrendingUp, Globe, Smartphone, CreditCard as CardIcon,
   Building2, Bitcoin, Info, ChevronDown,
-  Eye, EyeOff, Send, User, QrCode
+  Eye, EyeOff, Send, User, QrCode, Search, MapPin,
 } from 'lucide-react';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { CaptchaWidget } from './CaptchaWidget';
@@ -216,6 +216,15 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   const [transferPreview,   setTransferPreview]   = useState<string | null>(null);
   const [lookupLoading,     setLookupLoading]     = useState(false);
 
+  // Agent withdrawal state
+  const [isAgentWithdrawOpen,  setIsAgentWithdrawOpen]  = useState(false);
+  const [agentCodeInput,       setAgentCodeInput]       = useState('');
+  const [agentSearchLoading,   setAgentSearchLoading]   = useState(false);
+  const [agentInfo,            setAgentInfo]            = useState<{ name: string; agentCode: string; status: string; available: boolean } | null>(null);
+  const [agentWithdrawAmount,  setAgentWithdrawAmount]  = useState('');
+  const [agentWithdrawMsg,     setAgentWithdrawMsg]     = useState('');
+  const [agentWithdrawLoading, setAgentWithdrawLoading] = useState(false);
+
   const usdPreview = htgAmount && !isNaN(parseFloat(htgAmount)) ? parseFloat(htgAmount) / rate : 0;
   const htgPreview = withdrawUSD && !isNaN(parseFloat(withdrawUSD)) ? parseFloat(withdrawUSD) * rate : 0;
   const transferHtgPreview = transferUSD && !isNaN(parseFloat(transferUSD)) ? parseFloat(transferUSD) * rate : 0;
@@ -251,6 +260,55 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
 
   const resetTransfer = () => {
     setTransferWalletId(''); setTransferUSD(''); setTransferMessage(''); setTransferPreview(null);
+  };
+
+  const resetAgentWithdraw = () => {
+    setAgentCodeInput(''); setAgentInfo(null);
+    setAgentWithdrawAmount(''); setAgentWithdrawMsg('');
+  };
+
+  const handleAgentLookup = async () => {
+    const code = agentCodeInput.trim();
+    if (!code) { toast.error('Entrez le code agent.'); return; }
+    setAgentSearchLoading(true);
+    setAgentInfo(null);
+    try {
+      const res = await fetch(`/api/agent/lookup?code=${encodeURIComponent(code)}`);
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Agent introuvable.'); return; }
+      setAgentInfo(data);
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setAgentSearchLoading(false); }
+  };
+
+  const handleAgentWithdraw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!agentInfo) { toast.error('Recherchez un agent d\'abord.'); return; }
+    if (!agentInfo.available) { toast.error('Cet agent est indisponible.'); return; }
+    const usd = parseFloat(agentWithdrawAmount);
+    if (isNaN(usd) || usd <= 0) { toast.error('Montant invalide.'); return; }
+    if (usd > balance) { toast.error('Solde insuffisant.'); return; }
+    if (usd < minWithdraw) { toast.error(`Montant minimum: $${minWithdraw.toFixed(2)} USD`); return; }
+    if (usd > maxWithdraw) { toast.error(`Montant maximum: $${maxWithdraw.toFixed(2)} USD`); return; }
+    setAgentWithdrawLoading(true);
+    try {
+      const res = await fetch('/api/client/agent-withdrawal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId,
+          clientName: client?.name || '',
+          amount: usd,
+          agentCode: agentInfo.agentCode,
+          ...(agentWithdrawMsg.trim() && { message: agentWithdrawMsg.trim() }),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
+      toast.success(`Demande de retrait soumise ! L'agent ${agentInfo.name} confirmera sous peu.`);
+      setIsAgentWithdrawOpen(false); resetAgentWithdraw();
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setAgentWithdrawLoading(false); }
   };
 
   // Lookup recipient name as user types wallet ID
@@ -469,19 +527,34 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               </button>
             </div>
 
-            {/* ── Transfer button */}
-            <button
-              onClick={() => { resetTransfer(); setIsTransferOpen(true); }}
-              className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border-2 border-violet-200 bg-violet-50 hover:bg-violet-100 transition-all active:scale-95 group"
-            >
-              <div className="h-8 w-8 rounded-xl bg-violet-600 flex items-center justify-center shadow shadow-violet-300 group-hover:shadow-md transition-shadow">
-                <Send className="h-4 w-4 text-white" />
-              </div>
-              <div className="text-left">
-                <p className="font-black text-violet-700 text-sm leading-tight">Transfert Wallet</p>
-                <p className="text-violet-400 text-[10px]">Envoyer des fonds à un autre utilisateur</p>
-              </div>
-            </button>
+            {/* ── Transfer + Agent buttons */}
+            <div className="grid grid-cols-1 gap-2">
+              <button
+                onClick={() => { resetTransfer(); setIsTransferOpen(true); }}
+                className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border-2 border-violet-200 bg-violet-50 hover:bg-violet-100 transition-all active:scale-95 group"
+              >
+                <div className="h-8 w-8 rounded-xl bg-violet-600 flex items-center justify-center shadow shadow-violet-300 group-hover:shadow-md transition-shadow">
+                  <Send className="h-4 w-4 text-white" />
+                </div>
+                <div className="text-left">
+                  <p className="font-black text-violet-700 text-sm leading-tight">Transfert Wallet</p>
+                  <p className="text-violet-400 text-[10px]">Envoyer des fonds à un autre utilisateur</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => { resetAgentWithdraw(); setIsAgentWithdrawOpen(true); }}
+                className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border-2 border-teal-200 bg-teal-50 hover:bg-teal-100 transition-all active:scale-95 group"
+              >
+                <div className="h-8 w-8 rounded-xl bg-teal-600 flex items-center justify-center shadow shadow-teal-300 group-hover:shadow-md transition-shadow">
+                  <MapPin className="h-4 w-4 text-white" />
+                </div>
+                <div className="text-left">
+                  <p className="font-black text-teal-700 text-sm leading-tight">Retrait via Agent</p>
+                  <p className="text-teal-400 text-[10px]">Récupérer du cash auprès d'un point de service</p>
+                </div>
+              </button>
+            </div>
 
             {/* Payment Methods */}
             {depositMethods.length > 0 && (
@@ -890,6 +963,137 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               disabled={actionLoading || !withdrawMethod || (!!RECAPTCHA_SITE_KEY && !withdrawCaptchaToken)}
               className="w-full h-12 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black">
               {actionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Soumettre la demande'}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── AGENT WITHDRAWAL MODAL ───────────────────────────────────────────── */}
+      <Dialog open={isAgentWithdrawOpen} onOpenChange={v => { if (!v) resetAgentWithdraw(); setIsAgentWithdrawOpen(v); }}>
+        <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl p-0 overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="bg-gradient-to-br from-teal-500 to-cyan-700 p-5 text-white shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                <MapPin className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-black text-white">Retrait via Agent</DialogTitle>
+                <DialogDescription className="text-teal-100/70 text-xs">
+                  Solde: <strong>${balance.toFixed(2)} USD</strong>
+                </DialogDescription>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleAgentWithdraw} className="p-5 space-y-4 bg-white overflow-y-auto flex-1">
+
+            {/* Info banner */}
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-teal-50 border border-teal-100">
+              <Info className="h-4 w-4 text-teal-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-teal-700 leading-relaxed">
+                Soumettez une demande, puis rendez-vous physiquement chez l'agent pour récupérer votre argent.
+              </p>
+            </div>
+
+            {/* Agent code search */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Code Agent (8 chiffres)</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={agentCodeInput}
+                  onChange={e => { setAgentCodeInput(e.target.value); setAgentInfo(null); }}
+                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAgentLookup())}
+                  placeholder="Ex: 12345678"
+                  className="h-11 rounded-xl font-mono flex-1"
+                  maxLength={12}
+                />
+                <Button
+                  type="button"
+                  onClick={handleAgentLookup}
+                  disabled={agentSearchLoading || !agentCodeInput.trim()}
+                  className="h-11 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 border-0 text-white shrink-0"
+                >
+                  {agentSearchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            {/* Agent info card */}
+            <AnimatePresence>
+              {agentInfo && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+                  className={`rounded-xl border p-3.5 flex items-center gap-3 ${
+                    agentInfo.available
+                      ? 'bg-teal-50 border-teal-200'
+                      : 'bg-red-50 border-red-200'
+                  }`}
+                >
+                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center text-white font-black text-base shrink-0 ${
+                    agentInfo.available ? 'bg-teal-500' : 'bg-red-400'
+                  }`}>
+                    {agentInfo.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-black text-gray-800">{agentInfo.name}</p>
+                    <p className="text-[10px] font-mono text-gray-400">#{agentInfo.agentCode}</p>
+                  </div>
+                  <span className={`text-[10px] font-black px-2 py-1 rounded-lg ${
+                    agentInfo.available
+                      ? 'bg-teal-100 text-teal-700'
+                      : 'bg-red-100 text-red-600'
+                  }`}>
+                    {agentInfo.available ? '● Disponible' : '● Inactif'}
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Amount */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant à retirer (USD)</Label>
+              <Input
+                type="number"
+                value={agentWithdrawAmount}
+                onChange={e => setAgentWithdrawAmount(e.target.value)}
+                placeholder="Ex: 20.00"
+                className="h-12 rounded-xl text-lg font-black"
+                min="0.01"
+                max={balance}
+                step="0.01"
+                required
+              />
+              {agentWithdrawAmount && !isNaN(parseFloat(agentWithdrawAmount)) && parseFloat(agentWithdrawAmount) > 0 && (
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-teal-50 border border-teal-100">
+                  <TrendingUp className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                  <p className="text-xs font-black text-teal-700">
+                    ≈ <span className="text-sm">{Math.round(parseFloat(agentWithdrawAmount) * rate).toLocaleString()} HTG</span> à récupérer
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Message */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Message (optionnel)</Label>
+              <textarea
+                value={agentWithdrawMsg}
+                onChange={e => setAgentWithdrawMsg(e.target.value)}
+                placeholder="Notes pour l'agent..."
+                className="w-full min-h-[60px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-300 focus:border-teal-300 transition-all"
+                maxLength={200}
+              />
+              <p className="text-[10px] text-gray-400">{agentWithdrawMsg.length}/200</p>
+            </div>
+
+            <Button
+              type="submit"
+              disabled={agentWithdrawLoading || !agentInfo || !agentInfo.available || !agentWithdrawAmount}
+              className="w-full h-12 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-black border-0"
+            >
+              {agentWithdrawLoading
+                ? <Loader2 className="h-5 w-5 animate-spin" />
+                : 'Soumettre la demande →'}
             </Button>
           </form>
         </DialogContent>
