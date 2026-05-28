@@ -259,13 +259,26 @@ export interface ShippingConfig {
 
 export interface AffiliateRequest {
   id?: string;
+  uid?: string;
   name: string;
   email: string;
   phone: string;
   message?: string;
+  referralCode?: string;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: any;
   updatedAt: any;
+}
+
+export interface ClientNotification {
+  id?: string;
+  clientId: string;
+  title: string;
+  message: string;
+  type: 'deposit_approved' | 'deposit_rejected' | 'withdrawal_approved' | 'withdrawal_rejected' | 'purchase' | 'system';
+  read: boolean;
+  amount?: number;
+  createdAt: any;
 }
 
 export interface Client {

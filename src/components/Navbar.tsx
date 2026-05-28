@@ -1,4 +1,4 @@
-import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users, Truck, ExternalLink, Menu, X, Wallet, ChevronRight, GraduationCap, Settings, BookOpen, LayoutGrid } from 'lucide-react';
+import { Package, ShieldCheck, LogIn, LogOut, Search, Home, Users, Truck, ExternalLink, Menu, X, Wallet, ChevronRight, GraduationCap, Settings, BookOpen, LayoutGrid, Bell, CheckCheck, Info, TrendingUp, TrendingDown } from 'lucide-react';
 import RenaLogo from './RenaLogo';
 import { Button } from './ui/button';
 import { auth } from '@/lib/firebase';
@@ -6,7 +6,7 @@ import { signOut } from 'firebase/auth';
 import { useAuth } from '../hooks/useAuth';
 import { useSettings } from '../services/parcelService';
 import { usePendingCounts } from '../services/affiliateService';
-import { usePendingClientCount } from '../services/clientService';
+import { usePendingClientCount, useClientNotifications, markClientNotificationRead, markAllClientNotificationsRead } from '../services/clientService';
 import React, { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 import { Client, AdminAccount } from '../types';
@@ -43,8 +43,12 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
   const [lastError, setLastError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [formationsDropdownOpen, setFormationsDropdownOpen] = useState(false);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
   const formationsDropdownRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const notifPanelRef = useRef<HTMLDivElement>(null);
+
+  const { notifications: clientNotifs, unreadCount: clientUnreadCount } = useClientNotifications(loggedClient?.id || null);
 
   const isLoggedIn = !!(user || loggedClient);
 
@@ -71,10 +75,13 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
       if (formationsDropdownRef.current && !formationsDropdownRef.current.contains(e.target as Node)) {
         setFormationsDropdownOpen(false);
       }
+      if (notifPanelRef.current && !notifPanelRef.current.contains(e.target as Node)) {
+        setShowNotifPanel(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [menuOpen, formationsDropdownOpen]);
+  }, [menuOpen, formationsDropdownOpen, showNotifPanel]);
 
   useEffect(() => {
     if (menuOpen) document.body.style.overflow = 'hidden';
@@ -169,6 +176,76 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
 
             {/* Right side */}
             <div className="flex items-center gap-2 shrink-0">
+              {/* Client notification bell */}
+              {loggedClient && (
+                <div className="relative" ref={notifPanelRef}>
+                  <button
+                    onClick={() => setShowNotifPanel(v => !v)}
+                    className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors"
+                    aria-label="Notifications"
+                  >
+                    <Bell className={`h-5 w-5 ${clientUnreadCount > 0 ? 'text-primary' : 'text-gray-400'}`} />
+                    {clientUnreadCount > 0 && (
+                      <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[8px] font-black w-4 h-4 flex items-center justify-center rounded-full border-2 border-white">
+                        {clientUnreadCount > 9 ? '9+' : clientUnreadCount}
+                      </span>
+                    )}
+                  </button>
+                  {showNotifPanel && (
+                    <div className="absolute top-full right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-3 border-b">
+                        <span className="text-sm font-black text-dark">Notifications</span>
+                        {clientUnreadCount > 0 && (
+                          <button
+                            onClick={async () => { await markAllClientNotificationsRead(loggedClient.id!); }}
+                            className="text-[10px] text-primary font-bold hover:underline flex items-center gap-1"
+                          >
+                            <CheckCheck className="h-3 w-3" /> Tout lire
+                          </button>
+                        )}
+                      </div>
+                      <div className="max-h-80 overflow-y-auto">
+                        {clientNotifs.length === 0 ? (
+                          <div className="py-8 text-center text-gray-400 text-sm">
+                            <Bell className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                            <p>Aucune notification</p>
+                          </div>
+                        ) : (
+                          clientNotifs.slice(0, 15).map(notif => (
+                            <button
+                              key={notif.id}
+                              onClick={() => markClientNotificationRead(notif.id!)}
+                              className={`w-full flex items-start gap-3 px-4 py-3 text-left border-b last:border-0 transition-colors ${notif.read ? 'hover:bg-gray-50' : 'bg-blue-50/60 hover:bg-blue-50'}`}
+                            >
+                              <div className={`shrink-0 mt-0.5 h-7 w-7 rounded-full flex items-center justify-center ${
+                                notif.type === 'deposit_approved' ? 'bg-emerald-100' :
+                                notif.type === 'withdrawal_approved' ? 'bg-blue-100' :
+                                notif.type === 'deposit_rejected' || notif.type === 'withdrawal_rejected' ? 'bg-red-100' : 'bg-gray-100'
+                              }`}>
+                                {notif.type === 'deposit_approved' ? <TrendingUp className="h-3.5 w-3.5 text-emerald-600" /> :
+                                 notif.type === 'withdrawal_approved' ? <TrendingDown className="h-3.5 w-3.5 text-blue-600" /> :
+                                 notif.type?.includes('rejected') ? <X className="h-3.5 w-3.5 text-red-600" /> :
+                                 <Info className="h-3.5 w-3.5 text-gray-600" />}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className={`text-xs font-bold leading-snug ${notif.read ? 'text-gray-700' : 'text-dark'}`}>{notif.title}</p>
+                                <p className="text-[10px] text-subtext mt-0.5 leading-snug">{notif.message}</p>
+                                {notif.createdAt && (
+                                  <p className="text-[9px] text-gray-400 mt-1">
+                                    {new Date(notif.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                  </p>
+                                )}
+                              </div>
+                              {!notif.read && <div className="shrink-0 mt-1.5 h-2 w-2 rounded-full bg-primary" />}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Client wallet */}
               {loggedClient ? (
                 <button onClick={onOpenWallet}

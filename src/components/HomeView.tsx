@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Package, Truck, Users, ArrowRight,
   ShoppingBag, Globe, GraduationCap, Wallet,
-  MessageCircle, ArrowUp, ChevronRight, Search, X,
+  MessageCircle, ArrowUp, ChevronRight, Search, X, Zap, TrendingUp,
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { useState, useEffect } from 'react';
 import {
@@ -87,6 +88,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const [currentSlide, setCurrentSlide] = useState(0);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedItem, setSelectedItem] = useState<{ id: string; name: string; image: string; price?: string; type: string; description?: string } | null>(null);
 
   const imagesToDisplay = sliderImages.length > 0
     ? sliderImages.map(img => ({ url: img.url, description: img.description || '' }))
@@ -148,55 +150,66 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
           >
             <div
               onClick={onOpenWallet}
-              className="relative w-full rounded-[32px] overflow-hidden cursor-pointer group"
-              style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 45%, #4f46e5 100%)' }}
+              className="relative w-full rounded-[28px] overflow-hidden cursor-pointer group select-none"
+              style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 40%, #312e81 70%, #4c1d95 100%)' }}
             >
-              <div className="absolute top-0 right-0 w-72 h-72 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none" />
-              <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-400/20 rounded-full blur-2xl translate-y-1/2 -translate-x-1/4 pointer-events-none" />
-              <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+              <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-white/5 pointer-events-none" />
+              <div className="absolute -bottom-10 -left-10 w-44 h-44 rounded-full bg-indigo-500/10 pointer-events-none" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-blue-600/5 blur-3xl pointer-events-none" />
 
-              <div className="relative z-10 p-6 md:p-8">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-                  <div className="h-14 w-14 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center text-2xl font-black text-white shrink-0 group-hover:scale-105 transition-transform backdrop-blur-sm">
-                    {(effectiveClient?.name || loggedClient.name || '?').charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-0.5">Bonjour 👋</p>
-                    <p className="text-xl font-black text-white leading-tight truncate">{effectiveClient?.name || loggedClient.name}</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-2xl font-black text-white tabular-nums">{balanceHTG.toLocaleString()} <span className="text-lg font-bold text-white/70">HTG</span></span>
-                      <span className="px-2 py-0.5 rounded-full bg-white/15 text-white/80 text-xs font-bold">≈ ${balanceUSD}</span>
+              <div className="relative z-10 px-5 pt-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-6 rounded-md bg-gradient-to-br from-yellow-300 to-yellow-500 shadow-md flex items-center justify-center">
+                      <div className="grid grid-cols-2 gap-[2px] p-[3px]">
+                        {[...Array(4)].map((_, i) => <div key={i} className="w-[5px] h-[5px] rounded-[1px] bg-yellow-800/40" />)}
+                      </div>
                     </div>
+                    <span className="text-[10px] text-white/40 font-black uppercase tracking-widest">Rena Wallet</span>
+                  </div>
+                  <Wallet className="h-5 w-5 text-white/25" />
+                </div>
+
+                <div className="mb-4">
+                  <p className="text-[9px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1">Solde disponible</p>
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-3xl font-black text-white tabular-nums leading-none">{balanceHTG.toLocaleString()}</span>
+                    <span className="text-sm font-bold text-white/50">HTG</span>
+                    <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/60 text-[10px] font-bold border border-white/10">≈ ${balanceUSD} USD</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pb-5">
+                  <div>
+                    <p className="text-[9px] text-white/40 uppercase tracking-widest mb-0.5">Titulaire</p>
+                    <p className="text-sm font-black text-white truncate max-w-[180px]">{effectiveClient?.name || loggedClient.name}</p>
                   </div>
                   <button
                     onClick={e => { e.stopPropagation(); onOpenWallet?.(); }}
-                    className="flex items-center gap-2 shrink-0 h-10 px-5 rounded-2xl bg-white hover:bg-white/90 active:scale-95 text-primary font-black text-sm transition-all shadow-xl"
+                    className="flex items-center gap-1.5 h-9 px-4 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 border border-white/20 text-white font-black text-xs transition-all backdrop-blur-sm"
                   >
-                    <Wallet className="h-4 w-4" />
-                    Mon Wallet
+                    <TrendingUp className="h-3.5 w-3.5" />
+                    Ouvrir
                   </button>
                 </div>
-
-                {/* Recent transactions */}
-                {recentTx.length > 0 && (
-                  <div className="mt-5 pt-4 border-t border-white/10 grid grid-cols-3 gap-2">
-                    {recentTx.map(tx => {
-                      const isCredit = tx.type === 'deposit' || tx.type === 'transfer_received' || tx.type === 'refund';
-                      const usdAmt = tx.usdAmount ?? tx.amount;
-                      return (
-                        <div key={tx.id} className="flex flex-col gap-0.5 bg-white/10 rounded-xl p-2.5 border border-white/10">
-                          <span className={`text-xs font-black ${isCredit ? 'text-emerald-300' : 'text-red-300'}`}>
-                            {isCredit ? '+' : '-'}${usdAmt.toFixed(2)}
-                          </span>
-                          <span className="text-[9px] text-white/50 truncate capitalize">
-                            {tx.type === 'deposit' ? 'Dépôt' : tx.type === 'withdrawal' ? 'Retrait' : tx.type === 'purchase' ? 'Achat' : 'Reçu'}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
+
+              {recentTx.length > 0 && (
+                <div className="relative z-10 border-t border-white/[0.08] px-5 py-3 flex gap-2 overflow-x-auto scrollbar-none">
+                  {recentTx.map(tx => {
+                    const isCredit = tx.type === 'deposit' || tx.type === 'transfer_received' || tx.type === 'refund';
+                    const usdAmt = tx.usdAmount ?? tx.amount;
+                    return (
+                      <div key={tx.id} className="flex items-center gap-1.5 shrink-0 bg-white/[0.07] rounded-xl px-3 py-1.5 border border-white/10">
+                        <span className={`text-[10px] font-black ${isCredit ? 'text-emerald-400' : 'text-rose-400'}`}>{isCredit ? '▲' : '▼'}</span>
+                        <span className="text-[10px] font-bold text-white/80">${usdAmt.toFixed(2)}</span>
+                        <span className="text-[9px] text-white/35">{tx.type === 'deposit' ? 'Dépôt' : tx.type === 'withdrawal' ? 'Retrait' : tx.type === 'purchase' ? 'Achat' : 'Reçu'}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {recentTx.length === 0 && <div className="h-1" />}
             </div>
           </motion.section>
         ) : (
@@ -286,9 +299,9 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
           (() => {
             const q = searchQuery.trim().toLowerCase();
             const allItems = [
-              ...products.map(p => ({ id: p.id, name: p.name, image: p.image, price: p.price, type: 'product' })),
-              ...games.map(g => ({ id: g.id, name: g.name, image: g.image, price: g.priceRange, type: 'game' })),
-              ...cards.map(c => ({ id: c.id, name: c.name, image: c.image, price: c.price, type: 'card' })),
+              ...products.map(p => ({ id: p.id!, name: p.name, image: p.image, price: p.price, type: 'product', description: p.description })),
+              ...games.map(g => ({ id: g.id!, name: g.name, image: g.image, price: (g as any).priceRange || (g as any).price || '', type: 'game', description: (g as any).description || '' })),
+              ...cards.map(c => ({ id: c.id!, name: c.name, image: c.image, price: c.price, type: 'card', description: c.description })),
             ].filter(item => !q || item.name.toLowerCase().includes(q))
             .slice(0, q ? 20 : 8);
 
@@ -298,11 +311,11 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
               </div>
             );
 
-            const handleItemClick = () => {
+            const handleItemClick = (item: typeof allItems[0]) => {
               if (!loggedClient) {
                 onRequestAuth?.();
               } else {
-                onViewChange('products');
+                setSelectedItem(item);
               }
             };
 
@@ -314,7 +327,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: i * 0.05 }}
-                    onClick={handleItemClick}
+                    onClick={() => handleItemClick(item)}
                     className="relative rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all group bg-white text-left active:scale-[0.98]"
                   >
                     <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
@@ -406,6 +419,67 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
           <MessageCircle className="h-6 w-6" />
         </Button>
       </div>
+
+      {/* ── Product quick-view modal ── */}
+      <Dialog open={!!selectedItem} onOpenChange={(v) => { if (!v) setSelectedItem(null); }}>
+        <DialogContent className="sm:max-w-[380px] p-0 overflow-hidden rounded-2xl">
+          {selectedItem && (
+            <>
+              <div className="relative aspect-[4/3] bg-gray-100">
+                <img
+                  src={selectedItem.image}
+                  alt={selectedItem.name}
+                  className="w-full h-full object-cover"
+                  onError={e => { (e.target as HTMLImageElement).src = '/icon.svg'; }}
+                />
+                <div className="absolute top-3 left-3">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide ${
+                    selectedItem.type === 'game' ? 'bg-purple-500 text-white' :
+                    selectedItem.type === 'card' ? 'bg-emerald-500 text-white' :
+                    'bg-primary text-white'
+                  }`}>
+                    {selectedItem.type === 'game' ? 'Jeu' : selectedItem.type === 'card' ? 'Carte' : 'Produit'}
+                  </span>
+                </div>
+              </div>
+              <div className="p-5">
+                <DialogHeader>
+                  <DialogTitle className="text-lg font-black text-dark leading-snug">{selectedItem.name}</DialogTitle>
+                </DialogHeader>
+                {selectedItem.description && (
+                  <p className="text-sm text-subtext mt-2 leading-relaxed line-clamp-3">{selectedItem.description}</p>
+                )}
+                {selectedItem.price && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="text-xs text-subtext font-bold uppercase tracking-wider">Prix</span>
+                    <span className="text-sm font-black text-primary">{selectedItem.price}</span>
+                  </div>
+                )}
+                <div className="mt-5 flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-10 text-sm font-bold border-gray-200"
+                    onClick={() => { setSelectedItem(null); onViewChange('products'); }}
+                  >
+                    Voir le catalogue
+                  </Button>
+                  <Button
+                    className="flex-1 h-10 text-sm font-bold bg-emerald-500 hover:bg-emerald-600 border-0"
+                    onClick={() => {
+                      const phone = (window as any).__renaAdminPhone || '';
+                      const msg = `Bonjour, je suis intéressé par : ${selectedItem.name}${selectedItem.price ? ` (${selectedItem.price})` : ''}`;
+                      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+                    }}
+                  >
+                    <MessageCircle className="h-4 w-4 mr-1.5" />
+                    Commander
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

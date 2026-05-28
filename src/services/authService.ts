@@ -15,6 +15,11 @@ export interface SocialLoginResult {
   agent?: Agent;
   error?: string;
   type: 'affiliate' | 'agent' | 'none';
+  noAccount?: boolean;
+  googleUid?: string;
+  googleEmail?: string;
+  googleName?: string;
+  googlePhotoUrl?: string;
 }
 
 export const loginWithGoogle = async (targetType: 'affiliate' | 'agent'): Promise<SocialLoginResult> => {
@@ -30,7 +35,13 @@ export const loginWithGoogle = async (targetType: 'affiliate' | 'agent'): Promis
     if (targetType === 'affiliate') {
       const affiliate = await getAffiliateByEmail(email);
       if (!affiliate) {
-        return { user, type: 'none', error: "Aucun compte affilié trouvé avec cet email." };
+        return {
+          user, type: 'none', noAccount: true,
+          googleUid: user.uid,
+          googleEmail: email,
+          googleName: user.displayName || '',
+          googlePhotoUrl: user.photoURL || '',
+        };
       }
 
       const updates: any = {

@@ -11,7 +11,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { signInWithGooglePopup, mapGoogleAuthError } from '../lib/google-auth';
-import { Client, ClientTransaction, AdminClientNotification } from '../types';
+import { Client, ClientTransaction, AdminClientNotification, ClientNotification } from '../types';
 
 // ─── Deserialize API doc (converts {_seconds} timestamps back to {toDate()}) ──
 function fromApi<T>(doc: any): T {
@@ -425,4 +425,40 @@ export const markAllAdminNotificationsRead = async () => {
 
 export const clearAllAdminNotifications = async () => {
   await fetch('/api/admin/notifications/clear-all', { method: 'DELETE' });
+};
+
+// ─── Client Notifications ────────────────────────────────────────────────────
+
+export const useClientNotifications = (clientId: string | null) => {
+  const [notifications, setNotifications] = useState<ClientNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!clientId) { setLoading(false); return; }
+    let cancelled = false;
+
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch(`/api/client/notifications/${clientId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setNotifications((data.notifications || []).map(fromApi<ClientNotification>));
+      } catch { } finally { if (!cancelled) setLoading(false); }
+    };
+
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [clientId]);
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+  return { notifications, loading, unreadCount };
+};
+
+export const markClientNotificationRead = async (notifId: string) => {
+  await fetch(`/api/client/notifications/${notifId}/read`, { method: 'PATCH' });
+};
+
+export const markAllClientNotificationsRead = async (clientId: string) => {
+  await fetch(`/api/client/notifications/read-all/${clientId}`, { method: 'PATCH' });
 };

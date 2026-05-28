@@ -274,6 +274,45 @@ router.delete('/api/admin/notifications/clear-all', requireDb, async (_req, res)
   }
 });
 
+// ── Client notifications ───────────────────────────────────────────────────────
+router.get('/api/client/notifications/:clientId', requireDb, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    if (!clientId) return res.status(400).json({ error: 'clientId requis.' });
+    const snap = await adminDb.collection('client_notifications')
+      .where('clientId', '==', clientId)
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+      .get();
+    res.json({ notifications: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.patch('/api/client/notifications/:id/read', requireDb, async (req, res) => {
+  try {
+    await adminDb.collection('client_notifications').doc(req.params.id).update({ read: true });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.patch('/api/client/notifications/read-all/:clientId', requireDb, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const snap = await adminDb.collection('client_notifications')
+      .where('clientId', '==', clientId).where('read', '==', false).get();
+    const batch = adminDb.batch();
+    snap.docs.forEach(d => batch.update(d.ref, { read: true }));
+    await batch.commit();
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Deposit ───────────────────────────────────────────────────────────────────
 router.post('/api/client/deposit', requireDb, async (req, res) => {
   try {
@@ -959,6 +998,35 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
       }
     }
     await batch.commit();
+
+    // Create client notification
+    try {
+      const clientId = txData.clientId;
+      const amount = txData.amount;
+      const isDeposit = txData.type === 'deposit';
+      const isWithdrawal = txData.type === 'withdrawal';
+      let notifTitle = '', notifMessage = '', notifType = '';
+      if (status === 'approved' && isDeposit) {
+        notifType = 'deposit_approved'; notifTitle = 'Dépôt approuvé';
+        notifMessage = `Votre dépôt de $${Number(amount).toFixed(2)} a été approuvé et crédité sur votre compte.`;
+      } else if (status === 'rejected' && isDeposit) {
+        notifType = 'deposit_rejected'; notifTitle = 'Dépôt refusé';
+        notifMessage = `Votre dépôt de $${Number(amount).toFixed(2)} a été refusé.${reason ? ` Raison: ${reason}` : ''}`;
+      } else if (status === 'approved' && isWithdrawal) {
+        notifType = 'withdrawal_approved'; notifTitle = 'Retrait approuvé';
+        notifMessage = `Votre retrait de $${Number(amount).toFixed(2)} a été approuvé et est en cours de traitement.`;
+      } else if (status === 'rejected' && isWithdrawal) {
+        notifType = 'withdrawal_rejected'; notifTitle = 'Retrait refusé';
+        notifMessage = `Votre retrait de $${Number(amount).toFixed(2)} a été refusé.${reason ? ` Raison: ${reason}` : ''} Le montant a été remis sur votre solde.`;
+      }
+      if (notifType && clientId) {
+        await adminDb.collection('client_notifications').add({
+          clientId, type: notifType, title: notifTitle, message: notifMessage,
+          amount, txId, read: false, createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+    } catch {}
+
     res.json({ success: true });
   } catch (e: any) {
     console.error('[transaction/status]', e);
@@ -1044,6 +1112,20 @@ router.post('/api/client/register', requireDb, async (req, res) => {
       updatedAt: FieldValue.serverTimestamp(),
     };
     const ref = await adminDb.collection('clients').add(clientData);
+    // Increment referredClients on sponsor affiliates
+    if (directSponsorId) {
+      adminDb.collection('affiliates').doc(directSponsorId).update({
+        referredClients: FieldValue.increment(1),
+        monthlyReferredClients: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      }).catch(() => {});
+    }
+    if (indirectSponsorId) {
+      adminDb.collection('affiliates').doc(indirectSponsorId).update({
+        referredClients: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      }).catch(() => {});
+    }
     res.json({ success: true, client: { id: ref.id, ...clientData, createdAt: null, updatedAt: null } });
   } catch (e: any) {
     console.error('[register]', e);
@@ -1102,6 +1184,20 @@ router.post('/api/client/register-google', requireDb, async (req, res) => {
       updatedAt: FieldValue.serverTimestamp(),
     };
     const ref = await adminDb.collection('clients').add(clientData);
+    // Increment referredClients on sponsor affiliates
+    if (directSponsorId) {
+      adminDb.collection('affiliates').doc(directSponsorId).update({
+        referredClients: FieldValue.increment(1),
+        monthlyReferredClients: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      }).catch(() => {});
+    }
+    if (indirectSponsorId) {
+      adminDb.collection('affiliates').doc(indirectSponsorId).update({
+        referredClients: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      }).catch(() => {});
+    }
     res.json({ success: true, client: { id: ref.id, ...clientData, createdAt: null, updatedAt: null } });
   } catch (e: any) {
     console.error('[register-google]', e);

@@ -450,6 +450,8 @@ export const updateAffiliateRequestStatus = async (requestId: string, status: 'a
           password,
           code,
           walletId,
+          email: requestData.email,
+          ...(requestData.uid && { uid: requestData.uid }),
           balance: 0,
           referredClients: 0,
           monthlyReferredClients: 0,
