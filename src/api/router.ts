@@ -626,6 +626,27 @@ router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
     if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
     const clientData = clientSnap.data()!;
 
+    // Load fee settings
+    const settingsSnap = await adminDb.collection('settings').doc('global').get();
+    const feeSettings = settingsSnap.data() || {};
+    const agentDepositCommissionPct = Number(feeSettings.agentDepositCommissionPercent || 0);
+    const agentWithdrawPct = Number(feeSettings.agentWithdrawPercent || 0);
+    const agentWithdrawAgentSharePct = Number(feeSettings.agentWithdrawAgentSharePercent ?? 100);
+
+    // Fee calculation
+    let commissionAmount = 0;   // commission credited to agent (deposit)
+    let totalFee = 0;           // total fee (withdrawal)
+    let agentShareFee = 0;      // agent's share of withdrawal fee
+    let adminShareFee = 0;      // admin's share of withdrawal fee
+
+    if (type === 'deposit') {
+      commissionAmount = parseFloat((usd * agentDepositCommissionPct / 100).toFixed(4));
+    } else {
+      totalFee = parseFloat((usd * agentWithdrawPct / 100).toFixed(4));
+      agentShareFee = parseFloat((totalFee * agentWithdrawAgentSharePct / 100).toFixed(4));
+      adminShareFee = parseFloat((totalFee - agentShareFee).toFixed(4));
+    }
+
     // Balance checks
     if (type === 'deposit' && (agentData.balance || 0) < usd)
       return res.status(400).json({ error: 'Solde agent insuffisant pour effectuer ce dépôt.' });
@@ -634,20 +655,42 @@ router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
 
     const label = type === 'deposit' ? 'Dépôt' : 'Retrait';
     const txNote = note ? ` — ${note}` : '';
+    const agentId = agentSnap.docs[0].id;
 
     await adminDb.runTransaction(async (txn) => {
-      // Update client balance
-      const clientDelta = type === 'deposit' ? usd : -usd;
-      txn.update(clientRef, {
-        balance: FieldValue.increment(clientDelta),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      // Update agent balance
-      const agentDelta = type === 'deposit' ? -usd : usd;
-      txn.update(agentRef, {
-        balance: FieldValue.increment(agentDelta),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
+      if (type === 'deposit') {
+        // Client receives full deposit
+        txn.update(clientRef, {
+          balance: FieldValue.increment(usd),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        // Agent float decreases by deposit amount
+        txn.update(agentRef, {
+          balance: FieldValue.increment(-usd),
+          commissionBalance: FieldValue.increment(commissionAmount),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } else {
+        // Client wallet debited in full
+        txn.update(clientRef, {
+          balance: FieldValue.increment(-usd),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        // Agent: receives (usd - adminShare) — client digital balance minus what admin takes
+        txn.update(agentRef, {
+          balance: FieldValue.increment(usd - adminShareFee),
+          commissionBalance: FieldValue.increment(agentShareFee),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        // Admin treasury gets admin share
+        if (adminShareFee > 0) {
+          const settingsRef = adminDb.collection('settings').doc('global');
+          txn.update(settingsRef, {
+            feesBalance: FieldValue.increment(adminShareFee),
+          });
+        }
+      }
+
       // Record in client_transactions
       const txRef = adminDb.collection('client_transactions').doc();
       txn.set(txRef, {
@@ -659,13 +702,34 @@ router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
         method: `Agent: ${agentData.name}`,
         agentCode,
         agentName: agentData.name || '',
-        agentId: agentSnap.docs[0].id,
+        agentId,
         description: `${label} via Agent ${agentData.name}${txNote}`,
         ...(note && { message: note }),
+        ...(type === 'deposit' && commissionAmount > 0 && { agentCommission: commissionAmount }),
+        ...(type === 'withdrawal' && totalFee > 0 && { fee: totalFee, agentFeeShare: agentShareFee, adminFeeShare: adminShareFee }),
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
-      // Notification admin
+
+      // Fee record
+      if (commissionAmount > 0 || totalFee > 0) {
+        const feeRef = adminDb.collection('agent_fee_records').doc();
+        txn.set(feeRef, {
+          agentId,
+          agentCode,
+          agentName: agentData.name || '',
+          clientId,
+          clientName: clientData.name || '',
+          operationType: type,
+          baseAmount: usd,
+          feeTotal: type === 'deposit' ? commissionAmount : totalFee,
+          agentShare: type === 'deposit' ? commissionAmount : agentShareFee,
+          adminShare: type === 'deposit' ? 0 : adminShareFee,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Admin notification
       const notifRef = adminDb.collection('admin_notifications').doc();
       txn.set(notifRef, {
         type: `agent_client_${type}`,
@@ -674,12 +738,18 @@ router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
         agentCode,
         agentName: agentData.name || '',
         amount: usd,
+        ...(type === 'deposit' && commissionAmount > 0 && { agentCommission: commissionAmount }),
+        ...(type === 'withdrawal' && totalFee > 0 && { fee: totalFee, agentFeeShare: agentShareFee, adminFeeShare: adminShareFee }),
         read: false,
         createdAt: FieldValue.serverTimestamp(),
       });
     });
 
-    res.json({ success: true });
+    res.json({
+      success: true,
+      ...(type === 'deposit' && { agentCommission: commissionAmount }),
+      ...(type === 'withdrawal' && { fee: totalFee, agentShare: agentShareFee, adminShare: adminShareFee }),
+    });
   } catch (e: any) {
     console.error('[agent/client-transaction]', e);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
@@ -1246,6 +1316,19 @@ router.post('/api/admin/fees/withdraw', requireDb, async (req, res) => {
       createdAt: FieldValue.serverTimestamp(),
     });
     res.json({ success: true, withdrawn: current });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Agent fee records ─────────────────────────────────────────────────────────
+router.get('/api/admin/agent-fee-records', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('agent_fee_records')
+      .orderBy('createdAt', 'desc')
+      .limit(100)
+      .get();
+    res.json({ records: snap.docs.map(serializeDoc) });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

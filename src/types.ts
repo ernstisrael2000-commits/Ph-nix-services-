@@ -122,6 +122,7 @@ export interface Agent {
   name: string;
   phone: string;
   balance: number;
+  commissionBalance?: number;
   status: 'active' | 'inactive';
   walletId: string;
   createdAt: any;
@@ -232,6 +233,10 @@ export interface AppSettings {
   depositFeePercent?: number;
   transferFeePercent?: number;
   feesBalance?: number;
+  // Agent fee engine
+  agentDepositCommissionPercent?: number;
+  agentWithdrawPercent?: number;
+  agentWithdrawAgentSharePercent?: number;
 }
 
 export interface Game {

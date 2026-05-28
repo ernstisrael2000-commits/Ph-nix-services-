@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Package, Truck, Users, ArrowRight,
   ShoppingBag, Globe, GraduationCap, Wallet,
-  MessageCircle, ArrowUp, ChevronRight, Search, X, Zap, TrendingUp,
+  MessageCircle, ArrowUp, ChevronRight, Search, X, Zap, TrendingUp, Loader2,
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
@@ -13,7 +13,8 @@ import {
   useSliderImages, useNavButtons, useSettings,
   useProducts, useGames, useCardTopups,
 } from '../services/parcelService';
-import { useClientData, useClientTransactions } from '../services/clientService';
+import { useClientData, useClientTransactions, submitClientPurchase } from '../services/clientService';
+import { toast } from 'sonner';
 import { Client } from '../types';
 
 const SLIDER_IMAGES = [
@@ -89,6 +90,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState<{ id: string; name: string; image: string; price?: string; type: string; description?: string } | null>(null);
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
 
   const imagesToDisplay = sliderImages.length > 0
     ? sliderImages.map(img => ({ url: img.url, description: img.description || '' }))
@@ -455,25 +457,61 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                     <span className="text-sm font-black text-primary">{selectedItem.price}</span>
                   </div>
                 )}
-                <div className="mt-5 flex gap-2">
-                  <Button
-                    variant="outline"
-                    className="flex-1 h-10 text-sm font-bold border-gray-200"
-                    onClick={() => { setSelectedItem(null); onViewChange('products'); }}
-                  >
-                    Voir le catalogue
-                  </Button>
-                  <Button
-                    className="flex-1 h-10 text-sm font-bold bg-emerald-500 hover:bg-emerald-600 border-0"
-                    onClick={() => {
-                      const phone = (window as any).__renaAdminPhone || '';
-                      const msg = `Bonjour, je suis intéressé par : ${selectedItem.name}${selectedItem.price ? ` (${selectedItem.price})` : ''}`;
-                      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
-                    }}
-                  >
-                    <MessageCircle className="h-4 w-4 mr-1.5" />
-                    Commander
-                  </Button>
+                <div className="mt-5 space-y-2">
+                  {effectiveClient && selectedItem.price && (() => {
+                    const numericPrice = parseFloat(String(selectedItem.price).replace(/[^\d.]/g, ''));
+                    const balHTG = Math.round((effectiveClient.balance ?? 0) * exchangeRate);
+                    const canPay = !isNaN(numericPrice) && numericPrice > 0 && balHTG >= numericPrice;
+                    return (
+                      <button
+                        type="button"
+                        disabled={purchaseLoading || !canPay}
+                        onClick={async () => {
+                          if (purchaseLoading || !effectiveClient || !selectedItem) return;
+                          setPurchaseLoading(true);
+                          const priceUSD = numericPrice / exchangeRate;
+                          try {
+                            await submitClientPurchase(effectiveClient, selectedItem.name, String(selectedItem.price), priceUSD);
+                            toast.success(`✅ Achat effectué ! ${numericPrice.toLocaleString()} HTG débité.`);
+                            setSelectedItem(null);
+                            const adminNum = (window as any).__renaAdminPhone || '';
+                            const now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                            const msg = `🛍️ *ACHAT EFFECTUÉ — Rena*\n\n👤 Client: *${effectiveClient.name}*\n🔑 ID Wallet: *#${effectiveClient.walletId || '—'}*\n🛒 Service: *${selectedItem.name}*\n💰 Montant: *${numericPrice.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n📅 Date: *${now}*\n\n✅ Paiement traité automatiquement. Veuillez activer le service.`;
+                            if (adminNum) window.open(`https://wa.me/${adminNum.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+                          } catch (err: any) {
+                            toast.error(err.message || "Erreur lors de l'achat.");
+                          } finally {
+                            setPurchaseLoading(false);
+                          }
+                        }}
+                        className={`w-full h-12 rounded-2xl border-2 font-black text-sm flex items-center justify-center gap-2 transition-all ${canPay ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50 active:scale-95' : 'border-red-200 text-red-400 cursor-not-allowed opacity-60'}`}
+                      >
+                        {purchaseLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                          <><Wallet className="h-4 w-4" />{canPay ? `Payer ${numericPrice.toLocaleString()} HTG` : `Solde insuffisant (${balHTG.toLocaleString()} HTG)`}</>
+                        )}
+                      </button>
+                    );
+                  })()}
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1 h-10 text-sm font-bold border-gray-200"
+                      onClick={() => { setSelectedItem(null); onViewChange('products'); }}
+                    >
+                      Voir le catalogue
+                    </Button>
+                    <Button
+                      className="flex-1 h-10 text-sm font-bold bg-emerald-500 hover:bg-emerald-600 border-0"
+                      onClick={() => {
+                        const phone = (window as any).__renaAdminPhone || '';
+                        const msg = `Bonjour, je suis intéressé par : ${selectedItem.name}${selectedItem.price ? ` (${selectedItem.price})` : ''}`;
+                        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+                      }}
+                    >
+                      <MessageCircle className="h-4 w-4 mr-1.5" />
+                      WhatsApp
+                    </Button>
+                  </div>
                 </div>
               </div>
             </>

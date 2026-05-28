@@ -364,6 +364,19 @@ export const updateWithdrawalStatus = async (
       }
     }
 
+    // 4. Create affiliate notification
+    const notifRef = doc(collection(db, 'affiliate_notifications'));
+    batch.set(notifRef, {
+      affiliateId: requestData.affiliateId,
+      title: status === 'approved' ? '✅ Retrait approuvé' : '❌ Retrait refusé',
+      message: status === 'approved'
+        ? `Votre demande de retrait de $${requestData.amount} a été approuvée. Vous serez payé sur ${requestData.method} dans les plus brefs délais.`
+        : `Votre demande de retrait de $${requestData.amount} a été refusée.${reason ? ` Raison : ${reason}` : ''}`,
+      type: 'system',
+      read: false,
+      createdAt: serverTimestamp(),
+    });
+
     await batch.commit();
   } catch (error) {
     handleFirestoreError(error, 'update', 'withdrawals', auth);

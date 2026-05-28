@@ -237,6 +237,31 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
         </Card>
       </div>
 
+      {/* ── Commission Balance Card ── */}
+      {(agent.commissionBalance !== undefined && agent.commissionBalance > 0) && (
+        <Card className="rounded-[2rem] border-0 shadow-sm bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 overflow-hidden">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/20">
+                <ArrowRightLeft className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] mb-0.5">Commissions Cumulées</p>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl font-black text-amber-700">{(agent.commissionBalance || 0).toFixed(2)}</span>
+                  <span className="text-sm font-black text-amber-400">$</span>
+                </div>
+                <p className="text-[10px] text-amber-500/70 font-bold mt-0.5">≈ {((agent.commissionBalance || 0) * rate).toLocaleString()} HTG</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-[9px] font-bold text-amber-400 uppercase tracking-wider">Dépôts + Retraits</p>
+              <p className="text-[9px] text-amber-400 mt-0.5">Commissions reçues</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── Section Tabs ── */}
       <div className="flex gap-2 bg-gray-100 p-1.5 rounded-2xl">
         {[

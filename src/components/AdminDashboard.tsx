@@ -66,6 +66,7 @@ import { Parcel, ParcelStatus, PaymentStatus, Product, AppSettings, Affiliate, W
 import { useAllClientTransactions, updateClientTransactionStatus, useAdminClientNotifications, markAdminNotificationRead, markAllAdminNotificationsRead, clearAllAdminNotifications, approvePurchaseRequest, declinePurchaseRequest } from '../services/clientService';
 import AdminShippingManager from './AdminShippingManager';
 import AdminWalletManager from './AdminWalletManager';
+import AgentFeeHistory from './AgentFeeHistory';
 import { 
   BarChart, 
   Bar, 
@@ -7442,11 +7443,76 @@ const AffiliateEditForm = ({
                       <p className="text-[10px] text-gray-400">Ex: 1 = 1% déduit du montant</p>
                     </div>
                   </div>
+
+                  {/* ── Agent fee engine ── */}
+                  <div className="space-y-3 pt-4 border-t border-dashed border-gray-200">
+                    <p className="text-[10px] font-black text-primary uppercase tracking-widest flex items-center gap-1.5">
+                      <span>🤝</span> Moteur de Frais Agent
+                    </p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold text-gray-500">Commission Dépôt Agent (%)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="20"
+                          step="0.1"
+                          placeholder="0"
+                          value={pendingSettings?.agentDepositCommissionPercent ?? settings?.agentDepositCommissionPercent ?? ''}
+                          onChange={(e) => setPendingSettings(prev => ({ ...prev, agentDepositCommissionPercent: parseFloat(e.target.value) || 0 }))}
+                          className="rounded-xl border-gray-100 font-bold text-center"
+                        />
+                        <p className="text-[10px] text-gray-400">Commission créditée à l'agent à chaque dépôt</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold text-gray-500">Frais Retrait Agent (%)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="20"
+                          step="0.1"
+                          placeholder="0"
+                          value={pendingSettings?.agentWithdrawPercent ?? settings?.agentWithdrawPercent ?? ''}
+                          onChange={(e) => setPendingSettings(prev => ({ ...prev, agentWithdrawPercent: parseFloat(e.target.value) || 0 }))}
+                          className="rounded-xl border-gray-100 font-bold text-center"
+                        />
+                        <p className="text-[10px] text-gray-400">Frais total déduit du retrait client</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold text-gray-500">Part Agent des frais retrait (%)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          placeholder="100"
+                          value={pendingSettings?.agentWithdrawAgentSharePercent ?? settings?.agentWithdrawAgentSharePercent ?? ''}
+                          onChange={(e) => setPendingSettings(prev => ({ ...prev, agentWithdrawAgentSharePercent: parseFloat(e.target.value) || 0 }))}
+                          className="rounded-xl border-gray-100 font-bold text-center"
+                        />
+                        <p className="text-[10px] text-gray-400">% des frais retrait reversé à l'agent</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold text-gray-500">Part Admin des frais retrait (%)</Label>
+                        <Input
+                          type="number"
+                          readOnly
+                          value={100 - (pendingSettings?.agentWithdrawAgentSharePercent ?? settings?.agentWithdrawAgentSharePercent ?? 100)}
+                          className="rounded-xl border-gray-100 font-bold text-center bg-gray-50 text-gray-500"
+                        />
+                        <p className="text-[10px] text-gray-400">Calculé automatiquement (100% - part agent)</p>
+                      </div>
+                    </div>
+                  </div>
+
                   <Button
                     onClick={async () => {
                       await updateSettings({
                         depositFeePercent: pendingSettings.depositFeePercent !== undefined ? pendingSettings.depositFeePercent : (settings?.depositFeePercent || 0),
                         transferFeePercent: pendingSettings.transferFeePercent !== undefined ? pendingSettings.transferFeePercent : (settings?.transferFeePercent || 0),
+                        agentDepositCommissionPercent: pendingSettings.agentDepositCommissionPercent !== undefined ? pendingSettings.agentDepositCommissionPercent : (settings?.agentDepositCommissionPercent || 0),
+                        agentWithdrawPercent: pendingSettings.agentWithdrawPercent !== undefined ? pendingSettings.agentWithdrawPercent : (settings?.agentWithdrawPercent || 0),
+                        agentWithdrawAgentSharePercent: pendingSettings.agentWithdrawAgentSharePercent !== undefined ? pendingSettings.agentWithdrawAgentSharePercent : (settings?.agentWithdrawAgentSharePercent ?? 100),
                       });
                       toast.success("Frais mis à jour !");
                     }}
@@ -7455,6 +7521,9 @@ const AffiliateEditForm = ({
                     Enregistrer les frais
                   </Button>
                 </div>
+
+                {/* ── Historique des frais agent ── */}
+                <AgentFeeHistory />
 
                 <div className="space-y-2 pt-4 border-t">
                   <Label className="text-xs font-bold text-gray-500 uppercase">Code de déverrouillage</Label>
