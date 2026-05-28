@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { initializeApp, cert, getApps, App } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getMessaging as getAdminMessaging } from 'firebase-admin/messaging';
 
 const _require = createRequire(import.meta.url);
 let webpush: typeof import('web-push') | null = null;
@@ -66,6 +67,21 @@ function initFirebaseAdmin() {
 
 initFirebaseAdmin();
 
+// ─── FCM Admin Messaging ──────────────────────────────────────────────────────
+let _fcmMessaging: ReturnType<typeof getAdminMessaging> | null = null;
+
+function getFcmMessaging(): ReturnType<typeof getAdminMessaging> | null {
+  if (_fcmMessaging) return _fcmMessaging;
+  if (!adminApp) return null;
+  try {
+    _fcmMessaging = getAdminMessaging(adminApp);
+    return _fcmMessaging;
+  } catch (e) {
+    console.warn('[FCM] Admin Messaging init failed:', e);
+    return null;
+  }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function serializeDoc(snap: FirebaseFirestore.DocumentSnapshot | FirebaseFirestore.QueryDocumentSnapshot): any {
@@ -125,6 +141,47 @@ function sendAdminEmail(subject: string, text: string): void {
     subject,
     text,
   }).catch((err: any) => console.error('[Email] Erreur envoi:', err.message));
+}
+
+// ─── FCM: send push to a client by clientId (fire-and-forget) ────────────────
+async function sendFcmToClient(
+  clientId: string,
+  title: string,
+  body: string,
+  data?: Record<string, string>
+): Promise<void> {
+  const fm = getFcmMessaging();
+  if (!fm || !adminDb) return;
+  try {
+    const tokenSnap = await adminDb.collection('fcm_tokens').doc(clientId).get();
+    if (!tokenSnap.exists) return;
+    const token: string = tokenSnap.data()!.token;
+    if (!token) return;
+    await fm.send({
+      token,
+      notification: { title, body },
+      data: data || {},
+      webpush: {
+        notification: {
+          title,
+          body,
+          icon: '/icon.svg',
+          badge: '/icon.svg',
+          vibrate: [200, 100, 200],
+          requireInteraction: false,
+        },
+      },
+    });
+  } catch (e: any) {
+    const code: string = e?.errorInfo?.code || e?.code || '';
+    if (
+      code.includes('registration-token-not-registered') ||
+      code.includes('invalid-registration-token')
+    ) {
+      try { await adminDb.collection('fcm_tokens').doc(clientId).delete(); } catch {}
+    }
+    console.warn('[FCM] sendFcmToClient error:', e?.message || e);
+  }
 }
 
 // ─── Guards ───────────────────────────────────────────────────────────────────
@@ -395,6 +452,13 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
       `$${(usdAmount || amount).toFixed(2)} via ${method}${htgAmount ? ` (${htgAmount.toLocaleString()} HTG)` : ''}`
     );
 
+    sendFcmToClient(
+      clientId,
+      '💰 Dépôt en cours',
+      `Votre demande de dépôt de $${(usdAmount || amount).toFixed(2)} a été soumise et est en attente de validation.`,
+      { type: 'deposit', txId: txRef.id }
+    );
+
     res.json({ success: true, transactionId: txRef.id });
   } catch (e: any) {
     console.error('[deposit]', e);
@@ -490,6 +554,13 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
     sendPushToAdmins(
       `🏧 Nouveau retrait — ${clientName}`,
       `$${(usdAmount || amount).toFixed ? (usdAmount || amount).toFixed(2) : usdAmount || amount} via ${method} → ${accountNumber}`
+    );
+
+    sendFcmToClient(
+      clientId,
+      '🏧 Retrait en cours',
+      `Votre demande de retrait de $${(usdAmount || amount).toFixed ? (usdAmount || amount).toFixed(2) : usdAmount || amount} a été soumise et est en cours de traitement.`,
+      { type: 'withdrawal', txId: txRef.id }
     );
 
     res.json({ success: true, transactionId: txRef.id });
@@ -928,6 +999,14 @@ router.post('/api/client/purchase', requireDb, async (req, res) => {
       read: false, createdAt: FieldValue.serverTimestamp(),
     });
     await batch.commit();
+
+    sendFcmToClient(
+      clientId,
+      '✅ Achat enregistré',
+      `Votre achat de ${productName} a été enregistré avec succès.`,
+      { type: 'purchase', txId: txRef.id }
+    );
+
     res.json({ success: true, transactionId: txRef.id });
   } catch (e: any) {
     console.error('[purchase]', e);
@@ -974,6 +1053,14 @@ router.post('/api/admin/purchase/approve', requireDb, async (req, res) => {
       status: 'approved', read: true, resolvedAt: FieldValue.serverTimestamp(),
     });
     await batch.commit();
+
+    sendFcmToClient(
+      clientId,
+      '✅ Achat approuvé',
+      `Votre achat de $${Number(amount).toFixed(2)} a été approuvé. Merci pour votre confiance !`,
+      { type: 'purchase_approved', txId: transactionId }
+    );
+
     res.json({ success: true });
   } catch (e: any) {
     console.error('[purchase/approve]', e);
@@ -994,6 +1081,19 @@ router.post('/api/admin/purchase/decline', requireDb, async (req, res) => {
       status: 'declined', read: true, resolvedAt: FieldValue.serverTimestamp(),
     });
     await batch.commit();
+
+    adminDb.collection('client_transactions').doc(transactionId).get()
+      .then(snap => {
+        if (snap.exists) {
+          sendFcmToClient(
+            snap.data()!.clientId,
+            '❌ Achat refusé',
+            'Votre demande d\'achat a été refusée. Contactez le support pour plus d\'informations.',
+            { type: 'purchase_declined', txId: transactionId }
+          );
+        }
+      }).catch(() => {});
+
     res.json({ success: true });
   } catch (e: any) {
     console.error('[purchase/decline]', e);
@@ -1094,6 +1194,9 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
         await adminDb.collection('client_notifications').add({
           clientId, type: notifType, title: notifTitle, message: notifMessage,
           amount, txId, read: false, createdAt: FieldValue.serverTimestamp(),
+        });
+        sendFcmToClient(clientId, notifTitle, notifMessage, {
+          type: notifType, txId: txId || '', amount: String(amount),
         });
       }
     } catch {}
@@ -2286,6 +2389,37 @@ router.get('/api/admin/formations/:formationId/students', requireDb, requireAdmi
     const students = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     res.json({ students });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── FCM Token Registration ────────────────────────────────────────────────────
+router.post('/api/fcm/register', requireDb, async (req, res) => {
+  try {
+    const { clientId, token } = req.body;
+    if (!clientId || typeof clientId !== 'string' || !token || typeof token !== 'string')
+      return res.status(400).json({ error: 'clientId et token (string) requis.' });
+    await adminDb.collection('fcm_tokens').doc(clientId).set({
+      clientId,
+      token,
+      platform: 'web',
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[FCM] register error:', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+router.delete('/api/fcm/unregister/:clientId', requireDb, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    if (!clientId) return res.status(400).json({ error: 'clientId requis.' });
+    await adminDb.collection('fcm_tokens').doc(clientId).delete();
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[FCM] unregister error:', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
 });
 
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────

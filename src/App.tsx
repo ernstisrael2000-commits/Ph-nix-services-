@@ -21,6 +21,7 @@ import AccessChoice from './components/AccessChoice';
 import UserAuthModal from './components/UserAuthModal';
 import { useAuth } from './hooks/useAuth';
 import { useSettings } from './services/parcelService';
+import { useFCM } from './hooks/useFCM';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Package, ChevronLeft, Bell, X, WifiOff } from 'lucide-react';
 import { Button } from './components/ui/button';
@@ -141,6 +142,8 @@ export default function App() {
     const saved = localStorage.getItem('rena_client');
     return saved ? JSON.parse(saved) : null;
   });
+
+  useFCM(loggedClient?.id || null);
 
   const handleClientLogin = (client: Client) => {
     setLoggedClient(client);

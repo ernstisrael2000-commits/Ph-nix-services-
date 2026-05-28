@@ -1,3 +1,33 @@
+// ── Firebase Cloud Messaging — Background messages ────────────────────────────
+try {
+  importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
+  importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
+  firebase.initializeApp({
+    apiKey: 'AIzaSyC-Cnw4wf15uKVQ6Vt8diX-WNrYeX7b_LQ',
+    authDomain: 'gen-lang-client-0739219145.firebaseapp.com',
+    projectId: 'gen-lang-client-0739219145',
+    storageBucket: 'gen-lang-client-0739219145.firebasestorage.app',
+    messagingSenderId: '47402822818',
+    appId: '1:47402822818:web:de31d0864916143d0a3bfb',
+  });
+  const fcmMessaging = firebase.messaging();
+  fcmMessaging.onBackgroundMessage(function (payload) {
+    const title = (payload.notification && payload.notification.title) || 'Rena';
+    const body  = (payload.notification && payload.notification.body)  || '';
+    const data  = payload.data || {};
+    return self.registration.showNotification(title, {
+      body,
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+      tag: data.tag || 'rena-fcm',
+      data,
+      vibrate: [200, 100, 200],
+    });
+  });
+} catch (_fcmErr) {
+  // FCM unavailable (offline / CSP) — web-push still works
+}
+
 const CACHE_NAME = 'rena-cache-v1';
 const OFFLINE_URL = '/';
 
