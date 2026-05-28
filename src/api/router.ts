@@ -1,12 +1,14 @@
 import express from 'express';
 import nodemailer from 'nodemailer';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { initializeApp, cert, getApps, App } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
+const _require = createRequire(import.meta.url);
 let webpush: typeof import('web-push') | null = null;
 try {
-  webpush = require('web-push');
+  webpush = _require('web-push');
 } catch (e) {
   console.warn('[Push] web-push module unavailable:', e);
 }
@@ -494,21 +496,6 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
   } catch (e: any) {
     console.error('[withdrawal]', e);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
-  }
-});
-
-// ── Lookup wallet by walletId (for transfer preview) ─────────────────────────
-router.get('/api/client/lookup-wallet', requireDb, async (req, res) => {
-  try {
-    const walletId = (req.query.walletId as string || '').trim();
-    if (!walletId) return res.status(400).json({ error: 'walletId requis.' });
-    const snap = await adminDb.collection('clients')
-      .where('walletId', '==', walletId).limit(1).get();
-    if (snap.empty) return res.status(404).json({ error: 'Introuvable.' });
-    const data = snap.docs[0].data();
-    res.json({ name: data.name || '', found: true });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
   }
 });
 

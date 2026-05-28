@@ -65,6 +65,13 @@ export default async function handler(req: any, res: any) {
       return res.status(503).json({ error: 'FIREBASE_SERVICE_ACCOUNT non configuré' });
     }
     let raw = rawSa.trim();
+    // Support base64-encoded JSON (Vercel / Railway workaround)
+    if (!raw.startsWith('{')) {
+      try {
+        const decoded = Buffer.from(raw, 'base64').toString('utf8').trim();
+        if (decoded.startsWith('{')) raw = decoded;
+      } catch {}
+    }
     if (!raw.startsWith('{')) raw = '{' + raw;
     const sa = JSON.parse(raw);
     if (sa.private_key) {
