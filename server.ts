@@ -1,6 +1,5 @@
 import express from "express";
 import { createServer as createHttpServer } from "http";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import dotenv from "dotenv";
 import { fileURLToPath } from 'url';
@@ -44,24 +43,46 @@ async function startServer() {
 
   // ── Vite / Static ─────────────────────────────────────────────────────────
   if (process.env.NODE_ENV !== "production") {
-    const hmrConfig = process.env.REPLIT_DEV_DOMAIN
-      ? {
-          clientPort: 443,
-          protocol: "wss" as const,
-          host: process.env.REPLIT_DEV_DOMAIN,
-          server: httpServer,
-        }
-      : { server: httpServer };
+    // In dev mode, proxy frontend requests to the Vite dev server
+    const VITE_PORT = parseInt(process.env.VITE_PORT || '5173', 10);
 
-    const vite = await createViteServer({
-      server: {
-        middlewareMode: true,
-        hmr: hmrConfig,
-        allowedHosts: true,
-      },
-      appType: "spa",
+    // Start Vite as a child process
+    const { spawn } = await import('child_process');
+    const viteProcess = spawn('npx', ['vite', '--port', String(VITE_PORT), '--host', '0.0.0.0'], {
+      stdio: 'inherit',
+      env: { ...process.env },
+      shell: true,
     });
-    app.use(vite.middlewares);
+
+    viteProcess.on('error', (err) => {
+      console.error('[Vite] Failed to start:', err);
+    });
+
+    process.on('exit', () => viteProcess.kill());
+    process.on('SIGTERM', () => { viteProcess.kill(); process.exit(0); });
+    process.on('SIGINT', () => { viteProcess.kill(); process.exit(0); });
+
+    // Wait a moment for Vite to start, then proxy non-API requests
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const { createProxyMiddleware } = await import('http-proxy-middleware') as any;
+    app.use('/', createProxyMiddleware({
+      target: `http://localhost:${VITE_PORT}`,
+      changeOrigin: true,
+      ws: true,
+      on: {
+        error: (_err: any, _req: any, res: any) => {
+          if (res && typeof res.status === 'function') {
+            res.status(502).send('Vite dev server not ready yet');
+          }
+        },
+      },
+    }));
+
+    httpServer.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+      console.log(`Vite dev server on http://localhost:${VITE_PORT}`);
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
 
@@ -90,11 +111,11 @@ async function startServer() {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.sendFile(path.join(distPath, 'index.html'));
     });
-  }
 
-  httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+    httpServer.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
 
 startServer();

@@ -20,14 +20,8 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, './src'),
       },
     },
-    optimizeDeps: {
-      esbuildOptions: {
-        sourcemap: false,
-      },
-    },
     build: {
       chunkSizeWarningLimit: 1000,
-      sourcemap: false,
       rollupOptions: {
         output: {
           manualChunks: {
