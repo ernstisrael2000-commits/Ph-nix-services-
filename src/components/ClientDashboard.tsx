@@ -376,22 +376,42 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     finally { setAgentDepLoading(false); }
   };
 
-  // Load pending withdrawal confirmations (from agents) and poll every 30s
+  // Load pending confirmations once on mount, then use SSE for real-time updates
   React.useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      if (!clientId) return;
+    if (!clientId) return;
+
+    // Initial fetch (loads any confirmations that existed before connecting)
+    fetch(`/api/client/pending-confirmations/${encodeURIComponent(clientId)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => data && setPendingConfirmations(data.confirmations || []))
+      .catch(() => {});
+
+    // SSE connection for real-time push events
+    const es = new EventSource(`/api/client/events/${encodeURIComponent(clientId)}`);
+
+    es.addEventListener('withdrawal_pending', (e: Event) => {
       try {
-        const res = await fetch(`/api/client/pending-confirmations/${encodeURIComponent(clientId)}`);
-        if (res.ok && !cancelled) {
-          const data = await res.json();
-          setPendingConfirmations(data.confirmations || []);
-        }
-      } catch { /* silent */ }
-    };
-    load();
-    const interval = setInterval(load, 30000);
-    return () => { cancelled = true; clearInterval(interval); };
+        const conf = JSON.parse((e as MessageEvent).data);
+        setPendingConfirmations(prev => {
+          if (prev.some((c: any) => c.id === conf.id)) return prev;
+          return [conf, ...prev];
+        });
+        toast('⚠️ Confirmation de retrait requise', {
+          description: `L'agent ${conf.agentName} souhaite retirer $${Number(conf.amount).toFixed(2)} de votre compte.`,
+          duration: 8000,
+        });
+      } catch { /* ignore parse errors */ }
+    });
+
+    es.addEventListener('withdrawal_resolved', (e: Event) => {
+      try {
+        const { id } = JSON.parse((e as MessageEvent).data);
+        setPendingConfirmations(prev => prev.filter((c: any) => c.id !== id));
+      } catch { /* ignore parse errors */ }
+    });
+
+    // Auto-reconnect is handled natively by EventSource
+    return () => { es.close(); };
   }, [clientId]);
 
   const handleConfirmWithdrawal = async (confirmId: string) => {

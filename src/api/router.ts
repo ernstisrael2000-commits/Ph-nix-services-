@@ -199,6 +199,48 @@ const requireDb = (req: express.Request, res: express.Response, next: express.Ne
 
 const router = express.Router();
 
+// ── SSE: active client connections ────────────────────────────────────────────
+const clientSseConnections = new Map<string, Set<express.Response>>();
+
+function pushClientEvent(clientId: string, event: string, data: object): void {
+  const connections = clientSseConnections.get(clientId);
+  if (!connections || connections.size === 0) return;
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const res of [...connections]) {
+    try { res.write(payload); } catch { connections.delete(res); }
+  }
+}
+
+// ── Client: SSE event stream (withdrawal confirmations, etc.) ─────────────────
+router.get('/api/client/events/:clientId', (req, res) => {
+  const { clientId } = req.params;
+  if (!clientId) { res.status(400).end(); return; }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  if (!clientSseConnections.has(clientId)) clientSseConnections.set(clientId, new Set());
+  const conns = clientSseConnections.get(clientId)!;
+  conns.add(res);
+
+  // Initial heartbeat
+  res.write(': connected\n\n');
+
+  // Keep-alive ping every 25 s
+  const heartbeat = setInterval(() => {
+    try { res.write(': ping\n\n'); } catch { clearInterval(heartbeat); }
+  }, 25000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    conns.delete(res);
+    if (conns.size === 0) clientSseConnections.delete(clientId);
+  });
+});
+
 // ── Health ───────────────────────────────────────────────────────────────────
 router.get('/api/health', (_req, res) => res.json({ ok: true }));
 
@@ -1011,6 +1053,21 @@ router.post('/api/agent/initiate-withdrawal', requireDb, async (req, res) => {
       console.warn('[initiate-withdrawal] Push failed:', pushErr);
     }
 
+    // Push SSE event to client immediately
+    pushClientEvent(clientId, 'withdrawal_pending', {
+      id: confirmRef.id,
+      agentId: agentDoc.id,
+      agentCode,
+      agentName: agentData.name || '',
+      clientId,
+      clientName: clientData.name || '',
+      amount: usd,
+      ...(note && { note }),
+      status: 'pending',
+      expiresAt: expiresAt.toISOString(),
+      createdAt: new Date().toISOString(),
+    });
+
     res.json({ success: true, confirmId: confirmRef.id, clientName: clientData.name || '', amount: usd });
   } catch (e: any) {
     console.error('[agent/initiate-withdrawal]', e);
@@ -1042,7 +1099,12 @@ router.post('/api/agent/cancel-withdrawal/:confirmId', requireDb, async (req, re
     if (!confirmSnap.exists) return res.status(404).json({ error: 'Demande introuvable.' });
     if (confirmSnap.data()!.agentCode !== agentCode) return res.status(403).json({ error: 'Non autorisé.' });
     if (confirmSnap.data()!.status !== 'pending') return res.status(400).json({ error: 'Déjà traitée.' });
+    const affectedClientId = confirmSnap.data()!.clientId as string;
     await confirmRef.update({ status: 'cancelled', updatedAt: FieldValue.serverTimestamp() });
+
+    // Notify the client via SSE that the request was cancelled
+    pushClientEvent(affectedClientId, 'withdrawal_resolved', { id: confirmId, status: 'cancelled' });
+
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
@@ -1146,6 +1208,9 @@ router.post('/api/client/confirm-withdrawal/:confirmId', requireDb, async (req, 
       });
     });
 
+    // Notify any other SSE listeners (e.g., agent watching for confirmation)
+    pushClientEvent(clientId, 'withdrawal_resolved', { id: confirmId, status: 'confirmed', amount });
+
     res.json({ success: true, amount });
   } catch (e: any) {
     console.error('[client/confirm-withdrawal]', e);
@@ -1168,6 +1233,10 @@ router.post('/api/client/reject-withdrawal/:confirmId', requireDb, async (req, r
     if (confirmData.status !== 'pending') return res.status(400).json({ error: 'Déjà traitée.' });
 
     await confirmRef.update({ status: 'rejected', rejectedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+
+    // Remove from client's SSE stream
+    pushClientEvent(clientId, 'withdrawal_resolved', { id: confirmId, status: 'rejected' });
+
     res.json({ success: true });
   } catch (e: any) {
     console.error('[client/reject-withdrawal]', e);
