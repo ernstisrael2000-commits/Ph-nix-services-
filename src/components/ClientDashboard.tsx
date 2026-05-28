@@ -220,10 +220,19 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   const [isAgentWithdrawOpen,  setIsAgentWithdrawOpen]  = useState(false);
   const [agentCodeInput,       setAgentCodeInput]       = useState('');
   const [agentSearchLoading,   setAgentSearchLoading]   = useState(false);
-  const [agentInfo,            setAgentInfo]            = useState<{ name: string; agentCode: string; status: string; available: boolean } | null>(null);
+  const [agentInfo,            setAgentInfo]            = useState<{ name: string; agentCode: string | null; affiliateCode: string | null; affiliateId: string | null; status: string; available: boolean } | null>(null);
   const [agentWithdrawAmount,  setAgentWithdrawAmount]  = useState('');
   const [agentWithdrawMsg,     setAgentWithdrawMsg]     = useState('');
   const [agentWithdrawLoading, setAgentWithdrawLoading] = useState(false);
+
+  // Agent deposit state
+  const [isAgentDepositOpen,   setIsAgentDepositOpen]   = useState(false);
+  const [agentDepCodeInput,    setAgentDepCodeInput]    = useState('');
+  const [agentDepSearchLoad,   setAgentDepSearchLoad]   = useState(false);
+  const [agentDepInfo,         setAgentDepInfo]         = useState<{ name: string; affiliateCode: string; affiliateId: string; available: boolean } | null>(null);
+  const [agentDepAmount,       setAgentDepAmount]       = useState('');
+  const [agentDepMsg,          setAgentDepMsg]          = useState('');
+  const [agentDepLoading,      setAgentDepLoading]      = useState(false);
 
   const usdPreview = htgAmount && !isNaN(parseFloat(htgAmount)) ? parseFloat(htgAmount) / rate : 0;
   const htgPreview = withdrawUSD && !isNaN(parseFloat(withdrawUSD)) ? parseFloat(withdrawUSD) * rate : 0;
@@ -267,6 +276,11 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     setAgentWithdrawAmount(''); setAgentWithdrawMsg('');
   };
 
+  const resetAgentDeposit = () => {
+    setAgentDepCodeInput(''); setAgentDepInfo(null);
+    setAgentDepAmount(''); setAgentDepMsg('');
+  };
+
   const handleAgentLookup = async () => {
     const code = agentCodeInput.trim();
     if (!code) { toast.error('Entrez le code agent.'); return; }
@@ -279,6 +293,22 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
       setAgentInfo(data);
     } catch { toast.error('Erreur réseau.'); }
     finally { setAgentSearchLoading(false); }
+  };
+
+  const handleAgentDepLookup = async () => {
+    const code = agentDepCodeInput.trim();
+    if (!code) { toast.error('Entrez le code agent.'); return; }
+    setAgentDepSearchLoad(true);
+    setAgentDepInfo(null);
+    try {
+      const res = await fetch(`/api/agent/lookup?code=${encodeURIComponent(code)}`);
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Agent introuvable.'); return; }
+      // For deposit via agent, must be an affiliate (has affiliateId)
+      if (!data.affiliateId && !data.agentCode) { toast.error('Code invalide.'); return; }
+      setAgentDepInfo({ name: data.name, affiliateCode: data.affiliateCode || code, affiliateId: data.affiliateId || '', available: data.available });
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setAgentDepSearchLoad(false); }
   };
 
   const handleAgentWithdraw = async (e: React.FormEvent) => {
@@ -299,16 +329,47 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
           clientId,
           clientName: client?.name || '',
           amount: usd,
-          agentCode: agentInfo.agentCode,
+          ...(agentInfo.agentCode ? { agentCode: agentInfo.agentCode } : {}),
+          ...(agentInfo.affiliateCode ? { affiliateCode: agentInfo.affiliateCode } : {}),
+          ...(agentInfo.affiliateId ? { affiliateId: agentInfo.affiliateId } : {}),
           ...(agentWithdrawMsg.trim() && { message: agentWithdrawMsg.trim() }),
         }),
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
-      toast.success(`Demande de retrait soumise ! L'agent ${agentInfo.name} confirmera sous peu.`);
+      toast.success(`Demande de retrait soumise ! ${agentInfo.name} confirmera sous peu.`);
       setIsAgentWithdrawOpen(false); resetAgentWithdraw();
     } catch { toast.error('Erreur réseau.'); }
     finally { setAgentWithdrawLoading(false); }
+  };
+
+  const handleAgentDeposit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!agentDepInfo) { toast.error('Recherchez un agent d\'abord.'); return; }
+    if (!agentDepInfo.available) { toast.error('Cet agent est indisponible.'); return; }
+    const usd = parseFloat(agentDepAmount);
+    if (isNaN(usd) || usd <= 0) { toast.error('Montant invalide.'); return; }
+    if (usd < minDeposit) { toast.error(`Montant minimum: $${minDeposit.toFixed(2)} USD`); return; }
+    if (usd > maxDeposit) { toast.error(`Montant maximum: $${maxDeposit.toFixed(2)} USD`); return; }
+    setAgentDepLoading(true);
+    try {
+      const res = await fetch('/api/client/agent-deposit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId,
+          clientName: client?.name || '',
+          amount: usd,
+          affiliateCode: agentDepInfo.affiliateCode,
+          ...(agentDepMsg.trim() && { message: agentDepMsg.trim() }),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
+      toast.success(`Demande de dépôt envoyée à ${agentDepInfo.name} ! Il/elle confirmera sous peu.`);
+      setIsAgentDepositOpen(false); resetAgentDeposit();
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setAgentDepLoading(false); }
   };
 
   // Lookup recipient name as user types wallet ID
@@ -539,6 +600,19 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                 <div className="text-left">
                   <p className="font-black text-violet-700 text-sm leading-tight">Transfert Wallet</p>
                   <p className="text-violet-400 text-[10px]">Envoyer des fonds à un autre utilisateur</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => { resetAgentDeposit(); setIsAgentDepositOpen(true); }}
+                className="w-full flex items-center justify-center gap-3 py-3.5 rounded-2xl border-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-all active:scale-95 group"
+              >
+                <div className="h-8 w-8 rounded-xl bg-emerald-600 flex items-center justify-center shadow shadow-emerald-300 group-hover:shadow-md transition-shadow">
+                  <MapPin className="h-4 w-4 text-white" />
+                </div>
+                <div className="text-left">
+                  <p className="font-black text-emerald-700 text-sm leading-tight">Dépôt via Agent</p>
+                  <p className="text-emerald-400 text-[10px]">Déposer du cash auprès d'un point de service</p>
                 </div>
               </button>
 
@@ -1094,6 +1168,117 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               {agentWithdrawLoading
                 ? <Loader2 className="h-5 w-5 animate-spin" />
                 : 'Soumettre la demande →'}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── AGENT DEPOSIT MODAL ───────────────────────────────────────────────── */}
+      <Dialog open={isAgentDepositOpen} onOpenChange={v => { if (!v) resetAgentDeposit(); setIsAgentDepositOpen(v); }}>
+        <DialogContent className="max-w-sm rounded-[2rem] border-0 shadow-2xl p-0 overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="bg-gradient-to-br from-emerald-500 to-teal-700 p-5 text-white shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                <MapPin className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-black text-white">Dépôt via Agent</DialogTitle>
+                <DialogDescription className="text-emerald-100/70 text-xs">
+                  Solde actuel: <strong>${balance.toFixed(2)} USD</strong>
+                </DialogDescription>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleAgentDeposit} className="p-5 space-y-4 bg-white overflow-y-auto flex-1">
+            {/* Agent Code */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Code de l'Agent / Affilié</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={agentDepCodeInput}
+                  onChange={e => { setAgentDepCodeInput(e.target.value); setAgentDepInfo(null); }}
+                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAgentDepLookup())}
+                  placeholder="Ex: RENA001"
+                  className="h-11 rounded-xl font-mono flex-1"
+                  maxLength={12}
+                />
+                <Button
+                  type="button"
+                  onClick={handleAgentDepLookup}
+                  disabled={agentDepSearchLoad || !agentDepCodeInput.trim()}
+                  className="h-11 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 border-0 text-white shrink-0"
+                >
+                  {agentDepSearchLoad ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                </Button>
+              </div>
+
+              {agentDepInfo && (
+                <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 border border-emerald-100"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-full bg-emerald-200 flex items-center justify-center text-emerald-800 font-black text-sm">{agentDepInfo.name.charAt(0)}</div>
+                    <div>
+                      <p className="text-sm font-black text-emerald-800">{agentDepInfo.name}</p>
+                      <p className="text-[10px] font-mono text-gray-400">#{agentDepInfo.affiliateCode}</p>
+                    </div>
+                  </div>
+                  <span className={`text-[10px] font-black px-2 py-1 rounded-lg ${agentDepInfo.available ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
+                    {agentDepInfo.available ? 'Disponible' : 'Indisponible'}
+                  </span>
+                </motion.div>
+              )}
+            </div>
+
+            {/* Amount */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant à déposer (USD)</Label>
+              <Input
+                type="number"
+                value={agentDepAmount}
+                onChange={e => setAgentDepAmount(e.target.value)}
+                placeholder="Ex: 20.00"
+                className="h-12 rounded-xl text-lg font-black"
+                min="0.01"
+                step="0.01"
+              />
+              {agentDepAmount && !isNaN(parseFloat(agentDepAmount)) && parseFloat(agentDepAmount) > 0 && (
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-100">
+                  <TrendingUp className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  <p className="text-xs font-black text-emerald-700">
+                    ≈ <span className="text-sm">{Math.round(parseFloat(agentDepAmount) * rate).toLocaleString()} HTG</span> à remettre à l'agent
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Message */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Message (optionnel)</Label>
+              <textarea
+                value={agentDepMsg}
+                onChange={e => setAgentDepMsg(e.target.value)}
+                placeholder="Notes pour l'agent..."
+                className="w-full min-h-[60px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 transition-all"
+                maxLength={200}
+              />
+              <p className="text-[10px] text-gray-400">{agentDepMsg.length}/200</p>
+            </div>
+
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-emerald-50 border border-emerald-100">
+              <Info className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-emerald-800 font-medium leading-relaxed">
+                Remettez le cash physiquement à l'agent. Il confirmera la transaction et votre solde sera crédité.
+              </p>
+            </div>
+
+            <Button
+              type="submit"
+              disabled={agentDepLoading || !agentDepInfo || !agentDepInfo.available || !agentDepAmount}
+              className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black border-0"
+            >
+              {agentDepLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Soumettre la demande →'}
             </Button>
           </form>
         </DialogContent>

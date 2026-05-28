@@ -76,6 +76,11 @@ import {
   Search,
   Share2,
   ChevronDown,
+  Phone,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  RefreshCw,
+  XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -129,7 +134,25 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const [isClearHistoryConfirmOpen, setIsClearHistoryConfirmOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Commandes (Agent Mode)
+  // Point de Service (Agent Mode)
+  type PointTab = 'deposit' | 'withdrawal' | 'requests';
+  const [pointTab, setPointTab] = useState<PointTab>('deposit');
+
+  // Phone search (shared for deposit/withdrawal direct)
+  const [phoneInput, setPhoneInput] = useState('');
+  const [phoneClient, setPhoneClient] = useState<{ clientId: string; name: string; phone: string; walletId: string; balance: number } | null>(null);
+  const [phoneLoading, setPhoneLoading] = useState(false);
+  const [directAmount, setDirectAmount] = useState('');
+  const [directNote, setDirectNote] = useState('');
+  const [directSubmitting, setDirectSubmitting] = useState(false);
+
+  // Pending requests
+  const [withdrawalRequests, setWithdrawalRequests] = useState<any[]>([]);
+  const [depositRequests, setDepositRequests] = useState<any[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+  const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
+
+  // Legacy commandes state (kept for compatibility)
   const [agentClientWalletId, setAgentClientWalletId] = useState('');
   const [agentClientName, setAgentClientName] = useState<string | null>(null);
   const [agentClientLoading, setAgentClientLoading] = useState(false);
@@ -172,7 +195,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     validateAgent();
   }, [agentCode, depositMethod]);
 
-  // Client lookup for commandes tab
+  // Client lookup for commandes tab (legacy)
   useEffect(() => {
     if (agentClientWalletId.length >= 4) {
       setAgentClientLoading(true);
@@ -183,6 +206,123 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         .finally(() => setAgentClientLoading(false));
     } else { setAgentClientName(null); }
   }, [agentClientWalletId]);
+
+  // Phone search for direct transactions
+  const handlePhoneSearch = async () => {
+    const phone = phoneInput.trim();
+    if (!phone) { toast.error('Entrez un numéro de téléphone.'); return; }
+    setPhoneLoading(true);
+    setPhoneClient(null);
+    try {
+      const res = await fetch(`/api/affiliate/client-by-phone?phone=${encodeURIComponent(phone)}&affiliateId=${encodeURIComponent(affiliateId)}`);
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Client introuvable.'); return; }
+      setPhoneClient(data);
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setPhoneLoading(false); }
+  };
+
+  // Fetch pending requests
+  const fetchRequests = async () => {
+    setRequestsLoading(true);
+    try {
+      const [wRes, dRes] = await Promise.all([
+        fetch(`/api/affiliate/client-withdrawal-requests/${encodeURIComponent(affiliateId)}`),
+        fetch(`/api/affiliate/client-deposit-requests/${encodeURIComponent(affiliateId)}`),
+      ]);
+      const [wData, dData] = await Promise.all([wRes.json(), dRes.json()]);
+      setWithdrawalRequests(wData.requests || []);
+      setDepositRequests(dData.requests || []);
+    } catch { /* silent */ }
+    finally { setRequestsLoading(false); }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'commandes') fetchRequests();
+  }, [activeTab]);
+
+  // Direct transaction (deposit or withdrawal)
+  const handleDirectTx = async (type: 'deposit' | 'withdrawal') => {
+    const usd = parseFloat(directAmount);
+    if (isNaN(usd) || usd <= 0) { toast.error('Montant invalide.'); return; }
+    if (!phoneClient) { toast.error('Recherchez un client d\'abord.'); return; }
+    setDirectSubmitting(true);
+    try {
+      const res = await fetch('/api/affiliate/client-direct-tx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ affiliateId, clientId: phoneClient.clientId, type, amount: usd, note: directNote.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
+      const label = type === 'deposit' ? 'Dépôt' : 'Retrait';
+      toast.success(`${label} de $${usd.toFixed(2)} ${type === 'deposit' ? 'crédité' : 'débité'} pour ${phoneClient.name} !`);
+      setPhoneInput(''); setPhoneClient(null); setDirectAmount(''); setDirectNote('');
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setDirectSubmitting(false); }
+  };
+
+  // Confirm/reject withdrawal request
+  const handleConfirmWithdrawal = async (txId: string) => {
+    setProcessingRequestId(txId);
+    try {
+      const res = await fetch(`/api/affiliate/client-withdrawal/${txId}/confirm`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ affiliateId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
+      toast.success('Retrait confirmé ! Solde mis à jour.');
+      fetchRequests();
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setProcessingRequestId(null); }
+  };
+
+  const handleRejectWithdrawal = async (txId: string) => {
+    setProcessingRequestId(txId);
+    try {
+      const res = await fetch(`/api/affiliate/client-withdrawal/${txId}/reject`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ affiliateId, reason: 'Refusé par l\'affilié' }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
+      toast.success('Demande rejetée.');
+      fetchRequests();
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setProcessingRequestId(null); }
+  };
+
+  // Confirm/reject deposit request
+  const handleConfirmDeposit = async (txId: string) => {
+    setProcessingRequestId(txId);
+    try {
+      const res = await fetch(`/api/affiliate/client-deposit/${txId}/confirm`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ affiliateId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
+      toast.success('Dépôt confirmé ! Client crédité.');
+      fetchRequests();
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setProcessingRequestId(null); }
+  };
+
+  const handleRejectDeposit = async (txId: string) => {
+    setProcessingRequestId(txId);
+    try {
+      const res = await fetch(`/api/affiliate/client-deposit/${txId}/reject`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ affiliateId, reason: 'Refusé par l\'affilié' }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
+      toast.success('Demande rejetée.');
+      fetchRequests();
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setProcessingRequestId(null); }
+  };
 
   const copyWalletId = () => {
     if (affiliate?.walletId) {
@@ -929,131 +1069,329 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
           </div>
         )}
 
-        {/* ═══ COMMANDES ═══ */}
+        {/* ═══ COMMANDES / POINT DE SERVICE ═══ */}
         {activeTab === 'commandes' && (
           <div className="p-4 space-y-4">
 
             {/* Header */}
-            <div className="bg-gradient-to-br from-orange-500 to-rose-600 rounded-3xl p-6 text-white shadow-lg shadow-orange-200">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center">
-                  <PackageSearch className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-black">Mode Agent</h2>
-                  <p className="text-xs text-white/70">Soumettez des dépôts pour vos clients</p>
-                </div>
-              </div>
-              <p className="text-xs text-white/60 leading-relaxed">
-                En tant qu'affilié, vous pouvez recevoir des dépôts en espèces de clients et les soumettre à l'admin pour approbation.
-              </p>
-            </div>
-
-            {/* Client Lookup & Submit Deposit */}
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-4">
-              <h3 className="font-black text-dark text-sm">Soumettre un Dépôt Client</h3>
-
-              {/* Client Wallet ID */}
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ID Wallet du Client</Label>
-                <div className="relative">
-                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="8 chiffres"
-                    value={agentClientWalletId}
-                    onChange={e => setAgentClientWalletId(e.target.value)}
-                    className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg tracking-[0.2em] pl-11"
-                    maxLength={12}
-                  />
-                  {agentClientLoading && <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
-                </div>
-                {agentClientName && (
-                  <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <span className="text-xs font-black text-emerald-700">Client : {agentClientName}</span>
+            <div className="bg-gradient-to-br from-orange-500 to-rose-600 rounded-3xl p-5 text-white shadow-lg shadow-orange-200">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                    <PackageSearch className="h-5 w-5" />
                   </div>
-                )}
-                {!agentClientName && agentClientWalletId.length >= 4 && !agentClientLoading && (
-                  <div className="bg-orange-50 border border-orange-100 p-3 rounded-xl flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-orange-500 shrink-0" />
-                    <span className="text-xs font-bold text-orange-700">Aucun client trouvé avec cet ID.</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Amount */}
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant ($)</Label>
-                <div className="relative">
-                  <PlusCircle className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-orange-500" />
-                  <Input
-                    type="number"
-                    placeholder="0.00"
-                    value={agentAmount}
-                    onChange={e => setAgentAmount(e.target.value)}
-                    className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg pl-11"
-                  />
-                </div>
-              </div>
-
-              {/* Method */}
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode de Paiement</Label>
-                <Select value={agentPaymentMethod} onValueChange={setAgentPaymentMethod}>
-                  <SelectTrigger className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-bold">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-2xl">
-                    <SelectItem value="MonCash" className="font-bold">
-                      <div className="flex items-center gap-2">
-                        {settings?.moncashLogoUrl && <img src={settings.moncashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
-                        MonCash (Digicel)
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="NatCash" className="font-bold">
-                      <div className="flex items-center gap-2">
-                        {settings?.natcashLogoUrl && <img src={settings.natcashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
-                        NatCash (Natcom)
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="Espèces" className="font-bold">Espèces (Cash)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-100 p-3 rounded-xl flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
-                <p className="text-[10px] text-blue-800 font-bold leading-relaxed">
-                  La demande sera soumise à l'admin pour approbation. Le solde du client sera crédité après validation.
-                </p>
-              </div>
-
-              <Button
-                onClick={handleAgentSubmitDeposit}
-                disabled={agentSubmitting || !agentClientName || !agentAmount}
-                className="w-full h-12 bg-orange-500 hover:bg-orange-600 text-white font-black rounded-2xl shadow-lg shadow-orange-200 disabled:opacity-50"
-              >
-                {agentSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Soumettre le Dépôt'}
-              </Button>
-            </div>
-
-            {/* Info card */}
-            <div className="bg-gray-50 rounded-2xl border border-gray-100 p-4 space-y-3">
-              <h4 className="text-xs font-black text-dark uppercase tracking-widest">Comment ça marche ?</h4>
-              {[
-                { n: '1', t: 'Recevez des espèces du client', s: 'Le client vous remet physiquement l\'argent.' },
-                { n: '2', t: 'Entrez le wallet ID du client', s: 'Trouvez son ID dans son profil Rena.' },
-                { n: '3', t: 'Soumettez la demande', s: 'L\'admin valide et crédite le compte client.' },
-              ].map(step => (
-                <div key={step.n} className="flex items-start gap-3">
-                  <div className="h-6 w-6 rounded-full bg-orange-500 text-white text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">{step.n}</div>
                   <div>
-                    <p className="text-xs font-black text-dark">{step.t}</p>
-                    <p className="text-[10px] text-gray-400">{step.s}</p>
+                    <h2 className="text-lg font-black">Point de Service</h2>
+                    <p className="text-xs text-white/70">Dépôts & retraits pour vos clients</p>
                   </div>
                 </div>
+                <button onClick={fetchRequests} className="h-8 w-8 rounded-xl bg-white/15 flex items-center justify-center hover:bg-white/25 transition-colors">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <div className="bg-white/10 rounded-2xl p-3">
+                  <p className="text-[10px] text-white/60 font-black uppercase">Solde Disponible</p>
+                  <p className="text-xl font-black">${(affiliate.balance || 0).toFixed(2)}</p>
+                </div>
+                <div className="bg-white/10 rounded-2xl p-3">
+                  <p className="text-[10px] text-white/60 font-black uppercase">Demandes Pendantes</p>
+                  <p className="text-xl font-black">{withdrawalRequests.length + depositRequests.length}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Sub-tabs */}
+            <div className="bg-white rounded-2xl border border-gray-100 p-1.5 flex gap-1">
+              {[
+                { id: 'deposit', label: 'Dépôt Direct', icon: ArrowDownToLine },
+                { id: 'withdrawal', label: 'Retrait Direct', icon: ArrowUpFromLine },
+                { id: 'requests', label: `Demandes${withdrawalRequests.length + depositRequests.length > 0 ? ` (${withdrawalRequests.length + depositRequests.length})` : ''}`, icon: Bell },
+              ].map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => { setPointTab(t.id as PointTab); setPhoneClient(null); setPhoneInput(''); setDirectAmount(''); setDirectNote(''); }}
+                  className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                    pointTab === t.id ? 'bg-orange-500 text-white shadow' : 'text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  <t.icon className="h-3.5 w-3.5" />
+                  {t.label}
+                </button>
               ))}
             </div>
+
+            {/* ── Dépôt Direct ── */}
+            {pointTab === 'deposit' && (
+              <div className="space-y-4">
+                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-xl bg-emerald-100 flex items-center justify-center">
+                      <ArrowDownToLine className="h-4 w-4 text-emerald-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-dark text-sm">Dépôt Direct Client</h3>
+                      <p className="text-[10px] text-gray-400">Votre solde sera débité, le client crédité</p>
+                    </div>
+                  </div>
+
+                  {/* Phone search */}
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Téléphone du Client</Label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Input
+                          placeholder="+509 ..."
+                          value={phoneInput}
+                          onChange={e => { setPhoneInput(e.target.value); setPhoneClient(null); }}
+                          onKeyDown={e => e.key === 'Enter' && handlePhoneSearch()}
+                          className="h-11 rounded-xl pl-10 font-mono"
+                        />
+                      </div>
+                      <Button onClick={handlePhoneSearch} disabled={phoneLoading || !phoneInput.trim()} className="h-11 px-3 rounded-xl bg-orange-500 hover:bg-orange-600 border-0 text-white">
+                        {phoneLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    {phoneClient && (
+                      <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl space-y-1">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                          <span className="text-sm font-black text-emerald-700">{phoneClient.name}</span>
+                        </div>
+                        <p className="text-[10px] text-emerald-600 pl-6">Solde actuel: <strong>${(phoneClient.balance || 0).toFixed(2)}</strong></p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Amount */}
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant ($)</Label>
+                    <div className="relative">
+                      <PlusCircle className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
+                      <Input type="number" placeholder="0.00" value={directAmount} onChange={e => setDirectAmount(e.target.value)} className="h-11 rounded-xl pl-10 font-black text-lg" min="0.01" />
+                    </div>
+                    {directAmount && affiliate && parseFloat(directAmount) > affiliate.balance && (
+                      <p className="text-[10px] text-red-500 font-bold">Solde insuffisant (vous avez ${affiliate.balance.toFixed(2)})</p>
+                    )}
+                  </div>
+
+                  {/* Note */}
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Note (optionnel)</Label>
+                    <Input placeholder="Ex: Espèces reçues en bureau" value={directNote} onChange={e => setDirectNote(e.target.value)} className="h-11 rounded-xl" maxLength={100} />
+                  </div>
+
+                  <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl flex items-start gap-2">
+                    <AlertTriangle className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-emerald-800 font-bold leading-relaxed">
+                      Transaction immédiate. Votre solde sera débité et le client crédité instantanément.
+                    </p>
+                  </div>
+
+                  <Button
+                    onClick={() => handleDirectTx('deposit')}
+                    disabled={directSubmitting || !phoneClient || !directAmount || parseFloat(directAmount) > (affiliate?.balance || 0)}
+                    className="w-full h-12 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl shadow-lg shadow-emerald-200 disabled:opacity-50"
+                  >
+                    {directSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                      <span className="flex items-center gap-2"><ArrowDownToLine className="h-4 w-4" /> Effectuer le Dépôt</span>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Retrait Direct ── */}
+            {pointTab === 'withdrawal' && (
+              <div className="space-y-4">
+                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-xl bg-rose-100 flex items-center justify-center">
+                      <ArrowUpFromLine className="h-4 w-4 text-rose-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-dark text-sm">Retrait Direct Client</h3>
+                      <p className="text-[10px] text-gray-400">Le client est débité, votre solde augmente</p>
+                    </div>
+                  </div>
+
+                  {/* Phone search */}
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Téléphone du Client</Label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Input
+                          placeholder="+509 ..."
+                          value={phoneInput}
+                          onChange={e => { setPhoneInput(e.target.value); setPhoneClient(null); }}
+                          onKeyDown={e => e.key === 'Enter' && handlePhoneSearch()}
+                          className="h-11 rounded-xl pl-10 font-mono"
+                        />
+                      </div>
+                      <Button onClick={handlePhoneSearch} disabled={phoneLoading || !phoneInput.trim()} className="h-11 px-3 rounded-xl bg-orange-500 hover:bg-orange-600 border-0 text-white">
+                        {phoneLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    {phoneClient && (
+                      <div className="bg-blue-50 border border-blue-100 p-3 rounded-xl space-y-1">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" />
+                          <span className="text-sm font-black text-blue-700">{phoneClient.name}</span>
+                        </div>
+                        <p className="text-[10px] text-blue-600 pl-6">Solde actuel: <strong>${(phoneClient.balance || 0).toFixed(2)}</strong></p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Amount */}
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant ($)</Label>
+                    <div className="relative">
+                      <MinusCircle className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-rose-500" />
+                      <Input type="number" placeholder="0.00" value={directAmount} onChange={e => setDirectAmount(e.target.value)} className="h-11 rounded-xl pl-10 font-black text-lg" min="0.01" />
+                    </div>
+                    {directAmount && phoneClient && parseFloat(directAmount) > phoneClient.balance && (
+                      <p className="text-[10px] text-red-500 font-bold">Solde client insuffisant (il/elle a ${phoneClient.balance.toFixed(2)})</p>
+                    )}
+                  </div>
+
+                  {/* Note */}
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Note (optionnel)</Label>
+                    <Input placeholder="Ex: Cash remis en main propre" value={directNote} onChange={e => setDirectNote(e.target.value)} className="h-11 rounded-xl" maxLength={100} />
+                  </div>
+
+                  <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl flex items-start gap-2">
+                    <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-rose-800 font-bold leading-relaxed">
+                      Transaction immédiate. Le solde du client sera débité et le vôtre augmentera. Remettez le cash physiquement.
+                    </p>
+                  </div>
+
+                  <Button
+                    onClick={() => handleDirectTx('withdrawal')}
+                    disabled={directSubmitting || !phoneClient || !directAmount || parseFloat(directAmount) > (phoneClient?.balance || 0)}
+                    className="w-full h-12 bg-rose-500 hover:bg-rose-600 text-white font-black rounded-2xl shadow-lg shadow-rose-200 disabled:opacity-50"
+                  >
+                    {directSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+                      <span className="flex items-center gap-2"><ArrowUpFromLine className="h-4 w-4" /> Effectuer le Retrait</span>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Demandes Pendantes ── */}
+            {pointTab === 'requests' && (
+              <div className="space-y-4">
+                {requestsLoading ? (
+                  <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-orange-500" /></div>
+                ) : (withdrawalRequests.length === 0 && depositRequests.length === 0) ? (
+                  <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-10 text-center">
+                    <CheckCircle2 className="h-12 w-12 mx-auto mb-3 text-gray-200" />
+                    <p className="text-sm font-black text-gray-400">Aucune demande pendante</p>
+                    <p className="text-[10px] text-gray-300 mt-1">Les demandes de vos clients apparaîtront ici</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Withdrawal requests */}
+                    {withdrawalRequests.length > 0 && (
+                      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="p-4 border-b border-gray-50 flex items-center gap-2">
+                          <ArrowUpFromLine className="h-4 w-4 text-rose-500" />
+                          <h3 className="font-black text-dark text-sm">Retraits à confirmer</h3>
+                          <span className="ml-auto bg-rose-100 text-rose-700 text-[10px] font-black px-2 py-0.5 rounded-full">{withdrawalRequests.length}</span>
+                        </div>
+                        <div className="divide-y divide-gray-50">
+                          {withdrawalRequests.map(req => (
+                            <div key={req.id} className="p-4 space-y-3">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <p className="font-black text-dark text-sm">{req.clientName}</p>
+                                  <p className="text-[10px] text-gray-400">{req.description || `Retrait de $${req.amount}`}</p>
+                                  <p className="text-[10px] text-gray-300 mt-0.5">
+                                    {req.createdAt ? format(new Date(req.createdAt._seconds ? req.createdAt._seconds * 1000 : req.createdAt), 'dd MMM • HH:mm', { locale: fr }) : ''}
+                                  </p>
+                                </div>
+                                <span className="text-lg font-black text-rose-600">${req.amount?.toFixed(2)}</span>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  onClick={() => handleConfirmWithdrawal(req.id)}
+                                  disabled={!!processingRequestId}
+                                  className="flex-1 h-9 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black rounded-xl border-0"
+                                >
+                                  {processingRequestId === req.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Confirmer</>}
+                                </Button>
+                                <Button
+                                  onClick={() => handleRejectWithdrawal(req.id)}
+                                  disabled={!!processingRequestId}
+                                  variant="outline"
+                                  className="flex-1 h-9 border-red-200 text-red-600 text-xs font-black rounded-xl hover:bg-red-50"
+                                >
+                                  {processingRequestId === req.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><XCircle className="h-3.5 w-3.5 mr-1" />Rejeter</>}
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Deposit requests from clients */}
+                    {depositRequests.length > 0 && (
+                      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="p-4 border-b border-gray-50 flex items-center gap-2">
+                          <ArrowDownToLine className="h-4 w-4 text-emerald-500" />
+                          <h3 className="font-black text-dark text-sm">Dépôts à confirmer</h3>
+                          <span className="ml-auto bg-emerald-100 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-full">{depositRequests.length}</span>
+                        </div>
+                        <div className="divide-y divide-gray-50">
+                          {depositRequests.map(req => (
+                            <div key={req.id} className="p-4 space-y-3">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <p className="font-black text-dark text-sm">{req.clientName}</p>
+                                  <p className="text-[10px] text-gray-400">{req.description || `Dépôt de $${req.amount}`}</p>
+                                  <p className="text-[10px] text-gray-300 mt-0.5">
+                                    {req.createdAt ? format(new Date(req.createdAt._seconds ? req.createdAt._seconds * 1000 : req.createdAt), 'dd MMM • HH:mm', { locale: fr }) : ''}
+                                  </p>
+                                </div>
+                                <span className="text-lg font-black text-emerald-600">${req.amount?.toFixed(2)}</span>
+                              </div>
+                              {parseFloat(req.amount) > (affiliate?.balance || 0) && (
+                                <div className="bg-amber-50 border border-amber-100 p-2 rounded-xl">
+                                  <p className="text-[10px] text-amber-700 font-bold">Solde insuffisant pour confirmer ce dépôt.</p>
+                                </div>
+                              )}
+                              <div className="flex gap-2">
+                                <Button
+                                  onClick={() => handleConfirmDeposit(req.id)}
+                                  disabled={!!processingRequestId || parseFloat(req.amount) > (affiliate?.balance || 0)}
+                                  className="flex-1 h-9 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black rounded-xl border-0"
+                                >
+                                  {processingRequestId === req.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Confirmer</>}
+                                </Button>
+                                <Button
+                                  onClick={() => handleRejectDeposit(req.id)}
+                                  disabled={!!processingRequestId}
+                                  variant="outline"
+                                  className="flex-1 h-9 border-red-200 text-red-600 text-xs font-black rounded-xl hover:bg-red-50"
+                                >
+                                  {processingRequestId === req.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><XCircle className="h-3.5 w-3.5 mr-1" />Rejeter</>}
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 

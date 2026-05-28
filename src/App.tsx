@@ -11,8 +11,6 @@ import ProductsView from './components/ProductsView';
 import ServicesView from './components/ServicesView';
 import AffiliateLogin from './components/AffiliateLogin';
 import AffiliateDashboard from './components/AffiliateDashboard';
-import AgentLogin from './components/AgentLogin';
-import AgentDashboard from './components/AgentDashboard';
 import ClientDashboard from './components/ClientDashboard';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 import LoadingScreen from './components/LoadingScreen';
@@ -25,17 +23,17 @@ import { useFCM } from './hooks/useFCM';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Package, ChevronLeft, Bell, X, WifiOff } from 'lucide-react';
 import { Button } from './components/ui/button';
-import { Affiliate, AdminAccount, Agent, Client } from './types';
+import { Affiliate, AdminAccount, Client } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, getDocFromServer, onSnapshot } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { toast } from 'sonner';
 
 export default function App() {
-  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent' | 'formations' | 'products' | 'services'>('home');
-  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'agent' | 'formations' | 'products' | 'services')[]>(['home']);
+  const [view, setView] = useState<'home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'formations' | 'products' | 'services'>('home');
+  const [history, setHistory] = useState<('home' | 'tracking' | 'admin' | 'affiliate' | 'shipping' | 'formations' | 'products' | 'services')[]>(['home']);
   const [formationsTab, setFormationsTab] = useState<'all' | 'my'>('all');
-  const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'admin' | 'agent' | null>(null);
+  const [accessChoice, setAccessChoice] = useState<'selection' | 'affiliate' | 'admin' | null>(null);
   const { loading } = useAuth();
   const { settings } = useSettings();
   const [showAnnouncement, setShowAnnouncement] = useState(true);
@@ -121,21 +119,6 @@ export default function App() {
   const handleAffiliateLogout = () => {
     setLoggedAffiliate(null);
     localStorage.removeItem('rena_affiliate');
-  };
-
-  const [loggedAgent, setLoggedAgent] = useState<Agent | null>(() => {
-    const saved = localStorage.getItem('rena_agent');
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  const handleAgentLogin = (agent: Agent) => {
-    setLoggedAgent(agent);
-    localStorage.setItem('rena_agent', JSON.stringify(agent));
-  };
-
-  const handleAgentLogout = () => {
-    setLoggedAgent(null);
-    localStorage.removeItem('rena_agent');
   };
 
   const [loggedClient, setLoggedClient] = useState<Client | null>(() => {
@@ -267,7 +250,7 @@ export default function App() {
         </AnimatePresence>
         
         {/* ── Bottom Nav — hidden on dashboard views ── */}
-        {!['admin', 'affiliate', 'agent'].includes(view) && (
+        {!['admin', 'affiliate'].includes(view) && (
           <BottomNav
             currentView={view}
             onViewChange={handleViewChange}
@@ -279,7 +262,7 @@ export default function App() {
           />
         )}
 
-        <main className={`animate-in fade-in duration-500 ${view === 'formations' ? 'pt-0' : 'pt-14'} flex-grow relative ${!['admin', 'affiliate', 'agent'].includes(view) ? 'pb-[74px]' : ''}`}>
+        <main className={`animate-in fade-in duration-500 ${view === 'formations' ? 'pt-0' : 'pt-14'} flex-grow relative ${!['admin', 'affiliate'].includes(view) ? 'pb-[74px]' : ''}`}>
           {/* Back button only for utility views (tracking, shipping) */}
           {['tracking', 'shipping'].includes(view) && (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
@@ -352,17 +335,10 @@ export default function App() {
                 affiliateId={loggedAffiliate.id!} 
                 onLogout={handleAffiliateLogout} 
               />
-            ) : loggedAgent ? (
-              <AgentDashboard 
-                agentUid={loggedAgent.id!} 
-                onLogout={handleAgentLogout} 
-              />
             ) : loggedAdmin ? (
               <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
             ) : accessChoice === 'affiliate' ? (
               <AffiliateLogin onLogin={handleAffiliateLogin} />
-            ) : accessChoice === 'agent' ? (
-              <AgentLogin onLogin={handleAgentLogin} />
             ) : accessChoice === 'admin' ? (
               <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => setAccessChoice(null)} />
             ) : (
@@ -370,21 +346,10 @@ export default function App() {
             )
           )}
 
-          {view === 'agent' && (
-            loggedAgent ? (
-              <AgentDashboard 
-                agentUid={loggedAgent.id!} 
-                onLogout={handleAgentLogout} 
-              />
-            ) : (
-              <AgentLogin onLogin={handleAgentLogin} />
-            )
-          )}
-
         </main>
 
         {/* Footer — only on non-dashboard views */}
-        {!['admin', 'affiliate', 'agent'].includes(view) && (
+        {!['admin', 'affiliate'].includes(view) && (
           <footer className="py-12 border-t mt-auto bg-white pb-24">
             <div className="max-w-7xl mx-auto px-4 text-center">
               <div className="flex items-center justify-center gap-2 mb-4">

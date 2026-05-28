@@ -756,42 +756,90 @@ router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
   }
 });
 
-// ── Agent: lookup by code (client-facing, for withdrawal flow) ───────────────
+// ── Agent/Affiliate: lookup by code (client-facing, for deposit/withdrawal flows) ──
 router.get('/api/agent/lookup', requireDb, async (req, res) => {
   try {
     const code = (req.query.code as string || '').trim();
     if (!code) return res.status(400).json({ error: 'code requis.' });
-    const snap = await adminDb.collection('agents').where('agentCode', '==', code).limit(1).get();
-    if (snap.empty) return res.status(404).json({ error: 'Aucun agent trouvé avec ce code.' });
-    const d = snap.docs[0].data();
-    res.json({
-      found: true,
-      agentCode: d.agentCode,
-      name: d.name || '',
-      phone: d.phone || '',
-      status: d.status || 'inactive',
-      available: d.status === 'active',
-    });
+
+    // Check agents collection first
+    const agentSnap = await adminDb.collection('agents').where('agentCode', '==', code).limit(1).get();
+    if (!agentSnap.empty) {
+      const d = agentSnap.docs[0].data();
+      return res.json({
+        found: true,
+        agentCode: d.agentCode,
+        affiliateCode: null,
+        affiliateId: null,
+        name: d.name || '',
+        phone: d.phone || '',
+        status: d.status || 'inactive',
+        available: d.status === 'active',
+      });
+    }
+
+    // Fallback: check affiliates by code field
+    const affSnap = await adminDb.collection('affiliates').where('code', '==', code).limit(1).get();
+    if (!affSnap.empty) {
+      const d = affSnap.docs[0].data();
+      return res.json({
+        found: true,
+        agentCode: null,
+        affiliateCode: code,
+        affiliateId: affSnap.docs[0].id,
+        name: d.name || '',
+        phone: d.phone || '',
+        status: 'active',
+        available: true,
+      });
+    }
+
+    return res.status(404).json({ error: 'Aucun agent ou affilié trouvé avec ce code.' });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// ── Client: submit agent withdrawal request (creates pending, no immediate debit) ──
+// ── Client: submit agent/affiliate withdrawal request (pending, no immediate debit) ──
 router.post('/api/client/agent-withdrawal', requireDb, async (req, res) => {
   try {
-    const { clientId, clientName, amount, agentCode, message } = req.body;
-    if (!clientId || !clientName || !amount || !agentCode)
+    const { clientId, clientName, amount, agentCode, affiliateCode, affiliateId: bodyAffiliateId, message } = req.body;
+    if (!clientId || !clientName || !amount || (!agentCode && !affiliateCode && !bodyAffiliateId))
       return res.status(400).json({ error: 'Paramètres manquants.' });
     const usd = Number(amount);
     if (isNaN(usd) || usd <= 0) return res.status(400).json({ error: 'Montant invalide.' });
 
-    // Validate agent
-    const agentSnap = await adminDb.collection('agents').where('agentCode', '==', agentCode).limit(1).get();
-    if (agentSnap.empty) return res.status(404).json({ error: 'Agent introuvable.' });
-    const agentDoc = agentSnap.docs[0];
-    const agentData = agentDoc.data();
-    if (agentData.status === 'inactive') return res.status(400).json({ error: 'Cet agent est inactif.' });
+    let resolvedName = '';
+    let resolvedAgentCode: string | null = null;
+    let resolvedAgentId: string | null = null;
+    let resolvedAffiliateId: string | null = null;
+
+    if (agentCode) {
+      // Legacy: lookup from agents collection
+      const agentSnap = await adminDb.collection('agents').where('agentCode', '==', agentCode).limit(1).get();
+      if (agentSnap.empty) return res.status(404).json({ error: 'Agent introuvable.' });
+      const agentDoc = agentSnap.docs[0];
+      const agentData = agentDoc.data();
+      if (agentData.status === 'inactive') return res.status(400).json({ error: 'Cet agent est inactif.' });
+      resolvedName = agentData.name || '';
+      resolvedAgentCode = agentCode;
+      resolvedAgentId = agentDoc.id;
+    } else {
+      // New: lookup from affiliates collection
+      const code = affiliateCode || '';
+      let affDoc: FirebaseFirestore.DocumentSnapshot | null = null;
+      if (bodyAffiliateId) {
+        const snap = await adminDb.collection('affiliates').doc(bodyAffiliateId).get();
+        if (snap.exists) affDoc = snap;
+      }
+      if (!affDoc && code) {
+        const snap = await adminDb.collection('affiliates').where('code', '==', code).limit(1).get();
+        if (!snap.empty) affDoc = snap.docs[0];
+      }
+      if (!affDoc) return res.status(404).json({ error: 'Affilié introuvable.' });
+      resolvedName = affDoc.data()!.name || '';
+      resolvedAffiliateId = affDoc.id;
+    }
 
     // Validate client & balance
     const clientRef = adminDb.collection('clients').doc(clientId);
@@ -800,7 +848,7 @@ router.post('/api/client/agent-withdrawal', requireDb, async (req, res) => {
     const clientData = clientSnap.data()!;
     if ((clientData.balance || 0) < usd) return res.status(400).json({ error: 'Solde client insuffisant.' });
 
-    // Anti-double: block pending agent withdrawal for this client
+    // Anti-double: block if pending withdrawal request already exists
     const pendingCheck = await adminDb.collection('client_transactions')
       .where('clientId', '==', clientId)
       .where('type', '==', 'withdrawal')
@@ -810,7 +858,7 @@ router.post('/api/client/agent-withdrawal', requireDb, async (req, res) => {
     if (!pendingCheck.empty)
       return res.status(400).json({ error: 'Une demande de retrait via agent est déjà en cours. Veuillez patienter.' });
 
-    // Settings min/max validation
+    // Settings min/max
     try {
       const settingsSnap = await adminDb.collection('settings').doc('global').get();
       if (settingsSnap.exists) {
@@ -824,7 +872,6 @@ router.post('/api/client/agent-withdrawal', requireDb, async (req, res) => {
 
     const batch = adminDb.batch();
 
-    // Create pending transaction (no balance debit yet — done at agent confirmation)
     const txDocRef = adminDb.collection('client_transactions').doc();
     batch.set(txDocRef, {
       clientId,
@@ -834,32 +881,81 @@ router.post('/api/client/agent-withdrawal', requireDb, async (req, res) => {
       usdAmount: usd,
       status: 'pending',
       method: 'Agent',
-      agentCode,
-      agentId: agentDoc.id,
-      agentName: agentData.name || '',
+      ...(resolvedAgentCode && { agentCode: resolvedAgentCode, agentId: resolvedAgentId }),
+      ...(resolvedAffiliateId && { affiliateId: resolvedAffiliateId }),
+      agentName: resolvedName,
       source: 'agent_withdrawal_request',
-      description: `Retrait via Agent ${agentData.name} (code: ${agentCode})${message ? ` — ${message}` : ''}`,
+      description: `Retrait via Agent ${resolvedName}${message ? ` — ${message}` : ''}`,
       ...(message && { message }),
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    // Admin notification
     batch.set(adminDb.collection('admin_notifications').doc(), {
       type: 'agent_withdrawal_request',
       clientId,
       clientName,
-      agentCode,
-      agentName: agentData.name || '',
+      agentName: resolvedName,
       amount: usd,
       read: false,
       createdAt: FieldValue.serverTimestamp(),
     });
 
     await batch.commit();
-    res.json({ success: true, agentName: agentData.name || '', transactionId: txDocRef.id });
+    res.json({ success: true, agentName: resolvedName, transactionId: txDocRef.id });
   } catch (e: any) {
     console.error('[client/agent-withdrawal]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Client: request deposit via affiliate/agent (pending, affiliate confirms) ──
+router.post('/api/client/agent-deposit', requireDb, async (req, res) => {
+  try {
+    const { clientId, clientName, amount, affiliateCode, message } = req.body;
+    if (!clientId || !clientName || !amount || !affiliateCode)
+      return res.status(400).json({ error: 'Paramètres manquants.' });
+    const usd = Number(amount);
+    if (isNaN(usd) || usd <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+
+    // Resolve affiliate
+    const affSnap = await adminDb.collection('affiliates').where('code', '==', affiliateCode.trim()).limit(1).get();
+    if (affSnap.empty) return res.status(404).json({ error: 'Affilié introuvable avec ce code.' });
+    const affDoc = affSnap.docs[0];
+    const affData = affDoc.data();
+
+    // Anti-double
+    const pendingCheck = await adminDb.collection('client_transactions')
+      .where('clientId', '==', clientId)
+      .where('type', '==', 'deposit')
+      .where('status', '==', 'pending')
+      .where('source', '==', 'client_deposit_request')
+      .limit(1).get();
+    if (!pendingCheck.empty)
+      return res.status(400).json({ error: 'Une demande de dépôt via agent est déjà en cours.' });
+
+    const txDocRef = adminDb.collection('client_transactions').doc();
+    await txDocRef.set({
+      clientId,
+      clientName,
+      type: 'deposit',
+      amount: usd,
+      usdAmount: usd,
+      status: 'pending',
+      method: 'Agent',
+      affiliateId: affDoc.id,
+      affiliateName: affData.name || '',
+      affiliateCode: affiliateCode.trim(),
+      source: 'client_deposit_request',
+      description: `Dépôt via Affilié ${affData.name}${message ? ` — ${message}` : ''}`,
+      ...(message && { message }),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true, affiliateName: affData.name || '', transactionId: txDocRef.id });
+  } catch (e: any) {
+    console.error('[client/agent-deposit]', e);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
   }
 });
@@ -1267,6 +1363,281 @@ router.patch('/api/admin/affiliate-requests/:id', requireDb, async (req, res) =>
     } else {
       await reqRef.update({ status: 'declined', resolvedAt: FieldValue.serverTimestamp() });
     }
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Affiliate as Agent: search client by phone ────────────────────────────────
+router.get('/api/affiliate/client-by-phone', requireDb, async (req, res) => {
+  try {
+    const phone = (req.query.phone as string || '').trim();
+    const affiliateId = (req.query.affiliateId as string || '').trim();
+    if (!phone || !affiliateId) return res.status(400).json({ error: 'phone et affiliateId requis.' });
+
+    const affSnap = await adminDb.collection('affiliates').doc(affiliateId).get();
+    if (!affSnap.exists) return res.status(403).json({ error: 'Affilié introuvable.' });
+
+    const clientSnap = await adminDb.collection('clients').where('phone', '==', phone).limit(1).get();
+    if (clientSnap.empty) return res.status(404).json({ error: 'Aucun client trouvé avec ce numéro.' });
+    const clientDoc = clientSnap.docs[0];
+    const clientData = clientDoc.data();
+    res.json({
+      found: true,
+      clientId: clientDoc.id,
+      name: clientData.name || '',
+      phone: clientData.phone || '',
+      walletId: clientData.walletId || '',
+      balance: clientData.balance || 0,
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Affiliate as Agent: direct deposit or withdrawal for client ────────────────
+router.post('/api/affiliate/client-direct-tx', requireDb, async (req, res) => {
+  try {
+    const { affiliateId, clientId, type, amount, note } = req.body;
+    if (!affiliateId || !clientId || !type || !amount)
+      return res.status(400).json({ error: 'Paramètres manquants.' });
+    const usd = Number(amount);
+    if (isNaN(usd) || usd <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+    if (!['deposit', 'withdrawal'].includes(type)) return res.status(400).json({ error: 'Type invalide.' });
+
+    const affRef = adminDb.collection('affiliates').doc(affiliateId);
+    const affSnap = await affRef.get();
+    if (!affSnap.exists) return res.status(403).json({ error: 'Affilié introuvable.' });
+    const affData = affSnap.data()!;
+
+    const clientRef = adminDb.collection('clients').doc(clientId);
+    const clientSnap = await clientRef.get();
+    if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
+    const clientData = clientSnap.data()!;
+
+    const now = FieldValue.serverTimestamp();
+    const batch = adminDb.batch();
+
+    if (type === 'deposit') {
+      // Affiliate gives digital credit → affiliate.balance decreases, client.balance increases
+      if ((affData.balance || 0) < usd)
+        return res.status(400).json({ error: 'Solde affilié insuffisant pour ce dépôt.' });
+      batch.update(affRef, { balance: FieldValue.increment(-usd), updatedAt: now });
+      batch.update(clientRef, { balance: FieldValue.increment(usd), updatedAt: now });
+
+      const txRef = adminDb.collection('client_transactions').doc();
+      batch.set(txRef, {
+        clientId, clientName: clientData.name || '',
+        type: 'deposit', amount: usd, usdAmount: usd,
+        status: 'approved', method: 'Agent',
+        affiliateId, affiliateName: affData.name || '',
+        source: 'affiliate_direct_deposit',
+        description: `Dépôt direct par agent ${affData.name}${note ? ` — ${note}` : ''}`,
+        createdAt: now, updatedAt: now,
+      });
+      const affTxRef = adminDb.collection('affiliate_transactions').doc();
+      batch.set(affTxRef, {
+        affiliateId, type: 'client_deposit_given', amount: usd,
+        clientId, clientName: clientData.name || '',
+        description: `Dépôt pour client ${clientData.name}`, status: 'completed',
+        createdAt: now,
+      });
+    } else {
+      // Client gives digital credit → client.balance decreases, affiliate.balance increases
+      if ((clientData.balance || 0) < usd)
+        return res.status(400).json({ error: 'Solde client insuffisant.' });
+      batch.update(clientRef, { balance: FieldValue.increment(-usd), updatedAt: now });
+      batch.update(affRef, { balance: FieldValue.increment(usd), updatedAt: now });
+
+      const txRef = adminDb.collection('client_transactions').doc();
+      batch.set(txRef, {
+        clientId, clientName: clientData.name || '',
+        type: 'withdrawal', amount: usd, usdAmount: usd,
+        status: 'approved', method: 'Agent',
+        affiliateId, affiliateName: affData.name || '',
+        source: 'affiliate_direct_withdrawal',
+        description: `Retrait direct par agent ${affData.name}${note ? ` — ${note}` : ''}`,
+        createdAt: now, updatedAt: now,
+      });
+      const affTxRef = adminDb.collection('affiliate_transactions').doc();
+      batch.set(affTxRef, {
+        affiliateId, type: 'client_withdrawal_received', amount: usd,
+        clientId, clientName: clientData.name || '',
+        description: `Retrait de client ${clientData.name}`, status: 'completed',
+        createdAt: now,
+      });
+    }
+
+    await batch.commit();
+    res.json({ success: true, clientName: clientData.name || '', newClientBalance: (clientData.balance || 0) + (type === 'deposit' ? usd : -usd) });
+  } catch (e: any) {
+    console.error('[affiliate/client-direct-tx]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Affiliate: get pending client withdrawal requests ─────────────────────────
+router.get('/api/affiliate/client-withdrawal-requests/:affiliateId', requireDb, async (req, res) => {
+  try {
+    const { affiliateId } = req.params;
+    if (!affiliateId) return res.status(400).json({ error: 'affiliateId requis.' });
+    const snap = await adminDb.collection('client_transactions')
+      .where('affiliateId', '==', affiliateId)
+      .where('source', '==', 'agent_withdrawal_request')
+      .where('status', '==', 'pending')
+      .orderBy('createdAt', 'desc')
+      .limit(50).get();
+    res.json({ requests: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Affiliate: confirm client withdrawal request ───────────────────────────────
+router.post('/api/affiliate/client-withdrawal/:txId/confirm', requireDb, async (req, res) => {
+  try {
+    const { txId } = req.params;
+    const { affiliateId } = req.body;
+    if (!affiliateId) return res.status(400).json({ error: 'affiliateId requis.' });
+
+    const txRef = adminDb.collection('client_transactions').doc(txId);
+    const txSnap = await txRef.get();
+    if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const txData = txSnap.data()!;
+    if (txData.affiliateId !== affiliateId) return res.status(403).json({ error: 'Non autorisé.' });
+    if (txData.status !== 'pending') return res.status(400).json({ error: 'Déjà traitée.' });
+
+    const affRef = adminDb.collection('affiliates').doc(affiliateId);
+    const affSnap = await affRef.get();
+    if (!affSnap.exists) return res.status(404).json({ error: 'Affilié introuvable.' });
+    const affData = affSnap.data()!;
+
+    const clientRef = adminDb.collection('clients').doc(txData.clientId);
+    const clientSnap = await clientRef.get();
+    if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
+    const clientData = clientSnap.data()!;
+    const amount = txData.amount;
+    if ((clientData.balance || 0) < amount)
+      return res.status(400).json({ error: 'Solde client insuffisant.' });
+
+    const now = FieldValue.serverTimestamp();
+    const batch = adminDb.batch();
+    batch.update(clientRef, { balance: FieldValue.increment(-amount), updatedAt: now });
+    batch.update(affRef, { balance: FieldValue.increment(amount), updatedAt: now });
+    batch.update(txRef, { status: 'approved', updatedAt: now, confirmedAt: now, confirmedBy: affiliateId });
+    batch.set(adminDb.collection('affiliate_transactions').doc(), {
+      affiliateId, type: 'client_withdrawal_received', amount,
+      clientId: txData.clientId, clientName: txData.clientName || '',
+      description: `Retrait confirmé pour ${txData.clientName}`, status: 'completed',
+      createdAt: now,
+    });
+
+    await batch.commit();
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[affiliate/client-withdrawal/confirm]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Affiliate: reject client withdrawal request ────────────────────────────────
+router.post('/api/affiliate/client-withdrawal/:txId/reject', requireDb, async (req, res) => {
+  try {
+    const { txId } = req.params;
+    const { affiliateId, reason } = req.body;
+    if (!affiliateId) return res.status(400).json({ error: 'affiliateId requis.' });
+
+    const txRef = adminDb.collection('client_transactions').doc(txId);
+    const txSnap = await txRef.get();
+    if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const txData = txSnap.data()!;
+    if (txData.affiliateId !== affiliateId) return res.status(403).json({ error: 'Non autorisé.' });
+    if (txData.status !== 'pending') return res.status(400).json({ error: 'Déjà traitée.' });
+
+    const now = FieldValue.serverTimestamp();
+    await txRef.update({ status: 'rejected', updatedAt: now, rejectedAt: now, rejectionReason: reason || '' });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Affiliate: get pending client deposit requests ─────────────────────────────
+router.get('/api/affiliate/client-deposit-requests/:affiliateId', requireDb, async (req, res) => {
+  try {
+    const { affiliateId } = req.params;
+    const snap = await adminDb.collection('client_transactions')
+      .where('affiliateId', '==', affiliateId)
+      .where('source', '==', 'client_deposit_request')
+      .where('status', '==', 'pending')
+      .orderBy('createdAt', 'desc')
+      .limit(50).get();
+    res.json({ requests: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Affiliate: confirm client deposit request ──────────────────────────────────
+router.post('/api/affiliate/client-deposit/:txId/confirm', requireDb, async (req, res) => {
+  try {
+    const { txId } = req.params;
+    const { affiliateId } = req.body;
+    if (!affiliateId) return res.status(400).json({ error: 'affiliateId requis.' });
+
+    const txRef = adminDb.collection('client_transactions').doc(txId);
+    const txSnap = await txRef.get();
+    if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const txData = txSnap.data()!;
+    if (txData.affiliateId !== affiliateId) return res.status(403).json({ error: 'Non autorisé.' });
+    if (txData.status !== 'pending') return res.status(400).json({ error: 'Déjà traitée.' });
+
+    const affRef = adminDb.collection('affiliates').doc(affiliateId);
+    const affSnap = await affRef.get();
+    if (!affSnap.exists) return res.status(404).json({ error: 'Affilié introuvable.' });
+    const affData = affSnap.data()!;
+    const amount = txData.amount;
+    if ((affData.balance || 0) < amount)
+      return res.status(400).json({ error: 'Solde affilié insuffisant pour confirmer ce dépôt.' });
+
+    const clientRef = adminDb.collection('clients').doc(txData.clientId);
+    const now = FieldValue.serverTimestamp();
+    const batch = adminDb.batch();
+    batch.update(affRef, { balance: FieldValue.increment(-amount), updatedAt: now });
+    batch.update(clientRef, { balance: FieldValue.increment(amount), updatedAt: now });
+    batch.update(txRef, { status: 'approved', updatedAt: now, confirmedAt: now });
+    batch.set(adminDb.collection('affiliate_transactions').doc(), {
+      affiliateId, type: 'client_deposit_given', amount,
+      clientId: txData.clientId, clientName: txData.clientName || '',
+      description: `Dépôt confirmé pour ${txData.clientName}`, status: 'completed',
+      createdAt: now,
+    });
+
+    await batch.commit();
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[affiliate/client-deposit/confirm]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Affiliate: reject client deposit request ───────────────────────────────────
+router.post('/api/affiliate/client-deposit/:txId/reject', requireDb, async (req, res) => {
+  try {
+    const { txId } = req.params;
+    const { affiliateId, reason } = req.body;
+    if (!affiliateId) return res.status(400).json({ error: 'affiliateId requis.' });
+
+    const txRef = adminDb.collection('client_transactions').doc(txId);
+    const txSnap = await txRef.get();
+    if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const txData = txSnap.data()!;
+    if (txData.affiliateId !== affiliateId) return res.status(403).json({ error: 'Non autorisé.' });
+    if (txData.status !== 'pending') return res.status(400).json({ error: 'Déjà traitée.' });
+
+    const now = FieldValue.serverTimestamp();
+    await txRef.update({ status: 'rejected', updatedAt: now, rejectionReason: reason || '' });
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
