@@ -462,3 +462,8 @@ export const markClientNotificationRead = async (notifId: string) => {
 export const markAllClientNotificationsRead = async (clientId: string) => {
   await fetch(`/api/client/notifications/read-all/${clientId}`, { method: 'PATCH' });
 };
+
+export const clearAllClientNotifications = async (clientId: string) => {
+  const res = await fetch(`/api/client/notifications/clear-all/${clientId}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Erreur lors de la suppression.');
+};

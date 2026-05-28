@@ -1981,10 +1981,21 @@ const AffiliateEditForm = ({
         { value: 'analytics', label: 'Intelligence', icon: TrendingUp, permission: 'analytics' },
         { value: 'affiliates', label: 'Affiliés', icon: Users, permission: 'affiliates' },
         { value: 'clients', label: 'Base Clients', icon: Smartphone, permission: 'affiliates' },
+        { value: 'search', label: 'Recherche Affilié', icon: Search, permission: 'analytics' },
         { value: 'products', label: 'Catalogue', icon: LayoutGrid, permission: 'products' },
         { value: 'formations', label: 'Formations', icon: LucideIcons.GraduationCap, permission: 'products' },
         { value: 'formation_payments', label: 'Paiements Cours', icon: LucideIcons.CreditCard, permission: 'products' },
         { value: 'online-services', label: 'Services', icon: Globe, permission: 'products' },
+      ]
+    },
+    {
+      title: "Opérations Financières",
+      items: [
+        { value: 'transfers', label: 'Transferts Affiliés', icon: ArrowRightLeft, permission: 'affiliates' },
+        { value: 'withdrawals', label: 'Retraits Affiliés', icon: ArrowUp, permission: 'affiliates' },
+        { value: 'wallet-tx', label: 'Dépôts Wallet', icon: Wallet, permission: 'settings' },
+        { value: 'client-requests', label: 'Demandes Clients', icon: Bell, permission: 'affiliates' },
+        { value: 'clients-tx', label: 'Transactions Clients', icon: DollarSign, permission: 'affiliates' },
       ]
     },
     {
@@ -2115,6 +2126,68 @@ const AffiliateEditForm = ({
   const [clientTxStatusFilter, setClientTxStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [clientTxTypeFilter, setClientTxTypeFilter] = useState<'all' | 'deposit' | 'withdrawal' | 'purchase'>('all');
   const [clientTxActionLoading, setClientTxActionLoading] = useState<string | null>(null);
+  const [purchaseActionLoading, setPurchaseActionLoading] = useState<string | null>(null);
+
+  // Affiliate-submitted client requests (client_requests collection)
+  const [affiliateClientRequests, setAffiliateClientRequests] = useState<any[]>([]);
+  const [affiliateReqLoading, setAffiliateReqLoading] = useState(false);
+  const [affiliateReqActionLoading, setAffiliateReqActionLoading] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    const fetchAffiliateRequests = async () => {
+      setAffiliateReqLoading(true);
+      try {
+        const res = await fetch('/api/admin/affiliate-requests');
+        if (res.ok) {
+          const data = await res.json();
+          setAffiliateClientRequests(data.requests || []);
+        }
+      } catch {}
+      setAffiliateReqLoading(false);
+    };
+    fetchAffiliateRequests();
+    const interval = setInterval(fetchAffiliateRequests, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleAffiliateReqAction = async (reqId: string, action: 'approve' | 'decline') => {
+    setAffiliateReqActionLoading(reqId);
+    try {
+      const res = await fetch(`/api/admin/affiliate-requests/${reqId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur serveur.');
+      toast.success(action === 'approve' ? 'Dépôt affilié approuvé !' : 'Demande refusée.');
+      setAffiliateClientRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: action === 'approve' ? 'approved' : 'declined' } : r));
+    } catch (err: any) {
+      toast.error(err.message || 'Erreur.');
+    } finally {
+      setAffiliateReqActionLoading(null);
+    }
+  };
+
+  const handlePurchaseAction = async (
+    notifId: string, transactionId: string, clientId: string,
+    amount: number, directSponsorId: string | null, action: 'approve' | 'decline'
+  ) => {
+    setPurchaseActionLoading(notifId);
+    try {
+      if (action === 'approve') {
+        await approvePurchaseRequest(notifId, transactionId, clientId, amount, directSponsorId);
+        toast.success('Achat approuvé !');
+      } else {
+        await declinePurchaseRequest(notifId, transactionId);
+        toast.success('Achat refusé.');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erreur.');
+    } finally {
+      setPurchaseActionLoading(null);
+    }
+  };
 
   const handleClientTxAction = async (txId: string, status: 'approved' | 'rejected') => {
     setClientTxActionLoading(txId);
@@ -3711,9 +3784,9 @@ const AffiliateEditForm = ({
                                   {pendingDeposits.length}
                                 </span>
                               )}
-                              {item.value === 'client-requests' && pendingClientRequests.length > 0 && (
+                              {item.value === 'client-requests' && (pendingClientRequests.length + affiliateClientRequests.filter(r => r.status === 'pending').length) > 0 && (
                                 <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-red-500 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
-                                  {pendingClientRequests.length}
+                                  {pendingClientRequests.length + affiliateClientRequests.filter(r => r.status === 'pending').length}
                                 </span>
                               )}
                               {item.value === 'clients-tx' && pendingClientTxCount > 0 && (
@@ -5543,6 +5616,113 @@ const AffiliateEditForm = ({
 
         {/* ===== DEMANDES CLIENTS TAB ===== */}
         <TabsContent value="client-requests" className="space-y-6 pt-6 px-6 pb-20">
+
+          {/* ── Section : Dépôts soumis par les Affiliés ── */}
+          {(() => {
+            const pending = affiliateClientRequests.filter(r => r.status === 'pending');
+            return (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-black text-dark flex items-center gap-2">
+                    <div className="h-7 w-7 rounded-xl bg-indigo-100 flex items-center justify-center">
+                      <Users className="h-4 w-4 text-indigo-600" />
+                    </div>
+                    Dépôts soumis par les Affiliés
+                    {pending.length > 0 && (
+                      <span className="h-6 px-2 rounded-full bg-indigo-600 text-white text-[11px] font-black flex items-center animate-pulse">{pending.length}</span>
+                    )}
+                  </h2>
+                </div>
+                {affiliateReqLoading ? (
+                  <div className="flex items-center gap-2 py-6 justify-center text-gray-400">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span className="text-sm">Chargement...</span>
+                  </div>
+                ) : pending.length === 0 ? (
+                  <div className="rounded-2xl bg-gray-50 border border-gray-100 py-6 text-center text-gray-400 text-sm">
+                    <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-emerald-300" />
+                    Aucun dépôt affilié en attente
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {pending.map(req => {
+                      const isLoading = affiliateReqActionLoading === req.id;
+                      return (
+                        <Card key={req.id} className="border-2 border-indigo-200 overflow-hidden shadow-sm">
+                          <div className="h-1.5 w-full bg-indigo-400" />
+                          <CardContent className="p-5">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                              <div className="h-12 w-12 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
+                                <ArrowDown className="h-6 w-6 text-indigo-600" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-2 mb-2">
+                                  <p className="font-black text-dark">{req.clientName || 'Client'}</p>
+                                  <Badge className="bg-indigo-100 text-indigo-700 border-0 text-[11px] font-black">↓ DÉPÔT AFFILIÉ</Badge>
+                                  <Badge className="bg-amber-100 text-amber-700 border-0 text-[11px] font-black">EN ATTENTE</Badge>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1">
+                                  <div>
+                                    <p className="text-[10px] text-gray-400 uppercase font-black tracking-wider">Montant ($)</p>
+                                    <p className="font-black text-lg text-indigo-600">${req.amount}</p>
+                                    <p className="text-xs text-gray-400">≈ {(req.amount * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-gray-400 uppercase font-black tracking-wider">Affilié</p>
+                                    <p className="font-bold text-dark text-sm">{req.affiliateName || '—'}</p>
+                                    {req.affiliateCode && <p className="text-xs text-gray-400 font-mono">{req.affiliateCode}</p>}
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-gray-400 uppercase font-black tracking-wider">ID Wallet Client</p>
+                                    <p className="font-mono text-sm text-indigo-700">{req.clientWalletId || '—'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-gray-400 uppercase font-black tracking-wider">Méthode</p>
+                                    <p className="font-bold text-dark text-sm">{req.method || '—'}</p>
+                                  </div>
+                                </div>
+                                {req.createdAt && (
+                                  <p className="text-[10px] text-gray-400 mt-2">
+                                    <Clock className="h-3 w-3 inline mr-1" />
+                                    {(() => { try { const d = req.createdAt?._seconds ? new Date(req.createdAt._seconds * 1000) : new Date(req.createdAt); return format(d, 'dd MMM yyyy, HH:mm', { locale: fr }); } catch { return '—'; } })()}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+                                <Button
+                                  className="flex-1 h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm gap-2"
+                                  disabled={isLoading}
+                                  onClick={() => handleAffiliateReqAction(req.id, 'approve')}
+                                >
+                                  {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <><CheckCircle2 className="h-5 w-5" /> Approuver</>}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  className="flex-1 h-12 rounded-2xl border-2 border-red-200 text-red-600 hover:bg-red-50 font-black text-sm gap-2"
+                                  disabled={isLoading}
+                                  onClick={() => handleAffiliateReqAction(req.id, 'decline')}
+                                >
+                                  <XCircle className="h-5 w-5" /> Refuser
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div className="h-px bg-gray-200 flex-1" />
+            <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Demandes Clients Directes</span>
+            <div className="h-px bg-gray-200 flex-1" />
+          </div>
+
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
@@ -6552,64 +6732,144 @@ const AffiliateEditForm = ({
                     const isDeposit = notif.type === 'client_deposit';
                     const isWithdrawal = notif.type === 'client_withdrawal';
                     const isPurchase = notif.type === 'client_purchase';
-                    const iconBg = isDeposit ? 'bg-emerald-100' : isWithdrawal ? 'bg-red-100' : 'bg-primary/10';
+                    const isAlreadyResolved = (notif as any).status === 'approved' || (notif as any).status === 'declined';
+                    const iconBg = isDeposit ? 'bg-emerald-100' : isWithdrawal ? 'bg-red-100' : 'bg-violet-100';
                     const badgeCls = isDeposit
                       ? 'bg-emerald-100 text-emerald-700'
                       : isWithdrawal
                         ? 'bg-red-100 text-red-700'
-                        : 'bg-primary/10 text-primary';
+                        : 'bg-violet-100 text-violet-700';
                     const label = isDeposit ? '↓ DÉPÔT' : isWithdrawal ? '↑ RETRAIT' : '🛍️ ACHAT';
+                    const isPurchaseLoading = purchaseActionLoading === notif.id;
                     return (
-                      <div key={notif.id} className={`flex items-start gap-3 px-4 py-3 transition-colors ${notif.read ? 'bg-white hover:bg-gray-50' : 'bg-amber-50/60 hover:bg-amber-50'}`}>
-                        <div className={`mt-0.5 h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
-                          {isDeposit ? <ArrowDown className="h-4 w-4 text-emerald-600" />
-                            : isWithdrawal ? <ArrowUp className="h-4 w-4 text-red-600" />
-                            : <ShoppingBag className="h-4 w-4 text-primary" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-black text-dark text-sm">{notif.clientName}</span>
-                            <Badge className={`text-[10px] font-black px-2 py-0 border-0 ${badgeCls}`}>{label}</Badge>
-                            {(notif as any).clientWalletId && (
-                              <span className="text-[10px] font-mono text-gray-400">#{(notif as any).clientWalletId}</span>
+                      <div key={notif.id} className={`px-4 py-3 transition-colors ${notif.read ? 'bg-white hover:bg-gray-50' : isPurchase ? 'bg-violet-50/50 hover:bg-violet-50' : 'bg-amber-50/60 hover:bg-amber-50'}`}>
+                        {isPurchase ? (
+                          /* ── Purchase notification: structured card ── */
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-start gap-3">
+                              <div className="mt-0.5 h-10 w-10 rounded-xl flex items-center justify-center shrink-0 bg-violet-100">
+                                <ShoppingBag className="h-5 w-5 text-violet-600" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-black text-dark text-sm">{notif.clientName}</span>
+                                  <Badge className="text-[10px] font-black px-2 py-0 border-0 bg-violet-100 text-violet-700">🛍️ ACHAT</Badge>
+                                  {!notif.read && <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-primary text-white">NOUVEAU</span>}
+                                  {isAlreadyResolved && (
+                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${(notif as any).status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                                      {(notif as any).status === 'approved' ? '✓ TERMINÉ' : '✗ REFUSÉ'}
+                                    </span>
+                                  )}
+                                </div>
+                                {/* Service + Price */}
+                                <div className="mt-1.5 rounded-xl bg-white border border-violet-100 px-3 py-2 space-y-1">
+                                  {(notif as any).productName && (
+                                    <p className="font-black text-violet-700 text-sm leading-tight">{(notif as any).productName}</p>
+                                  )}
+                                  {(notif as any).productPrice && (
+                                    <p className="text-xs text-gray-500 font-bold">{(notif as any).productPrice}</p>
+                                  )}
+                                  <p className="font-black text-dark text-base">{(notif.amount || 0).toLocaleString()} HTG</p>
+                                  <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                                    {(notif as any).clientWalletId && (
+                                      <span className="text-[10px] font-mono text-gray-400">Wallet #{(notif as any).clientWalletId}</span>
+                                    )}
+                                    {(notif as any).clientPhone && (
+                                      <span className="text-[10px] text-gray-400">📱 {(notif as any).clientPhone}</span>
+                                    )}
+                                    <span className="text-[10px] text-gray-400">
+                                      {notif.createdAt?.toDate ? format(notif.createdAt.toDate(), 'dd MMM, HH:mm', { locale: fr }) : ''}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              {!notif.read && (
+                                <button onClick={() => markAdminNotificationRead(notif.id!)}
+                                  className="shrink-0 text-[10px] font-bold text-gray-400 hover:text-gray-600 mt-1 transition-colors"
+                                  title="Marquer comme lu">✓ Lu</button>
+                              )}
+                            </div>
+                            {/* Action buttons for unresolved purchases */}
+                            {!isAlreadyResolved && (notif as any).transactionId && (
+                              <div className="flex gap-2 ml-13 pl-13">
+                                <Button
+                                  size="sm"
+                                  className="h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black gap-1.5"
+                                  disabled={isPurchaseLoading}
+                                  onClick={() => handlePurchaseAction(
+                                    notif.id!,
+                                    (notif as any).transactionId,
+                                    (notif as any).clientId,
+                                    notif.amount,
+                                    (notif as any).directSponsorId || null,
+                                    'approve'
+                                  )}
+                                >
+                                  {isPurchaseLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="h-4 w-4" /> Terminé</>}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-9 px-3 rounded-xl text-xs font-black border-red-200 text-red-600 hover:bg-red-50 gap-1"
+                                  disabled={isPurchaseLoading}
+                                  onClick={() => handlePurchaseAction(
+                                    notif.id!,
+                                    (notif as any).transactionId,
+                                    (notif as any).clientId,
+                                    notif.amount,
+                                    (notif as any).directSponsorId || null,
+                                    'decline'
+                                  )}
+                                >
+                                  <XCircle className="h-4 w-4" /> Refuser
+                                </Button>
+                                {(notif as any).clientPhone && (
+                                  <a
+                                    href={`https://wa.me/${((notif as any).clientPhone || '').replace(/\D/g, '')}?text=${encodeURIComponent(`✅ Bonjour ${notif.clientName},\n\nVotre service *${(notif as any).productName || 'Service'}* au prix de *${(notif.amount || 0).toLocaleString()} HTG* a été *traité* avec succès.\n\nMerci de votre confiance — Équipe Rena 🙏`)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="h-9 px-3 rounded-xl text-xs font-black border-2 border-green-200 text-green-700 hover:bg-green-50 flex items-center gap-1 transition-colors"
+                                  >
+                                    📲 WhatsApp
+                                  </a>
+                                )}
+                              </div>
                             )}
+                          </div>
+                        ) : (
+                          /* ── Deposit / Withdrawal notification: compact row ── */
+                          <div className="flex items-start gap-3">
+                            <div className={`mt-0.5 h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${iconBg}`}>
+                              {isDeposit ? <ArrowDown className="h-4 w-4 text-emerald-600" /> : <ArrowUp className="h-4 w-4 text-red-600" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-black text-dark text-sm">{notif.clientName}</span>
+                                <Badge className={`text-[10px] font-black px-2 py-0 border-0 ${badgeCls}`}>{label}</Badge>
+                                {(notif as any).clientWalletId && (
+                                  <span className="text-[10px] font-mono text-gray-400">#{(notif as any).clientWalletId}</span>
+                                )}
+                                {!notif.read && (
+                                  <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-primary text-white">NOUVEAU</span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
+                                <span className="font-black text-dark text-sm">${(notif.amount || 0).toFixed(2)}</span>
+                                {notif.method && <span className="text-[11px] text-gray-500">via {notif.method}</span>}
+                                {(notif as any).accountNumber && <span className="text-[11px] font-mono text-gray-500">{(notif as any).accountNumber}</span>}
+                                {(notif as any).txId && <span className="text-[11px] font-mono text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Réf: {(notif as any).txId}</span>}
+                                {(notif as any).clientPhone && <span className="text-[10px] text-gray-400">📱 {(notif as any).clientPhone}</span>}
+                                <span className="text-[10px] text-gray-400">
+                                  {notif.createdAt?.toDate ? format(notif.createdAt.toDate(), 'dd MMM, HH:mm', { locale: fr }) : ''}
+                                </span>
+                              </div>
+                            </div>
                             {!notif.read && (
-                              <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-primary text-white">NOUVEAU</span>
+                              <button onClick={() => markAdminNotificationRead(notif.id!)}
+                                className="shrink-0 text-[10px] font-bold text-gray-400 hover:text-gray-600 mt-1 transition-colors"
+                                title="Marquer comme lu">✓ Lu</button>
                             )}
                           </div>
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
-                            <span className="font-black text-dark text-sm">
-                              {isDeposit || isWithdrawal
-                                ? `$${(notif.amount || 0).toFixed(2)}`
-                                : `${(notif.amount || 0).toLocaleString()} HTG`}
-                            </span>
-                            {isPurchase && (notif as any).productName && (
-                              <span className="text-[11px] font-bold text-primary">{(notif as any).productName}</span>
-                            )}
-                            {isPurchase && (notif as any).productPrice && (
-                              <span className="text-[11px] text-gray-500">Prix: {(notif as any).productPrice}</span>
-                            )}
-                            {!isPurchase && notif.method && (
-                              <span className="text-[11px] text-gray-500">via {notif.method}</span>
-                            )}
-                            {(notif as any).accountNumber && (
-                              <span className="text-[11px] font-mono text-gray-500">{(notif as any).accountNumber}</span>
-                            )}
-                            {(notif as any).txId && (
-                              <span className="text-[11px] font-mono text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Réf: {(notif as any).txId}</span>
-                            )}
-                            {(notif as any).clientPhone && (
-                              <span className="text-[10px] text-gray-400">📱 {(notif as any).clientPhone}</span>
-                            )}
-                            <span className="text-[10px] text-gray-400">
-                              {notif.createdAt?.toDate ? format(notif.createdAt.toDate(), 'dd MMM, HH:mm', { locale: fr }) : ''}
-                            </span>
-                          </div>
-                        </div>
-                        {!notif.read && (
-                          <button onClick={() => markAdminNotificationRead(notif.id!)}
-                            className="shrink-0 text-[10px] font-bold text-gray-400 hover:text-gray-600 mt-1 transition-colors"
-                            title="Marquer comme lu">✓ Lu</button>
                         )}
                       </div>
                     );

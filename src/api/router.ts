@@ -313,6 +313,21 @@ router.patch('/api/client/notifications/read-all/:clientId', requireDb, async (r
   }
 });
 
+router.delete('/api/client/notifications/clear-all/:clientId', requireDb, async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    if (!clientId) return res.status(400).json({ error: 'clientId requis.' });
+    const snap = await adminDb.collection('client_notifications')
+      .where('clientId', '==', clientId).get();
+    const batch = adminDb.batch();
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Deposit ───────────────────────────────────────────────────────────────────
 router.post('/api/client/deposit', requireDb, async (req, res) => {
   try {
@@ -720,6 +735,75 @@ router.get('/api/client/lookup-wallet', requireDb, async (req, res) => {
 });
 
 // ── Affiliate submits deposit for a client (agent mode) ───────────────────────
+router.get('/api/admin/affiliate-requests', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('client_requests')
+      .where('source', '==', 'affiliate')
+      .orderBy('createdAt', 'desc')
+      .limit(100)
+      .get();
+    res.json({ requests: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.patch('/api/admin/affiliate-requests/:id', requireDb, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action } = req.body;
+    if (!action || !['approve', 'decline'].includes(action))
+      return res.status(400).json({ error: 'Action invalide.' });
+    const reqRef = adminDb.collection('client_requests').doc(id);
+    const reqSnap = await reqRef.get();
+    if (!reqSnap.exists) return res.status(404).json({ error: 'Demande introuvable.' });
+    const reqData = reqSnap.data()!;
+    if (reqData.status !== 'pending') return res.status(400).json({ error: 'Demande déjà traitée.' });
+    if (action === 'approve') {
+      const clientRef = adminDb.collection('clients').doc(reqData.clientId);
+      const clientSnap = await clientRef.get();
+      if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
+      const clientData = clientSnap.data()!;
+      const exchangeRate = 146;
+      const htgAmount = reqData.amount * exchangeRate;
+      const batch = adminDb.batch();
+      batch.update(clientRef, {
+        balance: (clientData.balance || 0) + htgAmount,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      batch.set(adminDb.collection('client_transactions').doc(), {
+        clientId: reqData.clientId,
+        clientName: reqData.clientName,
+        type: 'deposit',
+        amount: htgAmount,
+        status: 'approved',
+        method: reqData.method || '',
+        description: `Dépôt via affilié ${reqData.affiliateName || ''} (approuvé)`,
+        source: 'affiliate',
+        affiliateId: reqData.affiliateId || '',
+        affiliateName: reqData.affiliateName || '',
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      batch.set(adminDb.collection('client_notifications').doc(), {
+        clientId: reqData.clientId,
+        type: 'deposit_approved',
+        title: 'Dépôt approuvé',
+        message: `Votre dépôt de ${htgAmount.toLocaleString()} HTG a été approuvé.`,
+        read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      batch.update(reqRef, { status: 'approved', resolvedAt: FieldValue.serverTimestamp() });
+      await batch.commit();
+    } else {
+      await reqRef.update({ status: 'declined', resolvedAt: FieldValue.serverTimestamp() });
+    }
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post('/api/affiliate/submit-client-deposit', requireDb, async (req, res) => {
   try {
     const { affiliateId, clientWalletId, amount, method } = req.body;
