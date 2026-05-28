@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Package, Truck, Users, ArrowRight,
   ShoppingBag, Globe, GraduationCap, Wallet,
-  MessageCircle, ArrowUp, ChevronRight,
+  MessageCircle, ArrowUp, ChevronRight, Search, X,
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Button } from './ui/button';
@@ -86,6 +86,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
 
   const [currentSlide, setCurrentSlide] = useState(0);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const imagesToDisplay = sliderImages.length > 0
     ? sliderImages.map(img => ({ url: img.url, description: img.description || '' }))
@@ -238,44 +239,42 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
         )}
       </AnimatePresence>
 
-      {/* ── Quick nav buttons (DB-driven) ── */}
-      {!buttonsLoading && buttons.length > 0 && (
-        <div className="w-full overflow-hidden">
-          <div className="flex items-center gap-3 overflow-x-auto pb-1 px-0.5 no-scrollbar">
-            {buttons.map(btn => (
-              <Button
-                key={btn.id}
-                variant="ghost"
-                className="flex-shrink-0 bg-white border border-gray-100 rounded-[16px] px-5 h-12 shadow-sm hover:bg-primary/5 hover:-translate-y-0.5 transition-all group"
-                onClick={() => resolveRedirection(btn)}
-              >
-                <div className="flex items-center gap-2">
-                  <LucideIcon name={btn.iconName} className="h-4 w-4 transition-colors group-hover:text-primary" color={btn.color || '#2563EB'} />
-                  <span className="font-bold text-sm transition-colors group-hover:text-primary" style={{ color: btn.color || '#2563EB' }}>
-                    {btn.label}
-                  </span>
-                </div>
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
-      {buttonsLoading && (
-        <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
-          {[1, 2, 3].map(i => <div key={i} className="h-12 w-28 bg-gray-100 animate-pulse rounded-2xl shrink-0" />)}
-        </div>
-      )}
+      {/* ── Barre de recherche produits ── */}
+      <div className="relative w-full">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none z-10" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Rechercher un produit, jeu, carte..."
+          className="w-full h-12 pl-11 pr-10 rounded-2xl border border-gray-200 bg-white text-sm font-medium text-dark placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-sm transition-all"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-dark transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
 
       {/* ── Nos Produits — real catalog preview ── */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-black text-dark">Nos Produits</h2>
-          <button
-            onClick={() => onViewChange('products')}
-            className="flex items-center gap-1 text-xs font-bold text-primary hover:underline"
-          >
-            Voir tout <ArrowRight className="h-3 w-3" />
-          </button>
+          <h2 className="text-lg font-black text-dark">
+            {searchQuery.trim() ? `Résultats (${
+              [...products, ...games, ...cards].filter(i => i.name.toLowerCase().includes(searchQuery.trim().toLowerCase())).length
+            })` : 'Nos Produits'}
+          </h2>
+          {!searchQuery.trim() && (
+            <button
+              onClick={() => onViewChange('products')}
+              className="flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+            >
+              Voir tout <ArrowRight className="h-3 w-3" />
+            </button>
+          )}
         </div>
         {(productsLoading || gamesLoading || cardsLoading) ? (
           <div className="grid grid-cols-2 gap-3">
@@ -285,14 +284,18 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
           </div>
         ) : (
           (() => {
+            const q = searchQuery.trim().toLowerCase();
             const allItems = [
               ...products.map(p => ({ id: p.id, name: p.name, image: p.image, price: p.price, type: 'product' })),
               ...games.map(g => ({ id: g.id, name: g.name, image: g.image, price: g.priceRange, type: 'game' })),
               ...cards.map(c => ({ id: c.id, name: c.name, image: c.image, price: c.price, type: 'card' })),
-            ].slice(0, 8);
+            ].filter(item => !q || item.name.toLowerCase().includes(q))
+            .slice(0, q ? 20 : 8);
 
             if (allItems.length === 0) return (
-              <div className="text-center py-8 text-gray-400 text-sm">Aucun produit disponible.</div>
+              <div className="text-center py-8 text-gray-400 text-sm">
+                {q ? `Aucun résultat pour "${searchQuery}"` : 'Aucun produit disponible.'}
+              </div>
             );
 
             const handleItemClick = () => {

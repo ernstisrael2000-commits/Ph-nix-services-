@@ -68,13 +68,22 @@ import {
   Fingerprint,
   Copy,
   Medal,
-  Calendar
+  Calendar,
+  Home,
+  ShoppingBag,
+  User,
+  PackageSearch,
+  Search,
+  Share2,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useSettings } from '../services/parcelService';
+
+type Tab = 'accueil' | 'reseau' | 'gains' | 'commandes' | 'profil';
 
 interface AffiliateDashboardProps {
   affiliateId: string;
@@ -90,17 +99,23 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const { transactions, loading: transactionsLoading } = useWalletTransactions(affiliateId);
   const { settings } = useSettings();
 
+  // Tab navigation
+  const [activeTab, setActiveTab] = useState<Tab>('accueil');
+
+  // Withdrawal
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawMethod, setWithdrawMethod] = useState<'MonCash' | 'NatCash' | 'Physical'>('MonCash');
   const [accountNumber, setAccountNumber] = useState('');
 
+  // Transfer
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [transferRecipientWalletId, setTransferRecipientWalletId] = useState('');
   const [transferAmount, setTransferAmount] = useState('');
   const [verifiedRecipientName, setVerifiedRecipientName] = useState<string | null>(null);
   const [isValidatingRecipient, setIsValidatingRecipient] = useState(false);
 
+  // Deposit
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
   const [depositMethod, setDepositMethod] = useState('MonCash');
@@ -108,39 +123,41 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const [verifiedAgentName, setVerifiedAgentName] = useState<string | null>(null);
   const [isValidatingAgent, setIsValidatingAgent] = useState(false);
 
+  // General
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [showScrollTop, setShowScrollTop] = useState(false);
   const [isClearHistoryConfirmOpen, setIsClearHistoryConfirmOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Commandes (Agent Mode)
+  const [agentClientWalletId, setAgentClientWalletId] = useState('');
+  const [agentClientName, setAgentClientName] = useState<string | null>(null);
+  const [agentClientLoading, setAgentClientLoading] = useState(false);
+  const [agentAmount, setAgentAmount] = useState('');
+  const [agentPaymentMethod, setAgentPaymentMethod] = useState('MonCash');
+  const [agentSubmitting, setAgentSubmitting] = useState(false);
 
   useEffect(() => {
-    if (affiliate && !affiliate.walletId) {
-      ensureWalletId(affiliate);
-    }
+    if (affiliate && !affiliate.walletId) ensureWalletId(affiliate);
   }, [affiliate]);
 
-  // Recipient validation
+  // Recipient validation for transfer
   useEffect(() => {
     const validate = async () => {
-      const trimmedId = transferRecipientWalletId.trim();
-      if (trimmedId.length === 8) {
+      const trimmed = transferRecipientWalletId.trim();
+      if (trimmed.length === 8) {
         setIsValidatingRecipient(true);
         try {
-          const recipient = await findAffiliateByWalletId(trimmedId);
+          const recipient = await findAffiliateByWalletId(trimmed);
           setVerifiedRecipientName(recipient ? recipient.name : null);
-        } catch (err) {
-          setVerifiedRecipientName(null);
-        } finally {
-          setIsValidatingRecipient(false);
-        }
-      } else {
-        setVerifiedRecipientName(null);
-      }
+        } catch { setVerifiedRecipientName(null); }
+        finally { setIsValidatingRecipient(false); }
+      } else { setVerifiedRecipientName(null); }
     };
     validate();
   }, [transferRecipientWalletId]);
 
-  // Agent validation
+  // Agent validation for deposit
   useEffect(() => {
     const validateAgent = async () => {
       if (depositMethod === 'Agent' && agentCode.length === 8) {
@@ -148,38 +165,46 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         try {
           const agent = await getAgentByCode(agentCode);
           setVerifiedAgentName(agent ? agent.name : null);
-        } catch (err) {
-          setVerifiedAgentName(null);
-        } finally {
-          setIsValidatingAgent(false);
-        }
-      } else {
-        setVerifiedAgentName(null);
-      }
+        } catch { setVerifiedAgentName(null); }
+        finally { setIsValidatingAgent(false); }
+      } else { setVerifiedAgentName(null); }
     };
     validateAgent();
   }, [agentCode, depositMethod]);
 
+  // Client lookup for commandes tab
   useEffect(() => {
-    const handleScroll = () => {
-      setShowScrollTop(window.scrollY > 400);
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+    if (agentClientWalletId.length >= 4) {
+      setAgentClientLoading(true);
+      fetch(`/api/client/lookup-wallet?walletId=${encodeURIComponent(agentClientWalletId)}`)
+        .then(r => r.json())
+        .then(d => setAgentClientName(d.name || null))
+        .catch(() => setAgentClientName(null))
+        .finally(() => setAgentClientLoading(false));
+    } else { setAgentClientName(null); }
+  }, [agentClientWalletId]);
 
   const copyWalletId = () => {
     if (affiliate?.walletId) {
       navigator.clipboard.writeText(affiliate.walletId);
-      toast.success("Wallet ID copié !");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success('ID Wallet copié !');
     }
   };
 
-  // Memoize ranking position for performance
+  const copyReferralCode = () => {
+    if (affiliate?.code) {
+      navigator.clipboard.writeText(affiliate.code);
+      toast.success('Code de parrainage copié !');
+    }
+  };
+
+  const levelInfo = React.useMemo(() => {
+    if (!affiliate) return null;
+    return getAffiliateLevelInfo(affiliate.points || 0);
+  }, [affiliate?.points]);
+
   const rankingPosition = React.useMemo(() => {
     if (!affiliate) return 0;
     return topAffiliates.findIndex(a => a.id === affiliate.id) + 1;
@@ -192,998 +217,948 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       .slice(0, 3);
   }, [affiliates]);
 
-  const levelInfo = React.useMemo(() => {
-    if (!affiliate) return null;
-    return getAffiliateLevelInfo(affiliate.points || 0);
-  }, [affiliate?.points]);
-
   const unreadCount = notifications.filter(n => !n.read).length;
+  const recentTx = transactions.slice(0, 5);
+
+  const handleWithdraw = async () => {
+    const amount = parseFloat(withdrawAmount);
+    if (isNaN(amount) || amount <= 0) { toast.error('Montant invalide.'); return; }
+    if (amount > affiliate!.balance) { toast.error('Solde insuffisant.'); return; }
+    const exchangeRate = settings?.exchangeRate || 146;
+    const minWithdrawUSD = 20 / exchangeRate;
+    if (amount < minWithdrawUSD) { toast.error(`Montant minimum: ${(20 / exchangeRate).toFixed(2)} $`); return; }
+    setIsSubmitting(true);
+    try {
+      await submitWithdrawal(affiliate!, amount, withdrawMethod, withdrawMethod === 'Physical' ? 'Bureau Juvénat' : accountNumber.trim());
+      toast.success("Demande de retrait soumise !");
+      setIsWithdrawModalOpen(false); setWithdrawAmount(''); setAccountNumber('');
+      const adminPhone = settings?.whatsappAdminNumber || '+50944813185';
+      const methodText = withdrawMethod === 'Physical' ? 'En personne (Juvénat)' : withdrawMethod;
+      const msg = `Bonjour Admin, j'ai soumis une demande de retrait Rena.\n\nMontant: ${amount} $\nMéthode: ${methodText}\nNuméro/Lieu: ${withdrawMethod === 'Physical' ? 'Bureau Juvénat' : accountNumber.trim()}\nCode Affilié: ${affiliate!.code}\nNom: ${affiliate!.name}`;
+      window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+    } catch (error: any) {
+      toast.error(error.message || 'Erreur lors du retrait.');
+    } finally { setIsSubmitting(false); }
+  };
+
+  const handleTransfer = async () => {
+    const amount = parseFloat(transferAmount);
+    if (isNaN(amount) || amount <= 0) { toast.error('Montant invalide.'); return; }
+    if (!verifiedRecipientName) { toast.error('Bénéficiaire non identifié.'); return; }
+    setIsSubmitting(true);
+    try {
+      const recipientName = await submitTransfer(affiliate!, transferRecipientWalletId.trim(), amount);
+      toast.success(`Transfert de ${amount} $ vers ${recipientName} soumis.`);
+      setIsTransferModalOpen(false); setTransferAmount(''); setTransferRecipientWalletId(''); setVerifiedRecipientName(null);
+    } catch (error: any) {
+      toast.error(error.message || 'Erreur lors du transfert.');
+    } finally { setIsSubmitting(false); }
+  };
+
+  const handleDepositRequest = async () => {
+    const amount = parseFloat(depositAmount);
+    if (isNaN(amount) || amount <= 0) { toast.error('Montant invalide.'); return; }
+    if (depositMethod === 'Agent' && !verifiedAgentName) { toast.error('Agent non identifiable.'); return; }
+    setIsSubmitting(true);
+    try {
+      if (depositMethod === 'Agent') {
+        await submitAgentDepositRequest(affiliateId, agentCode, amount);
+        toast.success("Demande envoyée à l'agent !");
+      } else {
+        await submitDepositRequest(affiliate!, amount, depositMethod);
+        toast.success('Demande de dépôt soumise !');
+        const adminPhone = settings?.whatsappAdminNumber || '+50944813185';
+        const msg = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Rena.\n\nMontant: ${amount} $\nMéthode: ${depositMethod}\nID Wallet: ${affiliate!.walletId}\nNom: ${affiliate!.name}`;
+        window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+      }
+      setIsDepositModalOpen(false); setDepositAmount(''); setAgentCode('');
+    } catch (error: any) {
+      toast.error(error.message || "Échec de l'envoi.");
+    } finally { setIsSubmitting(false); }
+  };
+
+  const handleClearTransactionHistory = async () => {
+    setIsSubmitting(true);
+    try {
+      await deleteWithdrawalHistory(affiliateId);
+      toast.success('Historique vidé !');
+      setIsClearHistoryConfirmOpen(false);
+    } catch { toast.error('Erreur.'); }
+    finally { setIsSubmitting(false); }
+  };
+
+  const handleAgentSubmitDeposit = async () => {
+    const amount = parseFloat(agentAmount);
+    if (isNaN(amount) || amount <= 0) { toast.error('Montant invalide.'); return; }
+    if (!agentClientName) { toast.error('Client non identifié.'); return; }
+    setAgentSubmitting(true);
+    try {
+      const res = await fetch('/api/affiliate/submit-client-deposit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ affiliateId, clientWalletId: agentClientWalletId, amount, method: agentPaymentMethod }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+      toast.success(`Dépôt de $${amount} soumis pour ${agentClientName} !`);
+      setAgentClientWalletId(''); setAgentClientName(null); setAgentAmount('');
+    } catch (e: any) {
+      toast.error(e.message || 'Erreur lors de la soumission.');
+    } finally { setAgentSubmitting(false); }
+  };
+
+  const getTransactionStatusBadge = (status: TransactionStatus) => {
+    switch (status) {
+      case 'completed':
+      case 'approved': return <Badge className="bg-green-100 text-green-700 border-green-200 text-[9px] font-black">Complété</Badge>;
+      case 'rejected': return <Badge className="bg-red-100 text-red-700 border-red-200 text-[9px] font-black">Rejeté</Badge>;
+      default: return <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[9px] font-black">En attente</Badge>;
+    }
+  };
 
   if (affiliateLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   if (!affiliate) return null;
 
-  const handleWithdraw = async () => {
-    const amount = parseFloat(withdrawAmount);
-    if (isNaN(amount) || amount <= 0) {
-      toast.error("Veuillez entrer un montant valide.");
-      return;
-    }
-
-    if (amount > affiliate.balance) {
-      toast.error("Solde insuffisant.");
-      return;
-    }
-
-    const exchangeRate = settings?.exchangeRate || 146;
-    const minWithdrawHTG = 20;
-    const minWithdrawUSD = minWithdrawHTG / exchangeRate;
-
-    if (amount < minWithdrawUSD) {
-      toast.error(`Le montant minimum de retrait est de ${minWithdrawHTG} HTG (soit environ ${minWithdrawUSD.toFixed(2)} $).`);
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await submitWithdrawal(affiliate, amount, withdrawMethod, withdrawMethod === 'Physical' ? 'Bureau Juvénat' : accountNumber.trim());
-      
-      toast.success("Demande soumise : En attente de validation par l'admin");
-      setIsWithdrawModalOpen(false);
-      setWithdrawAmount('');
-      setAccountNumber('');
-
-      // Send WhatsApp notification to admin
-      const adminPhone = settings?.whatsappAdminNumber || "+50944813185";
-      const methodText = withdrawMethod === 'Physical' ? 'En personne (Juvénat)' : withdrawMethod;
-      const message = `Bonjour Admin, j'ai soumis une demande de retrait Rena.\n\nMontant: ${amount} $\nMéthode: ${methodText}\nNuméro/Lieu: ${withdrawMethod === 'Physical' ? 'Bureau Juvénat' : accountNumber.trim()}\nCode Affilié: ${affiliate.code}\nNom: ${affiliate.name}`;
-      window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`, '_blank');
-      
-    } catch (error: any) {
-      let errorMessage = error.message;
-      try {
-        const parsed = JSON.parse(error.message);
-        if (parsed.error?.includes('permissions') || parsed.error?.includes('permission-denied')) {
-          errorMessage = "Votre demande de retrait a été enregistrée pour approbation.";
-          toast.success(errorMessage);
-          setIsWithdrawModalOpen(false);
-          setWithdrawAmount('');
-          setAccountNumber('');
-          return;
-        }
-      } catch (e) {}
-      toast.error(errorMessage || "Erreur lors de la demande.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleTransfer = async () => {
-    const amount = parseFloat(transferAmount);
-    if (isNaN(amount) || amount <= 0) {
-      toast.error("Montant invalide.");
-      return;
-    }
-    if (!verifiedRecipientName) {
-      toast.error("Bénéficiaire non identifié.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const recipientName = await submitTransfer(affiliate, transferRecipientWalletId.trim(), amount);
-      toast.success(`Votre demande de transfert de ${amount} $ vers ${recipientName} a été envoyée.`);
-      setIsTransferModalOpen(false);
-      setTransferAmount('');
-      setTransferRecipientWalletId('');
-      setVerifiedRecipientName(null);
-    } catch (error: any) {
-      let errorMessage = error.message;
-      try {
-        const parsed = JSON.parse(error.message);
-        if (parsed.error?.includes('permissions') || parsed.error?.includes('permission-denied')) {
-          errorMessage = "Votre demande de transfert a été enregistrée pour approbation.";
-          toast.success(errorMessage);
-          setIsTransferModalOpen(false);
-          setTransferAmount('');
-          setTransferRecipientWalletId('');
-          setVerifiedRecipientName(null);
-          return;
-        }
-      } catch (e) {}
-      toast.error(errorMessage || "Erreur lors du transfert.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDepositRequest = async () => {
-    const amount = parseFloat(depositAmount);
-    if (isNaN(amount) || amount <= 0) {
-      toast.error("Montant invalide.");
-      return;
-    }
-
-    if (depositMethod === 'Agent' && !verifiedAgentName) {
-      toast.error("Agent non identifiable.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      if (depositMethod === 'Agent') {
-        await submitAgentDepositRequest(affiliateId, agentCode, amount);
-        toast.success("Demande envoyée à l'agent !");
-        setIsDepositModalOpen(false);
-        setDepositAmount('');
-        setAgentCode('');
-      } else {
-        await submitDepositRequest(affiliate, amount, depositMethod);
-        toast.success("Votre demande de dépôt a été envoyée pour approbation.");
-        setIsDepositModalOpen(false);
-        setDepositAmount('');
-        
-        const adminPhone = settings?.whatsappAdminNumber || "+50944813185";
-        const message = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Rena.\n\nMontant: ${amount} $\nMéthode: ${depositMethod}\nID Wallet: ${affiliate.walletId}\nNom: ${affiliate.name}`;
-        window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`, '_blank');
-      }
-    } catch (error: any) {
-      let errorMessage = error.message;
-      try {
-        const parsed = JSON.parse(error.message);
-        if (parsed.error?.includes('permissions') || parsed.error?.includes('permission-denied')) {
-          errorMessage = "Votre demande de dépôt a été enregistrée pour approbation.";
-          toast.success(errorMessage);
-          setIsDepositModalOpen(false);
-          setDepositAmount('');
-          return;
-        }
-      } catch (e) {}
-      toast.error(errorMessage || "Échec de l'envoi.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleClearTransactionHistory = async () => {
-    setIsSubmitting(true);
-    try {
-      await deleteWithdrawalHistory(affiliateId); // This should ideally clear the transactions too
-      // If we want a specific clear transactions:
-      // await clearWalletHistory(affiliateId); 
-      toast.success("Historique vidé !");
-      setIsClearHistoryConfirmOpen(false);
-    } catch (error) {
-      toast.error("Erreur.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const getTransactionStatusBadge = (status: TransactionStatus) => {
-    switch (status) {
-      case 'completed': 
-      case 'approved': return <Badge className="bg-green-100 text-green-700 border-green-200">Terminé</Badge>;
-      case 'rejected': return <Badge className="bg-red-100 text-red-700 border-red-200">Rejeté</Badge>;
-      default: return <Badge className="bg-amber-100 text-amber-700 border-amber-200">En attente</Badge>;
-    }
-  };
-
-  const getLevelColor = (level: string) => {
-    switch (level) {
-      case 'VIP': return 'text-purple-600 bg-purple-50 border-purple-100';
-      case 'Elite': return 'text-indigo-600 bg-indigo-50 border-indigo-100';
-      case 'Gold': return 'text-amber-600 bg-amber-50 border-amber-100';
-      case 'Silver': return 'text-gray-600 bg-gray-50 border-gray-100';
-      default: return 'text-orange-600 bg-orange-50 border-orange-100';
-    }
-  };
+  const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
+    { id: 'accueil', label: 'Accueil', icon: Home },
+    { id: 'reseau', label: 'Réseau', icon: Users },
+    { id: 'gains', label: 'Gains', icon: TrendingUp },
+    { id: 'commandes', label: 'Commandes', icon: ShoppingBag },
+    { id: 'profil', label: 'Profil', icon: User },
+  ];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-200">
-            <Users className="h-6 w-6 text-white" />
+    <div className="min-h-screen bg-gray-50">
+
+      {/* ── Fixed Header ── */}
+      <div className="fixed top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-sm border-b border-gray-100 h-14">
+        <div className="flex items-center justify-between h-full px-4 max-w-2xl mx-auto">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-white font-black text-sm shrink-0">
+              {affiliate.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <p className="text-sm font-black text-dark leading-none truncate max-w-[160px]">{affiliate.name}</p>
+              <p className="text-[10px] text-gray-400 font-mono">#{affiliate.code}</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">RENA Affilié</h1>
-            <p className="text-gray-500 font-medium flex items-center gap-2">
-              {affiliate.name} 
-              <span className="text-gray-300">•</span> 
-              <span className="font-mono text-blue-600">{affiliate.code}</span>
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <Dialog open={isNotificationsOpen} onOpenChange={setIsNotificationsOpen}>
-            <DialogTrigger render={
-              <Button variant="outline" className="relative p-2 rounded-xl">
-                <Bell className="h-5 w-5 text-gray-600" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white animate-pulse">
-                    {unreadCount}
-                  </span>
-                )}
-              </Button>
-            } />
+          <div className="flex items-center gap-1.5">
+            <Dialog open={isNotificationsOpen} onOpenChange={setIsNotificationsOpen}>
+              <DialogTrigger render={
+                <button className="relative h-9 w-9 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-colors">
+                  <Bell className="h-4.5 w-4.5 text-gray-600" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 bg-red-500 text-white text-[7px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center border border-white">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+              } />
               <DialogContent className="max-w-md p-0 overflow-hidden rounded-[2rem]">
-                <DialogHeader className="p-6 bg-blue-600 text-white relative">
-                  <DialogTitle className="flex items-center gap-2">
-                    <Bell className="h-5 w-5" />
-                    Notifications
+                <DialogHeader className="p-6 bg-primary text-white relative">
+                  <DialogTitle className="flex items-center gap-2 text-base font-black">
+                    <Bell className="h-4 w-4" /> Notifications
                   </DialogTitle>
-                  <DialogDescription className="text-blue-100">
-                    Restez informé de vos gains et de votre progression.
-                  </DialogDescription>
-                  <DialogClose className="absolute right-4 top-4 rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
+                  <DialogClose className="absolute right-4 top-4 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
                     <X className="h-4 w-4" />
                   </DialogClose>
                 </DialogHeader>
-                <div className="md:max-h-[60vh] overflow-y-auto p-4 space-y-3 overscroll-contain custom-scrollbar">
-                {notificationsLoading ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                  </div>
-                ) : notifications.length > 0 ? (
-                  notifications.map((n) => (
-                    <div 
-                      key={n.id} 
-                      className={`p-4 rounded-xl border transition-colors ${n.read ? 'bg-gray-50/50 border-gray-100' : 'bg-blue-50/50 border-blue-100'}`}
-                      onClick={() => n.id && markNotificationAsRead(n.id)}
-                    >
+                <div className="max-h-[60vh] overflow-y-auto p-4 space-y-2">
+                  {notificationsLoading ? (
+                    <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+                  ) : notifications.length > 0 ? notifications.map(n => (
+                    <div key={n.id} onClick={() => n.id && markNotificationAsRead(n.id)}
+                      className={`p-3.5 rounded-2xl border cursor-pointer transition-colors ${n.read ? 'bg-gray-50 border-gray-100' : 'bg-blue-50 border-blue-100'}`}>
                       <div className="flex justify-between items-start mb-1">
-                        <h4 className="font-bold text-sm text-gray-900">{n.title}</h4>
-                        {!n.read && <div className="w-2 h-2 bg-blue-500 rounded-full" />}
+                        <h4 className="font-black text-sm text-dark">{n.title}</h4>
+                        {!n.read && <div className="w-2 h-2 bg-primary rounded-full shrink-0 mt-0.5" />}
                       </div>
                       <p className="text-xs text-gray-600 leading-relaxed">{n.message}</p>
-                      <p className="text-[10px] text-gray-400 mt-2">
-                        {n.createdAt?.toDate ? format(n.createdAt.toDate(), 'PPp', { locale: fr }) : ''}
+                      <p className="text-[10px] text-gray-400 mt-1.5">
+                        {n.createdAt?.toDate ? format(n.createdAt.toDate(), 'dd MMM • HH:mm', { locale: fr }) : ''}
                       </p>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-12 text-gray-400">
-                    <Bell className="h-12 w-12 mx-auto mb-2 opacity-20" />
-                    <p className="text-sm">Aucune notification pour le moment.</p>
+                  )) : (
+                    <div className="text-center py-12 text-gray-400">
+                      <Bell className="h-10 w-10 mx-auto mb-2 opacity-20" />
+                      <p className="text-sm font-medium">Aucune notification</p>
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+            <button onClick={onLogout}
+              className="h-9 w-9 flex items-center justify-center rounded-xl hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Tab Content ── */}
+      <div className="pt-14 pb-[68px] max-w-2xl mx-auto">
+
+        {/* ═══ ACCUEIL ═══ */}
+        {activeTab === 'accueil' && (
+          <div className="p-4 space-y-4">
+
+            {/* Wallet Card */}
+            <div className="relative rounded-3xl bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-6 text-white overflow-hidden shadow-xl shadow-primary/25">
+              <div className="absolute -top-8 -right-8 w-32 h-32 bg-white/5 rounded-full" />
+              <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-white/5 rounded-full" />
+              <div className="relative">
+                <div className="flex items-center justify-between mb-5">
+                  <p className="text-[10px] font-black text-white/60 uppercase tracking-widest">RENA AFFILIÉ</p>
+                  <Badge className="bg-white/15 text-white border-0 text-[9px] font-black uppercase tracking-widest px-2">
+                    {levelInfo?.level || 'Bronze'}
+                  </Badge>
+                </div>
+                <p className="text-[10px] text-white/50 font-black uppercase tracking-widest mb-1">Solde Disponible</p>
+                <div className="flex items-baseline gap-2">
+                  <h2 className="text-4xl font-black tabular-nums">{affiliate.balance.toLocaleString()}</h2>
+                  <span className="text-lg font-bold text-white/60">$</span>
+                </div>
+                <p className="text-sm text-white/50 mt-1">≈ {Math.round((affiliate.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
+                <div className="flex items-center justify-between mt-5 pt-4 border-t border-white/10">
+                  <button onClick={copyWalletId} className="flex items-center gap-2 group">
+                    <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">ID Wallet</p>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-black text-white/80 text-sm tracking-widest">{affiliate.walletId || '........'}</span>
+                      {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3 w-3 text-white/40 group-hover:text-white/70 transition-colors" />}
+                    </div>
+                  </button>
+                  <div className="text-right">
+                    <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">Score</p>
+                    <p className="font-black text-white/80">{affiliate.points || 0} pts</p>
                   </div>
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
-          <Button variant="outline" onClick={onLogout} className="flex-1 md:flex-none items-center gap-2 rounded-xl border-gray-200">
-            <LogOut className="h-4 w-4" />
-            <span className="hidden sm:inline">Déconnexion</span>
-          </Button>
-          {/* Level Progress Card - New Addition for 'Beautiful' design */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1 }}
-            className="p-8 rounded-[2.5rem] bg-white border border-gray-100 shadow-xl relative overflow-hidden group"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className={`p-2.5 rounded-xl ${getLevelColor(levelInfo?.level || 'Bronze')} border shadow-sm`}>
-                  <Trophy className="h-5 w-5" />
                 </div>
-                <div>
-                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Niveau Actuel</h4>
-                  <p className="text-xl font-black text-dark mt-1">{levelInfo?.level || 'Bronze'}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Score Total</p>
-                <p className="text-lg font-black text-emerald-600 mt-1">{affiliate.points || 0} PTS</p>
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="flex justify-between items-end mb-1">
-                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
-                  Progression vers {levelInfo?.level === 'VIP' ? 'Légende' : 'Niveau Suivant'}
-                </p>
-                <p className="text-sm font-black text-dark">{Math.round(levelInfo?.progress || 0)}%</p>
+            {/* Quick Actions */}
+            <div className="grid grid-cols-3 gap-3">
+              <Dialog open={isDepositModalOpen} onOpenChange={setIsDepositModalOpen}>
+                <DialogTrigger render={
+                  <button className="bg-white rounded-2xl p-4 flex flex-col items-center gap-2 border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all active:scale-95">
+                    <div className="h-10 w-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-200">
+                      <PlusCircle className="h-5 w-5 text-white" />
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-emerald-700">Dépôt</span>
+                  </button>
+                } />
+                <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
+                  <DialogHeader className="p-7 bg-emerald-600 text-white relative">
+                    <DialogTitle className="text-xl font-black">Recharger mon Compte</DialogTitle>
+                    <DialogDescription className="text-emerald-100 text-sm">Via MonCash, NatCash ou un agent local.</DialogDescription>
+                    <DialogClose className="absolute right-5 top-5 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
+                      <X className="h-4 w-4" />
+                    </DialogClose>
+                  </DialogHeader>
+                  <div className="p-7 space-y-5 max-h-[70vh] overflow-y-auto">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode</Label>
+                      <Select value={depositMethod} onValueChange={setDepositMethod}>
+                        <SelectTrigger className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-bold">
+                          <SelectValue placeholder="Méthode" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl">
+                          <SelectItem value="MonCash" className="font-bold">
+                            <div className="flex items-center gap-2">
+                              {settings?.moncashLogoUrl && <img src={settings.moncashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
+                              MonCash (Digicel)
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="NatCash" className="font-bold">
+                            <div className="flex items-center gap-2">
+                              {settings?.natcashLogoUrl && <img src={settings.natcashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
+                              NatCash (Natcom)
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="Agent" className="font-bold">Via Agent (Physique)</SelectItem>
+                          <SelectItem value="Physical" className="font-bold">Bureau / Proxy</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {depositMethod === 'Agent' && (
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Code Agent (8 chiffres)</Label>
+                        <div className="relative">
+                          <Input maxLength={8} placeholder="Entrez le code agent" value={agentCode}
+                            onChange={e => setAgentCode(e.target.value)}
+                            className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg tracking-[0.2em] pl-11" />
+                          <Users className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
+                          {isValidatingAgent && <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
+                        </div>
+                        {verifiedAgentName && (
+                          <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            <span className="text-xs font-black text-emerald-700">Agent : {verifiedAgentName}</span>
+                          </div>
+                        )}
+                        {!verifiedAgentName && agentCode.length === 8 && !isValidatingAgent && (
+                          <div className="bg-red-50 border border-red-100 p-3 rounded-xl flex items-center gap-2">
+                            <AlertCircle className="h-4 w-4 text-red-500" />
+                            <span className="text-xs font-black text-red-700">Agent introuvable.</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant ($)</Label>
+                      <div className="relative">
+                        <Input type="number" placeholder="Ex: 50" value={depositAmount}
+                          onChange={e => setDepositAmount(e.target.value)}
+                          className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg pl-11" />
+                        <PlusCircle className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
+                      </div>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                      <p className="text-[10px] text-amber-800 font-bold leading-relaxed">L'admin contactera sur WhatsApp pour valider le transfert avant de créditer votre compte.</p>
+                    </div>
+                  </div>
+                  <DialogFooter className="px-7 pb-7">
+                    <Button onClick={handleDepositRequest} disabled={isSubmitting} className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl">
+                      {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Envoyer la Demande'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isWithdrawModalOpen} onOpenChange={setIsWithdrawModalOpen}>
+                <DialogTrigger render={
+                  <button className="bg-white rounded-2xl p-4 flex flex-col items-center gap-2 border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all active:scale-95">
+                    <div className="h-10 w-10 rounded-xl bg-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-200">
+                      <MinusCircle className="h-5 w-5 text-white" />
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-indigo-700">Retrait</span>
+                  </button>
+                } />
+                <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
+                  <DialogHeader className="p-7 bg-indigo-600 text-white relative">
+                    <DialogTitle className="text-xl font-black">Retrait de Fonds</DialogTitle>
+                    <DialogDescription className="text-indigo-100 text-sm">Retirez votre argent sur MonCash, NatCash ou en personne.</DialogDescription>
+                    <DialogClose className="absolute right-5 top-5 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
+                      <X className="h-4 w-4" />
+                    </DialogClose>
+                  </DialogHeader>
+                  <div className="p-7 space-y-5 max-h-[70vh] overflow-y-auto">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode</Label>
+                      <Select value={withdrawMethod} onValueChange={(v: any) => setWithdrawMethod(v)}>
+                        <SelectTrigger className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-bold">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-2xl">
+                          <SelectItem value="MonCash" className="font-bold">
+                            <div className="flex items-center gap-2">
+                              {settings?.moncashLogoUrl && <img src={settings.moncashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
+                              MonCash
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="NatCash" className="font-bold">
+                            <div className="flex items-center gap-2">
+                              {settings?.natcashLogoUrl && <img src={settings.natcashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
+                              NatCash
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="Physical" className="font-bold">Retrait Physique (Bureau Juvénat)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {withdrawMethod !== 'Physical' && (
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Numéro {withdrawMethod}</Label>
+                        <Input placeholder="Ex: 44XXXXXX" value={accountNumber} onChange={e => setAccountNumber(e.target.value)}
+                          className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg" />
+                      </div>
+                    )}
+                    {withdrawMethod === 'Physical' && (
+                      <div className="bg-blue-50 border border-blue-100 p-3 rounded-xl flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                        <p className="text-[10px] text-blue-800 font-bold leading-relaxed">Le retrait s'effectue à notre bureau de Juvénat sur présentation d'une pièce d'identité.</p>
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant ($)</Label>
+                      <div className="relative">
+                        <Input type="number" placeholder={`Min ${(20 / (settings?.exchangeRate || 146)).toFixed(2)}`}
+                          value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)}
+                          className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg pl-11" />
+                        <MinusCircle className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-500" />
+                      </div>
+                      <p className="text-[10px] text-gray-400 font-bold">Solde disponible : {affiliate.balance} $</p>
+                    </div>
+                  </div>
+                  <DialogFooter className="px-7 pb-7">
+                    <Button onClick={handleWithdraw} disabled={isSubmitting} className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl">
+                      {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirmer le Retrait'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isTransferModalOpen} onOpenChange={setIsTransferModalOpen}>
+                <DialogTrigger render={
+                  <button className="bg-white rounded-2xl p-4 flex flex-col items-center gap-2 border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all active:scale-95">
+                    <div className="h-10 w-10 rounded-xl bg-blue-500 flex items-center justify-center shadow-lg shadow-blue-200">
+                      <ArrowRightLeft className="h-5 w-5 text-white" />
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-blue-700">Transfert</span>
+                  </button>
+                } />
+                <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
+                  <DialogHeader className="p-7 bg-blue-600 text-white relative">
+                    <DialogTitle className="text-xl font-black">Transfert Entre Affiliés</DialogTitle>
+                    <DialogDescription className="text-blue-100 text-sm">Envoyez des dollars instantanément à un autre membre.</DialogDescription>
+                    <DialogClose className="absolute right-5 top-5 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
+                      <X className="h-4 w-4" />
+                    </DialogClose>
+                  </DialogHeader>
+                  <div className="p-7 space-y-5 max-h-[70vh] overflow-y-auto">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ID Wallet Destinataire</Label>
+                      <div className="relative">
+                        <Input maxLength={8} placeholder="8 chiffres" value={transferRecipientWalletId}
+                          onChange={e => setTransferRecipientWalletId(e.target.value)}
+                          className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg tracking-[0.2em] pl-11" />
+                        <Fingerprint className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-500" />
+                        {isValidatingRecipient && <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-blue-500" />}
+                      </div>
+                      {verifiedRecipientName && (
+                        <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                          <span className="text-xs font-black text-emerald-700">Destinataire : {verifiedRecipientName}</span>
+                        </div>
+                      )}
+                      {!verifiedRecipientName && transferRecipientWalletId.length === 8 && !isValidatingRecipient && (
+                        <div className="bg-red-50 border border-red-100 p-3 rounded-xl flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-red-500" />
+                          <span className="text-xs font-black text-red-700">Aucun affilié trouvé.</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant ($)</Label>
+                      <div className="relative">
+                        <Input type="number" placeholder="0.00" value={transferAmount}
+                          onChange={e => setTransferAmount(e.target.value)}
+                          className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg pl-11" />
+                        <Send className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-500" />
+                      </div>
+                      <p className="text-[10px] text-gray-400 font-bold">Solde disponible : {affiliate.balance} $</p>
+                    </div>
+                  </div>
+                  <DialogFooter className="px-7 pb-7 flex-col gap-2">
+                    <Button onClick={handleTransfer} disabled={isSubmitting || !verifiedRecipientName} className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl">
+                      {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirmer le Transfert'}
+                    </Button>
+                    <p className="text-[10px] text-center text-gray-400">La demande sera traitée par l'administration.</p>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {/* Recent Transactions */}
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
+                <h3 className="font-black text-dark text-sm">Opérations Récentes</h3>
+                {transactions.length > 0 && (
+                  <button onClick={() => setActiveTab('gains')} className="text-[10px] font-black text-primary hover:underline flex items-center gap-0.5">
+                    Voir tout <ChevronRight className="h-3 w-3" />
+                  </button>
+                )}
               </div>
-              <div className="h-4 w-full bg-gray-50 rounded-full overflow-hidden border border-gray-100 p-0.5">
-                <motion.div 
+              {transactionsLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+              ) : recentTx.length > 0 ? (
+                <div className="divide-y divide-gray-50">
+                  {recentTx.map(t => {
+                    const isCredit = t.type === 'deposit' || t.type === 'transfer_received';
+                    return (
+                      <div key={t.id} className="px-5 py-3.5 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${isCredit ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'}`}>
+                            {isCredit ? <PlusCircle className="h-4 w-4" /> : <MinusCircle className="h-4 w-4" />}
+                          </div>
+                          <div>
+                            <p className="text-xs font-black text-dark">{t.description || (t.type === 'deposit' ? 'Dépôt' : t.type === 'withdrawal' ? 'Retrait' : 'Transfert')}</p>
+                            <p className="text-[10px] text-gray-400">
+                              {t.createdAt?.toDate ? format(t.createdAt.toDate(), 'dd MMM', { locale: fr }) : ''}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-sm font-black ${isCredit ? 'text-emerald-600' : 'text-rose-500'}`}>
+                            {isCredit ? '+' : '-'}{t.amount.toFixed(2)} $
+                          </p>
+                          <div className="flex justify-end mt-0.5">{getTransactionStatusBadge(t.status)}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-10 text-gray-400">
+                  <History className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                  <p className="text-xs font-medium">Aucune opération</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ═══ RÉSEAU ═══ */}
+        {activeTab === 'reseau' && (
+          <div className="p-4 space-y-4">
+
+            {/* Referral code card */}
+            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl p-6 text-white shadow-lg shadow-emerald-200">
+              <p className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-2">Mon Code de Parrainage</p>
+              <div className="flex items-center justify-between">
+                <span className="text-4xl font-black tracking-widest font-mono">{affiliate.code}</span>
+                <div className="flex gap-2">
+                  <button onClick={copyReferralCode}
+                    className="h-10 w-10 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors">
+                    <Copy className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => {
+                    const text = `Rejoignez-moi sur Rena ! Utilisez mon code ${affiliate.code} pour vous inscrire et profiter d'avantages exclusifs.`;
+                    if (navigator.share) navigator.share({ text });
+                    else { navigator.clipboard.writeText(text); toast.success('Message copié !'); }
+                  }} className="h-10 w-10 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors">
+                    <Share2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-white/60 mt-3">Partagez ce code pour inviter de nouveaux membres.</p>
+            </div>
+
+            {/* Team stats */}
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Membres Invités', value: affiliate.referredClients || 0, icon: Users, color: 'text-primary bg-primary/10' },
+                { label: 'Points Totaux', value: affiliate.points || 0, icon: Star, color: 'text-amber-600 bg-amber-50' },
+                { label: 'Gains Cumulés', value: `${(affiliate.totalEarnings || 0).toFixed(0)} $`, icon: TrendingUp, color: 'text-emerald-600 bg-emerald-50' },
+                { label: 'Total Retiré', value: `${(affiliate.totalWithdrawn || 0).toFixed(0)} $`, icon: ArrowUpRight, color: 'text-indigo-600 bg-indigo-50' },
+              ].map(stat => (
+                <div key={stat.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                  <div className={`h-8 w-8 rounded-xl ${stat.color} flex items-center justify-center mb-2`}>
+                    <stat.icon className="h-4 w-4" />
+                  </div>
+                  <p className="text-xl font-black text-dark">{stat.value}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wide mt-0.5">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Niveau */}
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Niveau Actuel</p>
+                  <p className="text-xl font-black text-dark mt-0.5">{levelInfo?.level || 'Bronze'}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Progression</p>
+                  <p className="text-lg font-black text-primary">{Math.round(levelInfo?.progress || 0)}%</p>
+                </div>
+              </div>
+              <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden">
+                <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${levelInfo?.progress || 0}%` }}
-                  transition={{ duration: 1.5, ease: "easeOut" }}
-                  className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                  transition={{ duration: 1, ease: 'easeOut' }}
+                  className="h-full rounded-full bg-gradient-to-r from-primary to-blue-400"
                 />
               </div>
               {levelInfo?.nextThreshold !== Infinity && (
-                <p className="text-[9px] text-gray-400 font-bold text-center">
-                  Plus que <span className="text-emerald-600">{(levelInfo?.nextThreshold || 0) - (affiliate.points || 0)} points</span> pour débloquer de nouveaux avantages.
+                <p className="text-[10px] text-gray-400 font-bold text-center">
+                  Plus que <span className="text-primary">{(levelInfo?.nextThreshold || 0) - (affiliate.points || 0)} points</span> pour le niveau suivant
                 </p>
               )}
             </div>
 
-            <div className="mt-8 grid grid-cols-2 gap-4 pb-1">
-               <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
-                    <TrendingUp className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="text-[8px] font-black text-gray-400 uppercase">Growth</p>
-                    <p className="text-xs font-black text-dark">+12% cette semaine</p>
-                  </div>
-               </div>
-               <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
-                    <Star className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="text-[8px] font-black text-gray-400 uppercase">Status</p>
-                    <p className="text-xs font-black text-dark">Verified Partner</p>
-                  </div>
-               </div>
-            </div>
-          </motion.div>
-        </div>
-      </div>
-
-      {/* Dashboard Hero - Consolidate into a modern Wallet */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        <div className="xl:col-span-2 space-y-6">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="relative h-64 w-full max-w-md mx-auto sm:max-w-none sm:h-72 rounded-[2.5rem] bg-white border border-emerald-100 shadow-[0_20px_50px_-15px_rgba(16,185,129,0.15)] overflow-hidden p-8 text-dark group hover:scale-[1.01] transition-all duration-500"
-          >
-            {/* Card Texture & Effects */}
-            <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]" />
-            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-emerald-600/10" />
-            <div className="absolute -top-24 -right-24 w-64 h-64 bg-emerald-500/5 rounded-full blur-[80px]" />
-            
-            <div className="relative h-full flex flex-col justify-between">
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-emerald-600 shadow-lg shadow-emerald-200">
-                    <Wallet className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-emerald-600 text-[10px] font-black uppercase tracking-[0.4em] drop-shadow-sm leading-none">RENA BANK</p>
-                    <p className="text-[8px] font-bold text-gray-400 mt-1 uppercase tracking-widest">Premium Affiliate Account</p>
-                  </div>
+            {/* Ranking position */}
+            {rankingPosition > 0 && (
+              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-amber-500 flex items-center justify-center shrink-0">
+                  <Trophy className="h-5 w-5 text-white" />
                 </div>
-                <div className="text-right">
-                  <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-100 rounded-full">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-[9px] font-black text-emerald-700 tracking-wider">ACTIVE</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-1 mt-4">
-                <div className="flex items-center gap-2 mb-1">
-                   <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">Solde Disponible</p>
-                </div>
-                <div className="flex flex-col">
-                  <div className="flex items-baseline gap-3">
-                    <motion.h3 
-                      className="text-5xl sm:text-6xl font-black tracking-tight text-emerald-950 font-sans"
-                    >
-                      {affiliate.balance.toLocaleString()}
-                    </motion.h3>
-                    <span className="text-2xl font-black text-emerald-600/40 uppercase tracking-tighter">$</span>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <p className="text-sm font-bold text-emerald-600/70 tracking-tight">
-                      ≈ {((affiliate.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
-                    </p>
-                    <ArrowUpRight className="h-3 w-3 text-emerald-400" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row justify-between items-end gap-2 sm:gap-0 mt-auto pt-4 border-t border-emerald-50">
-                <div className="w-full sm:w-auto">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="text-gray-300 text-[8px] font-black uppercase tracking-[0.2em]">Détenteur & ID</p>
-                    <Badge variant="outline" className="h-4 px-2 rounded-md bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[7px] font-black uppercase tracking-widest">
-                      #{affiliate.code}
-                    </Badge>
-                  </div>
-                  <p className="text-lg font-black tracking-wider text-emerald-950 uppercase font-sans truncate max-w-[200px]">{affiliate.name}</p>
-                </div>
-                <div className="w-full sm:w-auto text-right">
-                  <div className="flex items-center justify-end gap-2 mb-1">
-                    <p className="text-emerald-600/60 text-[8px] font-black uppercase tracking-[0.2em]">ID Wallet Personnel</p>
-                    <button 
-                      onClick={copyWalletId}
-                      className="p-1 rounded-md hover:bg-emerald-50 transition-colors text-emerald-400"
-                    >
-                      <Copy className="h-3 w-3" />
-                    </button>
-                  </div>
-                  <p className="text-2xl font-mono font-black tracking-widest text-emerald-950">
-                    ({affiliate.walletId || '........'})
-                  </p>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-
-          {/* Quick Action Buttons */}
-          <div className="grid grid-cols-3 gap-4">
-            <Dialog open={isDepositModalOpen} onOpenChange={setIsDepositModalOpen}>
-              <DialogTrigger render={
-                <Button className="h-20 sm:h-24 rounded-[2rem] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-2 border-emerald-100 flex flex-col items-center justify-center gap-2 shadow-sm transition-all active:scale-95 group">
-                  <div className="p-2 rounded-xl bg-emerald-500 text-white group-hover:scale-110 transition-transform">
-                    <PlusCircle className="h-6 w-6" />
-                  </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest">Dépôt</span>
-                </Button>
-              } />
-              <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
-                <DialogHeader className="p-8 bg-emerald-600 text-white relative">
-                  <DialogTitle className="text-2xl font-black">Recharger mon Compte</DialogTitle>
-                  <DialogDescription className="font-medium text-emerald-100 italic">
-                    Alimentez votre solde Rena via l'un de nos partenaires.
-                  </DialogDescription>
-                  <DialogClose className="absolute right-6 top-6 rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
-                    <X className="h-5 w-5" />
-                  </DialogClose>
-                </DialogHeader>
-                <div className="p-8 pb-4 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                  <div className="space-y-3">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Méthode de Recharge</Label>
-                    <Select value={depositMethod} onValueChange={setDepositMethod}>
-                      <SelectTrigger className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold">
-                        <SelectValue placeholder="Méthode" />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-2xl border-0 shadow-xl">
-                        <SelectItem value="MonCash" className="font-bold">
-                          <div className="flex items-center gap-2">
-                            {settings?.moncashLogoUrl && <img src={settings.moncashLogoUrl} alt="MonCash" className="h-4 w-auto object-contain" referrerPolicy="no-referrer" />}
-                            MonCash (Digicel)
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="NatCash" className="font-bold">
-                          <div className="flex items-center gap-2">
-                            {settings?.natcashLogoUrl && <img src={settings.natcashLogoUrl} alt="NatCash" className="h-4 w-auto object-contain" referrerPolicy="no-referrer" />}
-                            NatCash (Natcom)
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="Agent" className="font-bold">Dépôt via Agent (Physique)</SelectItem>
-                        <SelectItem value="Physical" className="font-bold">Bureau / Proxy</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  {depositMethod === 'Agent' && (
-                    <div className="space-y-3 animate-in slide-in-from-top-2">
-                       <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">ID Agent (8 chiffres)</Label>
-                       <div className="relative">
-                          <Input 
-                            maxLength={8}
-                            placeholder="Entrez le code agent"
-                            value={agentCode}
-                            onChange={(e) => setAgentCode(e.target.value)}
-                            className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-black text-xl tracking-[0.2em] pl-12"
-                          />
-                          <Users className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-primary" />
-                          {isValidatingAgent && (
-                             <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                               <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                             </div>
-                          )}
-                       </div>
-                       {verifiedAgentName && (
-                         <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl flex items-center gap-3">
-                           <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                           <div className="flex flex-col">
-                             <span className="text-[10px] uppercase font-black text-emerald-600">Agent Identifié</span>
-                             <span className="text-sm font-bold text-emerald-900">{verifiedAgentName}</span>
-                           </div>
-                         </div>
-                       )}
-                       {!verifiedAgentName && agentCode.length === 8 && !isValidatingAgent && (
-                         <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3">
-                           <AlertCircle className="h-5 w-5 text-red-500" />
-                           <span className="text-xs font-bold text-red-700">Agent non valide ou introuvable.</span>
-                         </div>
-                       )}
-                    </div>
-                  )}
-                  <div className="space-y-3">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Montant Souhaité ($)</Label>
-                    <div className="relative">
-                       <Input 
-                         type="number" 
-                         placeholder="Ex: 500" 
-                         value={depositAmount}
-                         onChange={(e) => setDepositAmount(e.target.value)}
-                         className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-black text-xl pl-12"
-                       />
-                       <PlusCircle className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-500" />
-                    </div>
-                  </div>
-                  <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                    <p className="text-[10px] text-amber-800 font-bold leading-relaxed">
-                      L'admin vous contactera sur WhatsApp pour valider le transfert effectif avant de créditer votre compte.
-                    </p>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button onClick={handleDepositRequest} disabled={isSubmitting} className="w-full h-14 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-lg shadow-emerald-100">
-                    {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Envoyer la Demande"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
-            <Dialog open={isWithdrawModalOpen} onOpenChange={setIsWithdrawModalOpen}>
-              <DialogTrigger render={
-                <Button className="h-20 sm:h-24 rounded-[2rem] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-2 border-indigo-100 flex flex-col items-center justify-center gap-2 shadow-sm transition-all active:scale-95 group">
-                  <div className="p-2 rounded-xl bg-indigo-500 text-white group-hover:scale-110 transition-transform">
-                    <MinusCircle className="h-6 w-6" />
-                  </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest">Retrait</span>
-                </Button>
-              } />
-              <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
-                <DialogHeader className="p-8 bg-indigo-600 text-white relative">
-                  <DialogTitle className="text-2xl font-black">Retrait de Fonds</DialogTitle>
-                  <DialogDescription className="font-medium text-indigo-100 italic">
-                    Choisissez votre méthode de retrait préférée.
-                  </DialogDescription>
-                  <DialogClose className="absolute right-6 top-6 rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
-                    <X className="h-5 w-5" />
-                  </DialogClose>
-                </DialogHeader>
-                <div className="p-8 pb-4 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                  <div className="space-y-3">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Méthode de Retrait</Label>
-                    <Select value={withdrawMethod} onValueChange={(v: any) => setWithdrawMethod(v)}>
-                      <SelectTrigger className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-bold">
-                        <SelectValue placeholder="Méthode" />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-2xl border-0 shadow-xl">
-                        <SelectItem value="MonCash" className="font-bold">
-                          <div className="flex items-center gap-2">
-                            {settings?.moncashLogoUrl && <img src={settings.moncashLogoUrl} alt="MonCash" className="h-4 w-auto object-contain" referrerPolicy="no-referrer" />}
-                            MonCash
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="NatCash" className="font-bold">
-                          <div className="flex items-center gap-2">
-                            {settings?.natcashLogoUrl && <img src={settings.natcashLogoUrl} alt="NatCash" className="h-4 w-auto object-contain" referrerPolicy="no-referrer" />}
-                            NatCash
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="Physical" className="font-bold">Retrait Physique (Bureau Juvénat)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {withdrawMethod !== 'Physical' && (
-                    <div className="space-y-3">
-                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Numéro {withdrawMethod}</Label>
-                      <Input 
-                        placeholder="Ex: 44XXXXXX" 
-                        value={accountNumber}
-                        onChange={(e) => setAccountNumber(e.target.value)}
-                        className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-black text-xl"
-                      />
-                    </div>
-                  )}
-
-                  {withdrawMethod === 'Physical' && (
-                    <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-start gap-3">
-                      <AlertTriangle className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
-                      <p className="text-[10px] text-blue-800 font-bold leading-relaxed">
-                        Le retrait physique s'effectue à notre bureau de Juvénat sur présentation d'une pièce d'identité.
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="space-y-3">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Montant ($)</Label>
-                    <div className="relative">
-                       <Input 
-                         type="number" 
-                         placeholder={`Min ${(20 / (settings?.exchangeRate || 146)).toFixed(2)}`} 
-                         value={withdrawAmount}
-                         onChange={(e) => setWithdrawAmount(e.target.value)}
-                         className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-black text-xl pl-12"
-                       />
-                       <MinusCircle className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-indigo-500" />
-                    </div>
-                    <p className="text-[9px] text-gray-400 font-bold ml-1">Solde disponible : {affiliate.balance} $</p>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button onClick={handleWithdraw} disabled={isSubmitting} className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-lg shadow-indigo-100">
-                    {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirmer le Retrait"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
-            <Dialog open={isTransferModalOpen} onOpenChange={setIsTransferModalOpen}>
-              <DialogTrigger render={
-                <Button className="h-20 sm:h-24 rounded-[2rem] bg-blue-50 hover:bg-blue-100 text-blue-700 border-2 border-blue-100 flex flex-col items-center justify-center gap-2 shadow-sm transition-all active:scale-95 group">
-                  <div className="p-2 rounded-xl bg-blue-500 text-white group-hover:scale-110 transition-transform">
-                    <ArrowRightLeft className="h-6 w-6" />
-                  </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest">Transfert</span>
-                </Button>
-              } />
-              <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
-                <DialogHeader className="p-8 bg-blue-600 text-white relative">
-                  <DialogTitle className="text-2xl font-black">Transfert Entre Affiliés</DialogTitle>
-                  <DialogDescription className="font-medium text-blue-100 italic">
-                    Envoyez des Dollars ($) instantanément à un autre membre Rena.
-                  </DialogDescription>
-                  <DialogClose className="absolute right-6 top-6 rounded-full bg-white/20 p-2 hover:bg-white/30 transition-colors">
-                    <X className="h-5 w-5" />
-                  </DialogClose>
-                </DialogHeader>
-                <div className="p-8 pb-4 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                  <div className="space-y-3">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">ID Wallet du Destinataire</Label>
-                    <div className="relative">
-                       <Input 
-                         maxLength={8}
-                         placeholder="8 Chiffres" 
-                         value={transferRecipientWalletId}
-                         onChange={(e) => setTransferRecipientWalletId(e.target.value)}
-                         className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-black text-lg tracking-[0.2em] pl-12"
-                       />
-                       <Fingerprint className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-blue-500" />
-                       {isValidatingRecipient && (
-                         <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                           <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                         </div>
-                       )}
-                    </div>
-                    {verifiedRecipientName && (
-                      <p className="text-[10px] text-green-600 font-bold bg-green-50 px-3 py-2 rounded-lg border border-green-100">
-                         Destinataire identifié : <span className="uppercase">{verifiedRecipientName}</span>
-                      </p>
-                    )}
-                    {!verifiedRecipientName && transferRecipientWalletId.length === 8 && !isValidatingRecipient && (
-                      <p className="text-[10px] text-red-500 font-bold bg-red-50 px-3 py-2 rounded-lg border border-red-100">
-                         Aucun affilié trouvé avec cet ID.
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-3">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Montant à Envoyer ($)</Label>
-                    <div className="relative">
-                       <Input 
-                         type="number" 
-                         placeholder="0.00" 
-                         value={transferAmount}
-                         onChange={(e) => setTransferAmount(e.target.value)}
-                         className="h-14 rounded-2xl border-gray-100 bg-gray-50/50 font-black text-xl pl-12"
-                       />
-                       <Send className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-blue-500" />
-                    </div>
-                    <p className="text-[9px] text-gray-400 font-bold">Solde disponible : {affiliate.balance} $</p>
-                  </div>
-                </div>
-                <DialogFooter className="flex-col gap-3">
-                  <Button onClick={handleTransfer} disabled={isSubmitting || !verifiedRecipientName} className="w-full h-14 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl shadow-lg shadow-blue-100">
-                    {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirmer le transfert"}
-                  </Button>
-                  <p className="text-[9px] text-center text-gray-400 font-medium">Votre demande de transfert sera traitée par l'administration.</p>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-
-        {/* Global Income Summary Card */}
-        <Card className="border border-emerald-50 shadow-xl bg-white text-dark rounded-[2.5rem] overflow-hidden relative p-8 flex flex-col justify-between group">
-           <div className="absolute top-0 right-0 p-8">
-              <TrendingUp className="h-8 w-8 text-emerald-500/10 group-hover:rotate-12 transition-transform" />
-           </div>
-           
-           <div className="space-y-8">
-              <div>
-                <p className="text-[10px] font-black text-emerald-600/40 uppercase tracking-[0.2em] mb-6">Récapitulatif Revenus</p>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center py-4 border-b border-gray-50 group/row px-2 rounded-2xl hover:bg-emerald-50/30 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 transition-colors group-hover/row:bg-emerald-500 group-hover/row:text-white">
-                         <Trophy className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase">Gains Cumulés</p>
-                        <p className="text-xl font-black text-emerald-950">{(affiliate.totalEarnings || 0).toLocaleString()} <span className="text-xs font-bold text-gray-300">$</span></p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-between items-center py-4 border-b border-gray-50 group/row px-2 rounded-2xl hover:bg-emerald-50/30 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 transition-colors group-hover/row:bg-blue-500 group-hover/row:text-white">
-                         <TrendingUp className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase">Revenus Directs</p>
-                        <p className="text-xl font-black text-emerald-950">{(affiliate.directRevenue || 0).toLocaleString()} <span className="text-xs font-bold text-gray-300">$</span></p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center py-4 group/row px-2 rounded-2xl hover:bg-emerald-50/30 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-500 transition-colors group-hover/row:bg-indigo-50 group-hover/row:text-white">
-                         <ArrowUpRight className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase">Total Retiré</p>
-                        <p className="text-xl font-black text-indigo-600">{(affiliate.totalWithdrawn || 0).toLocaleString()} <span className="text-xs font-bold text-gray-300">$</span></p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-           </div>
-
-           <div className="mt-8 p-6 bg-emerald-50/30 rounded-3xl border border-emerald-50 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Users className="h-5 w-5 text-emerald-600" />
-                <span className="text-sm font-black text-emerald-950">{affiliate.referredClients || 0} <span className="text-xs text-gray-400">Prospects</span></span>
-              </div>
-              <div className="h-8 w-px bg-emerald-100"></div>
-              <div className="flex items-center gap-3">
-                <Star className="h-4 w-4 text-amber-500" />
-                <span className="text-sm font-black text-emerald-950">{affiliate.points || 0} <span className="text-xs text-gray-400">Score</span></span>
-              </div>
-           </div>
-        </Card>
-
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Monthly Rankings & Prizes */}
-        <Card className="lg:col-span-2 border-0 shadow-xl bg-white overflow-hidden rounded-[2.5rem]">
-          <CardHeader className="bg-gray-50/50 border-b p-8">
-            <div className="flex justify-between items-center">
-              <div>
-                <CardTitle className="flex items-center gap-3 text-2xl font-black">
-                  <div className="p-2 rounded-xl bg-amber-100 text-amber-600">
-                    <Trophy className="h-6 w-6" />
-                  </div>
-                  Élite de la Communauté
-                </CardTitle>
-                <CardDescription className="font-bold text-gray-400">Les leaders qui dominent le marché cette saison.</CardDescription>
-              </div>
-              <Badge variant="outline" className="h-8 px-4 rounded-full bg-amber-50 text-amber-700 border-amber-200 font-black text-[10px] uppercase tracking-widest animate-pulse">
-                Live Ranking
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="p-8">
-            {rankingsLoading ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
-              </div>
-            ) : (
-              <div className="space-y-12">
-                {/* Responsive Podium */}
-                <div className="flex flex-col sm:flex-row items-end justify-center gap-6 pt-8 max-w-sm mx-auto sm:max-w-none">
-                  {/* 2nd Place */}
-                  <div className="flex-1 w-full order-2 sm:order-1 flex flex-col items-center space-y-3">
-                    <div className="relative">
-                      <div className="w-16 h-16 rounded-[1.25rem] bg-gray-50 border-2 border-gray-100 flex items-center justify-center overflow-hidden shadow-inner font-black text-gray-300">
-                        {(monthlyRankings[1] || winnersQueue[1])?.name.charAt(0)}
-                      </div>
-                      <div className="absolute -bottom-2 -right-2 bg-gray-500 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-black border-2 border-white shadow-md">2</div>
-                    </div>
-                    <div className="text-center">
-                      <p className="font-black text-sm text-dark truncate w-24">{(monthlyRankings[1] || winnersQueue[1])?.name || '...'}</p>
-                      <p className="text-[10px] font-black text-gray-400 uppercase">250 $ Bonus</p>
-                    </div>
-                    <div className="w-full h-16 bg-gray-50 rounded-t-2xl border-x border-t border-gray-100" />
-                  </div>
-
-                  {/* 1st Place */}
-                  <div className="flex-1 w-full order-1 sm:order-2 flex flex-col items-center space-y-3">
-                    <div className="relative">
-                      <div className="w-24 h-24 rounded-[1.75rem] bg-amber-50 border-4 border-amber-300 flex items-center justify-center overflow-hidden shadow-xl font-black text-amber-600 text-2xl">
-                        {(monthlyRankings[0] || winnersQueue[0])?.name.charAt(0)}
-                      </div>
-                      <div className="absolute -bottom-2 -right-2 bg-amber-500 text-white w-9 h-9 rounded-full flex items-center justify-center text-sm font-black border-2 border-white shadow-lg">1</div>
-                      <Trophy className="absolute -top-8 left-1/2 -translate-x-1/2 h-8 w-8 text-amber-500 animate-bounce" />
-                    </div>
-                    <div className="text-center">
-                      <p className="font-black text-lg text-dark truncate w-32">{(monthlyRankings[0] || winnersQueue[0])?.name || '...'}</p>
-                      <p className="text-xs font-black text-emerald-600 uppercase">500 $ Bonus Gold</p>
-                    </div>
-                    <div className="w-full h-28 bg-gradient-to-t from-amber-500 to-amber-400 rounded-t-3xl shadow-xl shadow-amber-200" />
-                  </div>
-
-                  {/* 3rd Place */}
-                  <div className="flex-1 w-full order-3 sm:order-3 flex flex-col items-center space-y-3">
-                    <div className="relative">
-                      <div className="w-16 h-16 rounded-[1.25rem] bg-orange-50/50 border-2 border-orange-100 flex items-center justify-center overflow-hidden shadow-inner font-black text-orange-200">
-                        {(monthlyRankings[2] || winnersQueue[2])?.name.charAt(0)}
-                      </div>
-                      <div className="absolute -bottom-2 -right-2 bg-orange-500 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-black border-2 border-white shadow-md">3</div>
-                    </div>
-                    <div className="text-center">
-                      <p className="font-black text-sm text-dark truncate w-24">{(monthlyRankings[2] || winnersQueue[2])?.name || '...'}</p>
-                      <p className="text-[10px] font-black text-orange-400 uppercase">150 $ Bonus</p>
-                    </div>
-                    <div className="w-full h-12 bg-orange-50 rounded-t-2xl border-x border-t border-orange-100" />
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Récapitulatif des Performances</h4>
-                  {(monthlyRankings.length > 0 ? monthlyRankings : winnersQueue).map((a, idx) => (
-                    <div key={a.id} className="flex items-center justify-between p-5 rounded-3xl bg-gray-50/50 border border-gray-100 hover:bg-white hover:shadow-xl hover:scale-[1.02] transition-all duration-300 group">
-                      <div className="flex items-center gap-5">
-                        <span className="text-2xl font-black text-gray-200 group-hover:text-blue-500 transition-colors">#{idx + 1}</span>
-                        <div>
-                          <p className="font-black text-dark text-lg">{a.name}</p>
-                          <div className="flex items-center gap-3 mt-1">
-                            <Badge variant="secondary" className="text-[10px] font-black px-2.5 h-5 bg-blue-600 text-white border-0 shadow-sm shadow-blue-200">
-                              {a.points || 0} PTS
-                            </Badge>
-                            <span className="text-[11px] font-bold text-gray-400 tracking-tight">{a.monthlySales || 0} $ produits</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-base font-black text-emerald-600">
-                          {idx === 0 ? '+500 G' : idx === 1 ? '+250 G' : '+150 G'}
-                        </p>
-                        <p className="text-[9px] text-gray-400 uppercase font-black tracking-widest">Commission Spéciale</p>
-                      </div>
-                    </div>
-                  ))}
+                <div>
+                  <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Votre Classement</p>
+                  <p className="font-black text-dark">#{rankingPosition} au classement global</p>
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        )}
 
-        {/* Unified Transaction History */}
-        <Card className="border-0 shadow-xl bg-white rounded-[2.5rem] flex flex-col">
-          <CardHeader className="bg-gray-50/50 border-b p-8">
-            <div className="flex justify-between items-center">
-              <div>
-                <CardTitle className="flex items-center gap-3 text-lg font-black">
-                  <div className="p-2 rounded-xl bg-blue-50 text-blue-600 shadow-sm">
-                    <History className="h-5 w-5" />
-                  </div>
-                  Opérations Récentes
-                </CardTitle>
-                <CardDescription className="font-bold">Dépôts, retraits et transferts.</CardDescription>
+        {/* ═══ GAINS ═══ */}
+        {activeTab === 'gains' && (
+          <div className="p-4 space-y-4">
+
+            {/* Monthly Rankings */}
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-50 flex items-center gap-3">
+                <div className="h-8 w-8 rounded-xl bg-amber-100 flex items-center justify-center">
+                  <Trophy className="h-4 w-4 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="font-black text-dark text-sm">Élite du Mois</h3>
+                  <p className="text-[10px] text-gray-400 font-medium">Les meilleurs performeurs</p>
+                </div>
+                <Badge className="ml-auto bg-amber-100 text-amber-700 border-0 text-[9px] font-black uppercase">Live</Badge>
               </div>
-              {transactions.length > 0 && (
-                <Dialog open={isClearHistoryConfirmOpen} onOpenChange={setIsClearHistoryConfirmOpen}>
-                  <DialogTrigger render={
-                    <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50 hover:text-red-600 h-10 rounded-xl text-[10px] font-black uppercase px-4">
-                      <AlertCircle className="h-4 w-4 mr-1.5" />
-                      Vider
-                    </Button>
-                  } />
-                  <DialogContent className="max-w-sm rounded-[2.5rem] p-8 border-0 shadow-2xl">
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center gap-3 text-xl font-black">
-                        <AlertCircle className="h-6 w-6 text-red-500" />
-                        Action Critique
-                      </DialogTitle>
-                      <DialogDescription className="font-bold py-2 text-gray-500">
-                        Cette opération supprimera définitivement votre historique d'opérations.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter className="gap-2 sm:gap-3 mt-6">
-                      <Button variant="outline" onClick={() => setIsClearHistoryConfirmOpen(false)} className="h-12 rounded-2xl font-bold flex-1 border-gray-100">Retour</Button>
-                      <Button variant="destructive" onClick={handleClearTransactionHistory} disabled={isSubmitting} className="h-12 rounded-2xl font-black bg-red-600 flex-1 hover:bg-red-700 shadow-lg shadow-red-200">
-                        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Effacer"}
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+              <div className="p-5">
+                {rankingsLoading ? (
+                  <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-amber-500" /></div>
+                ) : (
+                  <div className="space-y-2">
+                    {(monthlyRankings.length > 0 ? monthlyRankings : winnersQueue).slice(0, 5).map((a, idx) => (
+                      <div key={a.id} className={`flex items-center gap-3 p-3 rounded-2xl ${a.id === affiliate.id ? 'bg-primary/5 border border-primary/10' : 'hover:bg-gray-50'} transition-colors`}>
+                        <span className={`w-6 text-center font-black text-sm ${idx === 0 ? 'text-amber-500' : idx === 1 ? 'text-gray-400' : idx === 2 ? 'text-orange-500' : 'text-gray-300'}`}>
+                          #{idx + 1}
+                        </span>
+                        <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center font-black text-sm text-gray-600 shrink-0">
+                          {a.name.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-black text-sm text-dark truncate">{a.name} {a.id === affiliate.id && <span className="text-primary text-[10px]">(vous)</span>}</p>
+                          <p className="text-[10px] text-gray-400 font-mono">{a.code}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-black text-sm text-emerald-600">{a.points || 0} pts</p>
+                          <p className="text-[9px] text-gray-400">{idx === 0 ? '500 $' : idx === 1 ? '250 $' : idx === 2 ? '150 $' : ''}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Full Transaction History */}
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-xl bg-blue-50 flex items-center justify-center">
+                    <History className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-dark text-sm">Historique Complet</h3>
+                    <p className="text-[10px] text-gray-400">{transactions.length} opération(s)</p>
+                  </div>
+                </div>
+                {transactions.length > 0 && (
+                  <Dialog open={isClearHistoryConfirmOpen} onOpenChange={setIsClearHistoryConfirmOpen}>
+                    <DialogTrigger render={
+                      <button className="text-[10px] font-black text-red-400 hover:text-red-600 flex items-center gap-1 transition-colors">
+                        <AlertCircle className="h-3 w-3" /> Vider
+                      </button>
+                    } />
+                    <DialogContent className="max-w-sm rounded-[2.5rem] p-7 border-0 shadow-2xl">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-lg font-black">
+                          <AlertCircle className="h-5 w-5 text-red-500" /> Supprimer l'historique ?
+                        </DialogTitle>
+                        <DialogDescription className="text-sm text-gray-500 pt-1">Cette action est irréversible.</DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter className="gap-2 mt-5">
+                        <Button variant="outline" onClick={() => setIsClearHistoryConfirmOpen(false)} className="flex-1 h-11 rounded-2xl font-bold">Retour</Button>
+                        <Button variant="destructive" onClick={handleClearTransactionHistory} disabled={isSubmitting} className="flex-1 h-11 rounded-2xl font-black">
+                          {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Effacer'}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
+              </div>
+              {transactionsLoading ? (
+                <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+              ) : transactions.length > 0 ? (
+                <div className="divide-y divide-gray-50">
+                  {transactions.map(t => {
+                    const isCredit = t.type === 'deposit' || t.type === 'transfer_received';
+                    return (
+                      <div key={t.id} className="px-5 py-4 flex items-start justify-between">
+                        <div className="flex items-start gap-3">
+                          <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                            t.type === 'deposit' ? 'bg-emerald-50 text-emerald-600' :
+                            t.type === 'withdrawal' ? 'bg-indigo-50 text-indigo-600' :
+                            t.type === 'transfer' || t.type === 'transfer_sent' ? 'bg-blue-50 text-blue-600' :
+                            'bg-teal-50 text-teal-600'
+                          }`}>
+                            {isCredit ? <Download className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                          </div>
+                          <div>
+                            <p className={`text-sm font-black ${isCredit ? 'text-emerald-600' : 'text-rose-500'}`}>
+                              {isCredit ? '+' : '-'}{t.amount.toFixed(2)} $
+                            </p>
+                            <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{t.description || t.type}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[9px] text-gray-400">
+                                {t.createdAt?.toDate ? format(t.createdAt.toDate(), 'dd MMM yyyy • HH:mm', { locale: fr }) : ''}
+                              </span>
+                              {t.method && <Badge variant="outline" className="h-4 text-[8px] font-black">{t.method}</Badge>}
+                            </div>
+                            {t.status === 'rejected' && t.rejectionReason && (
+                              <p className="text-[10px] text-red-500 mt-1 font-bold">{t.rejectionReason}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="shrink-0 mt-0.5">{getTransactionStatusBadge(t.status)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-400">
+                  <Fingerprint className="h-10 w-10 mx-auto mb-2 opacity-10" />
+                  <p className="text-sm font-medium">Aucune opération</p>
+                </div>
               )}
             </div>
-          </CardHeader>
-          <CardContent className="p-0 flex-1 overflow-y-auto max-h-[800px] custom-scrollbar">
-            {transactionsLoading ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-              </div>
-            ) : transactions.length > 0 ? (
-              <div className="divide-y divide-gray-50">
-                {transactions.map((t) => (
-                  <div key={t.id} className="p-6 hover:bg-gray-50/50 transition-all group border-l-4 border-transparent hover:border-blue-500">
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex gap-4">
-                        <div className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${
-                          t.type === 'deposit' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                          t.type === 'withdrawal' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' :
-                          (t.type === 'transfer' || t.type === 'transfer_sent') ? 'bg-blue-50 text-blue-600 border border-blue-100' :
-                          'bg-amber-50 text-amber-600 border border-amber-100'
-                        }`}>
-                          {t.type === 'deposit' && <PlusCircle className="h-6 w-6" />}
-                          {t.type === 'withdrawal' && <MinusCircle className="h-6 w-6" />}
-                          {(t.type === 'transfer' || t.type === 'transfer_sent') && <Send className="h-6 w-6" />}
-                          {t.type === 'transfer_received' && <Download className="h-6 w-6" />}
-                        </div>
-                        <div>
-                          <p className="font-black text-lg text-emerald-950 leading-none">
-                            {t.type === 'transfer' || t.type === 'transfer_sent' || t.type === 'withdrawal' ? '-' : '+'}
-                            {t.amount.toLocaleString()} <span className="text-[10px] text-gray-300 font-bold">$</span>
-                          </p>
-                          <p className="text-xs font-bold text-gray-500 mt-1 capitalize">{t.description}</p>
-                          <div className="flex items-center gap-3 mt-2">
-                             <div className="flex items-center gap-1.5 grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all">
-                               <Calendar className="h-3 w-3 text-gray-400" />
-                               <span className="text-[10px] font-black text-gray-400">
-                                 {t.createdAt?.toDate ? format(t.createdAt.toDate(), 'dd MMM yyyy • HH:mm', { locale: fr }) : ''}
-                               </span>
-                             </div>
-                             {t.method && (
-                               <Badge variant="outline" className="h-4 text-[8px] font-black uppercase bg-white border-emerald-50 text-emerald-600">
-                                 {t.method}
-                               </Badge>
-                             )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="scale-90 origin-right">
-                        {getTransactionStatusBadge(t.status)}
-                      </div>
-                    </div>
-                    {t.status === 'rejected' && t.rejectionReason && (
-                      <div className="mt-4 p-4 bg-red-50/50 rounded-2xl text-xs text-red-600 flex items-start gap-3 border border-red-100 font-medium">
-                        <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                        <p><span className="font-black uppercase text-[10px] block mb-1">Motif du rejet</span> {t.rejectionReason}</p>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-24 text-gray-400">
-                <div className="bg-gray-50 w-20 h-20 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-inner">
-                  <Fingerprint className="h-10 w-10 opacity-10" />
-                </div>
-                <p className="font-black text-dark text-lg">Aucune opération</p>
-                <p className="text-sm font-medium mt-1">Vos finances apparaîtront ici.</p>
-              </div>
-            )}
-          </CardContent>
-          <div className="p-6 bg-gray-50/30 border-t text-center">
-            <Button variant="ghost" className="w-full h-12 rounded-2xl text-xs font-black uppercase tracking-widest text-blue-600 hover:bg-blue-50 hover:text-blue-700 transition-all">
-              Générer un Relevé
-              <ChevronRight className="h-4 w-4 ml-2" />
-            </Button>
           </div>
-        </Card>
+        )}
+
+        {/* ═══ COMMANDES ═══ */}
+        {activeTab === 'commandes' && (
+          <div className="p-4 space-y-4">
+
+            {/* Header */}
+            <div className="bg-gradient-to-br from-orange-500 to-rose-600 rounded-3xl p-6 text-white shadow-lg shadow-orange-200">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                  <PackageSearch className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black">Mode Agent</h2>
+                  <p className="text-xs text-white/70">Soumettez des dépôts pour vos clients</p>
+                </div>
+              </div>
+              <p className="text-xs text-white/60 leading-relaxed">
+                En tant qu'affilié, vous pouvez recevoir des dépôts en espèces de clients et les soumettre à l'admin pour approbation.
+              </p>
+            </div>
+
+            {/* Client Lookup & Submit Deposit */}
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-4">
+              <h3 className="font-black text-dark text-sm">Soumettre un Dépôt Client</h3>
+
+              {/* Client Wallet ID */}
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">ID Wallet du Client</Label>
+                <div className="relative">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="8 chiffres"
+                    value={agentClientWalletId}
+                    onChange={e => setAgentClientWalletId(e.target.value)}
+                    className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg tracking-[0.2em] pl-11"
+                    maxLength={12}
+                  />
+                  {agentClientLoading && <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
+                </div>
+                {agentClientName && (
+                  <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <span className="text-xs font-black text-emerald-700">Client : {agentClientName}</span>
+                  </div>
+                )}
+                {!agentClientName && agentClientWalletId.length >= 4 && !agentClientLoading && (
+                  <div className="bg-orange-50 border border-orange-100 p-3 rounded-xl flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-orange-500 shrink-0" />
+                    <span className="text-xs font-bold text-orange-700">Aucun client trouvé avec cet ID.</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Amount */}
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant ($)</Label>
+                <div className="relative">
+                  <PlusCircle className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-orange-500" />
+                  <Input
+                    type="number"
+                    placeholder="0.00"
+                    value={agentAmount}
+                    onChange={e => setAgentAmount(e.target.value)}
+                    className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg pl-11"
+                  />
+                </div>
+              </div>
+
+              {/* Method */}
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode de Paiement</Label>
+                <Select value={agentPaymentMethod} onValueChange={setAgentPaymentMethod}>
+                  <SelectTrigger className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-bold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-2xl">
+                    <SelectItem value="MonCash" className="font-bold">
+                      <div className="flex items-center gap-2">
+                        {settings?.moncashLogoUrl && <img src={settings.moncashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
+                        MonCash (Digicel)
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="NatCash" className="font-bold">
+                      <div className="flex items-center gap-2">
+                        {settings?.natcashLogoUrl && <img src={settings.natcashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
+                        NatCash (Natcom)
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="Espèces" className="font-bold">Espèces (Cash)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-100 p-3 rounded-xl flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                <p className="text-[10px] text-blue-800 font-bold leading-relaxed">
+                  La demande sera soumise à l'admin pour approbation. Le solde du client sera crédité après validation.
+                </p>
+              </div>
+
+              <Button
+                onClick={handleAgentSubmitDeposit}
+                disabled={agentSubmitting || !agentClientName || !agentAmount}
+                className="w-full h-12 bg-orange-500 hover:bg-orange-600 text-white font-black rounded-2xl shadow-lg shadow-orange-200 disabled:opacity-50"
+              >
+                {agentSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Soumettre le Dépôt'}
+              </Button>
+            </div>
+
+            {/* Info card */}
+            <div className="bg-gray-50 rounded-2xl border border-gray-100 p-4 space-y-3">
+              <h4 className="text-xs font-black text-dark uppercase tracking-widest">Comment ça marche ?</h4>
+              {[
+                { n: '1', t: 'Recevez des espèces du client', s: 'Le client vous remet physiquement l\'argent.' },
+                { n: '2', t: 'Entrez le wallet ID du client', s: 'Trouvez son ID dans son profil Rena.' },
+                { n: '3', t: 'Soumettez la demande', s: 'L\'admin valide et crédite le compte client.' },
+              ].map(step => (
+                <div key={step.n} className="flex items-start gap-3">
+                  <div className="h-6 w-6 rounded-full bg-orange-500 text-white text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">{step.n}</div>
+                  <div>
+                    <p className="text-xs font-black text-dark">{step.t}</p>
+                    <p className="text-[10px] text-gray-400">{step.s}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ═══ PROFIL ═══ */}
+        {activeTab === 'profil' && (
+          <div className="p-4 space-y-4">
+
+            {/* Profile Card */}
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
+              <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+                <span className="text-3xl font-black text-primary">{affiliate.name.charAt(0)}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-black text-dark text-lg truncate">{affiliate.name}</p>
+                <p className="text-xs text-gray-400 font-mono">#{affiliate.code}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <Badge className={`text-[9px] font-black ${
+                    levelInfo?.level === 'VIP' ? 'bg-purple-100 text-purple-700' :
+                    levelInfo?.level === 'Gold' ? 'bg-amber-100 text-amber-700' :
+                    levelInfo?.level === 'Silver' ? 'bg-gray-100 text-gray-600' :
+                    'bg-orange-100 text-orange-700'
+                  } border-0`}>{levelInfo?.level || 'Bronze'}</Badge>
+                  <span className="text-[10px] text-gray-400 font-bold">{affiliate.points || 0} pts</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <TrendingUp className="h-5 w-5 text-emerald-500 mb-2" />
+                <p className="text-xl font-black text-dark">{(affiliate.totalEarnings || 0).toFixed(0)} $</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase">Gains totaux</p>
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+                <Users className="h-5 w-5 text-primary mb-2" />
+                <p className="text-xl font-black text-dark">{affiliate.referredClients || 0}</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase">Membres invités</p>
+              </div>
+            </div>
+
+            {/* Level Progress */}
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-dark text-sm">Progression de Niveau</h3>
+                <span className="text-xs font-black text-primary">{levelInfo?.level || 'Bronze'}</span>
+              </div>
+              <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${levelInfo?.progress || 0}%` }}
+                  transition={{ duration: 1, ease: 'easeOut' }}
+                  className="h-full rounded-full bg-gradient-to-r from-primary to-indigo-400"
+                />
+              </div>
+              <div className="flex justify-between text-[10px] text-gray-400 font-bold">
+                <span>0 pts</span>
+                {levelInfo?.nextThreshold !== Infinity && <span>{levelInfo?.nextThreshold} pts</span>}
+              </div>
+            </div>
+
+            {/* Wallet ID */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">ID Wallet</p>
+                <p className="font-mono font-black text-dark tracking-widest">{affiliate.walletId || '........'}</p>
+              </div>
+              <button onClick={copyWalletId} className="h-10 w-10 rounded-xl bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-colors">
+                {copied ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4 text-gray-500" />}
+              </button>
+            </div>
+
+            {/* Logout */}
+            <button onClick={onLogout}
+              className="w-full h-12 rounded-2xl border-2 border-red-100 bg-red-50 text-red-600 font-black text-sm flex items-center justify-center gap-2 hover:bg-red-100 transition-colors active:scale-[0.98]">
+              <LogOut className="h-4 w-4" />
+              Se déconnecter
+            </button>
+          </div>
+        )}
       </div>
-      {/* Back to Top Button */}
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.5 }}
-        animate={{ opacity: showScrollTop ? 1 : 0, scale: showScrollTop ? 1 : 0 }}
-        className="fixed bottom-6 right-6 z-50 pointer-events-none"
-      >
-        <Button 
-          onClick={scrollToTop}
-          className="pointer-events-auto h-12 w-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl flex items-center justify-center p-0"
-        >
-          <ArrowUp className="h-6 w-6" />
-        </Button>
-      </motion.div>
+
+      {/* ── Fixed Bottom Tab Bar ── */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-100 safe-area-pb">
+        <div className="flex max-w-2xl mx-auto">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 px-1 transition-colors relative ${activeTab === tab.id ? 'text-primary' : 'text-gray-400'}`}
+            >
+              {activeTab === tab.id && (
+                <motion.div layoutId="tab-indicator"
+                  className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary rounded-full" />
+              )}
+              <tab.icon className="h-5 w-5" />
+              <span className="text-[9px] font-black uppercase tracking-wider">{tab.label}</span>
+              {tab.id === 'commandes' && (
+                <span className="absolute top-1.5 right-3 h-2 w-2 bg-orange-500 rounded-full" />
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
     </div>
   );
 }
-

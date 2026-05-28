@@ -664,6 +664,63 @@ router.post('/api/client/transfer', requireDb, async (req, res) => {
   }
 });
 
+// ── Lookup client by walletId (for transfer preview) ─────────────────────────
+router.get('/api/client/lookup-wallet', requireDb, async (req, res) => {
+  try {
+    const { walletId } = req.query;
+    if (!walletId || typeof walletId !== 'string')
+      return res.status(400).json({ error: 'walletId requis.' });
+    const snap = await adminDb.collection('clients')
+      .where('walletId', '==', walletId.trim()).limit(1).get();
+    if (snap.empty) return res.json({ name: null });
+    const data = snap.docs[0].data();
+    res.json({ name: data.name || null });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Affiliate submits deposit for a client (agent mode) ───────────────────────
+router.post('/api/affiliate/submit-client-deposit', requireDb, async (req, res) => {
+  try {
+    const { affiliateId, clientWalletId, amount, method } = req.body;
+    if (!affiliateId || !clientWalletId || !amount || !method)
+      return res.status(400).json({ error: 'Paramètres manquants.' });
+    const usd = Number(amount);
+    if (isNaN(usd) || usd <= 0)
+      return res.status(400).json({ error: 'Montant invalide.' });
+    const affiliateSnap = await adminDb.collection('affiliates').doc(affiliateId).get();
+    if (!affiliateSnap.exists)
+      return res.status(404).json({ error: 'Affilié introuvable.' });
+    const affiliateData = affiliateSnap.data()!;
+    const clientSnap = await adminDb.collection('clients')
+      .where('walletId', '==', clientWalletId.trim()).limit(1).get();
+    if (clientSnap.empty)
+      return res.status(404).json({ error: 'Aucun client trouvé avec cet ID Wallet.' });
+    const clientDoc = clientSnap.docs[0];
+    const clientData = clientDoc.data();
+    await adminDb.collection('client_requests').add({
+      type: 'deposit',
+      clientId: clientDoc.id,
+      clientName: clientData.name || '',
+      clientWalletId: clientWalletId.trim(),
+      amount: usd,
+      method,
+      status: 'pending',
+      source: 'affiliate',
+      affiliateId,
+      affiliateName: affiliateData.name || '',
+      affiliateCode: affiliateData.code || '',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    res.json({ success: true, clientName: clientData.name || '' });
+  } catch (e: any) {
+    console.error('[affiliate/submit-client-deposit]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
 // ── Delete client transaction history ────────────────────────────────────────
 router.delete('/api/client/transactions/:clientId', requireDb, async (req, res) => {
   try {
