@@ -14,10 +14,10 @@ import {
   registerClient, loginClient,
   loginClientWithGoogle, registerClientWithGoogle
 } from '../services/clientService';
-import { loginAdminWithGoogle } from '../services/adminService';
+import { loginAdminWithGoogle, linkAdminGoogle } from '../services/adminService';
 import { Client, AdminAccount } from '../types';
 
-type ModalView = 'choice' | 'client-login' | 'client-register' | 'admin-access' | 'google-register';
+type ModalView = 'choice' | 'client-login' | 'client-register' | 'admin-access' | 'google-register' | 'admin-link-google';
 
 interface UserAuthModalProps {
   open: boolean;
@@ -112,11 +112,21 @@ export default function UserAuthModal({
   // Stores pending google result when dialog is closed during auth
   const pendingGoogleResult = useRef<any>(null);
 
+  // For Google → credentials link flow
+  const [pendingGoogleEmail, setPendingGoogleEmail] = useState('');
+  const [pendingGoogleUid, setPendingGoogleUid] = useState('');
+  const [linkFullName, setLinkFullName] = useState('');
+  const [linkPassword, setLinkPassword] = useState('');
+  const [linkCode, setLinkCode] = useState('');
+  const [showLinkPassword, setShowLinkPassword] = useState(false);
+
   const resetForms = () => {
     setLoginEmail(''); setLoginPassword('');
     setRegName(''); setRegPhone(''); setRegEmail(''); setRegPassword(''); setRegSponsor('');
     setGoogleUser(null); setGoogleRegPhone(''); setGoogleRegSponsor('');
     setShowPassword(false); setGoogleError(null);
+    setPendingGoogleEmail(''); setPendingGoogleUid('');
+    setLinkFullName(''); setLinkPassword(''); setLinkCode(''); setShowLinkPassword(false);
     setView('choice');
     setLoading(false);
   };
@@ -252,8 +262,15 @@ export default function UserAuthModal({
         const result = await loginAdminWithGoogle();
         if (!result.success || !result.admin) {
           setLoading(false);
-          setGoogleError(result.error || "Accès refusé.");
-          setView('admin-access');
+          // If google account not yet linked, offer the link flow
+          if (result.googleEmail && result.googleUid) {
+            setPendingGoogleEmail(result.googleEmail);
+            setPendingGoogleUid(result.googleUid);
+            setView('admin-link-google');
+          } else {
+            setGoogleError(result.error || "Accès refusé.");
+            setView('admin-access');
+          }
           onOpenChange(true);
           return;
         }
@@ -268,6 +285,27 @@ export default function UserAuthModal({
         onOpenChange(true);
       }
     }, 150);
+  };
+
+  // ── Link Google to existing admin account ────────────────────────────────
+  const handleLinkGoogle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!linkFullName || !linkPassword) { toast.error("Veuillez remplir tous les champs."); return; }
+    setLoading(true);
+    try {
+      const result = await linkAdminGoogle(linkFullName.trim(), linkPassword, linkCode.trim(), pendingGoogleEmail, pendingGoogleUid);
+      if (!result.success || !result.admin) {
+        toast.error(result.error || "Identifiants incorrects.");
+        return;
+      }
+      toast.success(`Compte Google associé ! Bienvenue, ${result.admin.fullName} !`);
+      onAdminLogin(result.admin);
+      resetForms();
+    } catch (err: any) {
+      toast.error(err.message || "Erreur lors de la liaison.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -562,6 +600,70 @@ export default function UserAuthModal({
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <><UserPlus className="h-5 w-5 mr-2" />Créer mon compte</>}
               </Button>
             </form>
+          </div>
+        )}
+
+        {/* ── ADMIN LINK GOOGLE — first-time Google account association ── */}
+        {view === 'admin-link-google' && (
+          <div>
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 text-white">
+              <button onClick={() => { setView('admin-access'); setPendingGoogleEmail(''); setPendingGoogleUid(''); }}
+                className="flex items-center gap-1 text-white/60 hover:text-white text-sm mb-4 transition-colors">
+                <ArrowLeft className="h-4 w-4" /> Retour
+              </button>
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center">
+                  <ShieldCheck className="h-6 w-6 text-amber-400" />
+                </div>
+                <div>
+                  <DialogTitle className="text-lg font-black text-white">Associer votre compte Google</DialogTitle>
+                  <DialogDescription className="text-white/60 text-xs mt-0.5">Première connexion — vérification requise</DialogDescription>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 bg-white space-y-4">
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-blue-50 border border-blue-100">
+                <GoogleIcon />
+                <p className="text-xs text-blue-800 font-semibold truncate">{pendingGoogleEmail}</p>
+              </div>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Ce compte Google n'est pas encore lié. Entrez vos identifiants admin pour l'associer définitivement.
+              </p>
+              <form onSubmit={handleLinkGoogle} className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Nom complet</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input value={linkFullName} onChange={e => setLinkFullName(e.target.value)}
+                      placeholder="Nom administrateur" className="pl-10 h-11 rounded-xl border-gray-200" required autoFocus />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Mot de passe</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input type={showLinkPassword ? 'text' : 'password'} value={linkPassword} onChange={e => setLinkPassword(e.target.value)}
+                      placeholder="••••••••" className="pl-10 pr-10 h-11 rounded-xl border-gray-200" required />
+                    <button type="button" onClick={() => setShowLinkPassword(!showLinkPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-dark transition-colors">
+                      {showLinkPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Code de connexion <span className="text-gray-300">(si requis)</span></Label>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input value={linkCode} onChange={e => setLinkCode(e.target.value)}
+                      placeholder="Ex: XX-2026" className="pl-10 h-11 rounded-xl border-gray-200" />
+                  </div>
+                </div>
+                <Button type="submit" disabled={loading}
+                  className="w-full h-12 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-black shadow-lg mt-1">
+                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <><ShieldCheck className="h-5 w-5 mr-2" />Associer et accéder</>}
+                </Button>
+              </form>
+            </div>
           </div>
         )}
 

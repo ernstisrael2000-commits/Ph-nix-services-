@@ -128,9 +128,43 @@ export const checkAdminLogin = async (
   }
 };
 
+// ── Admin: Link Google account to existing admin (first-time setup) ──────────
+
+export const linkAdminGoogle = async (
+  fullName: string,
+  password: string,
+  loginCode: string,
+  googleEmail: string,
+  googleUid: string
+): Promise<{ success: boolean; admin?: AdminAccount; error?: string }> => {
+  try {
+    const res = await fetch('/api/admin/link-google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fullName, password, loginCode, email: googleEmail, uid: googleUid }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { success: false, error: data.error || 'Erreur de liaison.' };
+
+    const adminData = data.admin as AdminAccount;
+    try {
+      await setDoc(doc(db, 'admin_uids', googleUid), {
+        adminId: adminData.id,
+        fullName: adminData.fullName,
+        updatedAt: serverTimestamp()
+      });
+    } catch (err) {
+      console.warn('Could not write admin_uids after link:', err);
+    }
+    return { success: true, admin: adminData };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Erreur lors de la liaison.' };
+  }
+};
+
 // ── Admin Google Login ────────────────────────────────────────────────────────
 
-export const loginAdminWithGoogle = async (): Promise<{ success: boolean; admin?: AdminAccount; error?: string }> => {
+export const loginAdminWithGoogle = async (): Promise<{ success: boolean; admin?: AdminAccount; error?: string; googleEmail?: string; googleUid?: string }> => {
   try {
     const result = await signInWithGooglePopup();
     const googleEmail = result.user.email?.toLowerCase() || '';
@@ -145,7 +179,7 @@ export const loginAdminWithGoogle = async (): Promise<{ success: boolean; admin?
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      return { success: false, error: data.error || 'Accès refusé.' };
+      return { success: false, error: data.error || 'Accès refusé.', googleEmail, googleUid };
     }
 
     const adminData = data.admin as AdminAccount;

@@ -3221,6 +3221,48 @@ router.post('/api/admin/verify-google', requireDb, async (req, res) => {
   }
 });
 
+// ── Admin: Link Google account to existing admin (verify creds first) ────────
+router.post('/api/admin/link-google', requireDb, async (req, res) => {
+  try {
+    const { fullName, password, loginCode, email, uid } = req.body;
+    if (!fullName || !password || !email || !uid)
+      return res.status(400).json({ error: 'Données manquantes.' });
+
+    const snap = await adminDb.collection('admin_accounts').where('fullName', '==', fullName).limit(1).get();
+    if (snap.empty)
+      return res.status(401).json({ error: 'Identifiants incorrects.' });
+
+    const adminDoc = snap.docs[0];
+    const adminData: any = { id: adminDoc.id, ...adminDoc.data() };
+
+    if (adminData.lockUntil) {
+      const lockDate = adminData.lockUntil?.toDate ? adminData.lockUntil.toDate() : new Date(adminData.lockUntil);
+      if (lockDate > new Date())
+        return res.status(403).json({ error: 'Compte bloqué temporairement. Réessayez plus tard.' });
+    }
+
+    if (adminData.password !== password)
+      return res.status(401).json({ error: 'Identifiants incorrects.' });
+
+    if (adminData.isSuperAdmin && adminData.loginCode && adminData.loginCode !== loginCode)
+      return res.status(401).json({ error: 'Code de connexion incorrect.' });
+
+    await adminDoc.ref.update({
+      email: email.toLowerCase(),
+      uid,
+      failedAttempts: 0,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    await adminDb.collection('admin_login_logs').add({ adminName: adminData.fullName, success: true, timestamp: FieldValue.serverTimestamp() });
+
+    const updated = await adminDoc.ref.get();
+    res.json({ success: true, admin: serializeDoc(updated) });
+  } catch (e: any) {
+    console.error('[admin/link-google]', e);
+    res.status(500).json({ error: 'Erreur lors de la liaison du compte.' });
+  }
+});
+
 // ── Client: Update Google UID ─────────────────────────────────────────────────
 router.post('/api/client/update-google-uid', requireDb, async (req, res) => {
   try {
