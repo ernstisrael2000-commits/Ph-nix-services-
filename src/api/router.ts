@@ -9,6 +9,9 @@ import {
   emailDepositSubmitted, emailDepositApproved, emailDepositRejected,
   emailWithdrawalSubmitted, emailWithdrawalApproved, emailWithdrawalRejected,
   emailWithdrawalOtp, emailAgentWithdrawalConfirmed, emailAffiliateCommission,
+  emailPurchase, emailAffiliateWithdrawalSubmitted,
+  emailAffiliateWithdrawalApproved, emailAffiliateWithdrawalRejected,
+  emailFormationPurchase,
   ADMIN_EMAIL,
 } from '../lib/email.ts';
 
@@ -2245,6 +2248,12 @@ router.post('/api/client/purchase', requireDb, async (req, res) => {
       { type: 'purchase', txId: txRef.id }
     );
 
+    // Email admin + client
+    fireEmail(
+      () => emailPurchase({ clientName, clientEmail: clientData.email, productName, amount }),
+      { type: 'purchase', to: [ADMIN_EMAIL, ...(clientData.email ? [clientData.email] : [])], clientId, amount }
+    );
+
     res.json({ success: true, transactionId: txRef.id });
   } catch (e: any) {
     console.error('[purchase]', e);
@@ -2388,7 +2397,7 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
         // Apply withdrawal fee if configured
         try {
           const settingsSnap = await adminDb.collection('settings').doc('global').get();
-          const feePercent = settingsSnap.exists ? (settingsSnap.data()!.depositFeePercent || 0) : 0;
+          const feePercent = settingsSnap.exists ? (settingsSnap.data()!.withdrawalFeePercent || 0) : 0;
           if (feePercent > 0) {
             const feeAmount = parseFloat((txData.amount * feePercent / 100).toFixed(4));
             if (feeAmount > 0) {
@@ -2926,6 +2935,17 @@ router.post('/api/formations/purchases/wallet', async (req, res) => {
       });
     }
     await batch.commit();
+
+    // Email admin + client pour achat formation
+    if (price > 0) {
+      const recipientEmail = clientData.email || '';
+      const recipientName = clientName || clientData.name || '';
+      fireEmail(
+        () => emailFormationPurchase({ clientName: recipientName, clientEmail: recipientEmail, formationTitle: formationTitle || '', amount: price }),
+        { type: 'formation_purchase', to: [ADMIN_EMAIL, ...(recipientEmail ? [recipientEmail] : [])], clientId, amount: price }
+      );
+    }
+
     res.json({ success: true });
   } catch (e: any) {
     console.error('[formations/purchases/wallet]', e);

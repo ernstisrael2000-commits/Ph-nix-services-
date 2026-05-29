@@ -83,13 +83,12 @@ interface AgentTransaction {
   createdAt: any;
 }
 
-type ActiveSection = 'overview' | 'requests' | 'deposit' | 'withdraw' | 'commissions' | 'clients' | 'settings';
+type ActiveSection = 'overview' | 'requests' | 'deposit' | 'commissions' | 'clients' | 'settings';
 
 const sectionNav = [
   { key: 'overview',     label: 'Accueil',      icon: Home },
   { key: 'requests',     label: 'Demandes',      icon: Clock },
   { key: 'deposit',      label: 'Dépôt',         icon: ArrowDownLeft },
-  { key: 'withdraw',     label: 'Retrait',        icon: ArrowUpRight },
   { key: 'commissions',  label: 'Commissions',   icon: BadgeDollarSign },
   { key: 'clients',      label: 'Clients',       icon: Users },
   { key: 'settings',     label: 'Paramètres',    icon: Settings },
@@ -122,11 +121,6 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
   const [txAmount, setTxAmount] = useState('');
   const [txNote, setTxNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  // Withdrawal confirmation state
-  const [withdrawInitiated, setWithdrawInitiated] = useState<{ confirmId: string; clientName: string; amount: number } | null>(null);
-  const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
-  const [loadingPendingW, setLoadingPendingW] = useState(false);
 
   // Client withdrawal requests
   const [withdrawRequests, setWithdrawRequests] = useState<ClientWithdrawRequest[]>([]);
@@ -162,18 +156,6 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
       if (res.ok) setWithdrawRequests(data.requests || []);
     } catch {}
     finally { setLoadingRequests(false); }
-  }, [agent?.agentCode]);
-
-  // Load pending withdrawal confirmations (initiated by agent, awaiting client)
-  const loadPendingWithdrawals = useCallback(async () => {
-    if (!agent?.agentCode) return;
-    setLoadingPendingW(true);
-    try {
-      const res = await fetch(`/api/agent/pending-withdrawals/${encodeURIComponent(agent.agentCode)}`);
-      const data = await res.json();
-      if (res.ok) setPendingWithdrawals(data.confirmations || []);
-    } catch {}
-    finally { setLoadingPendingW(false); }
   }, [agent?.agentCode]);
 
   // Load full tx history
@@ -216,14 +198,12 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
     if (!agent) return;
     loadWithdrawRequests();
     loadStats();
-    loadPendingWithdrawals();
   }, [agent?.agentCode]);
 
   useEffect(() => {
     if (activeSection === 'commissions') loadFeeRecords();
     if (activeSection === 'clients' || activeSection === 'overview') loadTransactions();
     if (activeSection === 'requests') loadWithdrawRequests();
-    if (activeSection === 'withdraw') loadPendingWithdrawals();
   }, [activeSection, agent?.agentCode]);
 
   // Approve affiliate deposit
@@ -327,46 +307,6 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
       await loadStats();
     } catch { toast.error('Erreur réseau.'); }
     finally { setSubmitting(false); }
-  };
-
-  // Initiate withdrawal — sends confirmation request to client
-  const handleInitiateWithdrawal = async () => {
-    if (!foundClient || !agent?.agentCode) return;
-    const usd = parseFloat(txAmount);
-    if (isNaN(usd) || usd <= 0) { toast.error('Montant invalide.'); return; }
-    if (foundClient.balance < usd) { toast.error('Solde client insuffisant.'); return; }
-    setSubmitting(true);
-    try {
-      const res = await fetch('/api/agent/initiate-withdrawal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentCode: agent.agentCode, clientId: foundClient.clientId, amount: usd, note: txNote.trim() || undefined }),
-      });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
-      toast.success(`Demande de retrait envoyée à ${foundClient.name}. En attente de sa confirmation.`);
-      setWithdrawInitiated({ confirmId: data.confirmId, clientName: data.clientName, amount: data.amount });
-      setFoundClient(null); setClientSearch(''); setSearchResults([]); setTxAmount(''); setTxNote('');
-      await loadPendingWithdrawals();
-    } catch { toast.error('Erreur réseau.'); }
-    finally { setSubmitting(false); }
-  };
-
-  // Cancel a pending withdrawal confirmation
-  const handleCancelWithdrawal = async (confirmId: string) => {
-    if (!agent?.agentCode) return;
-    try {
-      const res = await fetch(`/api/agent/cancel-withdrawal/${confirmId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentCode: agent.agentCode }),
-      });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
-      toast.success('Demande de retrait annulée.');
-      if (withdrawInitiated?.confirmId === confirmId) setWithdrawInitiated(null);
-      await loadPendingWithdrawals();
-    } catch { toast.error('Erreur réseau.'); }
   };
 
   // Unique clients from tx history
@@ -759,72 +699,6 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
               submitting={submitting}
               onSearch={handleSearchClient}
               onSubmit={handleSubmitDeposit}
-            />
-          </motion.div>
-        )}
-
-        {/* ── WITHDRAW (with client confirmation) ── */}
-        {activeSection === 'withdraw' && (
-          <motion.div key="withdraw" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-            <h3 className="text-lg font-black text-dark flex items-center gap-2 px-1">
-              <ArrowUpRight className="h-5 w-5 text-rose-500" />
-              Retrait pour un client
-            </h3>
-
-            <div className="bg-rose-50 border border-rose-100 rounded-2xl p-3.5 flex items-start gap-3">
-              <ShieldCheck className="h-4 w-4 text-rose-500 mt-0.5 shrink-0" />
-              <p className="text-xs text-rose-700 leading-relaxed">
-                Le client recevra une <strong>notification de confirmation</strong> avant que le retrait ne soit effectué. Il doit valider dans son tableau de bord.
-              </p>
-            </div>
-
-            {/* Pending withdrawal confirmations */}
-            {(loadingPendingW ? (
-              <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-rose-300" /></div>
-            ) : pendingWithdrawals.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-black text-gray-500 uppercase tracking-widest px-1">En attente de confirmation client</p>
-                {pendingWithdrawals.map((pw: any) => (
-                  <div key={pw.id} className="flex items-center justify-between gap-3 p-4 bg-amber-50 border-2 border-amber-200 rounded-2xl">
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                        <Clock className="h-4 w-4 text-amber-600" />
-                      </div>
-                      <div>
-                        <p className="font-black text-dark text-sm">{pw.clientName}</p>
-                        <p className="text-xs text-amber-600 font-bold">${Number(pw.amount).toFixed(2)} — En attente</p>
-                        <p className="text-[10px] text-gray-400">{fmtDate(pw.createdAt)}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleCancelWithdrawal(pw.id)}
-                      className="text-[10px] font-black text-red-500 hover:text-red-700 uppercase tracking-widest bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-xl transition-colors"
-                    >
-                      Annuler
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ))}
-
-            <DirectTxForm
-              type="withdrawal"
-              agent={agent}
-              rate={rate}
-              clientSearch={clientSearch}
-              setClientSearch={setClientSearch}
-              searching={searching}
-              searchResults={searchResults}
-              setSearchResults={setSearchResults}
-              foundClient={foundClient}
-              setFoundClient={setFoundClient}
-              txAmount={txAmount}
-              setTxAmount={setTxAmount}
-              txNote={txNote}
-              setTxNote={setTxNote}
-              submitting={submitting}
-              onSearch={handleSearchClient}
-              onSubmit={handleInitiateWithdrawal}
             />
           </motion.div>
         )}

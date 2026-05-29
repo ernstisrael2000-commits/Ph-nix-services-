@@ -1,19 +1,29 @@
 import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASS;
 
-// Resend requires a verified domain as FROM.
-// Use RESEND_FROM env var when you have a verified domain (e.g. noreply@votredomaine.com).
-// Falls back to Resend's built-in test domain which works without custom domain setup.
-export const FROM_EMAIL  = process.env.RESEND_FROM  || 'onboarding@resend.dev';
-export const ADMIN_EMAIL = process.env.ADMIN_EMAIL  || 'ernstisrael2000@gmail.com';
+export const FROM_EMAIL  = process.env.RESEND_FROM  || SMTP_USER || 'noreply@rena.ht';
+export const ADMIN_EMAIL = process.env.ADMIN_EMAIL  || SMTP_USER || 'ernstisrael2000@gmail.com';
 
 let resend: Resend | null = null;
 if (RESEND_API_KEY) {
   resend = new Resend(RESEND_API_KEY);
   console.log(`[Email] Resend initialisé — FROM: ${FROM_EMAIL}`);
+} else if (SMTP_USER && SMTP_PASS) {
+  console.log(`[Email] Mode SMTP activé — FROM: ${SMTP_USER}`);
 } else {
-  console.warn('[Email] RESEND_API_KEY absent — emails désactivés');
+  console.warn('[Email] Aucun service email configuré (RESEND_API_KEY ou SMTP_USER/SMTP_PASS requis)');
+}
+
+function getSmtpTransport() {
+  if (!SMTP_USER || !SMTP_PASS) return null;
+  return nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
+  });
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -41,23 +51,17 @@ function baseHtml(title: string, accentColor: string, body: string): string {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:32px 16px;">
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);max-width:100%;">
-
-        <!-- Header -->
         <tr>
           <td style="background:${accentColor};padding:28px 32px;text-align:center;">
             <p style="margin:0;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.75);">RENA INTELLIGENCE</p>
             <h1 style="margin:8px 0 0;font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">${title}</h1>
           </td>
         </tr>
-
-        <!-- Body -->
         <tr>
           <td style="padding:32px 32px 24px;">
             ${body}
           </td>
         </tr>
-
-        <!-- Footer -->
         <tr>
           <td style="padding:20px 32px 28px;border-top:1px solid #f0f0f0;text-align:center;">
             <p style="margin:0;font-size:11px;color:#aaa;line-height:1.6;">
@@ -66,7 +70,6 @@ function baseHtml(title: string, accentColor: string, body: string): string {
             </p>
           </td>
         </tr>
-
       </table>
     </td></tr>
   </table>
@@ -91,12 +94,13 @@ function statusBadge(status: string): string {
     approved:  { bg: '#d1fae5', color: '#065f46', label: 'Approuvé' },
     rejected:  { bg: '#fee2e2', color: '#991b1b', label: 'Refusé' },
     confirmed: { bg: '#d1fae5', color: '#065f46', label: 'Confirmé' },
+    completed: { bg: '#d1fae5', color: '#065f46', label: 'Complété' },
   };
   const s = map[status] || { bg: '#f3f4f6', color: '#374151', label: status };
   return `<span style="display:inline-block;padding:4px 12px;border-radius:20px;background:${s.bg};color:${s.color};font-size:12px;font-weight:700;">${s.label}</span>`;
 }
 
-// ── Core send (logs errors, returns result) ───────────────────────────────────
+// ── Core send ─────────────────────────────────────────────────────────────────
 
 export interface SendResult {
   success: boolean;
@@ -110,26 +114,54 @@ export async function send(
   html: string,
   type: string,
 ): Promise<SendResult> {
-  if (!resend) {
-    console.warn(`[Email] Skipped (no client) — ${type} → ${to}`);
-    return { success: false, error: 'Resend client not initialized' };
+  const toArr = Array.isArray(to) ? to : [to];
+  const validTo = toArr.filter(Boolean);
+  if (!validTo.length) {
+    console.warn(`[Email] Skipped (no recipient) — ${type}`);
+    return { success: false, error: 'No recipient' };
   }
-  try {
-    const result = await resend.emails.send({ from: FROM_EMAIL, to, subject, html });
-    if (result.error) {
-      console.error(`[Email] Échec envoi "${type}" → ${to}:`, JSON.stringify(result.error));
-      return { success: false, error: JSON.stringify(result.error) };
+
+  // Try Resend first
+  if (resend) {
+    try {
+      const result = await resend.emails.send({ from: FROM_EMAIL, to: validTo, subject, html });
+      if (result.error) {
+        console.error(`[Email] Resend échec "${type}" → ${validTo}:`, JSON.stringify(result.error));
+        // fall through to SMTP
+      } else {
+        console.log(`[Email] ✓ Resend "${type}" → ${validTo} (id: ${result.data?.id})`);
+        return { success: true, id: result.data?.id };
+      }
+    } catch (e: any) {
+      console.error(`[Email] Resend exception "${type}":`, e?.message);
+      // fall through to SMTP
     }
-    console.log(`[Email] ✓ "${type}" envoyé → ${to} (id: ${result.data?.id})`);
-    return { success: true, id: result.data?.id };
-  } catch (e: any) {
-    console.error(`[Email] Exception "${type}" → ${to}:`, e?.message || e);
-    return { success: false, error: e?.message || String(e) };
   }
+
+  // SMTP fallback (or primary when no Resend key)
+  const smtp = getSmtpTransport();
+  if (smtp) {
+    try {
+      const info = await smtp.sendMail({
+        from: `"Rena Intelligence" <${SMTP_USER}>`,
+        to: validTo.join(', '),
+        subject,
+        html,
+      });
+      console.log(`[Email] ✓ SMTP "${type}" → ${validTo} (id: ${info.messageId})`);
+      return { success: true, id: info.messageId };
+    } catch (e: any) {
+      console.error(`[Email] SMTP exception "${type}" → ${validTo}:`, e?.message);
+      return { success: false, error: e?.message };
+    }
+  }
+
+  console.warn(`[Email] Skipped (aucun service configuré) — ${type} → ${validTo}`);
+  return { success: false, error: 'No email service configured' };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC EMAIL FUNCTIONS — each returns SendResult for audit logging
+// EMAIL FUNCTIONS — chacune envoie à admin ET utilisateur concerné
 // ─────────────────────────────────────────────────────────────────────────────
 
 // 1. Dépôt soumis → admin + client
@@ -174,43 +206,70 @@ export async function emailDepositSubmitted(opts: {
   }
 }
 
-// 2. Dépôt approuvé → client
+// 2. Dépôt approuvé → admin + client
 export async function emailDepositApproved(opts: {
   clientName: string; clientEmail?: string; amount: number;
 }): Promise<void> {
-  if (!opts.clientEmail) return;
-  const html = baseHtml('✅ Dépôt approuvé', '#059669',
-    `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${opts.clientName}</strong>, votre dépôt a été approuvé et crédité sur votre compte.</p>
+  const { clientName, clientEmail, amount } = opts;
+  const adminHtml = baseHtml('✅ Dépôt approuvé', '#059669',
+    `<p style="margin:0 0 20px;font-size:15px;color:#444;">Le dépôt de <strong>${clientName}</strong> a été approuvé.</p>
     <table width="100%" cellpadding="0" cellspacing="0">
-      ${row('Montant crédité', fmt(opts.amount), true)}
+      ${row('Client', clientName, true)}
+      ${row('Montant crédité', fmt(amount), true)}
       ${row('Date', dateFr())}
       ${row('Statut', statusBadge('approved'))}
-    </table>
-    <p style="margin:24px 0 0;padding:16px;background:#f0fdf4;border-radius:10px;font-size:13px;color:#065f46;">
-      🎉 Votre solde a été mis à jour. Vous pouvez l'utiliser dès maintenant.
-    </p>`
+    </table>`
   );
-  await send(opts.clientEmail, `✅ Dépôt de ${fmt(opts.amount)} approuvé`, html, 'deposit_approved');
+  await send(ADMIN_EMAIL, `✅ Dépôt approuvé — ${clientName} ${fmt(amount)}`, adminHtml, 'deposit_approved_admin');
+
+  if (clientEmail) {
+    const clientHtml = baseHtml('✅ Dépôt approuvé', '#059669',
+      `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${clientName}</strong>, votre dépôt a été approuvé et crédité sur votre compte.</p>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        ${row('Montant crédité', fmt(amount), true)}
+        ${row('Date', dateFr())}
+        ${row('Statut', statusBadge('approved'))}
+      </table>
+      <p style="margin:24px 0 0;padding:16px;background:#f0fdf4;border-radius:10px;font-size:13px;color:#065f46;">
+        🎉 Votre solde a été mis à jour. Vous pouvez l'utiliser dès maintenant.
+      </p>`
+    );
+    await send(clientEmail, `✅ Dépôt de ${fmt(amount)} approuvé`, clientHtml, 'deposit_approved_client');
+  }
 }
 
-// 3. Dépôt refusé → client
+// 3. Dépôt refusé → admin + client
 export async function emailDepositRejected(opts: {
   clientName: string; clientEmail?: string; amount: number; reason?: string;
 }): Promise<void> {
-  if (!opts.clientEmail) return;
-  const html = baseHtml('❌ Dépôt refusé', '#dc2626',
-    `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${opts.clientName}</strong>, votre demande de dépôt n'a pas pu être validée.</p>
+  const { clientName, clientEmail, amount, reason } = opts;
+  const adminHtml = baseHtml('❌ Dépôt refusé', '#dc2626',
+    `<p style="margin:0 0 20px;font-size:15px;color:#444;">Le dépôt de <strong>${clientName}</strong> a été refusé.</p>
     <table width="100%" cellpadding="0" cellspacing="0">
-      ${row('Montant', fmt(opts.amount), true)}
+      ${row('Client', clientName, true)}
+      ${row('Montant', fmt(amount), true)}
+      ${reason ? row('Raison', reason) : ''}
       ${row('Date', dateFr())}
       ${row('Statut', statusBadge('rejected'))}
-      ${opts.reason ? row('Raison', opts.reason) : ''}
-    </table>
-    <p style="margin:24px 0 0;padding:16px;background:#fef2f2;border-radius:10px;font-size:13px;color:#991b1b;border-left:4px solid #dc2626;">
-      Contactez le support si vous avez des questions.
-    </p>`
+    </table>`
   );
-  await send(opts.clientEmail, `❌ Dépôt de ${fmt(opts.amount)} refusé`, html, 'deposit_rejected');
+  await send(ADMIN_EMAIL, `❌ Dépôt refusé — ${clientName} ${fmt(amount)}`, adminHtml, 'deposit_rejected_admin');
+
+  if (clientEmail) {
+    const clientHtml = baseHtml('❌ Dépôt refusé', '#dc2626',
+      `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${clientName}</strong>, votre demande de dépôt n'a pas pu être validée.</p>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        ${row('Montant', fmt(amount), true)}
+        ${row('Date', dateFr())}
+        ${row('Statut', statusBadge('rejected'))}
+        ${reason ? row('Raison', reason) : ''}
+      </table>
+      <p style="margin:24px 0 0;padding:16px;background:#fef2f2;border-radius:10px;font-size:13px;color:#991b1b;border-left:4px solid #dc2626;">
+        Contactez le support si vous avez des questions.
+      </p>`
+    );
+    await send(clientEmail, `❌ Dépôt de ${fmt(amount)} refusé`, clientHtml, 'deposit_rejected_client');
+  }
 }
 
 // 4. Retrait soumis → admin + client
@@ -256,43 +315,70 @@ export async function emailWithdrawalSubmitted(opts: {
   }
 }
 
-// 5. Retrait approuvé → client
+// 5. Retrait approuvé → admin + client
 export async function emailWithdrawalApproved(opts: {
   clientName: string; clientEmail?: string; amount: number;
 }): Promise<void> {
-  if (!opts.clientEmail) return;
-  const html = baseHtml('✅ Retrait approuvé', '#7c3aed',
-    `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${opts.clientName}</strong>, votre retrait a été approuvé et est en cours de traitement.</p>
+  const { clientName, clientEmail, amount } = opts;
+  const adminHtml = baseHtml('✅ Retrait approuvé', '#7c3aed',
+    `<p style="margin:0 0 20px;font-size:15px;color:#444;">Le retrait de <strong>${clientName}</strong> a été approuvé.</p>
     <table width="100%" cellpadding="0" cellspacing="0">
-      ${row('Montant', fmt(opts.amount), true)}
+      ${row('Client', clientName, true)}
+      ${row('Montant', fmt(amount), true)}
       ${row('Date', dateFr())}
       ${row('Statut', statusBadge('approved'))}
-    </table>
-    <p style="margin:24px 0 0;padding:16px;background:#faf5ff;border-radius:10px;font-size:13px;color:#6d28d9;">
-      Votre argent sera disponible selon le délai de traitement habituel.
-    </p>`
+    </table>`
   );
-  await send(opts.clientEmail, `✅ Retrait de ${fmt(opts.amount)} approuvé`, html, 'withdrawal_approved');
+  await send(ADMIN_EMAIL, `✅ Retrait approuvé — ${clientName} ${fmt(amount)}`, adminHtml, 'withdrawal_approved_admin');
+
+  if (clientEmail) {
+    const clientHtml = baseHtml('✅ Retrait approuvé', '#7c3aed',
+      `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${clientName}</strong>, votre retrait a été approuvé et est en cours de traitement.</p>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        ${row('Montant', fmt(amount), true)}
+        ${row('Date', dateFr())}
+        ${row('Statut', statusBadge('approved'))}
+      </table>
+      <p style="margin:24px 0 0;padding:16px;background:#faf5ff;border-radius:10px;font-size:13px;color:#6d28d9;">
+        Votre argent sera disponible selon le délai de traitement habituel.
+      </p>`
+    );
+    await send(clientEmail, `✅ Retrait de ${fmt(amount)} approuvé`, clientHtml, 'withdrawal_approved_client');
+  }
 }
 
-// 6. Retrait refusé → client
+// 6. Retrait refusé → admin + client
 export async function emailWithdrawalRejected(opts: {
   clientName: string; clientEmail?: string; amount: number; reason?: string;
 }): Promise<void> {
-  if (!opts.clientEmail) return;
-  const html = baseHtml('❌ Retrait refusé', '#dc2626',
-    `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${opts.clientName}</strong>, votre demande de retrait a été refusée. Le montant a été remis sur votre solde.</p>
+  const { clientName, clientEmail, amount, reason } = opts;
+  const adminHtml = baseHtml('❌ Retrait refusé', '#dc2626',
+    `<p style="margin:0 0 20px;font-size:15px;color:#444;">Le retrait de <strong>${clientName}</strong> a été refusé.</p>
     <table width="100%" cellpadding="0" cellspacing="0">
-      ${row('Montant remboursé', fmt(opts.amount), true)}
+      ${row('Client', clientName, true)}
+      ${row('Montant remboursé', fmt(amount), true)}
+      ${reason ? row('Raison', reason) : ''}
       ${row('Date', dateFr())}
       ${row('Statut', statusBadge('rejected'))}
-      ${opts.reason ? row('Raison', opts.reason) : ''}
     </table>`
   );
-  await send(opts.clientEmail, `❌ Retrait de ${fmt(opts.amount)} refusé`, html, 'withdrawal_rejected');
+  await send(ADMIN_EMAIL, `❌ Retrait refusé — ${clientName} ${fmt(amount)}`, adminHtml, 'withdrawal_rejected_admin');
+
+  if (clientEmail) {
+    const clientHtml = baseHtml('❌ Retrait refusé', '#dc2626',
+      `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${clientName}</strong>, votre demande de retrait a été refusée. Le montant a été remis sur votre solde.</p>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        ${row('Montant remboursé', fmt(amount), true)}
+        ${row('Date', dateFr())}
+        ${row('Statut', statusBadge('rejected'))}
+        ${reason ? row('Raison', reason) : ''}
+      </table>`
+    );
+    await send(clientEmail, `❌ Retrait de ${fmt(amount)} refusé`, clientHtml, 'withdrawal_rejected_client');
+  }
 }
 
-// 7. OTP retrait agent → client (code de sécurité)
+// 7. OTP retrait agent → client
 export async function emailWithdrawalOtp(opts: {
   clientName: string; clientEmail: string; agentName: string;
   amount: number; otpCode: string; expiresMinutes: number;
@@ -323,29 +409,43 @@ export async function emailWithdrawalOtp(opts: {
   await send(clientEmail, `🔐 Code de confirmation — Retrait de ${fmt(amount)}`, html, 'withdrawal_otp');
 }
 
-// 8. Commission affilié/agent
+// 8. Commission affilié/agent → admin + affilié
 export async function emailAffiliateCommission(opts: {
   affiliateName: string; affiliateEmail?: string;
   amount: number; sourceClientName?: string; type?: string;
 }): Promise<void> {
-  if (!opts.affiliateEmail) return;
   const { affiliateName, affiliateEmail, amount, sourceClientName, type } = opts;
-  const html = baseHtml('💎 Commission reçue', '#2563eb',
-    `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${affiliateName}</strong>, une nouvelle commission a été créditée sur votre compte !</p>
+
+  const adminHtml = baseHtml('💎 Commission créditée', '#2563eb',
+    `<p style="margin:0 0 20px;font-size:15px;color:#444;">Une commission a été créditée à <strong>${affiliateName}</strong>.</p>
     <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Affilié', affiliateName, true)}
       ${row('Commission', fmt(amount), true)}
       ${sourceClientName ? row('Source', sourceClientName) : ''}
       ${type ? row('Type', type) : ''}
       ${row('Date', dateFr())}
-    </table>
-    <p style="margin:24px 0 0;padding:16px;background:#eff6ff;border-radius:10px;font-size:13px;color:#1e40af;border-left:4px solid #2563eb;">
-      🎉 Votre solde a été mis à jour. Consultez votre tableau de bord pour les détails.
-    </p>`
+    </table>`
   );
-  await send(affiliateEmail, `💎 Commission de ${fmt(amount)} créditée`, html, 'affiliate_commission');
+  await send(ADMIN_EMAIL, `💎 Commission ${fmt(amount)} — ${affiliateName}`, adminHtml, 'affiliate_commission_admin');
+
+  if (affiliateEmail) {
+    const html = baseHtml('💎 Commission reçue', '#2563eb',
+      `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${affiliateName}</strong>, une nouvelle commission a été créditée sur votre compte !</p>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        ${row('Commission', fmt(amount), true)}
+        ${sourceClientName ? row('Source', sourceClientName) : ''}
+        ${type ? row('Type', type) : ''}
+        ${row('Date', dateFr())}
+      </table>
+      <p style="margin:24px 0 0;padding:16px;background:#eff6ff;border-radius:10px;font-size:13px;color:#1e40af;border-left:4px solid #2563eb;">
+        🎉 Votre solde a été mis à jour. Consultez votre tableau de bord pour les détails.
+      </p>`
+    );
+    await send(affiliateEmail, `💎 Commission de ${fmt(amount)} créditée`, html, 'affiliate_commission_affiliate');
+  }
 }
 
-// 9. Retrait agent confirmé par client
+// 9. Retrait agent confirmé par client → admin + client
 export async function emailAgentWithdrawalConfirmed(opts: {
   clientName: string; clientEmail?: string; agentName: string; amount: number;
 }): Promise<void> {
@@ -374,5 +474,182 @@ export async function emailAgentWithdrawalConfirmed(opts: {
       </table>`
     );
     await send(clientEmail, `✅ Retrait de ${fmt(amount)} confirmé`, clientHtml, 'agent_withdrawal_confirmed_client');
+  }
+}
+
+// 10. Achat produit/service → admin + client
+export async function emailPurchase(opts: {
+  clientName: string; clientEmail?: string;
+  productName: string; amount: number;
+}): Promise<void> {
+  const { clientName, clientEmail, productName, amount } = opts;
+  const date = dateFr();
+
+  const adminHtml = baseHtml('🛒 Nouvel achat', '#0891b2',
+    `<p style="margin:0 0 20px;font-size:15px;color:#444;">Un client vient d'effectuer un achat.</p>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Client', clientName, true)}
+      ${row('Produit / Service', productName, true)}
+      ${row('Montant', fmt(amount), true)}
+      ${row('Date', date)}
+      ${row('Statut', statusBadge('completed'))}
+    </table>`
+  );
+  await send(ADMIN_EMAIL, `🛒 Achat ${fmt(amount)} — ${clientName} (${productName})`, adminHtml, 'purchase_admin');
+
+  if (clientEmail) {
+    const clientHtml = baseHtml('🛒 Achat confirmé', '#0891b2',
+      `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${clientName}</strong>, votre achat a bien été enregistré.</p>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        ${row('Produit / Service', productName, true)}
+        ${row('Montant débité', fmt(amount), true)}
+        ${row('Date', date)}
+        ${row('Statut', statusBadge('completed'))}
+      </table>
+      <p style="margin:24px 0 0;padding:16px;background:#ecfeff;border-radius:10px;font-size:13px;color:#155e75;border-left:4px solid #0891b2;">
+        Merci pour votre confiance. Consultez votre historique pour les détails.
+      </p>`
+    );
+    await send(clientEmail, `🛒 Achat de ${productName} confirmé`, clientHtml, 'purchase_client');
+  }
+}
+
+// 11. Retrait affilié soumis → admin + affilié
+export async function emailAffiliateWithdrawalSubmitted(opts: {
+  affiliateName: string; affiliateEmail?: string;
+  amount: number; method?: string; accountNumber?: string;
+}): Promise<void> {
+  const { affiliateName, affiliateEmail, amount, method, accountNumber } = opts;
+  const date = dateFr();
+
+  const adminHtml = baseHtml('💸 Retrait affilié', '#d97706',
+    `<p style="margin:0 0 20px;font-size:15px;color:#444;">Un affilié a soumis une demande de retrait.</p>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Affilié', affiliateName, true)}
+      ${row('Montant', fmt(amount), true)}
+      ${method ? row('Méthode', method) : ''}
+      ${accountNumber ? row('Compte', accountNumber) : ''}
+      ${row('Date', date)}
+      ${row('Statut', statusBadge('pending'))}
+    </table>
+    <p style="margin:24px 0 0;padding:16px;background:#fffbeb;border-radius:10px;font-size:13px;color:#92400e;border-left:4px solid #d97706;">
+      ⚡ Traitez cette demande depuis le tableau de bord admin.
+    </p>`
+  );
+  await send(ADMIN_EMAIL, `💸 Retrait affilié ${fmt(amount)} — ${affiliateName}`, adminHtml, 'affiliate_withdrawal_submitted_admin');
+
+  if (affiliateEmail) {
+    const html = baseHtml('Retrait en cours de traitement', '#d97706',
+      `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${affiliateName}</strong>, votre demande de retrait a bien été reçue.</p>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        ${row('Montant', fmt(amount), true)}
+        ${method ? row('Méthode', method) : ''}
+        ${row('Date', date)}
+        ${row('Statut', statusBadge('pending'))}
+      </table>
+      <p style="margin:24px 0 0;padding:16px;background:#fffbeb;border-radius:10px;font-size:13px;color:#92400e;">
+        Vous serez notifié dès que votre retrait sera traité.
+      </p>`
+    );
+    await send(affiliateEmail, `💸 Votre retrait de ${fmt(amount)} est en cours`, html, 'affiliate_withdrawal_submitted_affiliate');
+  }
+}
+
+// 12. Retrait affilié approuvé → admin + affilié
+export async function emailAffiliateWithdrawalApproved(opts: {
+  affiliateName: string; affiliateEmail?: string; amount: number;
+}): Promise<void> {
+  const { affiliateName, affiliateEmail, amount } = opts;
+  const adminHtml = baseHtml('✅ Retrait affilié approuvé', '#059669',
+    `<p style="margin:0 0 20px;font-size:15px;color:#444;">Le retrait de <strong>${affiliateName}</strong> a été approuvé.</p>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Affilié', affiliateName, true)}
+      ${row('Montant', fmt(amount), true)}
+      ${row('Date', dateFr())}
+      ${row('Statut', statusBadge('approved'))}
+    </table>`
+  );
+  await send(ADMIN_EMAIL, `✅ Retrait affilié approuvé — ${affiliateName} ${fmt(amount)}`, adminHtml, 'affiliate_withdrawal_approved_admin');
+
+  if (affiliateEmail) {
+    const html = baseHtml('✅ Retrait approuvé', '#059669',
+      `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${affiliateName}</strong>, votre retrait a été approuvé !</p>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        ${row('Montant', fmt(amount), true)}
+        ${row('Date', dateFr())}
+        ${row('Statut', statusBadge('approved'))}
+      </table>
+      <p style="margin:24px 0 0;padding:16px;background:#f0fdf4;border-radius:10px;font-size:13px;color:#065f46;border-left:4px solid #059669;">
+        🎉 Votre paiement est en cours de traitement.
+      </p>`
+    );
+    await send(affiliateEmail, `✅ Retrait de ${fmt(amount)} approuvé`, html, 'affiliate_withdrawal_approved_affiliate');
+  }
+}
+
+// 13. Retrait affilié refusé → admin + affilié
+export async function emailAffiliateWithdrawalRejected(opts: {
+  affiliateName: string; affiliateEmail?: string; amount: number; reason?: string;
+}): Promise<void> {
+  const { affiliateName, affiliateEmail, amount, reason } = opts;
+  const adminHtml = baseHtml('❌ Retrait affilié refusé', '#dc2626',
+    `<p style="margin:0 0 20px;font-size:15px;color:#444;">Le retrait de <strong>${affiliateName}</strong> a été refusé.</p>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Affilié', affiliateName, true)}
+      ${row('Montant', fmt(amount), true)}
+      ${reason ? row('Raison', reason) : ''}
+      ${row('Date', dateFr())}
+    </table>`
+  );
+  await send(ADMIN_EMAIL, `❌ Retrait affilié refusé — ${affiliateName} ${fmt(amount)}`, adminHtml, 'affiliate_withdrawal_rejected_admin');
+
+  if (affiliateEmail) {
+    const html = baseHtml('❌ Retrait refusé', '#dc2626',
+      `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${affiliateName}</strong>, votre demande de retrait a été refusée.</p>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        ${row('Montant', fmt(amount), true)}
+        ${reason ? row('Raison', reason) : ''}
+        ${row('Date', dateFr())}
+        ${row('Statut', statusBadge('rejected'))}
+      </table>`
+    );
+    await send(affiliateEmail, `❌ Retrait de ${fmt(amount)} refusé`, html, 'affiliate_withdrawal_rejected_affiliate');
+  }
+}
+
+// 14. Achat formation → admin + client
+export async function emailFormationPurchase(opts: {
+  clientName: string; clientEmail?: string;
+  formationTitle: string; amount: number;
+}): Promise<void> {
+  const { clientName, clientEmail, formationTitle, amount } = opts;
+  const date = dateFr();
+
+  const adminHtml = baseHtml('🎓 Achat formation', '#7c3aed',
+    `<p style="margin:0 0 20px;font-size:15px;color:#444;">Un client vient d'acheter une formation.</p>
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Client', clientName, true)}
+      ${row('Formation', formationTitle, true)}
+      ${row('Montant', fmt(amount), true)}
+      ${row('Date', date)}
+      ${row('Statut', statusBadge('completed'))}
+    </table>`
+  );
+  await send(ADMIN_EMAIL, `🎓 Formation achetée — ${clientName} (${formationTitle})`, adminHtml, 'formation_purchase_admin');
+
+  if (clientEmail) {
+    const html = baseHtml('🎓 Formation achetée', '#7c3aed',
+      `<p style="margin:0 0 20px;font-size:15px;color:#444;">Bonjour <strong>${clientName}</strong>, votre accès à la formation a été activé !</p>
+      <table width="100%" cellpadding="0" cellspacing="0">
+        ${row('Formation', formationTitle, true)}
+        ${row('Montant', fmt(amount), true)}
+        ${row('Date', date)}
+        ${row('Statut', statusBadge('completed'))}
+      </table>
+      <p style="margin:24px 0 0;padding:16px;background:#faf5ff;border-radius:10px;font-size:13px;color:#6d28d9;border-left:4px solid #7c3aed;">
+        🚀 Vous pouvez accéder à votre formation depuis votre tableau de bord dès maintenant.
+      </p>`
+    );
+    await send(clientEmail, `🎓 Accès à "${formationTitle}" activé`, html, 'formation_purchase_client');
   }
 }

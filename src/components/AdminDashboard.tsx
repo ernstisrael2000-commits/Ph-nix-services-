@@ -2141,16 +2141,6 @@ function EmailLogsPanel() {
       ]
     },
     {
-      title: "Opérations Financières",
-      items: [
-        { value: 'transfers', label: 'Transferts Affiliés', icon: ArrowRightLeft, permission: 'affiliates' },
-        { value: 'withdrawals', label: 'Retraits Affiliés', icon: ArrowUp, permission: 'affiliates' },
-        { value: 'wallet-tx', label: 'Dépôts Wallet', icon: Wallet, permission: 'settings' },
-        { value: 'client-requests', label: 'Demandes Clients', icon: Bell, permission: 'affiliates' },
-        { value: 'clients-tx', label: 'Transactions Clients', icon: DollarSign, permission: 'affiliates' },
-      ]
-    },
-    {
       title: "Logistique & Opérations",
       items: [
         { value: 'parcels', label: 'Colis & Tracking', icon: Package, permission: 'parcels' },
