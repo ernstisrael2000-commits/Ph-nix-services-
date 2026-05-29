@@ -1564,6 +1564,37 @@ router.post('/api/agent/withdrawal-request/:txId/reject', requireDb, async (req,
   }
 });
 
+// ── Agent: self deposit request (agent recharges own balance) ────────────────
+router.post('/api/agent/self-deposit-request', requireDb, async (req, res) => {
+  try {
+    const { agentCode, amount, method } = req.body;
+    if (!agentCode || !amount || !method) return res.status(400).json({ error: 'Champs requis manquants.' });
+    const usd = Number(amount);
+    if (isNaN(usd) || usd <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+
+    const agentSnap = await adminDb.collection('agents').where('agentCode', '==', agentCode).limit(1).get();
+    if (agentSnap.empty) return res.status(404).json({ error: 'Agent introuvable.' });
+    const agentDoc = agentSnap.docs[0];
+    const agentData = agentDoc.data();
+
+    await adminDb.collection('agent_deposit_requests').add({
+      agentId: agentDoc.id,
+      agentCode,
+      agentName: agentData.name || '',
+      amount: usd,
+      method,
+      status: 'pending',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[agent/self-deposit-request]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
 // ── Agent: full transaction history ──────────────────────────────────────────
 router.get('/api/agent/transactions/:agentCode', requireDb, async (req, res) => {
   try {

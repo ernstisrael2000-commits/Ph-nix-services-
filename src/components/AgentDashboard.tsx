@@ -12,12 +12,14 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from './ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import {
   Wallet, CheckCircle2, XCircle, Loader2, History, LogOut,
   Clock, User, ArrowRightLeft, Search, ArrowDownLeft, ArrowUpRight,
   Phone, RefreshCw, TrendingUp, BarChart3, Users, Settings,
   Home, AlertCircle, BadgeDollarSign, ChevronRight, Star,
-  ArrowDownToLine, ArrowUpFromLine, StickyNote, ShieldCheck,
+  ArrowDownToLine, ArrowUpFromLine, StickyNote, ShieldCheck, PlusCircle, AlertTriangle, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -141,6 +143,12 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
 
   // Reject reason state
   const [rejectReasonMap, setRejectReasonMap] = useState<Record<string, string>>({});
+
+  // Self-deposit (agent recharges own balance)
+  const [isSelfDepositOpen, setIsSelfDepositOpen] = useState(false);
+  const [selfDepositAmount, setSelfDepositAmount] = useState('');
+  const [selfDepositMethod, setSelfDepositMethod] = useState('MonCash');
+  const [selfDepositSubmitting, setSelfDepositSubmitting] = useState(false);
 
   const rate = settings?.exchangeRate || 146;
   const pendingAffiliateRequests = agentHistory.filter(t => t.status === 'pending_agent');
@@ -280,6 +288,29 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
       }
     } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setSearching(false); }
+  };
+
+  // Agent self-deposit request (recharge own balance)
+  const handleAgentSelfDeposit = async () => {
+    const usd = parseFloat(selfDepositAmount);
+    if (isNaN(usd) || usd <= 0) { toast.error('Montant invalide.'); return; }
+    if (!agent?.agentCode) return;
+    setSelfDepositSubmitting(true);
+    try {
+      await apiFetch('/api/agent/self-deposit-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentCode: agent.agentCode, amount: usd, method: selfDepositMethod }),
+      });
+      const adminPhone = settings?.whatsappAdminNumber || '+50944813185';
+      const msg = `Bonjour Admin, je souhaite recharger mon solde agent.\n\n💰 Montant: $${usd.toFixed(2)}\n💳 Méthode: ${selfDepositMethod}\n🔑 Code Agent: ${agent.agentCode}\n👤 Nom: ${agent.name}`;
+      window.open(`https://wa.me/${adminPhone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+      toast.success('Demande enregistrée ! Continuez sur WhatsApp.');
+      setIsSelfDepositOpen(false);
+      setSelfDepositAmount('');
+      setSelfDepositMethod('MonCash');
+    } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
+    finally { setSelfDepositSubmitting(false); }
   };
 
   // Submit direct deposit (instant, no confirmation needed)
@@ -453,6 +484,21 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
                 ))}
               </div>
             ) : null}
+
+            {/* Recharger mon Solde */}
+            <button
+              onClick={() => setIsSelfDepositOpen(true)}
+              className="w-full flex items-center gap-4 p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-200 hover:bg-emerald-100 transition-all active:scale-[0.99] group"
+            >
+              <div className="h-10 w-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-emerald-200">
+                <PlusCircle className="h-5 w-5" />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="font-black text-emerald-800">Recharger mon Solde</p>
+                <p className="text-xs text-emerald-600">MonCash, NatCash, Bureau / Proxy</p>
+              </div>
+              <ChevronRight className="h-5 w-5 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
+            </button>
 
             {/* Pending alerts */}
             {totalPendingCount > 0 && (
@@ -882,6 +928,86 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
         )}
 
       </AnimatePresence>
+
+      {/* ── Self-Deposit Dialog ───────────────────────────────────────────── */}
+      <Dialog open={isSelfDepositOpen} onOpenChange={v => { if (!v) { setSelfDepositAmount(''); setSelfDepositMethod('MonCash'); } setIsSelfDepositOpen(v); }}>
+        <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
+          <DialogHeader className="p-6 bg-emerald-600 text-white relative">
+            <DialogTitle className="text-xl font-black">Recharger mon Solde</DialogTitle>
+            <DialogDescription className="text-emerald-100 text-sm mt-1">Via MonCash, NatCash ou Bureau / Proxy.</DialogDescription>
+            <DialogClose className="absolute right-5 top-5 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
+              <X className="h-4 w-4" />
+            </DialogClose>
+          </DialogHeader>
+
+          <div className="p-6 space-y-5">
+            {/* Method */}
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode de paiement</Label>
+              <Select value={selfDepositMethod} onValueChange={setSelfDepositMethod}>
+                <SelectTrigger className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-bold">
+                  <SelectValue placeholder="Choisir une méthode" />
+                </SelectTrigger>
+                <SelectContent className="rounded-2xl">
+                  <SelectItem value="MonCash" className="font-bold">
+                    <div className="flex items-center gap-2">
+                      {settings?.moncashLogoUrl && <img src={settings.moncashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
+                      MonCash (Digicel)
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="NatCash" className="font-bold">
+                    <div className="flex items-center gap-2">
+                      {settings?.natcashLogoUrl && <img src={settings.natcashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
+                      NatCash (Natcom)
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="Physical" className="font-bold">Bureau / Proxy (En personne)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Amount */}
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant (USD)</Label>
+              <div className="relative">
+                <Input
+                  type="number"
+                  placeholder="Ex: 50"
+                  value={selfDepositAmount}
+                  onChange={e => setSelfDepositAmount(e.target.value)}
+                  className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg pl-11"
+                  min="1" step="1"
+                />
+                <PlusCircle className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
+              </div>
+              {selfDepositAmount && !isNaN(parseFloat(selfDepositAmount)) && parseFloat(selfDepositAmount) > 0 && (
+                <p className="text-xs text-gray-400 font-bold text-center">
+                  ≈ {Math.round(parseFloat(selfDepositAmount) * rate).toLocaleString()} HTG
+                </p>
+              )}
+            </div>
+
+            {/* Info notice */}
+            <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-[10px] text-amber-800 font-bold leading-relaxed">
+                Vous serez redirigé sur WhatsApp pour envoyer votre preuve de paiement. L'admin créditera votre solde après vérification.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="px-6 pb-6">
+            <Button
+              onClick={handleAgentSelfDeposit}
+              disabled={selfDepositSubmitting || !selfDepositAmount || isNaN(parseFloat(selfDepositAmount)) || parseFloat(selfDepositAmount) <= 0}
+              className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl border-0"
+            >
+              {selfDepositSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Envoyer la Demande →'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

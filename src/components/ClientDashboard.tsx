@@ -550,7 +550,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
         className="relative z-10 w-full max-w-md bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] max-h-full sm:max-h-[95vh] overflow-hidden flex flex-col shadow-2xl shadow-black/20"
       >
         {/* Top bar */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
+        <div className="flex items-center justify-between px-4 pt-3 pb-2 shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="h-8 w-8 rounded-2xl bg-violet-100 flex items-center justify-center">
               <Wallet className="h-4 w-4 text-violet-600" />
@@ -566,9 +566,9 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
         </div>
 
         {/* Card */}
-        <div className="px-4 pb-4 shrink-0">
+        <div className="px-3 pb-2 shrink-0">
           {loading ? (
-            <div className="w-full rounded-[1.75rem] bg-violet-100 animate-pulse" style={{ aspectRatio: '1.75 / 1' }} />
+            <div className="w-full rounded-[1.75rem] bg-violet-100 animate-pulse" style={{ aspectRatio: '2 / 1' }} />
           ) : client ? (
             <VirtualCard
               client={client} balance={balance} rate={rate}
@@ -576,14 +576,14 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               hidden={balanceHidden} onToggleHide={() => setBalanceHidden(v => !v)}
             />
           ) : (
-            <div className="w-full rounded-[1.75rem] bg-gray-100 flex items-center justify-center" style={{ aspectRatio: '1.75 / 1' }}>
+            <div className="w-full rounded-[1.75rem] bg-gray-100 flex items-center justify-center" style={{ aspectRatio: '2 / 1' }}>
               <AlertCircle className="h-8 w-8 text-gray-300" />
             </div>
           )}
 
           {/* Balance strip */}
           {client && (
-            <div className="mt-3 grid grid-cols-3 gap-2 px-1">
+            <div className="mt-2 grid grid-cols-3 gap-2 px-1">
               <div>
                 <p className="text-[10px] text-gray-400 font-semibold">Solde USD</p>
                 <p className="text-base font-black text-gray-900">
@@ -606,7 +606,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto no-scrollbar">
-          <div className="px-4 pb-4 space-y-3">
+          <div className="px-3 pb-3 space-y-2.5">
 
             {/* ── Pending withdrawal confirmations (agent-initiated) */}
             <AnimatePresence>
@@ -680,11 +680,11 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => { setDepositMethod(depositMethods[0] || null); setIsDepositOpen(true); }}
-                className="group relative overflow-hidden flex flex-col items-center justify-center gap-1 py-4 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-emerald-700 transition-all active:scale-95"
+                className="group relative overflow-hidden flex flex-col items-center justify-center gap-1 py-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-emerald-700 transition-all active:scale-95"
               >
                 <div className="absolute -right-4 -bottom-4 w-16 h-16 rounded-full bg-white/10" />
-                <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center mb-0.5">
-                  <ArrowDownToLine className="h-5 w-5 text-white" />
+                <div className="h-8 w-8 rounded-xl bg-white/20 flex items-center justify-center mb-0.5">
+                  <ArrowDownToLine className="h-4 w-4 text-white" />
                 </div>
                 <p className="font-black text-white text-sm">Déposer</p>
                 <p className="text-white/70 text-[10px]">HTG → USD</p>
@@ -692,11 +692,11 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
 
               <button
                 onClick={() => { setWithdrawMethod(withdrawalMethods[0] || null); setIsWithdrawOpen(true); }}
-                className="group relative overflow-hidden flex flex-col items-center justify-center gap-1 py-4 rounded-2xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg shadow-red-200 hover:from-red-600 hover:to-rose-700 transition-all active:scale-95"
+                className="group relative overflow-hidden flex flex-col items-center justify-center gap-1 py-3 rounded-2xl bg-gradient-to-br from-red-500 to-rose-600 shadow-lg shadow-red-200 hover:from-red-600 hover:to-rose-700 transition-all active:scale-95"
               >
                 <div className="absolute -right-4 -bottom-4 w-16 h-16 rounded-full bg-white/10" />
-                <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center mb-0.5">
-                  <ArrowUpFromLine className="h-5 w-5 text-white" />
+                <div className="h-8 w-8 rounded-xl bg-white/20 flex items-center justify-center mb-0.5">
+                  <ArrowUpFromLine className="h-4 w-4 text-white" />
                 </div>
                 <p className="font-black text-white text-sm">Retirer</p>
                 <p className="text-white/70 text-[10px]">En USD</p>
@@ -1026,15 +1026,15 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                       </div>
                     )}
                     {qr && (
-                      <div className="flex items-center gap-3 bg-white rounded-xl p-3 border border-emerald-100">
-                        <div className="relative shrink-0">
-                          <img src={qr} alt="QR Code" className="h-20 w-20 object-contain rounded-lg border border-gray-100"
+                      <div className="flex flex-col items-center gap-2 bg-white rounded-xl p-3 border border-emerald-100 text-center">
+                        <div className="relative">
+                          <img src={qr} alt="QR Code" className="h-28 w-28 object-contain rounded-lg border border-gray-100 mx-auto"
                             onError={e => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none'; }} />
                           <div className="absolute -bottom-1.5 -right-1.5 bg-emerald-600 text-white p-1 rounded-md shadow">
                             <QrCode className="h-3 w-3" />
                           </div>
                         </div>
-                        <div className="min-w-0">
+                        <div>
                           <p className="text-[10px] font-black text-gray-400 uppercase tracking-wide">QR Code</p>
                           <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">Scannez ce code pour envoyer le paiement directement</p>
                         </div>
