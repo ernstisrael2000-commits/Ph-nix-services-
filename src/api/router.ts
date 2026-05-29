@@ -1564,7 +1564,225 @@ router.post('/api/agent/withdrawal-request/:txId/reject', requireDb, async (req,
   }
 });
 
-// ── Agent: self deposit request (agent recharges own balance) ────────────────
+// ── Agent: personal deposit (client deposits into agent wallet) ───────────────
+router.post('/api/agent/personal-deposit', requireDb, async (req, res) => {
+  try {
+    const { agentCode, amount, method, accountNumber, accountName, message } = req.body;
+    if (!agentCode || !amount || !method) return res.status(400).json({ error: 'Champs requis manquants.' });
+    const usd = Number(amount);
+    if (isNaN(usd) || usd <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+
+    const agentSnap = await adminDb.collection('agents').where('agentCode', '==', agentCode).limit(1).get();
+    if (agentSnap.empty) return res.status(404).json({ error: 'Agent introuvable.' });
+    const agentDoc = agentSnap.docs[0];
+    const agentData = agentDoc.data();
+    if (agentData.status === 'inactive') return res.status(400).json({ error: 'Agent inactif.' });
+
+    const txRef = adminDb.collection('agent_personal_transactions').doc();
+    const batch = adminDb.batch();
+    batch.set(txRef, {
+      agentId: agentDoc.id,
+      agentCode,
+      agentName: agentData.name || '',
+      type: 'deposit',
+      amount: usd,
+      method,
+      ...(accountNumber && { accountNumber }),
+      ...(accountName && { accountName }),
+      ...(message && { message }),
+      status: 'pending',
+      description: `Dépôt personnel — ${method}`,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    batch.set(adminDb.collection('admin_notifications').doc(), {
+      type: 'agent_personal_deposit',
+      agentId: agentDoc.id,
+      agentCode,
+      agentName: agentData.name || '',
+      amount: usd,
+      method,
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    // Email to admin
+    fireEmail(
+      () => emailDepositSubmitted({
+        clientName: `Agent: ${agentData.name || agentCode}`,
+        clientEmail: undefined,
+        amount: usd,
+        method,
+        txId: txRef.id,
+      }),
+      { type: 'agent_personal_deposit', to: ADMIN_EMAIL, amount: usd }
+    );
+
+    res.json({ success: true, txId: txRef.id });
+  } catch (e: any) {
+    console.error('[agent/personal-deposit]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Agent: personal withdrawal (agent withdraws from own commission balance) ──
+router.post('/api/agent/personal-withdrawal', requireDb, async (req, res) => {
+  try {
+    const { agentCode, amount, method, accountNumber, accountName, message } = req.body;
+    if (!agentCode || !amount || !method || !accountNumber) return res.status(400).json({ error: 'Champs requis manquants.' });
+    const usd = Number(amount);
+    if (isNaN(usd) || usd <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+
+    const agentSnap = await adminDb.collection('agents').where('agentCode', '==', agentCode).limit(1).get();
+    if (agentSnap.empty) return res.status(404).json({ error: 'Agent introuvable.' });
+    const agentDoc = agentSnap.docs[0];
+    const agentData = agentDoc.data();
+    if (agentData.status === 'inactive') return res.status(400).json({ error: 'Agent inactif.' });
+
+    const commissionBalance = Number(agentData.commissionBalance || 0);
+    if (commissionBalance < usd) return res.status(400).json({ error: `Solde commissions insuffisant. Disponible: $${commissionBalance.toFixed(2)}` });
+
+    const txRef = adminDb.collection('agent_personal_transactions').doc();
+    const batch = adminDb.batch();
+
+    // Debit commission balance immediately
+    batch.update(agentDoc.ref, {
+      commissionBalance: FieldValue.increment(-usd),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    batch.set(txRef, {
+      agentId: agentDoc.id,
+      agentCode,
+      agentName: agentData.name || '',
+      type: 'withdrawal',
+      amount: usd,
+      method,
+      accountNumber,
+      ...(accountName && { accountName }),
+      ...(message && { message }),
+      status: 'pending',
+      description: `Retrait commissions — ${method} — ${accountNumber}`,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    batch.set(adminDb.collection('admin_notifications').doc(), {
+      type: 'agent_personal_withdrawal',
+      agentId: agentDoc.id,
+      agentCode,
+      agentName: agentData.name || '',
+      amount: usd,
+      method,
+      accountNumber,
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    // Email to admin
+    fireEmail(
+      () => emailWithdrawalSubmitted({
+        clientName: `Agent: ${agentData.name || agentCode}`,
+        clientEmail: agentData.email || undefined,
+        amount: usd,
+        method,
+        accountNumber,
+        accountName: accountName || agentData.name,
+      }),
+      { type: 'agent_personal_withdrawal', to: ADMIN_EMAIL, amount: usd }
+    );
+
+    res.json({ success: true, txId: txRef.id });
+  } catch (e: any) {
+    console.error('[agent/personal-withdrawal]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Agent: personal transaction history ──────────────────────────────────────
+router.get('/api/agent/personal-transactions/:agentId', requireDb, async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const snap = await adminDb.collection('agent_personal_transactions')
+      .where('agentId', '==', agentId)
+      .orderBy('createdAt', 'desc')
+      .limit(100).get();
+    res.json({ transactions: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Admin: approve agent personal deposit ────────────────────────────────────
+router.post('/api/admin/agent-personal-deposit/:txId/approve', requireDb, async (req, res) => {
+  try {
+    const { txId } = req.params;
+    const txRef = adminDb.collection('agent_personal_transactions').doc(txId);
+    const txSnap = await txRef.get();
+    if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const txData = txSnap.data()!;
+    if (txData.status !== 'pending') return res.status(400).json({ error: 'Déjà traitée.' });
+    if (txData.type !== 'deposit') return res.status(400).json({ error: 'Type invalide.' });
+
+    const agentRef = adminDb.collection('agents').doc(txData.agentId);
+    await adminDb.runTransaction(async (txn) => {
+      txn.update(agentRef, {
+        balance: FieldValue.increment(txData.amount),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      txn.update(txRef, { status: 'approved', approvedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Admin: reject agent personal deposit ─────────────────────────────────────
+router.post('/api/admin/agent-personal-deposit/:txId/reject', requireDb, async (req, res) => {
+  try {
+    const { txId } = req.params;
+    const { reason } = req.body;
+    const txRef = adminDb.collection('agent_personal_transactions').doc(txId);
+    const txSnap = await txRef.get();
+    if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const txData = txSnap.data()!;
+    if (txData.status !== 'pending') return res.status(400).json({ error: 'Déjà traitée.' });
+
+    // If it was a withdrawal that debited commission balance, refund it
+    if (txData.type === 'withdrawal') {
+      const agentRef = adminDb.collection('agents').doc(txData.agentId);
+      await adminDb.runTransaction(async (txn) => {
+        txn.update(agentRef, { commissionBalance: FieldValue.increment(txData.amount), updatedAt: FieldValue.serverTimestamp() });
+        txn.update(txRef, { status: 'rejected', ...(reason && { rejectionReason: reason }), rejectedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+      });
+    } else {
+      await txRef.update({ status: 'rejected', ...(reason && { rejectionReason: reason }), rejectedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    }
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Admin: approve agent personal withdrawal ─────────────────────────────────
+router.post('/api/admin/agent-personal-withdrawal/:txId/approve', requireDb, async (req, res) => {
+  try {
+    const { txId } = req.params;
+    const txRef = adminDb.collection('agent_personal_transactions').doc(txId);
+    const txSnap = await txRef.get();
+    if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const txData = txSnap.data()!;
+    if (txData.status !== 'pending') return res.status(400).json({ error: 'Déjà traitée.' });
+    if (txData.type !== 'withdrawal') return res.status(400).json({ error: 'Type invalide.' });
+    await txRef.update({ status: 'approved', approvedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Self-deposit request (agent recharges own balance) ────────────────────────
 router.post('/api/agent/self-deposit-request', requireDb, async (req, res) => {
   try {
     const { agentCode, amount, method } = req.body;

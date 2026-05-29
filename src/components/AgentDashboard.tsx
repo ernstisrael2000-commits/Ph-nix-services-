@@ -86,7 +86,7 @@ interface AgentTransaction {
   createdAt: any;
 }
 
-type ActiveSection = 'overview' | 'requests' | 'deposit' | 'commissions' | 'clients' | 'settings';
+type ActiveSection = 'overview' | 'requests' | 'deposit' | 'commissions' | 'clients' | 'finances' | 'settings';
 
 const sectionNav = [
   { key: 'overview',     label: 'Accueil',      icon: Home },
@@ -94,6 +94,7 @@ const sectionNav = [
   { key: 'deposit',      label: 'Dépôt',         icon: ArrowDownLeft },
   { key: 'commissions',  label: 'Commissions',   icon: BadgeDollarSign },
   { key: 'clients',      label: 'Clients',       icon: Users },
+  { key: 'finances',     label: 'Mes Finances',  icon: Wallet },
   { key: 'settings',     label: 'Paramètres',    icon: Settings },
 ] as const;
 
@@ -150,6 +151,18 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
   const [selfDepositMethod, setSelfDepositMethod] = useState('MonCash');
   const [selfDepositSubmitting, setSelfDepositSubmitting] = useState(false);
 
+  // Personal finances (agent deposits into own wallet / withdraws commissions)
+  const [personalTxs, setPersonalTxs] = useState<any[]>([]);
+  const [loadingPersonalTxs, setLoadingPersonalTxs] = useState(false);
+  const [personalDepositOpen, setPersonalDepositOpen] = useState(false);
+  const [personalWithdrawalOpen, setPersonalWithdrawalOpen] = useState(false);
+  const [pAmount, setPAmount] = useState('');
+  const [pMethod, setPMethod] = useState('MonCash');
+  const [pAccount, setPAccount] = useState('');
+  const [pAccountName, setPAccountName] = useState('');
+  const [pMessage, setPMessage] = useState('');
+  const [pSubmitting, setPSubmitting] = useState(false);
+
   const rate = settings?.exchangeRate || 146;
   const pendingAffiliateRequests = agentHistory.filter(t => t.status === 'pending_agent');
 
@@ -203,6 +216,18 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
     finally { setLoadingStats(false); }
   }, [agent?.agentCode]);
 
+  // Load personal transactions
+  const loadPersonalTxs = useCallback(async () => {
+    if (!agent?.id) return;
+    setLoadingPersonalTxs(true);
+    try {
+      const res = await fetch(`/api/agent/personal-transactions/${encodeURIComponent(agent.id)}`);
+      const data = await res.json();
+      if (res.ok) setPersonalTxs(data.transactions || []);
+    } catch {}
+    finally { setLoadingPersonalTxs(false); }
+  }, [agent?.id]);
+
   useEffect(() => {
     if (!agent) return;
     loadWithdrawRequests();
@@ -213,7 +238,8 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
     if (activeSection === 'commissions') loadFeeRecords();
     if (activeSection === 'clients' || activeSection === 'overview') loadTransactions();
     if (activeSection === 'requests') loadWithdrawRequests();
-  }, [activeSection, agent?.agentCode]);
+    if (activeSection === 'finances') loadPersonalTxs();
+  }, [activeSection, agent?.agentCode, agent?.id]);
 
   // Approve affiliate deposit
   const handleApproveAffiliate = async (tx: WalletTransaction) => {
@@ -269,6 +295,53 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
       await loadWithdrawRequests();
     } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setIsProcessing(false); }
+  };
+
+  // Personal deposit (agent rechts own balance via payment to admin)
+  const handlePersonalDeposit = async () => {
+    const usd = parseFloat(pAmount);
+    if (isNaN(usd) || usd <= 0) { toast.error('Montant invalide.'); return; }
+    if (!agent?.agentCode) return;
+    setPSubmitting(true);
+    try {
+      const res = await fetch('/api/agent/personal-deposit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentCode: agent.agentCode, amount: usd, method: pMethod, accountNumber: pAccount || undefined, accountName: pAccountName || undefined, message: pMessage || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
+      toast.success('Demande de dépôt envoyée ! L\'admin validera sous peu.');
+      setPersonalDepositOpen(false);
+      setPAmount(''); setPMethod('MonCash'); setPAccount(''); setPAccountName(''); setPMessage('');
+      loadPersonalTxs();
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setPSubmitting(false); }
+  };
+
+  // Personal withdrawal (agent withdraws from commission balance)
+  const handlePersonalWithdrawal = async () => {
+    const usd = parseFloat(pAmount);
+    if (isNaN(usd) || usd <= 0) { toast.error('Montant invalide.'); return; }
+    if (!pAccount.trim()) { toast.error('Numéro de compte requis.'); return; }
+    if (!agent?.agentCode) return;
+    const available = agent.commissionBalance || 0;
+    if (usd > available) { toast.error(`Solde commissions insuffisant. Disponible: $${available.toFixed(2)}`); return; }
+    setPSubmitting(true);
+    try {
+      const res = await fetch('/api/agent/personal-withdrawal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentCode: agent.agentCode, amount: usd, method: pMethod, accountNumber: pAccount, accountName: pAccountName || undefined, message: pMessage || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
+      toast.success('Demande de retrait envoyée ! L\'admin traitera votre retrait.');
+      setPersonalWithdrawalOpen(false);
+      setPAmount(''); setPMethod('MonCash'); setPAccount(''); setPAccountName(''); setPMessage('');
+      loadPersonalTxs();
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setPSubmitting(false); }
   };
 
   // Search client by phone, name or wallet ID
@@ -881,6 +954,118 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
           </motion.div>
         )}
 
+        {/* ── FINANCES PERSONNELLES ── */}
+        {activeSection === 'finances' && (
+          <motion.div key="finances" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+            <h3 className="text-lg font-black text-dark flex items-center gap-2 px-1">
+              <Wallet className="h-5 w-5 text-primary" />
+              Mes Finances
+            </h3>
+
+            {/* Balance summary */}
+            <div className="grid grid-cols-2 gap-3">
+              <Card className="rounded-[1.75rem] border-0 shadow-lg bg-gradient-to-br from-slate-800 to-slate-900 text-white overflow-hidden">
+                <CardContent className="p-4">
+                  <p className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-2">Solde Agent</p>
+                  <p className="text-2xl font-black">${(agent.balance || 0).toFixed(2)}</p>
+                  <p className="text-[10px] text-white/40 mt-0.5">≈ {((agent.balance || 0) * rate).toLocaleString()} HTG</p>
+                </CardContent>
+              </Card>
+              <Card className="rounded-[1.75rem] border-0 shadow-lg bg-gradient-to-br from-amber-500 to-orange-500 text-white overflow-hidden">
+                <CardContent className="p-4">
+                  <p className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-2">Commissions</p>
+                  <p className="text-2xl font-black">${(agent.commissionBalance || 0).toFixed(2)}</p>
+                  <p className="text-[10px] text-white/40 mt-0.5">≈ {((agent.commissionBalance || 0) * rate).toLocaleString()} HTG</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Action buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => { setPAmount(''); setPMethod('MonCash'); setPAccount(''); setPAccountName(''); setPMessage(''); setPersonalDepositOpen(true); }}
+                className="flex flex-col items-center gap-2 p-4 rounded-[1.75rem] bg-emerald-50 border-2 border-emerald-200 hover:bg-emerald-100 transition-all active:scale-[0.98]"
+              >
+                <div className="h-10 w-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-200">
+                  <ArrowDownToLine className="h-5 w-5" />
+                </div>
+                <p className="font-black text-emerald-800 text-sm">Dépôt</p>
+                <p className="text-[10px] text-emerald-600 text-center leading-tight">Créditer mon solde agent</p>
+              </button>
+              <button
+                onClick={() => { setPAmount(''); setPMethod('MonCash'); setPAccount(''); setPAccountName(''); setPMessage(''); setPersonalWithdrawalOpen(true); }}
+                className="flex flex-col items-center gap-2 p-4 rounded-[1.75rem] bg-rose-50 border-2 border-rose-200 hover:bg-rose-100 transition-all active:scale-[0.98]"
+              >
+                <div className="h-10 w-10 rounded-2xl bg-rose-500 text-white flex items-center justify-center shadow-lg shadow-rose-200">
+                  <ArrowUpFromLine className="h-5 w-5" />
+                </div>
+                <p className="font-black text-rose-800 text-sm">Retrait</p>
+                <p className="text-[10px] text-rose-600 text-center leading-tight">Retirer mes commissions</p>
+              </button>
+            </div>
+
+            {/* Info box */}
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3.5 flex items-start gap-3">
+              <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+              <div className="text-xs text-blue-700 leading-relaxed space-y-1">
+                <p><strong>Dépôt :</strong> Soumettez une demande, l'admin créditera votre solde agent après vérification du paiement.</p>
+                <p><strong>Retrait :</strong> Retirez vos commissions accumulées. Le montant est débité immédiatement en attente de traitement.</p>
+              </div>
+            </div>
+
+            {/* Transaction history */}
+            <div>
+              <div className="flex items-center justify-between px-1 mb-3">
+                <p className="font-black text-dark text-sm">Historique personnel</p>
+                <button onClick={loadPersonalTxs} disabled={loadingPersonalTxs} className="text-gray-400 hover:text-gray-600 transition-colors">
+                  <RefreshCw className={`h-4 w-4 ${loadingPersonalTxs ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+              {loadingPersonalTxs ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+              ) : personalTxs.length === 0 ? (
+                <div className="bg-gray-50 rounded-[2rem] p-10 text-center border-2 border-dashed border-gray-200">
+                  <History className="h-8 w-8 text-gray-200 mx-auto mb-2" />
+                  <p className="text-gray-400 text-sm font-bold">Aucune transaction personnelle</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {personalTxs.map((tx: any) => (
+                    <div key={tx.id} className="flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                      <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${
+                        tx.type === 'deposit' ? 'bg-emerald-100' : 'bg-rose-100'
+                      }`}>
+                        {tx.type === 'deposit'
+                          ? <ArrowDownToLine className="h-4 w-4 text-emerald-600" />
+                          : <ArrowUpFromLine className="h-4 w-4 text-rose-600" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-dark text-sm truncate">
+                          {tx.type === 'deposit' ? 'Dépôt personnel' : 'Retrait commissions'}
+                        </p>
+                        <p className="text-[10px] text-gray-400 truncate">{tx.method}{tx.accountNumber ? ` — ${tx.accountNumber}` : ''}</p>
+                        <p className="text-[10px] text-gray-300">{fmtDate(tx.createdAt)}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className={`font-black text-sm ${tx.type === 'deposit' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {tx.type === 'deposit' ? '+' : '-'}${(tx.amount || 0).toFixed(2)}
+                        </p>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                          tx.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
+                          tx.status === 'pending'  ? 'bg-amber-100 text-amber-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {tx.status === 'approved' ? 'Validé' : tx.status === 'pending' ? 'En attente' : 'Refusé'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
         {/* ── SETTINGS ── */}
         {activeSection === 'settings' && (
           <motion.div key="settings" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
@@ -928,6 +1113,138 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
         )}
 
       </AnimatePresence>
+
+      {/* ── Personal Deposit Dialog ───────────────────────────────────────── */}
+      <Dialog open={personalDepositOpen} onOpenChange={v => { if (!v) { setPAmount(''); setPMethod('MonCash'); setPAccount(''); setPAccountName(''); setPMessage(''); } setPersonalDepositOpen(v); }}>
+        <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
+          <DialogHeader className="p-6 bg-emerald-600 text-white relative">
+            <DialogTitle className="text-xl font-black">Dépôt — Solde Agent</DialogTitle>
+            <DialogDescription className="text-emerald-100 text-sm mt-1">Demandez à créditer votre solde agent.</DialogDescription>
+            <DialogClose className="absolute right-5 top-5 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
+              <X className="h-4 w-4" />
+            </DialogClose>
+          </DialogHeader>
+          <div className="p-6 space-y-4">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode de paiement</Label>
+              <Select value={pMethod} onValueChange={setPMethod}>
+                <SelectTrigger className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-bold">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-2xl">
+                  <SelectItem value="MonCash" className="font-bold">MonCash (Digicel)</SelectItem>
+                  <SelectItem value="NatCash" className="font-bold">NatCash (Natcom)</SelectItem>
+                  <SelectItem value="Virement" className="font-bold">Virement bancaire</SelectItem>
+                  <SelectItem value="Physical" className="font-bold">En personne / Bureau</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant (USD)</Label>
+              <div className="relative">
+                <Input type="number" placeholder="Ex: 100" value={pAmount} onChange={e => setPAmount(e.target.value)}
+                  className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg pl-11" min="1" step="1" />
+                <ArrowDownToLine className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
+              </div>
+              {pAmount && !isNaN(parseFloat(pAmount)) && parseFloat(pAmount) > 0 && (
+                <p className="text-xs text-gray-400 font-bold text-center">≈ {Math.round(parseFloat(pAmount) * rate).toLocaleString()} HTG</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Numéro de référence (optionnel)</Label>
+              <Input placeholder="Ex: N° transaction MonCash" value={pAccount} onChange={e => setPAccount(e.target.value)}
+                className="h-11 rounded-2xl border-gray-100 bg-gray-50 font-medium" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Message (optionnel)</Label>
+              <Input placeholder="Note pour l'admin..." value={pMessage} onChange={e => setPMessage(e.target.value)}
+                className="h-11 rounded-2xl border-gray-100 bg-gray-50 font-medium" maxLength={200} />
+            </div>
+            <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-[10px] text-amber-800 font-bold leading-relaxed">
+                L'admin recevra un email de notification et créditera votre solde après vérification.
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="px-6 pb-6">
+            <Button onClick={handlePersonalDeposit}
+              disabled={pSubmitting || !pAmount || isNaN(parseFloat(pAmount)) || parseFloat(pAmount) <= 0}
+              className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl border-0">
+              {pSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Envoyer la demande →'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Personal Withdrawal Dialog ────────────────────────────────────── */}
+      <Dialog open={personalWithdrawalOpen} onOpenChange={v => { if (!v) { setPAmount(''); setPMethod('MonCash'); setPAccount(''); setPAccountName(''); setPMessage(''); } setPersonalWithdrawalOpen(v); }}>
+        <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
+          <DialogHeader className="p-6 bg-rose-600 text-white relative">
+            <DialogTitle className="text-xl font-black">Retrait — Commissions</DialogTitle>
+            <DialogDescription className="text-rose-100 text-sm mt-1">Retirez vos commissions accumulées.</DialogDescription>
+            <DialogClose className="absolute right-5 top-5 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
+              <X className="h-4 w-4" />
+            </DialogClose>
+          </DialogHeader>
+          <div className="p-6 space-y-4">
+            {/* Available balance */}
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center">
+              <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Commissions disponibles</p>
+              <p className="text-3xl font-black text-amber-700">${(agent.commissionBalance || 0).toFixed(2)}</p>
+              <p className="text-[10px] text-amber-500 mt-0.5">≈ {((agent.commissionBalance || 0) * rate).toLocaleString()} HTG</p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode de paiement</Label>
+              <Select value={pMethod} onValueChange={setPMethod}>
+                <SelectTrigger className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-bold">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-2xl">
+                  <SelectItem value="MonCash" className="font-bold">MonCash (Digicel)</SelectItem>
+                  <SelectItem value="NatCash" className="font-bold">NatCash (Natcom)</SelectItem>
+                  <SelectItem value="Virement" className="font-bold">Virement bancaire</SelectItem>
+                  <SelectItem value="Physical" className="font-bold">En personne / Bureau</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Numéro de compte *</Label>
+              <Input placeholder="Ex: +509 XXXX XXXX" value={pAccount} onChange={e => setPAccount(e.target.value)}
+                className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-bold" required />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Nom du bénéficiaire</Label>
+              <Input placeholder="Nom sur le compte" value={pAccountName} onChange={e => setPAccountName(e.target.value)}
+                className="h-11 rounded-2xl border-gray-100 bg-gray-50 font-medium" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant (USD) *</Label>
+              <div className="relative">
+                <Input type="number" placeholder="0.00" value={pAmount} onChange={e => setPAmount(e.target.value)}
+                  className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg pl-11"
+                  min="0.01" step="0.01" max={agent.commissionBalance || 0} />
+                <ArrowUpFromLine className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-rose-500" />
+              </div>
+              {pAmount && !isNaN(parseFloat(pAmount)) && parseFloat(pAmount) > (agent.commissionBalance || 0) && (
+                <p className="text-xs text-red-500 font-bold">Montant supérieur à votre solde commissions</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Message (optionnel)</Label>
+              <Input placeholder="Note pour l'admin..." value={pMessage} onChange={e => setPMessage(e.target.value)}
+                className="h-11 rounded-2xl border-gray-100 bg-gray-50 font-medium" maxLength={200} />
+            </div>
+          </div>
+          <DialogFooter className="px-6 pb-6">
+            <Button onClick={handlePersonalWithdrawal}
+              disabled={pSubmitting || !pAmount || !pAccount.trim() || isNaN(parseFloat(pAmount)) || parseFloat(pAmount) <= 0 || parseFloat(pAmount) > (agent.commissionBalance || 0)}
+              className="w-full h-12 bg-rose-600 hover:bg-rose-700 text-white font-black rounded-2xl border-0">
+              {pSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Demander le retrait →'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Self-Deposit Dialog ───────────────────────────────────────────── */}
       <Dialog open={isSelfDepositOpen} onOpenChange={v => { if (!v) { setSelfDepositAmount(''); setSelfDepositMethod('MonCash'); } setIsSelfDepositOpen(v); }}>
