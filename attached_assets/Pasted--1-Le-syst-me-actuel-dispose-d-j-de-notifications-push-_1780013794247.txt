@@ -1,0 +1,139 @@
+
+1.
+
+Le système actuel dispose déjà de notifications (push / internes).
+On ne doit pas supprimer ces systèmes. Ils doivent rester actifs.
+
+L’objectif est d’ajouter un nouveau canal de notification par email pour renforcer la sécurité et le suivi des actions utilisateurs.
+
+---
+
+2. OBJECTIF PRINCIPAL
+
+Mettre en place un système d’email automatique pour notifier :
+
+- Dépôts effectués
+- Demandes de retrait
+- Validation ou refus de retrait
+- Commissions affiliés
+- Activités importantes des agents
+- Notifications administrateur
+
+---
+
+3. TECHNOLOGIES À UTILISER
+
+- Firebase Firestore (source des événements)
+- Firebase Cloud Functions (déclencheurs automatiques)
+- Resend (service d’envoi d’emails)
+- Domaine déjà vérifié (Hostinger + DNS configuré)
+
+---
+
+4. RÈGLE IMPORTANTE
+
+- Ne pas remplacer les notifications existantes
+- Ajouter uniquement un canal email en parallèle
+- Chaque action importante doit déclencher :
+  - Notification existante (push/UI)
+  - + Email (nouveau système)
+
+---
+
+5. LOGIQUE ATTENDUE
+
+Exemple 1 — Dépôt
+
+Quand un dépôt est créé dans Firestore :
+
+- Envoyer email à l’admin
+- Contenu : montant, utilisateur, date
+
+---
+
+Exemple 2 — Retrait
+
+Quand un retrait est demandé :
+
+- Envoyer email au client avec code OTP
+- Envoyer email à l’admin pour validation
+
+---
+
+Exemple 3 — Commission affilié
+
+Quand commission générée :
+
+- Email automatique à l’affilié avec montant gagné
+
+---
+
+6. STRUCTURE TECHNIQUE ATTENDUE
+
+A) Cloud Function trigger
+
+Déclencher les emails sur événements Firestore :
+
+- deposits/{id}
+- withdrawals/{id}
+- commissions/{id}
+
+---
+
+B) Resend integration
+
+Utiliser API Resend :
+
+- from: noreply@domaine.com
+- to: userEmail / adminEmail
+- subject + HTML template propre
+
+---
+
+C) Sécurité
+
+- Ne jamais exposer la clé API côté frontend
+- Tout envoi email doit passer par Cloud Functions uniquement
+
+---
+
+7. FORMAT DES EMAILS
+
+Emails simples, clairs :
+
+- Titre clair
+- Montant
+- Nom utilisateur
+- Date
+- Statut de la transaction
+
+---
+
+8. PRIORITÉ D’IMPLÉMENTATION
+
+1. Configuration Resend dans Cloud Functions
+2. Test email manuel (fonction test)
+3. Déclencheur dépôt
+4. Déclencheur retrait
+5. Déclencheur commission
+6. Logs des emails envoyés
+
+---
+
+9. OBJECTIF FINAL
+
+Avoir un système où :
+
+- Chaque action critique = notification immédiate
+- Admin toujours informé en temps réel
+- Clients informés automatiquement
+- Système fiable type fintech
+
+---
+
+NOTE
+
+Les systèmes actuels de notification doivent rester actifs.
+Ce module email est une extension, pas une migration.
+
+Important: Pour les dépôts, les agents peuvent faire les dépôts pour les utilisateurs facilement, mais pour le retrait, il faudrait qu'il y ait un message de confirmation qui sera confirmé par l'utilisateur. Parce que je ne veux pas que les agents retirent facilement l'argent du compte des utilisateurs facilement. Comme si un utilisateur a déjà donné un code à un agent pour faire un retrait et que cet agent se souvient de ce même code. J'aimerais qu'il y ait un système de messagerie avec un code de confirmation unique et aléatoire.
