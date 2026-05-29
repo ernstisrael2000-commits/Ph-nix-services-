@@ -92,7 +92,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useSettings } from '../services/parcelService';
 
-type Tab = 'accueil' | 'reseau' | 'gains' | 'commandes' | 'profil';
+type Tab = 'accueil' | 'reseau' | 'gains' | 'commandes' | 'finances' | 'profil';
 
 interface AffiliateDashboardProps {
   affiliateId: string;
@@ -161,6 +161,13 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const [depositRequests, setDepositRequests] = useState<any[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
+
+  // Finances personnelles
+  const [affWAmount, setAffWAmount] = useState('');
+  const [affWMethod, setAffWMethod] = useState<'MonCash' | 'NatCash' | 'Physical'>('MonCash');
+  const [affWAccount, setAffWAccount] = useState('');
+  const [affWSubmitting, setAffWSubmitting] = useState(false);
+  const [affWModalOpen, setAffWModalOpen] = useState(false);
 
   // Legacy commandes state (kept for compatibility)
   const [agentClientWalletId, setAgentClientWalletId] = useState('');
@@ -420,15 +427,23 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     const exchangeRate = settings?.exchangeRate || 146;
     const minWithdrawUSD = 20 / exchangeRate;
     if (amount < minWithdrawUSD) { toast.error(`Montant minimum: ${(20 / exchangeRate).toFixed(2)} $`); return; }
+    if (withdrawMethod !== 'Physical' && !accountNumber.trim()) { toast.error('Numéro de compte requis.'); return; }
     setIsSubmitting(true);
     try {
-      await submitWithdrawal(affiliate!, amount, withdrawMethod, withdrawMethod === 'Physical' ? 'Bureau Juvénat' : accountNumber.trim());
-      toast.success("Demande de retrait soumise !");
+      const res = await fetch('/api/affiliate/submit-withdrawal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          affiliateId,
+          amount,
+          method: withdrawMethod,
+          accountNumber: withdrawMethod === 'Physical' ? 'Bureau Juvénat' : accountNumber.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+      toast.success("Demande de retrait soumise ! Vous recevrez un email de confirmation.");
       setIsWithdrawModalOpen(false); setWithdrawAmount(''); setAccountNumber('');
-      const adminPhone = settings?.whatsappAdminNumber || '+50944813185';
-      const methodText = withdrawMethod === 'Physical' ? 'En personne (Juvénat)' : withdrawMethod;
-      const msg = `Bonjour Admin, j'ai soumis une demande de retrait Rena.\n\nMontant: ${amount} $\nMéthode: ${methodText}\nNuméro/Lieu: ${withdrawMethod === 'Physical' ? 'Bureau Juvénat' : accountNumber.trim()}\nCode Affilié: ${affiliate!.code}\nNom: ${affiliate!.name}`;
-      window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(msg)}`, '_blank');
     } catch (error: any) {
       toast.error(error.message || 'Erreur lors du retrait.');
     } finally { setIsSubmitting(false); }
@@ -500,6 +515,33 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     } finally { setAgentSubmitting(false); }
   };
 
+  // Retrait personnel affilié (via API avec email)
+  const handleAffiliateWithdraw = async () => {
+    const amount = parseFloat(affWAmount);
+    if (isNaN(amount) || amount <= 0) { toast.error('Montant invalide.'); return; }
+    if (amount > (affiliate?.balance || 0)) { toast.error('Solde insuffisant.'); return; }
+    if (affWMethod !== 'Physical' && !affWAccount.trim()) { toast.error('Numéro de compte requis.'); return; }
+    setAffWSubmitting(true);
+    try {
+      const res = await fetch('/api/affiliate/submit-withdrawal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          affiliateId,
+          amount,
+          method: affWMethod,
+          accountNumber: affWMethod === 'Physical' ? 'Bureau Juvénat' : affWAccount.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+      toast.success('Demande de retrait soumise ! Un email de confirmation a été envoyé.');
+      setAffWModalOpen(false); setAffWAmount(''); setAffWAccount(''); setAffWMethod('MonCash');
+    } catch (e: any) {
+      toast.error(e.message || 'Erreur réseau.');
+    } finally { setAffWSubmitting(false); }
+  };
+
   const getTransactionStatusBadge = (status: TransactionStatus) => {
     switch (status) {
       case 'completed':
@@ -524,6 +566,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     { id: 'reseau', label: 'Réseau', icon: Users },
     { id: 'gains', label: 'Gains', icon: TrendingUp },
     { id: 'commandes', label: 'Commandes', icon: ShoppingBag },
+    { id: 'finances', label: 'Finances', icon: Wallet },
     { id: 'profil', label: 'Profil', icon: User },
   ];
 
@@ -1489,6 +1532,161 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
             )}
           </div>
         )}
+
+        {/* ═══ FINANCES ═══ */}
+        {activeTab === 'finances' && (
+          <div className="p-4 space-y-4">
+            <h3 className="text-lg font-black text-dark flex items-center gap-2 px-1">
+              <Wallet className="h-5 w-5 text-primary" />
+              Mes Finances
+            </h3>
+
+            {/* Balance card */}
+            <div className="relative rounded-3xl bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-6 text-white overflow-hidden shadow-xl shadow-primary/25">
+              <div className="absolute -top-8 -right-8 w-32 h-32 bg-white/5 rounded-full" />
+              <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-white/5 rounded-full" />
+              <div className="relative">
+                <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-1">Solde Disponible</p>
+                <div className="flex items-baseline gap-2">
+                  <h2 className="text-4xl font-black tabular-nums">{affiliate.balance.toLocaleString()}</h2>
+                  <span className="text-lg font-bold text-white/60">$</span>
+                </div>
+                <p className="text-sm text-white/50 mt-1">≈ {Math.round((affiliate.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => { setDepositAmount(''); setDepositMethod('MonCash'); setAgentCode(''); setIsDepositModalOpen(true); }}
+                className="flex flex-col items-center gap-2 p-4 rounded-[1.75rem] bg-emerald-50 border-2 border-emerald-200 hover:bg-emerald-100 transition-all active:scale-[0.98]"
+              >
+                <div className="h-10 w-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-200">
+                  <ArrowDownToLine className="h-5 w-5" />
+                </div>
+                <p className="font-black text-emerald-800 text-sm">Dépôt</p>
+                <p className="text-[10px] text-emerald-600 text-center leading-tight">Créditer mon compte</p>
+              </button>
+              <button
+                onClick={() => { setAffWAmount(''); setAffWMethod('MonCash'); setAffWAccount(''); setAffWModalOpen(true); }}
+                className="flex flex-col items-center gap-2 p-4 rounded-[1.75rem] bg-indigo-50 border-2 border-indigo-200 hover:bg-indigo-100 transition-all active:scale-[0.98]"
+              >
+                <div className="h-10 w-10 rounded-2xl bg-indigo-500 text-white flex items-center justify-center shadow-lg shadow-indigo-200">
+                  <ArrowUpFromLine className="h-5 w-5" />
+                </div>
+                <p className="font-black text-indigo-800 text-sm">Retrait</p>
+                <p className="text-[10px] text-indigo-600 text-center leading-tight">Retirer mon solde</p>
+              </button>
+            </div>
+
+            {/* Info */}
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3.5 flex items-start gap-3">
+              <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+              <div className="text-xs text-blue-700 leading-relaxed space-y-1">
+                <p><strong>Dépôt :</strong> Soumettez une demande, l'admin créditera votre compte après vérification.</p>
+                <p><strong>Retrait :</strong> Un email de confirmation est envoyé à l'admin et à vous lors de la soumission.</p>
+              </div>
+            </div>
+
+            {/* Transaction history */}
+            <div>
+              <p className="font-black text-dark text-sm px-1 mb-3">Historique des transactions</p>
+              {transactionsLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+              ) : transactions.length === 0 ? (
+                <div className="bg-gray-50 rounded-[2rem] p-10 text-center border-2 border-dashed border-gray-200">
+                  <History className="h-8 w-8 text-gray-200 mx-auto mb-2" />
+                  <p className="text-gray-400 text-sm font-bold">Aucune transaction</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {transactions.map((tx: any) => (
+                    <div key={tx.id} className="flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                      <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${
+                        tx.type === 'deposit' || tx.type === 'commission' ? 'bg-emerald-100' : 'bg-indigo-100'
+                      }`}>
+                        {tx.type === 'deposit' || tx.type === 'commission'
+                          ? <ArrowDownToLine className="h-4 w-4 text-emerald-600" />
+                          : <ArrowUpFromLine className="h-4 w-4 text-indigo-600" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-dark text-sm truncate">
+                          {tx.type === 'deposit' ? 'Dépôt' : tx.type === 'commission' ? 'Commission' : tx.type === 'withdrawal' ? 'Retrait' : tx.type === 'transfer' ? 'Transfert' : tx.type}
+                        </p>
+                        <p className="text-[10px] text-gray-400 truncate">{tx.method || tx.description || ''}</p>
+                        <p className="text-[10px] text-gray-300">
+                          {tx.createdAt?.toDate ? format(tx.createdAt.toDate(), 'dd MMM yyyy • HH:mm', { locale: fr }) : ''}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className={`font-black text-sm ${tx.type === 'withdrawal' || tx.type === 'transfer' ? 'text-indigo-600' : 'text-emerald-600'}`}>
+                          {tx.type === 'withdrawal' || tx.type === 'transfer' ? '-' : '+'}{(tx.amount || 0).toFixed(2)} $
+                        </p>
+                        {getTransactionStatusBadge(tx.status)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Withdrawal modal (finances tab) ─────────────────────────── */}
+        <Dialog open={affWModalOpen} onOpenChange={v => { if (!v) { setAffWAmount(''); setAffWAccount(''); setAffWMethod('MonCash'); } setAffWModalOpen(v); }}>
+          <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
+            <DialogHeader className="p-6 bg-indigo-600 text-white relative">
+              <DialogTitle className="text-xl font-black">Retrait — Mes Finances</DialogTitle>
+              <DialogDescription className="text-indigo-100 text-sm mt-1">
+                Solde disponible : <strong>{(affiliate?.balance || 0).toFixed(2)} $</strong>
+              </DialogDescription>
+              <DialogClose className="absolute right-5 top-5 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
+                <X className="h-4 w-4" />
+              </DialogClose>
+            </DialogHeader>
+            <div className="p-6 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode</Label>
+                <Select value={affWMethod} onValueChange={(v: any) => setAffWMethod(v)}>
+                  <SelectTrigger className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-bold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-2xl">
+                    <SelectItem value="MonCash" className="font-bold">MonCash (Digicel)</SelectItem>
+                    <SelectItem value="NatCash" className="font-bold">NatCash (Natcom)</SelectItem>
+                    <SelectItem value="Physical" className="font-bold">En personne / Bureau</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {affWMethod !== 'Physical' && (
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Numéro de compte *</Label>
+                  <Input placeholder="Ex: +509 XXXX XXXX" value={affWAccount} onChange={e => setAffWAccount(e.target.value)}
+                    className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-bold" />
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant ($) *</Label>
+                <div className="relative">
+                  <Input type="number" placeholder="0.00" value={affWAmount} onChange={e => setAffWAmount(e.target.value)}
+                    className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg pl-11"
+                    min="0.01" step="0.01" max={affiliate?.balance || 0} />
+                  <ArrowUpFromLine className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-500" />
+                </div>
+                {affWAmount && parseFloat(affWAmount) > (affiliate?.balance || 0) && (
+                  <p className="text-xs text-red-500 font-bold">Montant supérieur à votre solde</p>
+                )}
+              </div>
+            </div>
+            <DialogFooter className="px-6 pb-6">
+              <Button onClick={handleAffiliateWithdraw}
+                disabled={affWSubmitting || !affWAmount || isNaN(parseFloat(affWAmount)) || parseFloat(affWAmount) <= 0 || parseFloat(affWAmount) > (affiliate?.balance || 0) || (affWMethod !== 'Physical' && !affWAccount.trim())}
+                className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl border-0">
+                {affWSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Demander le retrait →'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* ═══ PROFIL ═══ */}
         {activeTab === 'profil' && (

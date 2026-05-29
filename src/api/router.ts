@@ -2034,8 +2034,20 @@ router.patch('/api/admin/affiliate-requests/:id', requireDb, async (req, res) =>
       });
       batch.update(reqRef, { status: 'approved', resolvedAt: FieldValue.serverTimestamp() });
       await batch.commit();
+      // Email notification
+      fireEmail(
+        () => emailDepositApproved({ clientName: reqData.clientName || '', clientEmail: clientData.email || undefined, amount: htgAmount / (reqData.exchangeRate || 146), method: reqData.method || '' }),
+        { type: 'affiliate_deposit_approved', to: [ADMIN_EMAIL, ...(clientData.email ? [clientData.email] : [])], clientId: reqData.clientId, amount: htgAmount }
+      );
     } else {
+      const clientSnap2 = await adminDb.collection('clients').doc(reqData.clientId).get();
+      const clientEmail2 = clientSnap2.exists ? clientSnap2.data()?.email : undefined;
       await reqRef.update({ status: 'declined', resolvedAt: FieldValue.serverTimestamp() });
+      // Email notification
+      fireEmail(
+        () => emailDepositRejected({ clientName: reqData.clientName || '', clientEmail: clientEmail2, amount: reqData.amount || 0, method: reqData.method || '' }),
+        { type: 'affiliate_deposit_declined', to: [ADMIN_EMAIL, ...(clientEmail2 ? [clientEmail2] : [])], clientId: reqData.clientId, amount: reqData.amount }
+      );
     }
     res.json({ success: true });
   } catch (e: any) {
@@ -2388,6 +2400,69 @@ router.post('/api/affiliate/submit-client-deposit', requireDb, async (req, res) 
     res.json({ success: true, clientName: clientData.name || '' });
   } catch (e: any) {
     console.error('[affiliate/submit-client-deposit]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Affiliate: submit own withdrawal (personal) ───────────────────────────────
+router.post('/api/affiliate/submit-withdrawal', requireDb, async (req, res) => {
+  try {
+    const { affiliateId, amount, method, accountNumber } = req.body;
+    if (!affiliateId || !amount || !method || !accountNumber)
+      return res.status(400).json({ error: 'Paramètres manquants.' });
+    const usd = Number(amount);
+    if (isNaN(usd) || usd <= 0)
+      return res.status(400).json({ error: 'Montant invalide.' });
+
+    const affSnap = await adminDb.collection('affiliates').doc(affiliateId).get();
+    if (!affSnap.exists) return res.status(404).json({ error: 'Affilié introuvable.' });
+    const affData = affSnap.data()!;
+    if ((affData.balance || 0) < usd)
+      return res.status(400).json({ error: `Solde insuffisant. Disponible: $${(affData.balance || 0).toFixed(2)}` });
+
+    const batch = adminDb.batch();
+    const withdrawRef = adminDb.collection('withdrawals').doc();
+    batch.set(withdrawRef, {
+      affiliateId,
+      affiliateName: affData.name || '',
+      affiliateCode: affData.code || '',
+      amount: usd,
+      method,
+      accountNumber,
+      status: 'pending',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    const txRef = adminDb.collection('wallet_transactions').doc();
+    batch.set(txRef, {
+      affiliateId,
+      type: 'withdrawal',
+      amount: usd,
+      status: 'pending',
+      method,
+      accountNumber,
+      description: `Retrait via ${method}`,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    // Email to admin + affiliate
+    fireEmail(
+      () => emailAffiliateWithdrawalSubmitted({
+        affiliateName: affData.name || '',
+        affiliateEmail: affData.email || undefined,
+        amount: usd,
+        method,
+        accountNumber,
+        affiliateCode: affData.code || '',
+      }),
+      { type: 'affiliate_withdrawal_submitted', to: [ADMIN_EMAIL, ...(affData.email ? [affData.email] : [])], affiliateId, amount: usd }
+    );
+
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[affiliate/submit-withdrawal]', e);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
   }
 });
