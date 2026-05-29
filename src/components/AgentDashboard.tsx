@@ -473,7 +473,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
             <Wallet className="h-12 w-12" />
           </div>
           <CardHeader className="p-5 pb-0">
-            <CardTitle className="text-gray-400 text-[9px] font-black uppercase tracking-[0.2em]">Solde Agent</CardTitle>
+            <CardTitle className="text-gray-400 text-[9px] font-black uppercase tracking-[0.2em]">Wallet Agent</CardTitle>
           </CardHeader>
           <CardContent className="p-5 pt-2">
             <div className="flex items-baseline gap-1.5">
@@ -481,17 +481,21 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
               <span className="text-sm font-black text-white/30">$</span>
             </div>
             <p className="text-[10px] font-bold text-white/40 mt-0.5">≈ {((agent.balance || 0) * rate).toLocaleString()} HTG</p>
+            {agent.walletLocked && (
+              <span className="text-[9px] font-black text-red-400 uppercase tracking-wider mt-1 block">🔒 Verrouillé</span>
+            )}
           </CardContent>
         </Card>
 
         <Card className="rounded-[2rem] border-0 shadow-sm bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 col-span-1">
           <CardContent className="p-5">
-            <p className="text-[9px] font-black text-amber-600 uppercase tracking-[0.2em] mb-1">Commissions</p>
+            <p className="text-[9px] font-black text-amber-600 uppercase tracking-[0.2em] mb-1">Wallet Affilié</p>
             <div className="flex items-baseline gap-1">
               <span className="text-3xl font-black text-amber-700">{(agent.commissionBalance || 0).toFixed(2)}</span>
               <span className="text-sm font-black text-amber-400">$</span>
             </div>
             <p className="text-[10px] text-amber-500/70 font-bold mt-0.5">≈ {((agent.commissionBalance || 0) * rate).toLocaleString()} HTG</p>
+            <p className="text-[9px] text-amber-400 font-bold mt-1">Commissions cumulées</p>
           </CardContent>
         </Card>
       </div>
@@ -956,60 +960,64 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
 
         {/* ── FINANCES PERSONNELLES ── */}
         {activeSection === 'finances' && (
-          <motion.div key="finances" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+          <motion.div key="finances" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
             <h3 className="text-lg font-black text-dark flex items-center gap-2 px-1">
               <Wallet className="h-5 w-5 text-primary" />
               Mes Finances
             </h3>
 
-            {/* Balance summary */}
-            <div className="grid grid-cols-2 gap-3">
-              <Card className="rounded-[1.75rem] border-0 shadow-lg bg-gradient-to-br from-slate-800 to-slate-900 text-white overflow-hidden">
-                <CardContent className="p-4">
-                  <p className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-2">Solde Agent</p>
-                  <p className="text-2xl font-black">${(agent.balance || 0).toFixed(2)}</p>
-                  <p className="text-[10px] text-white/40 mt-0.5">≈ {((agent.balance || 0) * rate).toLocaleString()} HTG</p>
-                </CardContent>
-              </Card>
-              <Card className="rounded-[1.75rem] border-0 shadow-lg bg-gradient-to-br from-amber-500 to-orange-500 text-white overflow-hidden">
-                <CardContent className="p-4">
-                  <p className="text-[9px] font-black text-white/50 uppercase tracking-widest mb-2">Commissions</p>
-                  <p className="text-2xl font-black">${(agent.commissionBalance || 0).toFixed(2)}</p>
-                  <p className="text-[10px] text-white/40 mt-0.5">≈ {((agent.commissionBalance || 0) * rate).toLocaleString()} HTG</p>
-                </CardContent>
-              </Card>
+            {/* ── WALLET AGENT ── */}
+            <div className="rounded-[2rem] border-2 border-slate-200 bg-white overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 bg-slate-900 text-white">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Wallet Agent</p>
+                  <p className="text-2xl font-black mt-0.5">${(agent.balance || 0).toFixed(2)}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">≈ {((agent.balance || 0) * rate).toLocaleString()} HTG</p>
+                </div>
+                <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center">
+                  <Wallet className="h-6 w-6 text-slate-300" />
+                </div>
+              </div>
+              <div className="p-4">
+                <p className="text-[10px] text-slate-500 font-bold mb-3">Caisse opérationnelle — utilisée pour les dépôts clients.</p>
+                {agent.walletLocked && (
+                  <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-2.5 mb-3">
+                    <span className="text-red-500 text-xs font-black">🔒 Ce wallet est verrouillé par l'admin. Contactez l'administrateur.</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => { setPAmount(''); setPMethod('MonCash'); setPAccount(''); setPAccountName(''); setPMessage(''); setPersonalDepositOpen(true); }}
+                  disabled={!!agent.walletLocked}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-slate-900 text-white font-black text-sm hover:bg-slate-800 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ArrowDownToLine className="h-4 w-4" />
+                  Recharger Wallet Agent
+                </button>
+              </div>
             </div>
 
-            {/* Action buttons */}
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => { setPAmount(''); setPMethod('MonCash'); setPAccount(''); setPAccountName(''); setPMessage(''); setPersonalDepositOpen(true); }}
-                className="flex flex-col items-center gap-2 p-4 rounded-[1.75rem] bg-emerald-50 border-2 border-emerald-200 hover:bg-emerald-100 transition-all active:scale-[0.98]"
-              >
-                <div className="h-10 w-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-200">
-                  <ArrowDownToLine className="h-5 w-5" />
+            {/* ── WALLET AFFILIÉ ── */}
+            <div className="rounded-[2rem] border-2 border-amber-200 bg-white overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-100">Wallet Affilié</p>
+                  <p className="text-2xl font-black mt-0.5">${(agent.commissionBalance || 0).toFixed(2)}</p>
+                  <p className="text-[10px] text-amber-100 mt-0.5">≈ {((agent.commissionBalance || 0) * rate).toLocaleString()} HTG</p>
                 </div>
-                <p className="font-black text-emerald-800 text-sm">Dépôt</p>
-                <p className="text-[10px] text-emerald-600 text-center leading-tight">Créditer mon solde agent</p>
-              </button>
-              <button
-                onClick={() => { setPAmount(''); setPMethod('MonCash'); setPAccount(''); setPAccountName(''); setPMessage(''); setPersonalWithdrawalOpen(true); }}
-                className="flex flex-col items-center gap-2 p-4 rounded-[1.75rem] bg-rose-50 border-2 border-rose-200 hover:bg-rose-100 transition-all active:scale-[0.98]"
-              >
-                <div className="h-10 w-10 rounded-2xl bg-rose-500 text-white flex items-center justify-center shadow-lg shadow-rose-200">
-                  <ArrowUpFromLine className="h-5 w-5" />
+                <div className="h-12 w-12 rounded-2xl bg-white/20 flex items-center justify-center">
+                  <TrendingUp className="h-6 w-6 text-white" />
                 </div>
-                <p className="font-black text-rose-800 text-sm">Retrait</p>
-                <p className="text-[10px] text-rose-600 text-center leading-tight">Retirer mes commissions</p>
-              </button>
-            </div>
-
-            {/* Info box */}
-            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3.5 flex items-start gap-3">
-              <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
-              <div className="text-xs text-blue-700 leading-relaxed space-y-1">
-                <p><strong>Dépôt :</strong> Soumettez une demande, l'admin créditera votre solde agent après vérification du paiement.</p>
-                <p><strong>Retrait :</strong> Retirez vos commissions accumulées. Le montant est débité immédiatement en attente de traitement.</p>
+              </div>
+              <div className="p-4">
+                <p className="text-[10px] text-amber-700 font-bold mb-3">Commissions accumulées sur vos transactions clients.</p>
+                <button
+                  onClick={() => { setPAmount(''); setPMethod('MonCash'); setPAccount(''); setPAccountName(''); setPMessage(''); setPersonalWithdrawalOpen(true); }}
+                  disabled={(agent.commissionBalance || 0) <= 0}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-amber-500 text-white font-black text-sm hover:bg-amber-600 transition-all active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ArrowUpFromLine className="h-4 w-4" />
+                  Retirer mes Commissions
+                </button>
               </div>
             </div>
 
@@ -1033,21 +1041,21 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
                   {personalTxs.map((tx: any) => (
                     <div key={tx.id} className="flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-gray-100 shadow-sm">
                       <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${
-                        tx.type === 'deposit' ? 'bg-emerald-100' : 'bg-rose-100'
+                        tx.type === 'deposit' ? 'bg-slate-100' : 'bg-amber-100'
                       }`}>
                         {tx.type === 'deposit'
-                          ? <ArrowDownToLine className="h-4 w-4 text-emerald-600" />
-                          : <ArrowUpFromLine className="h-4 w-4 text-rose-600" />}
+                          ? <ArrowDownToLine className="h-4 w-4 text-slate-600" />
+                          : <ArrowUpFromLine className="h-4 w-4 text-amber-600" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-black text-dark text-sm truncate">
-                          {tx.type === 'deposit' ? 'Dépôt personnel' : 'Retrait commissions'}
+                          {tx.type === 'deposit' ? '↓ Recharge Wallet Agent' : '↑ Retrait Wallet Affilié'}
                         </p>
                         <p className="text-[10px] text-gray-400 truncate">{tx.method}{tx.accountNumber ? ` — ${tx.accountNumber}` : ''}</p>
                         <p className="text-[10px] text-gray-300">{fmtDate(tx.createdAt)}</p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className={`font-black text-sm ${tx.type === 'deposit' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        <p className={`font-black text-sm ${tx.type === 'deposit' ? 'text-slate-700' : 'text-amber-600'}`}>
                           {tx.type === 'deposit' ? '+' : '-'}${(tx.amount || 0).toFixed(2)}
                         </p>
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${

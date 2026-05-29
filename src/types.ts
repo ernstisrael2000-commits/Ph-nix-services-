@@ -123,6 +123,7 @@ export interface Agent {
   phone: string;
   balance: number;
   commissionBalance?: number;
+  walletLocked?: boolean;
   status: 'active' | 'inactive';
   walletId: string;
   createdAt: any;

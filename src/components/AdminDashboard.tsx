@@ -2399,6 +2399,8 @@ function EmailLogsPanel() {
   const [nextAutoApproveIn, setNextAutoApproveIn] = useState(60);
   const [selectedAgentForBalance, setSelectedAgentForBalance] = useState<Agent | null>(null);
   const [balanceAdjustment, setBalanceAdjustment] = useState('');
+  const [agentWalletType, setAgentWalletType] = useState<'balance' | 'commission'>('balance');
+  const [agentWalletNote, setAgentWalletNote] = useState('');
 
   const filteredAgentsList = React.useMemo(() => {
     return allAgents.filter(a => 
@@ -3197,7 +3199,7 @@ function EmailLogsPanel() {
     }
   };
 
-  const handleUpdateAgentBalanceAction = async (type: 'add' | 'remove') => {
+  const handleUpdateAgentBalanceAction = async (type: 'credit' | 'debit') => {
     if (!selectedAgentForBalance?.id || !balanceAdjustment) return;
     const amount = parseFloat(balanceAdjustment);
     if (isNaN(amount) || amount <= 0) {
@@ -3206,12 +3208,35 @@ function EmailLogsPanel() {
     }
     setIsSaving(true);
     try {
-      await updateAgentBalance(selectedAgentForBalance.id, type === 'add' ? amount : -amount);
-      toast.success("Solde agent mis à jour.");
+      const res = await fetch(`/api/admin/agent/${selectedAgentForBalance.id}/wallet/adjust`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, wallet: agentWalletType, amount, note: agentWalletNote }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur serveur.');
+      const walletLabel = agentWalletType === 'commission' ? 'Wallet Affilié' : 'Wallet Agent';
+      toast.success(`${walletLabel} mis à jour.`);
       setIsAgentBalanceDialogOpen(false);
       setBalanceAdjustment('');
-    } catch (error) {
-      toast.error("Erreur lors de la mise à jour du solde.");
+      setAgentWalletNote('');
+    } catch (error: any) {
+      toast.error(error.message || "Erreur lors de la mise à jour.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleToggleAgentLock = async (agent: Agent) => {
+    if (!agent.id) return;
+    setIsSaving(true);
+    try {
+      const res = await fetch(`/api/admin/agent/${agent.id}/toggle-lock`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur serveur.');
+      toast.success(data.walletLocked ? '🔒 Wallet Agent verrouillé.' : '🔓 Wallet Agent déverrouillé.');
+    } catch (error: any) {
+      toast.error(error.message || "Erreur.");
     } finally {
       setIsSaving(false);
     }
@@ -3500,7 +3525,8 @@ function EmailLogsPanel() {
               <TableRow className="border-0">
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 px-8 text-gray-500">ID / Agent</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-center text-gray-500">Téléphone</TableHead>
-                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-right text-gray-500">Solde Disponible</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-right text-gray-500">Wallet Agent</TableHead>
+                <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-right text-gray-500">Wallet Affilié</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-center text-gray-500">Statut</TableHead>
                 <TableHead className="font-black uppercase text-[10px] tracking-widest h-14 text-right px-8 text-gray-500">Actions</TableHead>
               </TableRow>
@@ -3518,7 +3544,13 @@ function EmailLogsPanel() {
                     {agent.phone}
                   </TableCell>
                   <TableCell className="text-right">
-                    <span className="text-xl font-black text-primary">{agent.balance.toLocaleString()} $</span>
+                    <div className="flex flex-col items-end">
+                      <span className="text-lg font-black text-primary">{agent.balance.toLocaleString()} $</span>
+                      {agent.walletLocked && <span className="text-[9px] font-black text-red-500 uppercase tracking-wide">🔒 Verrouillé</span>}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className="text-lg font-black text-amber-600">{(agent.commissionBalance || 0).toFixed(2)} $</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge className={`rounded-xl px-3 py-1 text-[10px] font-black uppercase ${
@@ -3534,12 +3566,25 @@ function EmailLogsPanel() {
                         variant="outline"
                         onClick={() => {
                           setSelectedAgentForBalance(agent);
+                          setAgentWalletType('balance');
+                          setBalanceAdjustment('');
+                          setAgentWalletNote('');
                           setIsAgentBalanceDialogOpen(true);
                         }}
                         className="rounded-xl border-2 border-gray-100 hover:border-primary hover:text-primary transition-all h-10 px-3"
                       >
                         <Wallet className="h-4 w-4 mr-2" />
-                        Ajuster Solde
+                        Wallets
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleToggleAgentLock(agent)}
+                        disabled={isSaving}
+                        className={`rounded-xl border-2 h-10 px-3 transition-all ${agent.walletLocked ? 'border-red-200 text-red-600 hover:bg-red-50' : 'border-gray-100 text-gray-500 hover:border-gray-300'}`}
+                        title={agent.walletLocked ? 'Déverrouiller Wallet Agent' : 'Verrouiller Wallet Agent'}
+                      >
+                        {agent.walletLocked ? '🔒' : '🔓'}
                       </Button>
                     </div>
                   </TableCell>
@@ -3547,7 +3592,7 @@ function EmailLogsPanel() {
               ))}
               {filteredAgentsList.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-64 text-center">
+                  <TableCell colSpan={6} className="h-64 text-center">
                     {agentsLoading ? (
                       <Loader2 className="h-10 w-10 animate-spin mx-auto text-gray-200" />
                     ) : (
@@ -3620,46 +3665,87 @@ function EmailLogsPanel() {
       </Dialog>
 
       {/* Balance Adjustment Dialog */}
-      <Dialog open={isAgentBalanceDialogOpen} onOpenChange={setIsAgentBalanceDialogOpen}>
-        <DialogContent className="rounded-[2.5rem] p-8 border-0 shadow-2xl">
+      <Dialog open={isAgentBalanceDialogOpen} onOpenChange={(v) => { setIsAgentBalanceDialogOpen(v); if (!v) { setBalanceAdjustment(''); setAgentWalletNote(''); setAgentWalletType('balance'); } }}>
+        <DialogContent className="rounded-[2.5rem] p-8 border-0 shadow-2xl max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-black">Ajuster le Solde</DialogTitle>
+            <DialogTitle className="text-2xl font-black">Gestion des Wallets</DialogTitle>
             <DialogDescription>
               Agent: <span className="font-black text-dark">{selectedAgentForBalance?.name}</span>
+              <span className="ml-2 font-mono text-xs text-gray-400">#{selectedAgentForBalance?.agentCode}</span>
             </DialogDescription>
           </DialogHeader>
-          <div className="pt-8 space-y-8">
-            <div className="text-center bg-gray-50 p-6 rounded-3xl border border-gray-100">
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">Solde Actuel</span>
-              <span className="text-4xl font-black text-primary">{selectedAgentForBalance?.balance.toLocaleString()} $</span>
+          <div className="pt-4 space-y-5">
+            {/* Wallet balances summary */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="text-center bg-slate-900 text-white p-4 rounded-2xl">
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block mb-1">Wallet Agent</span>
+                <span className="text-2xl font-black">{selectedAgentForBalance?.balance.toLocaleString()} $</span>
+                {selectedAgentForBalance?.walletLocked && <span className="text-[9px] text-red-400 block mt-0.5 font-black">🔒 Verrouillé</span>}
+              </div>
+              <div className="text-center bg-amber-50 border-2 border-amber-200 p-4 rounded-2xl">
+                <span className="text-[9px] font-black uppercase tracking-widest text-amber-500 block mb-1">Wallet Affilié</span>
+                <span className="text-2xl font-black text-amber-700">{(selectedAgentForBalance?.commissionBalance || 0).toFixed(2)} $</span>
+              </div>
             </div>
-            
+
+            {/* Wallet selector */}
             <div className="space-y-2">
-              <Label className="text-xs font-black uppercase tracking-widest text-gray-500 ml-1">Montant de l'ajustement</Label>
+              <Label className="text-xs font-black uppercase tracking-widest text-gray-500 ml-1">Wallet à ajuster</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setAgentWalletType('balance')}
+                  className={`h-11 rounded-2xl font-black text-sm border-2 transition-all ${agentWalletType === 'balance' ? 'bg-slate-900 text-white border-slate-900' : 'border-gray-200 text-gray-500 hover:border-slate-400'}`}
+                >
+                  Wallet Agent
+                </button>
+                <button
+                  onClick={() => setAgentWalletType('commission')}
+                  className={`h-11 rounded-2xl font-black text-sm border-2 transition-all ${agentWalletType === 'commission' ? 'bg-amber-500 text-white border-amber-500' : 'border-gray-200 text-gray-500 hover:border-amber-400'}`}
+                >
+                  Wallet Affilié
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-widest text-gray-500 ml-1">Montant ($)</Label>
               <Input 
                 type="number"
                 value={balanceAdjustment}
                 onChange={(e) => setBalanceAdjustment(e.target.value)}
                 placeholder="0.00"
+                min="0.01"
+                step="0.01"
                 className="h-14 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20 text-center text-2xl font-black"
               />
             </div>
 
-            <div className="flex gap-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-black uppercase tracking-widest text-gray-500 ml-1">Note (optionnel)</Label>
+              <Input
+                value={agentWalletNote}
+                onChange={(e) => setAgentWalletNote(e.target.value)}
+                placeholder="Raison de l'ajustement..."
+                className="h-11 rounded-2xl bg-gray-50 border-0 focus:ring-2 focus:ring-primary/20"
+                maxLength={200}
+              />
+            </div>
+
+            <div className="flex gap-3">
               <Button 
-                onClick={() => handleUpdateAgentBalanceAction('add')}
-                disabled={isSaving}
-                className="flex-1 h-16 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-[11px] shadow-lg shadow-emerald-500/20 border-0"
+                onClick={() => handleUpdateAgentBalanceAction('credit')}
+                disabled={isSaving || !balanceAdjustment}
+                className="flex-1 h-14 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-[11px] shadow-lg shadow-emerald-500/20 border-0"
               >
-                Ajouter (+)
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : '+ Créditer'}
               </Button>
               <Button 
-                onClick={() => handleUpdateAgentBalanceAction('remove')}
-                disabled={isSaving}
+                onClick={() => handleUpdateAgentBalanceAction('debit')}
+                disabled={isSaving || !balanceAdjustment}
                 variant="destructive"
-                className="flex-1 h-16 rounded-2xl font-black uppercase text-[11px] shadow-lg shadow-red-500/20 border-0"
+                className="flex-1 h-14 rounded-2xl font-black uppercase text-[11px] shadow-lg shadow-red-500/20 border-0"
               >
-                Retirer (-)
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : '− Débiter'}
               </Button>
             </div>
           </div>

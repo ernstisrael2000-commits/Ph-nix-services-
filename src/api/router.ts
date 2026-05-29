@@ -2863,6 +2863,92 @@ router.get('/api/admin/email-logs', requireDb, async (req, res) => {
   }
 });
 
+// ── Admin: directly credit/debit agent wallet ─────────────────────────────────
+router.post('/api/admin/agent/:agentId/wallet/adjust', requireDb, async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const { type, wallet, amount, note } = req.body;
+    // type: 'credit' | 'debit' | 'lock' | 'unlock'
+    // wallet: 'balance' | 'commission'
+    if (!type || !amount || !wallet) return res.status(400).json({ error: 'Paramètres manquants.' });
+    const usd = Number(amount);
+    if (isNaN(usd) || usd <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+
+    const agentRef = adminDb.collection('agents').doc(agentId);
+    const agentSnap = await agentRef.get();
+    if (!agentSnap.exists) return res.status(404).json({ error: 'Agent introuvable.' });
+    const agentData = agentSnap.data()!;
+
+    const field = wallet === 'commission' ? 'commissionBalance' : 'balance';
+    const delta = type === 'credit' ? usd : -usd;
+    const currentVal = Number(agentData[field] || 0);
+
+    if (type === 'debit' && currentVal < usd) {
+      return res.status(400).json({ error: `Solde insuffisant (${currentVal.toFixed(2)} $).` });
+    }
+
+    const logRef = adminDb.collection('agent_wallet_adjustments').doc();
+    const batch = adminDb.batch();
+    batch.update(agentRef, {
+      [field]: FieldValue.increment(delta),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    batch.set(logRef, {
+      agentId,
+      agentCode: agentData.agentCode || '',
+      agentName: agentData.name || '',
+      type,
+      wallet,
+      amount: usd,
+      delta,
+      balanceBefore: currentVal,
+      balanceAfter: parseFloat((currentVal + delta).toFixed(6)),
+      note: note || '',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[admin/agent/wallet/adjust]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Admin: toggle agent wallet lock ──────────────────────────────────────────
+router.post('/api/admin/agent/:agentId/toggle-lock', requireDb, async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const agentRef = adminDb.collection('agents').doc(agentId);
+    const agentSnap = await agentRef.get();
+    if (!agentSnap.exists) return res.status(404).json({ error: 'Agent introuvable.' });
+    const currentLocked = agentSnap.data()!.walletLocked || false;
+    await agentRef.update({
+      walletLocked: !currentLocked,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    res.json({ success: true, walletLocked: !currentLocked });
+  } catch (e: any) {
+    console.error('[admin/agent/toggle-lock]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Admin: agent wallet adjustment history ────────────────────────────────────
+router.get('/api/admin/agent/:agentId/wallet/history', requireDb, async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const snap = await adminDb.collection('agent_wallet_adjustments')
+      .where('agentId', '==', agentId)
+      .orderBy('createdAt', 'desc')
+      .limit(50)
+      .get();
+    res.json({ records: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
 // ── Client auth ───────────────────────────────────────────────────────────────
 router.post('/api/client/register', requireDb, async (req, res) => {
   try {
