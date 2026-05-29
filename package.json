@@ -7,9 +7,9 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "dev": "TSX_TSCONFIG_PATH=tsconfig.server.json tsx watch --clear-screen=false --tsconfig tsconfig.server.json server.ts",
+    "dev": "TSX_TSCONFIG_PATH=tsconfig.server.json npx tsx watch --clear-screen=false --tsconfig tsconfig.server.json server.ts",
     "build": "vite build",
-    "start": "NODE_ENV=production TSX_TSCONFIG_PATH=tsconfig.server.json tsx --tsconfig tsconfig.server.json server.ts",
+    "start": "NODE_ENV=production TSX_TSCONFIG_PATH=tsconfig.server.json npx tsx --tsconfig tsconfig.server.json server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
