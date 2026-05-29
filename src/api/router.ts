@@ -2407,7 +2407,7 @@ router.post('/api/affiliate/submit-client-deposit', requireDb, async (req, res) 
 // ── Affiliate: submit own withdrawal (personal) ───────────────────────────────
 router.post('/api/affiliate/submit-withdrawal', requireDb, async (req, res) => {
   try {
-    const { affiliateId, amount, method, accountNumber } = req.body;
+    const { affiliateId, amount, method, accountNumber, walletType } = req.body;
     if (!affiliateId || !amount || !method || !accountNumber)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     const usd = Number(amount);
@@ -2417,11 +2417,15 @@ router.post('/api/affiliate/submit-withdrawal', requireDb, async (req, res) => {
     const affSnap = await adminDb.collection('affiliates').doc(affiliateId).get();
     if (!affSnap.exists) return res.status(404).json({ error: 'Affilié introuvable.' });
     const affData = affSnap.data()!;
-    if ((affData.balance || 0) < usd)
-      return res.status(400).json({ error: `Solde insuffisant. Disponible: $${(affData.balance || 0).toFixed(2)}` });
+    const isCommissions = walletType === 'commissions';
+    const walletField = isCommissions ? 'totalEarnings' : 'balance';
+    const walletBalance = Number(affData[walletField] || 0);
+    if (walletBalance < usd)
+      return res.status(400).json({ error: `Solde insuffisant. Disponible: $${walletBalance.toFixed(2)}` });
 
     const batch = adminDb.batch();
     const withdrawRef = adminDb.collection('withdrawals').doc();
+    const walletLabel = isCommissions ? 'Wallet Commissions' : 'Wallet Principal';
     batch.set(withdrawRef, {
       affiliateId,
       affiliateName: affData.name || '',
@@ -2429,6 +2433,8 @@ router.post('/api/affiliate/submit-withdrawal', requireDb, async (req, res) => {
       amount: usd,
       method,
       accountNumber,
+      walletType: walletType || 'principal',
+      walletLabel,
       status: 'pending',
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -2441,7 +2447,8 @@ router.post('/api/affiliate/submit-withdrawal', requireDb, async (req, res) => {
       status: 'pending',
       method,
       accountNumber,
-      description: `Retrait via ${method}`,
+      walletType: walletType || 'principal',
+      description: `Retrait ${walletLabel} via ${method}`,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });

@@ -169,6 +169,10 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const [affWSubmitting, setAffWSubmitting] = useState(false);
   const [affWModalOpen, setAffWModalOpen] = useState(false);
 
+  // Wallet selector for deposit / withdrawal dialogs
+  const [depositWallet, setDepositWallet] = useState<'principal' | 'commissions'>('principal');
+  const [withdrawWallet, setWithdrawWallet] = useState<'principal' | 'commissions'>('principal');
+
   // Legacy commandes state (kept for compatibility)
   const [agentClientWalletId, setAgentClientWalletId] = useState('');
   const [agentClientName, setAgentClientName] = useState<string | null>(null);
@@ -423,7 +427,8 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const handleWithdraw = async () => {
     const amount = parseFloat(withdrawAmount);
     if (isNaN(amount) || amount <= 0) { toast.error('Montant invalide.'); return; }
-    if (amount > affiliate!.balance) { toast.error('Solde insuffisant.'); return; }
+    const walletBalance = withdrawWallet === 'commissions' ? (affiliate!.totalEarnings || 0) : affiliate!.balance;
+    if (amount > walletBalance) { toast.error('Solde insuffisant.'); return; }
     const exchangeRate = settings?.exchangeRate || 146;
     const minWithdrawUSD = 20 / exchangeRate;
     if (amount < minWithdrawUSD) { toast.error(`Montant minimum: ${(20 / exchangeRate).toFixed(2)} $`); return; }
@@ -438,12 +443,13 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
           amount,
           method: withdrawMethod,
           accountNumber: withdrawMethod === 'Physical' ? 'Bureau Juvénat' : accountNumber.trim(),
+          walletType: withdrawWallet,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Erreur serveur');
       toast.success("Demande de retrait soumise ! Vous recevrez un email de confirmation.");
-      setIsWithdrawModalOpen(false); setWithdrawAmount(''); setAccountNumber('');
+      setIsWithdrawModalOpen(false); setWithdrawAmount(''); setAccountNumber(''); setWithdrawWallet('principal');
     } catch (error: any) {
       toast.error(error.message || 'Erreur lors du retrait.');
     } finally { setIsSubmitting(false); }
@@ -469,6 +475,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     if (depositMethod === 'Agent' && !verifiedAgentName) { toast.error('Agent non identifiable.'); return; }
     setIsSubmitting(true);
     try {
+      const walletLabel = depositWallet === 'commissions' ? 'Wallet Commissions' : 'Wallet Principal';
       if (depositMethod === 'Agent') {
         await submitAgentDepositRequest(affiliateId, agentCode, amount);
         toast.success("Demande envoyée à l'agent !");
@@ -476,10 +483,10 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         await submitDepositRequest(affiliate!, amount, depositMethod);
         toast.success('Demande de dépôt soumise !');
         const adminPhone = settings?.whatsappAdminNumber || '+50944813185';
-        const msg = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Rena.\n\nMontant: ${amount} $\nMéthode: ${depositMethod}\nID Wallet: ${affiliate!.walletId}\nNom: ${affiliate!.name}`;
+        const msg = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Rena.\n\nMontant: ${amount} $\nMéthode: ${depositMethod}\nWallet: ${walletLabel}\nID Wallet: ${affiliate!.walletId}\nNom: ${affiliate!.name}`;
         window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(msg)}`, '_blank');
       }
-      setIsDepositModalOpen(false); setDepositAmount(''); setAgentCode('');
+      setIsDepositModalOpen(false); setDepositAmount(''); setAgentCode(''); setDepositWallet('principal');
     } catch (error: any) {
       toast.error(error.message || "Échec de l'envoi.");
     } finally { setIsSubmitting(false); }
@@ -710,12 +717,32 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
                   <DialogHeader className="p-7 bg-emerald-600 text-white relative">
                     <DialogTitle className="text-xl font-black">Recharger mon Compte</DialogTitle>
-                    <DialogDescription className="text-emerald-100 text-sm">Via MonCash, NatCash ou un agent local.</DialogDescription>
+                    <DialogDescription className="text-emerald-100 text-sm">Choisissez le wallet à créditer et la méthode.</DialogDescription>
                     <DialogClose className="absolute right-5 top-5 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
                       <X className="h-4 w-4" />
                     </DialogClose>
                   </DialogHeader>
                   <div className="p-7 space-y-5 max-h-[70vh] overflow-y-auto">
+                    {/* Wallet selector */}
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Wallet à créditer</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setDepositWallet('principal')}
+                          className={`p-3 rounded-2xl border-2 text-left transition-all ${depositWallet === 'principal' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-100 bg-gray-50'}`}
+                        >
+                          <p className={`text-[9px] font-black uppercase tracking-widest ${depositWallet === 'principal' ? 'text-emerald-600' : 'text-gray-400'}`}>Wallet Principal</p>
+                          <p className={`text-base font-black mt-0.5 ${depositWallet === 'principal' ? 'text-emerald-700' : 'text-gray-500'}`}>{(affiliate.balance || 0).toFixed(2)} $</p>
+                        </button>
+                        <button
+                          onClick={() => setDepositWallet('commissions')}
+                          className={`p-3 rounded-2xl border-2 text-left transition-all ${depositWallet === 'commissions' ? 'border-amber-500 bg-amber-50' : 'border-gray-100 bg-gray-50'}`}
+                        >
+                          <p className={`text-[9px] font-black uppercase tracking-widest ${depositWallet === 'commissions' ? 'text-amber-600' : 'text-gray-400'}`}>Wallet Commissions</p>
+                          <p className={`text-base font-black mt-0.5 ${depositWallet === 'commissions' ? 'text-amber-700' : 'text-gray-500'}`}>{(affiliate.totalEarnings || 0).toFixed(2)} $</p>
+                        </button>
+                      </div>
+                    </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode</Label>
                       <Select value={depositMethod} onValueChange={setDepositMethod}>
@@ -735,6 +762,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                               NatCash (Natcom)
                             </div>
                           </SelectItem>
+                          <SelectItem value="Admin" className="font-bold">Admin (Espèces directes)</SelectItem>
                           <SelectItem value="Agent" className="font-bold">Via Agent (Physique)</SelectItem>
                           <SelectItem value="Virement" className="font-bold">Virement Bancaire</SelectItem>
                           <SelectItem value="Crypto" className="font-bold">Crypto (USDT / BTC)</SelectItem>
@@ -800,12 +828,32 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                 <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
                   <DialogHeader className="p-7 bg-indigo-600 text-white relative">
                     <DialogTitle className="text-xl font-black">Retrait de Fonds</DialogTitle>
-                    <DialogDescription className="text-indigo-100 text-sm">Retirez votre argent sur MonCash, NatCash ou en personne.</DialogDescription>
+                    <DialogDescription className="text-indigo-100 text-sm">Choisissez le wallet à débiter et la méthode.</DialogDescription>
                     <DialogClose className="absolute right-5 top-5 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
                       <X className="h-4 w-4" />
                     </DialogClose>
                   </DialogHeader>
                   <div className="p-7 space-y-5 max-h-[70vh] overflow-y-auto">
+                    {/* Wallet selector */}
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Wallet à débiter</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setWithdrawWallet('principal')}
+                          className={`p-3 rounded-2xl border-2 text-left transition-all ${withdrawWallet === 'principal' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-gray-50'}`}
+                        >
+                          <p className={`text-[9px] font-black uppercase tracking-widest ${withdrawWallet === 'principal' ? 'text-indigo-600' : 'text-gray-400'}`}>Wallet Principal</p>
+                          <p className={`text-base font-black mt-0.5 ${withdrawWallet === 'principal' ? 'text-indigo-700' : 'text-gray-500'}`}>{(affiliate.balance || 0).toFixed(2)} $</p>
+                        </button>
+                        <button
+                          onClick={() => setWithdrawWallet('commissions')}
+                          className={`p-3 rounded-2xl border-2 text-left transition-all ${withdrawWallet === 'commissions' ? 'border-amber-500 bg-amber-50' : 'border-gray-100 bg-gray-50'}`}
+                        >
+                          <p className={`text-[9px] font-black uppercase tracking-widest ${withdrawWallet === 'commissions' ? 'text-amber-600' : 'text-gray-400'}`}>Wallet Commissions</p>
+                          <p className={`text-base font-black mt-0.5 ${withdrawWallet === 'commissions' ? 'text-amber-700' : 'text-gray-500'}`}>{(affiliate.totalEarnings || 0).toFixed(2)} $</p>
+                        </button>
+                      </div>
+                    </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode</Label>
                       <Select value={withdrawMethod} onValueChange={(v: any) => setWithdrawMethod(v)}>
@@ -816,15 +864,16 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                           <SelectItem value="MonCash" className="font-bold">
                             <div className="flex items-center gap-2">
                               {settings?.moncashLogoUrl && <img src={settings.moncashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
-                              MonCash
+                              MonCash (Digicel)
                             </div>
                           </SelectItem>
                           <SelectItem value="NatCash" className="font-bold">
                             <div className="flex items-center gap-2">
                               {settings?.natcashLogoUrl && <img src={settings.natcashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
-                              NatCash
+                              NatCash (Natcom)
                             </div>
                           </SelectItem>
+                          <SelectItem value="Admin" className="font-bold">Admin (Espèces directes)</SelectItem>
                           <SelectItem value="Virement" className="font-bold">Virement Bancaire</SelectItem>
                           <SelectItem value="Physical" className="font-bold">Retrait Physique (Bureau Juvénat)</SelectItem>
                         </SelectContent>
@@ -856,7 +905,9 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                           className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg pl-11" />
                         <MinusCircle className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-500" />
                       </div>
-                      <p className="text-[10px] text-gray-400 font-bold">Solde disponible : {affiliate.balance} $</p>
+                      <p className="text-[10px] text-gray-400 font-bold">
+                        Solde {withdrawWallet === 'commissions' ? 'Commissions' : 'Principal'} : {withdrawWallet === 'commissions' ? (affiliate.totalEarnings || 0).toFixed(2) : (affiliate.balance || 0).toFixed(2)} $
+                      </p>
                     </div>
                   </div>
                   <DialogFooter className="px-7 pb-7">
