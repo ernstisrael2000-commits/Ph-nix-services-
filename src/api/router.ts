@@ -1,10 +1,15 @@
 import express from 'express';
 import nodemailer from 'nodemailer';
-import { createHash } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { initializeApp, cert, getApps, App } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getMessaging as getAdminMessaging } from 'firebase-admin/messaging';
+import {
+  emailDepositSubmitted, emailDepositApproved, emailDepositRejected,
+  emailWithdrawalSubmitted, emailWithdrawalApproved, emailWithdrawalRejected,
+  emailWithdrawalOtp, emailAgentWithdrawalConfirmed, emailAffiliateCommission,
+} from '../lib/email.ts';
 
 const _require = createRequire(import.meta.url);
 let webpush: typeof import('web-push') | null = null;
@@ -489,6 +494,16 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
       (message ? `Message : ${message}\n` : '')
     );
 
+    // Resend email (fire-and-forget)
+    adminDb.collection('clients').doc(clientId).get().then(snap => {
+      const clientEmail = snap.exists ? snap.data()?.email : undefined;
+      emailDepositSubmitted({
+        clientName, clientEmail,
+        amount: usdAmount || amount,
+        method, txId, walletId: clientWalletId,
+      }).catch(() => {});
+    }).catch(() => {});
+
     sendPushToAdmins(
       `💰 Nouveau dépôt — ${clientName}`,
       `$${(usdAmount || amount).toFixed(2)} via ${method}${htgAmount ? ` (${htgAmount.toLocaleString()} HTG)` : ''}`
@@ -592,6 +607,13 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
       (message ? `Message : ${message}\n` : '') +
       `\n⚠️ Solde débité. Traitez ce retrait depuis le tableau de bord.`
     );
+
+    // Resend email (fire-and-forget)
+    emailWithdrawalSubmitted({
+      clientName, clientEmail: clientData.email,
+      amount: usdAmount || amount,
+      method, accountNumber, accountName,
+    }).catch(() => {});
 
     sendPushToAdmins(
       `🏧 Nouveau retrait — ${clientName}`,
@@ -829,6 +851,17 @@ router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
       });
     });
 
+    // Resend email — affiliate/agent commission notification (fire-and-forget)
+    if (type === 'deposit' && commissionAmount > 0 && agentData.email) {
+      emailAffiliateCommission({
+        affiliateName: agentData.name || '',
+        affiliateEmail: agentData.email,
+        amount: commissionAmount,
+        sourceClientName: clientData.name || '',
+        type: 'Dépôt client',
+      }).catch(() => {});
+    }
+
     res.json({
       success: true,
       ...(type === 'deposit' && { agentCommission: commissionAmount }),
@@ -1017,6 +1050,10 @@ router.post('/api/agent/initiate-withdrawal', requireDb, async (req, res) => {
       .where('clientId', '==', clientId).where('status', '==', 'pending').limit(1).get();
     if (!pendingCheck.empty) return res.status(400).json({ error: 'Une demande de retrait est déjà en attente de confirmation pour ce client.' });
 
+    // Generate 6-digit OTP + store SHA-256 hash
+    const otpPlain = String(randomInt(100000, 999999));
+    const otpHash = createHash('sha256').update(otpPlain).digest('hex');
+
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
     const confirmRef = adminDb.collection('agent_withdrawal_confirmations').doc();
     await confirmRef.set({
@@ -1024,6 +1061,8 @@ router.post('/api/agent/initiate-withdrawal', requireDb, async (req, res) => {
       clientId, clientName: clientData.name || '',
       amount: usd, ...(note && { note }),
       status: 'pending',
+      otpHash,
+      otpVerified: false,
       expiresAt,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -1037,6 +1076,18 @@ router.post('/api/agent/initiate-withdrawal', requireDb, async (req, res) => {
       amount: usd, agentName: agentData.name || '', confirmId: confirmRef.id,
       read: false, createdAt: FieldValue.serverTimestamp(),
     });
+
+    // Send OTP email to client (fire-and-forget)
+    if (clientData.email) {
+      emailWithdrawalOtp({
+        clientName: clientData.name || '',
+        clientEmail: clientData.email,
+        agentName: agentData.name || '',
+        amount: usd,
+        otpCode: otpPlain,
+        expiresMinutes: 30,
+      }).catch(() => {});
+    }
 
     try {
       const fcm = getFcmMessaging();
@@ -1128,7 +1179,7 @@ router.get('/api/client/pending-confirmations/:clientId', requireDb, async (req,
 router.post('/api/client/confirm-withdrawal/:confirmId', requireDb, async (req, res) => {
   try {
     const { confirmId } = req.params;
-    const { clientId } = req.body;
+    const { clientId, otpCode } = req.body;
     if (!confirmId || !clientId) return res.status(400).json({ error: 'Paramètres manquants.' });
 
     const confirmRef = adminDb.collection('agent_withdrawal_confirmations').doc(confirmId);
@@ -1137,6 +1188,15 @@ router.post('/api/client/confirm-withdrawal/:confirmId', requireDb, async (req, 
     const confirmData = confirmSnap.data()!;
     if (confirmData.clientId !== clientId) return res.status(403).json({ error: 'Non autorisé.' });
     if (confirmData.status !== 'pending') return res.status(400).json({ error: 'Cette demande a déjà été traitée.' });
+
+    // OTP verification: only required when an OTP was generated (otpHash present)
+    if (confirmData.otpHash) {
+      if (!otpCode) return res.status(400).json({ error: 'Code OTP requis.' });
+      const submittedHash = createHash('sha256').update(String(otpCode)).digest('hex');
+      if (submittedHash !== confirmData.otpHash) {
+        return res.status(403).json({ error: 'Code OTP incorrect.' });
+      }
+    }
 
     const expiresAt = confirmData.expiresAt?.toDate ? confirmData.expiresAt.toDate() : new Date(confirmData.expiresAt);
     if (new Date() > expiresAt) {
@@ -1210,6 +1270,16 @@ router.post('/api/client/confirm-withdrawal/:confirmId', requireDb, async (req, 
 
     // Notify any other SSE listeners (e.g., agent watching for confirmation)
     pushClientEvent(clientId, 'withdrawal_resolved', { id: confirmId, status: 'confirmed', amount });
+
+    // Resend confirmation email (fire-and-forget)
+    adminDb.collection('clients').doc(clientId).get().then(cSnap => {
+      emailAgentWithdrawalConfirmed({
+        clientName: confirmData.clientName || '',
+        clientEmail: cSnap.exists ? cSnap.data()?.email : undefined,
+        agentName: agentData.name || '',
+        amount,
+      }).catch(() => {});
+    }).catch(() => {});
 
     res.json({ success: true, amount });
   } catch (e: any) {
@@ -2349,6 +2419,20 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
         sendFcmToClient(clientId, notifTitle, notifMessage, {
           type: notifType, txId: txId || '', amount: String(amount),
         });
+
+        // Resend email (fire-and-forget)
+        const clientEmailSnap = await adminDb.collection('clients').doc(clientId).get().catch(() => null);
+        const clientEmail = clientEmailSnap?.exists ? clientEmailSnap.data()?.email : undefined;
+        const clientName = txData.clientName || '';
+        if (status === 'approved' && isDeposit) {
+          emailDepositApproved({ clientName, clientEmail, amount }).catch(() => {});
+        } else if (status === 'rejected' && isDeposit) {
+          emailDepositRejected({ clientName, clientEmail, amount, reason }).catch(() => {});
+        } else if (status === 'approved' && isWithdrawal) {
+          emailWithdrawalApproved({ clientName, clientEmail, amount }).catch(() => {});
+        } else if (status === 'rejected' && isWithdrawal) {
+          emailWithdrawalRejected({ clientName, clientEmail, amount, reason }).catch(() => {});
+        }
       }
     } catch {}
 

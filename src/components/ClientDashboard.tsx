@@ -237,6 +237,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   // Agent-initiated withdrawal confirmations (agent wants to withdraw from client account)
   const [pendingConfirmations,     setPendingConfirmations]     = useState<any[]>([]);
   const [confirmActionLoading,     setConfirmActionLoading]     = useState<string | null>(null);
+  const [otpInputs,                setOtpInputs]                = useState<Record<string, string>>({});
 
   const usdPreview = htgAmount && !isNaN(parseFloat(htgAmount)) ? parseFloat(htgAmount) / rate : 0;
   const htgPreview = withdrawUSD && !isNaN(parseFloat(withdrawUSD)) ? parseFloat(withdrawUSD) * rate : 0;
@@ -415,17 +416,20 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   }, [clientId]);
 
   const handleConfirmWithdrawal = async (confirmId: string) => {
+    const otp = (otpInputs[confirmId] || '').trim();
+    if (!otp) { toast.error('Veuillez saisir le code OTP reçu par email.'); return; }
     setConfirmActionLoading(confirmId + ':confirm');
     try {
       const res = await fetch(`/api/client/confirm-withdrawal/${confirmId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId }),
+        body: JSON.stringify({ clientId, otpCode: otp }),
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
       toast.success(`Retrait de $${Number(data.amount).toFixed(2)} confirmé.`);
       setPendingConfirmations(prev => prev.filter(c => c.id !== confirmId));
+      setOtpInputs(prev => { const n = { ...prev }; delete n[confirmId]; return n; });
     } catch { toast.error('Erreur réseau.'); }
     finally { setConfirmActionLoading(null); }
   };
@@ -657,6 +661,22 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                       </p>
                       <p className="text-[10px] text-amber-500 mt-1">Expire dans 30 min à partir de la demande</p>
                     </div>
+                  </div>
+                  {/* OTP input */}
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] font-bold text-amber-700 flex items-center gap-1.5">
+                      <Shield className="h-3 w-3" />
+                      Code de sécurité reçu par email
+                    </p>
+                    <Input
+                      value={otpInputs[conf.id] || ''}
+                      onChange={e => setOtpInputs(prev => ({ ...prev, [conf.id]: e.target.value }))}
+                      placeholder="Entrez le code à 6 chiffres"
+                      maxLength={6}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="h-10 rounded-xl border-2 border-amber-200 bg-white text-center text-lg font-black tracking-widest focus-visible:ring-amber-400 text-amber-900 placeholder:text-amber-300 placeholder:text-sm placeholder:font-normal placeholder:tracking-normal"
+                    />
                   </div>
                   <div className="flex gap-2">
                     <Button
