@@ -3224,13 +3224,14 @@ router.post('/api/admin/verify-google', requireDb, async (req, res) => {
 // ── Admin: Link Google account to existing admin (verify creds first) ────────
 router.post('/api/admin/link-google', requireDb, async (req, res) => {
   try {
-    const { fullName, password, loginCode, email, uid } = req.body;
-    if (!fullName || !password || !email || !uid)
+    const { loginCode, email, uid } = req.body;
+    if (!loginCode || !email || !uid)
       return res.status(400).json({ error: 'Données manquantes.' });
 
-    const snap = await adminDb.collection('admin_accounts').where('fullName', '==', fullName).limit(1).get();
+    // Find admin account by loginCode (unique secret per account)
+    const snap = await adminDb.collection('admin_accounts').where('loginCode', '==', loginCode).limit(1).get();
     if (snap.empty)
-      return res.status(401).json({ error: 'Identifiants incorrects.' });
+      return res.status(401).json({ error: 'Code secret incorrect. Vérifiez votre code de connexion.' });
 
     const adminDoc = snap.docs[0];
     const adminData: any = { id: adminDoc.id, ...adminDoc.data() };
@@ -3240,12 +3241,6 @@ router.post('/api/admin/link-google', requireDb, async (req, res) => {
       if (lockDate > new Date())
         return res.status(403).json({ error: 'Compte bloqué temporairement. Réessayez plus tard.' });
     }
-
-    if (adminData.password !== password)
-      return res.status(401).json({ error: 'Identifiants incorrects.' });
-
-    if (adminData.isSuperAdmin && adminData.loginCode && adminData.loginCode !== loginCode)
-      return res.status(401).json({ error: 'Code de connexion incorrect.' });
 
     await adminDoc.ref.update({
       email: email.toLowerCase(),

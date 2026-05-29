@@ -290,10 +290,10 @@ export default function UserAuthModal({
   // ── Link Google to existing admin account ────────────────────────────────
   const handleLinkGoogle = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!linkFullName || !linkPassword) { toast.error("Veuillez remplir tous les champs."); return; }
+    if (!linkCode.trim()) { toast.error("Veuillez entrer votre code secret."); return; }
     setLoading(true);
     try {
-      const result = await linkAdminGoogle(linkFullName.trim(), linkPassword, linkCode.trim(), pendingGoogleEmail, pendingGoogleUid);
+      const result = await linkAdminGoogle(linkCode.trim(), pendingGoogleEmail, pendingGoogleUid);
       if (!result.success || !result.admin) {
         toast.error(result.error || "Identifiants incorrects.");
         return;
@@ -627,39 +627,19 @@ export default function UserAuthModal({
                 <p className="text-xs text-blue-800 font-semibold truncate">{pendingGoogleEmail}</p>
               </div>
               <p className="text-xs text-gray-500 leading-relaxed">
-                Ce compte Google n'est pas encore lié. Entrez vos identifiants admin pour l'associer définitivement.
+                Ce compte Google n'est pas encore lié. Entrez votre <strong className="text-gray-700">code secret</strong> pour l'associer en un clic.
               </p>
               <form onSubmit={handleLinkGoogle} className="space-y-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Nom complet</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input value={linkFullName} onChange={e => setLinkFullName(e.target.value)}
-                      placeholder="Nom administrateur" className="pl-10 h-11 rounded-xl border-gray-200" required autoFocus />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Mot de passe</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input type={showLinkPassword ? 'text' : 'password'} value={linkPassword} onChange={e => setLinkPassword(e.target.value)}
-                      placeholder="••••••••" className="pl-10 pr-10 h-11 rounded-xl border-gray-200" required />
-                    <button type="button" onClick={() => setShowLinkPassword(!showLinkPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-dark transition-colors">
-                      {showLinkPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Code de connexion <span className="text-gray-300">(si requis)</span></Label>
+                  <Label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Code secret</Label>
                   <div className="relative">
                     <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <Input value={linkCode} onChange={e => setLinkCode(e.target.value)}
-                      placeholder="Ex: XX-2026" className="pl-10 h-11 rounded-xl border-gray-200" />
+                      placeholder="Ex: XX-2026" className="pl-10 h-12 rounded-xl border-gray-200 font-mono tracking-widest text-base" required autoFocus />
                   </div>
                 </div>
                 <Button type="submit" disabled={loading}
-                  className="w-full h-12 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-black shadow-lg mt-1">
+                  className="w-full h-12 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-black shadow-lg">
                   {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <><ShieldCheck className="h-5 w-5 mr-2" />Associer et accéder</>}
                 </Button>
               </form>

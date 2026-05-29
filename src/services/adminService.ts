@@ -131,8 +131,6 @@ export const checkAdminLogin = async (
 // ── Admin: Link Google account to existing admin (first-time setup) ──────────
 
 export const linkAdminGoogle = async (
-  fullName: string,
-  password: string,
   loginCode: string,
   googleEmail: string,
   googleUid: string
@@ -141,7 +139,7 @@ export const linkAdminGoogle = async (
     const res = await fetch('/api/admin/link-google', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fullName, password, loginCode, email: googleEmail, uid: googleUid }),
+      body: JSON.stringify({ loginCode, email: googleEmail, uid: googleUid }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { success: false, error: data.error || 'Erreur de liaison.' };
