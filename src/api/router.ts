@@ -1,6 +1,6 @@
 import express from 'express';
 import nodemailer from 'nodemailer';
-import { createHash, randomInt } from 'node:crypto';
+import { createHash, randomInt, randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { initializeApp, cert, getApps, App } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -3755,6 +3755,114 @@ router.delete('/api/fcm/unregister/:clientId', requireDb, async (req, res) => {
   } catch (e: any) {
     console.error('[FCM] unregister error:', e);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── TX Code: generate (client generates QR code for agent to scan) ─────────────
+router.post('/api/client/generate-tx-code', requireDb, async (req, res) => {
+  try {
+    const { clientId, type, amount } = req.body;
+    if (!clientId || !type || !['deposit', 'withdrawal'].includes(type))
+      return res.status(400).json({ error: 'clientId et type (deposit|withdrawal) requis.' });
+    const usd = parseFloat(amount);
+    if (isNaN(usd) || usd <= 0) return res.status(400).json({ error: 'Montant invalide.' });
+
+    const clientDoc = await adminDb.collection('clients').doc(clientId).get();
+    if (!clientDoc.exists) return res.status(404).json({ error: 'Client introuvable.' });
+    const clientData = clientDoc.data()!;
+
+    if (type === 'withdrawal' && (clientData.balance || 0) < usd)
+      return res.status(400).json({ error: 'Solde insuffisant.' });
+
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = Date.now() + 15 * 60 * 1000;
+
+    const codeRef = await adminDb.collection('tx_codes').add({
+      clientId,
+      clientName: clientData.name || 'Client',
+      type,
+      amount: usd,
+      token,
+      expiresAt,
+      used: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    const codeData = JSON.stringify({ id: codeRef.id, tk: token, ty: type, a: usd, cn: clientData.name || 'Client' });
+    res.json({ codeId: codeRef.id, codeData, expiresAt, clientName: clientData.name });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── TX Code: scan & process (affiliate scans client QR code) ──────────────────
+router.post('/api/affiliate/scan-tx-code', requireDb, async (req, res) => {
+  try {
+    const { affiliateId, codeData } = req.body;
+    if (!affiliateId || !codeData) return res.status(400).json({ error: 'affiliateId et codeData requis.' });
+
+    let parsed: { id: string; tk: string };
+    try { parsed = JSON.parse(codeData); } catch { return res.status(400).json({ error: 'Code QR invalide.' }); }
+    const { id: codeId, tk: token } = parsed;
+    if (!codeId || !token) return res.status(400).json({ error: 'Code QR malformé.' });
+
+    const codeRef = adminDb.collection('tx_codes').doc(codeId);
+    const codeDoc = await codeRef.get();
+    if (!codeDoc.exists) return res.status(404).json({ error: 'Code introuvable.' });
+    const code = codeDoc.data()!;
+
+    if (code.token !== token) return res.status(403).json({ error: 'Token invalide.' });
+    if (code.used) return res.status(409).json({ error: 'Code déjà utilisé.' });
+    if (Date.now() > code.expiresAt) return res.status(410).json({ error: 'Code expiré.' });
+
+    const affRef = adminDb.collection('affiliates').doc(affiliateId);
+    const affDoc = await affRef.get();
+    if (!affDoc.exists) return res.status(404).json({ error: 'Affilié introuvable.' });
+    const aff = affDoc.data()!;
+
+    const clientRef = adminDb.collection('clients').doc(code.clientId);
+    const clientDoc = await clientRef.get();
+    if (!clientDoc.exists) return res.status(404).json({ error: 'Client introuvable.' });
+    const clientSnap = clientDoc.data()!;
+
+    const amount = parseFloat(code.amount);
+    const type = code.type;
+
+    if (type === 'deposit' && (aff.balance || 0) < amount)
+      return res.status(400).json({ error: `Solde affilié insuffisant ($${(aff.balance || 0).toFixed(2)} disponible).` });
+    if (type === 'withdrawal' && (clientSnap.balance || 0) < amount)
+      return res.status(400).json({ error: `Solde client insuffisant ($${(clientSnap.balance || 0).toFixed(2)} disponible).` });
+
+    await adminDb.runTransaction(async (tx: any) => {
+      const freshCode = (await tx.get(codeRef)).data();
+      if (freshCode.used) throw new Error('Code déjà utilisé.');
+      const now = FieldValue.serverTimestamp();
+      const txRef = adminDb.collection('client_transactions').doc();
+      tx.set(txRef, {
+        clientId: code.clientId, clientName: code.clientName,
+        affiliateId, affiliateName: aff.name || 'Agent',
+        type, amount,
+        method: 'Agent QR Code',
+        status: 'completed',
+        description: `${type === 'deposit' ? 'Dépôt' : 'Retrait'} via QR Code — Agent: ${aff.name || affiliateId}`,
+        createdAt: now, processedAt: now,
+      });
+      tx.update(codeRef, { used: true, usedAt: now, usedBy: affiliateId });
+      if (type === 'deposit') {
+        tx.update(affRef, { balance: FieldValue.increment(-amount) });
+        tx.update(clientRef, { balance: FieldValue.increment(amount) });
+      } else {
+        tx.update(clientRef, { balance: FieldValue.increment(-amount) });
+        tx.update(affRef, { balance: FieldValue.increment(amount) });
+      }
+    });
+
+    res.json({
+      success: true, type, amount,
+      clientName: code.clientName,
+      message: `${type === 'deposit' ? 'Dépôt' : 'Retrait'} de $${amount.toFixed(2)} traité pour ${code.clientName}`,
+    });
+  } catch (e: any) {
+    if (e.message === 'Code déjà utilisé.') return res.status(409).json({ error: e.message });
+    res.status(500).json({ error: e.message });
   }
 });
 

@@ -81,6 +81,9 @@ import {
   ArrowUpFromLine,
   RefreshCw,
   XCircle,
+  QrCode,
+  Camera,
+  ScanLine,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -135,8 +138,14 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const [copied, setCopied] = useState(false);
 
   // Point de Service (Agent Mode)
-  type PointTab = 'deposit' | 'withdrawal' | 'requests';
+  type PointTab = 'deposit' | 'scan' | 'requests';
   const [pointTab, setPointTab] = useState<PointTab>('deposit');
+
+  // QR Scanner state
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<string | null>(null);
+  const [scannedTxInfo, setScannedTxInfo] = useState<{ clientName: string; type: string; amount: number } | null>(null);
+  const [scanConfirmLoading, setScanConfirmLoading] = useState(false);
 
   // Phone search (shared for deposit/withdrawal direct)
   const [phoneInput, setPhoneInput] = useState('');
@@ -322,6 +331,63 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       fetchRequests();
     } catch { toast.error('Erreur réseau.'); }
     finally { setProcessingRequestId(null); }
+  };
+
+  // QR scanner handlers
+  const handleScannedCode = (raw: string) => {
+    setScanResult(raw);
+    // Parse display info from QR payload
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed.ty && parsed.a !== undefined && parsed.cn) {
+        setScannedTxInfo({ clientName: parsed.cn, type: parsed.ty, amount: parseFloat(parsed.a) });
+      } else {
+        setScannedTxInfo(null);
+      }
+    } catch { setScannedTxInfo(null); }
+  };
+
+  const handleConfirmScan = async () => {
+    if (!scanResult) return;
+    setScanConfirmLoading(true);
+    try {
+      const res = await fetch('/api/affiliate/scan-tx-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ affiliateId, codeData: scanResult }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
+      toast.success(data.message || 'Transaction traitée avec succès !');
+      setScanResult(null);
+      setScannedTxInfo(null);
+      setScanning(false);
+      fetchRequests();
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setScanConfirmLoading(false); }
+  };
+
+  const startQrScanner = async () => {
+    setScanning(true);
+    setScanResult(null);
+    setScannedTxInfo(null);
+    try {
+      const { Html5Qrcode } = await import('html5-qrcode');
+      const scanner = new Html5Qrcode('qr-scanner-affiliate');
+      await scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 240, height: 240 } },
+        (decodedText: string) => {
+          scanner.stop().catch(() => {});
+          setScanning(false);
+          handleScannedCode(decodedText);
+        },
+        (_err: any) => { /* ignore scan errors */ }
+      );
+    } catch (e: any) {
+      setScanning(false);
+      toast.error('Impossible d\'accéder à la caméra. Vérifiez les permissions.');
+    }
   };
 
   const copyWalletId = () => {
@@ -1105,7 +1171,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
             <div className="bg-white rounded-2xl border border-gray-100 p-1.5 flex gap-1">
               {[
                 { id: 'deposit', label: 'Dépôt Direct', icon: ArrowDownToLine },
-                { id: 'withdrawal', label: 'Retrait Direct', icon: ArrowUpFromLine },
+                { id: 'scan', label: 'Scanner QR', icon: QrCode },
                 { id: 'requests', label: `Demandes${withdrawalRequests.length + depositRequests.length > 0 ? ` (${withdrawalRequests.length + depositRequests.length})` : ''}`, icon: Bell },
               ].map(t => (
                 <button
@@ -1202,84 +1268,126 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
               </div>
             )}
 
-            {/* ── Retrait Direct ── */}
-            {pointTab === 'withdrawal' && (
+            {/* ── Scanner QR ── */}
+            {pointTab === 'scan' && (
               <div className="space-y-4">
-                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-4">
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-xl bg-rose-100 flex items-center justify-center">
-                      <ArrowUpFromLine className="h-4 w-4 text-rose-600" />
+                {!scanResult ? (
+                  <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-xl bg-violet-100 flex items-center justify-center">
+                        <QrCode className="h-4 w-4 text-violet-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-black text-dark text-sm">Scanner Code QR Client</h3>
+                        <p className="text-[10px] text-gray-400">Scannez le code généré par le client</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-black text-dark text-sm">Retrait Direct Client</h3>
-                      <p className="text-[10px] text-gray-400">Le client est débité, votre solde augmente</p>
+
+                    <div className="rounded-2xl overflow-hidden bg-black min-h-[260px] flex items-center justify-center relative">
+                      {scanning ? (
+                        <div id="qr-scanner-affiliate" className="w-full" />
+                      ) : (
+                        <div className="flex flex-col items-center gap-3 text-white p-8">
+                          <Camera className="h-12 w-12 text-white/40" />
+                          <p className="text-sm text-white/60 font-bold">Caméra inactive</p>
+                          <p className="text-[11px] text-white/40 text-center">Appuyez sur "Démarrer le scan" pour activer la caméra</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <Button
+                      onClick={startQrScanner}
+                      disabled={scanning}
+                      className="w-full h-12 bg-violet-600 hover:bg-violet-700 text-white font-black rounded-2xl border-0 shadow-lg shadow-violet-200"
+                    >
+                      {scanning ? (
+                        <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Scan en cours...</span>
+                      ) : (
+                        <span className="flex items-center gap-2"><ScanLine className="h-4 w-4" />Démarrer le Scan</span>
+                      )}
+                    </Button>
+
+                    <div className="bg-gray-50 rounded-2xl border border-gray-100 p-3 space-y-2">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Comment utiliser</p>
+                      {[
+                        { n: '1', t: 'Le client génère un QR', s: 'Dépôt ou Retrait → Via Agent dans son wallet' },
+                        { n: '2', t: 'Scannez le code', s: 'Appuyez sur "Démarrer" et pointez la caméra' },
+                        { n: '3', t: 'Confirmez', s: 'Vérifiez les infos et appuyez sur Confirmer' },
+                      ].map(s => (
+                        <div key={s.n} className="flex items-start gap-2">
+                          <div className="h-5 w-5 rounded-full bg-violet-500 text-white text-[9px] font-black flex items-center justify-center shrink-0">{s.n}</div>
+                          <div>
+                            <p className="text-[11px] font-black text-gray-700">{s.t}</p>
+                            <p className="text-[10px] text-gray-400">{s.s}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-
-                  {/* Multi-field client search */}
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Téléphone, nom ou ID Wallet</Label>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                        <Input
-                          placeholder="Ex: +509..., Jean Dupont, W-..."
-                          value={phoneInput}
-                          onChange={e => { setPhoneInput(e.target.value); setPhoneClient(null); }}
-                          onKeyDown={e => e.key === 'Enter' && handlePhoneSearch()}
-                          className="h-11 rounded-xl pl-10 font-mono"
-                        />
+                ) : (
+                  <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-xl bg-emerald-100 flex items-center justify-center">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                       </div>
-                      <Button onClick={handlePhoneSearch} disabled={phoneLoading || !phoneInput.trim()} className="h-11 px-3 rounded-xl bg-orange-500 hover:bg-orange-600 border-0 text-white">
-                        {phoneLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                      <div>
+                        <h3 className="font-black text-dark text-sm">Code scanné</h3>
+                        <p className="text-[10px] text-gray-400">Vérifiez les détails avant de confirmer</p>
+                      </div>
+                    </div>
+
+                    {scannedTxInfo ? (
+                      <div className="bg-gray-50 rounded-2xl border border-gray-100 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Client</span>
+                          <span className="font-black text-dark text-sm">{scannedTxInfo.clientName}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Type</span>
+                          <span className={`font-black text-sm px-2 py-0.5 rounded-lg ${scannedTxInfo.type === 'deposit' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                            {scannedTxInfo.type === 'deposit' ? 'Dépôt' : 'Retrait'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant</span>
+                          <span className="font-black text-xl text-dark">${scannedTxInfo.amount.toFixed(2)}</span>
+                        </div>
+                        {scannedTxInfo.type === 'deposit' && (
+                          <div className="bg-amber-50 border border-amber-100 p-2.5 rounded-xl">
+                            <p className="text-[10px] text-amber-700 font-bold">Votre solde sera débité de ${scannedTxInfo.amount.toFixed(2)} et le client crédité.</p>
+                          </div>
+                        )}
+                        {scannedTxInfo.type === 'withdrawal' && (
+                          <div className="bg-blue-50 border border-blue-100 p-2.5 rounded-xl">
+                            <p className="text-[10px] text-blue-700 font-bold">Le client sera débité de ${scannedTxInfo.amount.toFixed(2)} et votre solde augmentera. Remettez le cash.</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl">
+                        <p className="text-xs text-amber-700 font-bold">Code QR scanné. Confirmez pour valider côté serveur.</p>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleConfirmScan}
+                        disabled={scanConfirmLoading}
+                        className="flex-1 h-12 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-2xl border-0"
+                      >
+                        {scanConfirmLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="h-4 w-4 mr-2" />Confirmer</>}
+                      </Button>
+                      <Button
+                        onClick={() => { setScanResult(null); setScannedTxInfo(null); setScanning(false); }}
+                        disabled={scanConfirmLoading}
+                        variant="outline"
+                        className="flex-1 h-12 border-gray-200 text-gray-500 rounded-2xl"
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />Annuler
                       </Button>
                     </div>
-                    {phoneClient && (
-                      <div className="bg-blue-50 border border-blue-100 p-3 rounded-xl space-y-1">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" />
-                          <span className="text-sm font-black text-blue-700">{phoneClient.name}</span>
-                        </div>
-                        <p className="text-[10px] text-blue-600 pl-6">Solde actuel: <strong>${(phoneClient.balance || 0).toFixed(2)}</strong></p>
-                      </div>
-                    )}
                   </div>
-
-                  {/* Amount */}
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant ($)</Label>
-                    <div className="relative">
-                      <MinusCircle className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-rose-500" />
-                      <Input type="number" placeholder="0.00" value={directAmount} onChange={e => setDirectAmount(e.target.value)} className="h-11 rounded-xl pl-10 font-black text-lg" min="0.01" />
-                    </div>
-                    {directAmount && phoneClient && parseFloat(directAmount) > phoneClient.balance && (
-                      <p className="text-[10px] text-red-500 font-bold">Solde client insuffisant (il/elle a ${phoneClient.balance.toFixed(2)})</p>
-                    )}
-                  </div>
-
-                  {/* Note */}
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Note (optionnel)</Label>
-                    <Input placeholder="Ex: Cash remis en main propre" value={directNote} onChange={e => setDirectNote(e.target.value)} className="h-11 rounded-xl" maxLength={100} />
-                  </div>
-
-                  <div className="bg-rose-50 border border-rose-100 p-3 rounded-xl flex items-start gap-2">
-                    <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0 mt-0.5" />
-                    <p className="text-[10px] text-rose-800 font-bold leading-relaxed">
-                      Transaction immédiate. Le solde du client sera débité et le vôtre augmentera. Remettez le cash physiquement.
-                    </p>
-                  </div>
-
-                  <Button
-                    onClick={() => handleDirectTx('withdrawal')}
-                    disabled={directSubmitting || !phoneClient || !directAmount || parseFloat(directAmount) > (phoneClient?.balance || 0)}
-                    className="w-full h-12 bg-rose-500 hover:bg-rose-600 text-white font-black rounded-2xl shadow-lg shadow-rose-200 disabled:opacity-50"
-                  >
-                    {directSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : (
-                      <span className="flex items-center gap-2"><ArrowUpFromLine className="h-4 w-4" /> Effectuer le Retrait</span>
-                    )}
-                  </Button>
-                </div>
+                )}
               </div>
             )}
 
