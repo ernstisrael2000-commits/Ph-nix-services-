@@ -644,37 +644,56 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         {activeTab === 'accueil' && (
           <div className="p-4 space-y-4">
 
-            {/* Wallet Card */}
-            <div className="relative rounded-3xl bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-6 text-white overflow-hidden shadow-xl shadow-primary/25">
-              <div className="absolute -top-8 -right-8 w-32 h-32 bg-white/5 rounded-full" />
-              <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-white/5 rounded-full" />
-              <div className="relative">
-                <div className="flex items-center justify-between mb-5">
-                  <p className="text-[10px] font-black text-white/60 uppercase tracking-widest">RENA AFFILIÉ</p>
-                  <Badge className="bg-white/15 text-white border-0 text-[9px] font-black uppercase tracking-widest px-2">
-                    {levelInfo?.level || 'Bronze'}
-                  </Badge>
-                </div>
-                <p className="text-[10px] text-white/50 font-black uppercase tracking-widest mb-1">Solde Disponible</p>
-                <div className="flex items-baseline gap-2">
-                  <h2 className="text-4xl font-black tabular-nums">{affiliate.balance.toLocaleString()}</h2>
-                  <span className="text-lg font-bold text-white/60">$</span>
-                </div>
-                <p className="text-sm text-white/50 mt-1">≈ {Math.round((affiliate.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
-                <div className="flex items-center justify-between mt-5 pt-4 border-t border-white/10">
-                  <button onClick={copyWalletId} className="flex items-center gap-2 group">
-                    <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">ID Wallet</p>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-mono font-black text-white/80 text-sm tracking-widest">{affiliate.walletId || '........'}</span>
-                      {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3 w-3 text-white/40 group-hover:text-white/70 transition-colors" />}
+            {/* Dual Wallet Cards */}
+            <div className="grid grid-cols-2 gap-3">
+
+              {/* Wallet Principal */}
+              <div className="relative rounded-[2rem] bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-4 text-white overflow-hidden shadow-xl shadow-primary/20">
+                <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/5 rounded-full" />
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[8px] font-black text-white/60 uppercase tracking-widest">Wallet Principal</p>
+                    <Badge className="bg-white/15 text-white border-0 text-[8px] font-black uppercase tracking-widest px-1.5 py-0">
+                      {levelInfo?.level || 'Bronze'}
+                    </Badge>
+                  </div>
+                  <p className="text-[8px] text-white/50 font-black uppercase tracking-widest">Solde Disponible</p>
+                  <div className="flex items-baseline gap-1 mt-0.5">
+                    <span className="text-2xl font-black tabular-nums leading-none">{(affiliate.balance || 0).toLocaleString()}</span>
+                    <span className="text-sm font-bold text-white/60">$</span>
+                  </div>
+                  <p className="text-[9px] text-white/40 mt-0.5">≈ {Math.round((affiliate.balance || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
+                  <button onClick={copyWalletId} className="flex items-center gap-1 mt-3 pt-2.5 border-t border-white/10 group w-full">
+                    <p className="text-[8px] text-white/40 font-black uppercase tracking-widest shrink-0">ID</p>
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="font-mono font-black text-white/70 text-[9px] tracking-wider truncate">{affiliate.walletId || '........'}</span>
+                      {copied ? <CheckCircle2 className="h-3 w-3 text-emerald-300 shrink-0" /> : <Copy className="h-2.5 w-2.5 text-white/30 shrink-0 group-hover:text-white/60 transition-colors" />}
                     </div>
                   </button>
-                  <div className="text-right">
-                    <p className="text-[10px] text-white/40 font-black uppercase tracking-widest">Score</p>
-                    <p className="font-black text-white/80">{affiliate.points || 0} pts</p>
+                </div>
+              </div>
+
+              {/* Wallet Commissions */}
+              <div className="relative rounded-[2rem] bg-gradient-to-br from-amber-400 to-orange-500 p-4 text-white overflow-hidden shadow-xl shadow-amber-200">
+                <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full" />
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[8px] font-black text-amber-100 uppercase tracking-widest">Wallet Commissions</p>
+                    <TrendingUp className="h-3.5 w-3.5 text-white/50" />
+                  </div>
+                  <p className="text-[8px] text-white/60 font-black uppercase tracking-widest">Gains Cumulés</p>
+                  <div className="flex items-baseline gap-1 mt-0.5">
+                    <span className="text-2xl font-black tabular-nums leading-none">{(affiliate.totalEarnings || 0).toLocaleString()}</span>
+                    <span className="text-sm font-bold text-white/60">$</span>
+                  </div>
+                  <p className="text-[9px] text-amber-100/60 mt-0.5">≈ {Math.round((affiliate.totalEarnings || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG</p>
+                  <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-white/10">
+                    <p className="text-[8px] text-white/50 font-black uppercase tracking-widest">Score</p>
+                    <p className="font-black text-white/80 text-sm">{affiliate.points || 0} pts</p>
                   </div>
                 </div>
               </div>
+
             </div>
 
             {/* Quick Actions */}
