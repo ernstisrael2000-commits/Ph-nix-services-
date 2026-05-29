@@ -2701,7 +2701,6 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
     const clientRef = adminDb.collection('clients').doc(txData.clientId);
     const clientSnap = await clientRef.get();
     if (clientSnap.exists) {
-      const cd = clientSnap.data()!;
       if (status === 'approved' && txData.type === 'deposit') {
         // Apply deposit fee if configured
         let netAmount = txData.amount;
@@ -2721,7 +2720,7 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
           }
         } catch {}
         batch.update(clientRef, {
-          balance: (cd.balance || 0) + netAmount,
+          balance: FieldValue.increment(netAmount),
           updatedAt: FieldValue.serverTimestamp(),
         });
       } else if (status === 'approved' && txData.type === 'withdrawal') {
@@ -2741,7 +2740,7 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
         } catch {}
       } else if (status === 'rejected' && txData.type === 'withdrawal') {
         batch.update(clientRef, {
-          balance: (cd.balance || 0) + txData.amount,
+          balance: FieldValue.increment(txData.amount),
           updatedAt: FieldValue.serverTimestamp(),
         });
       }
@@ -2791,7 +2790,9 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
           fireEmail(() => emailWithdrawalRejected({ clientName, clientEmail, amount, reason }), { type: 'withdrawal_rejected', to: clientEmail || '', clientId, amount });
         }
       }
-    } catch {}
+    } catch (notifErr: any) {
+      console.error('[transaction/status] notification error (non-fatal):', notifErr?.message);
+    }
 
     res.json({ success: true });
   } catch (e: any) {

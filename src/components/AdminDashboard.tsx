@@ -2344,6 +2344,18 @@ function EmailLogsPanel() {
     }
   };
 
+  const handleWalletTxAction = async (txId: string, status: 'approved' | 'rejected') => {
+    setClientTxActionLoading(txId);
+    try {
+      await updateWalletTransactionStatus(txId, status);
+      toast.success(status === 'approved' ? 'Dépôt approuvé !' : 'Dépôt refusé.');
+    } catch (err: any) {
+      toast.error(err.message || 'Erreur lors du traitement.');
+    } finally {
+      setClientTxActionLoading(null);
+    }
+  };
+
   const filteredClientTransactions = React.useMemo(() => {
     return clientTransactions.filter(tx => {
       const matchStatus = clientTxStatusFilter === 'all' || tx.status === clientTxStatusFilter;
@@ -2471,7 +2483,7 @@ function EmailLogsPanel() {
     } else if (notifFilter === 'withdrawal') {
       combined = combined.filter(r => r.type === 'withdrawal');
     } else if (notifFilter === 'deposit') {
-      combined = combined.filter(r => r.type === 'deposit_request');
+      combined = combined.filter(r => r.type === 'deposit_request' || r.type === 'client_deposit_req');
     } else if (notifFilter === 'client_tx') {
       combined = combined.filter(r => r.type === 'client_deposit_req' || r.type === 'client_withdrawal_req');
     }
@@ -7245,7 +7257,7 @@ function EmailLogsPanel() {
                             if (isRegistration) handleAffiliateRequestAction(req as any, 'approved');
                             else if (isWithdrawal) handleWithdrawalAction(req as any, 'approved');
                             else if (isClientDeposit || isClientWithdrawal) handleClientTxAction(req.id!, 'approved');
-                            else updateWalletTransactionStatus(req.id!, 'approved');
+                            else handleWalletTxAction(req.id!, 'approved');
                           }}
                         >
                           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : '✓ Approuver'}
@@ -7259,7 +7271,7 @@ function EmailLogsPanel() {
                             if (isRegistration) handleAffiliateRequestAction(req as any, 'rejected');
                             else if (isWithdrawal) handleWithdrawalAction(req as any, 'rejected');
                             else if (isClientDeposit || isClientWithdrawal) handleClientTxAction(req.id!, 'rejected');
-                            else updateWalletTransactionStatus(req.id!, 'rejected');
+                            else handleWalletTxAction(req.id!, 'rejected');
                           }}
                         >
                           ✕ Rejeter
