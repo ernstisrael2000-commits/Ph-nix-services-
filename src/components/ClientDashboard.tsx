@@ -22,6 +22,7 @@ import {
   useClientData, useClientTransactions,
   submitClientDeposit, submitClientWithdrawal, submitClientTransfer,
 } from '../services/clientService';
+import { apiFetch } from '../lib/apiFetch';
 import { useSettings } from '../services/parcelService';
 import { Client, PaymentMethod, DEFAULT_PAYMENT_METHODS } from '../types';
 
@@ -284,11 +285,9 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     setWdAgentSearchLoading(true);
     setWdAgentInfo(null);
     try {
-      const res = await fetch(`/api/agent/lookup?code=${encodeURIComponent(code)}`);
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Agent introuvable.'); return; }
+      const data = await apiFetch(`/api/agent/lookup?code=${encodeURIComponent(code)}`);
       setWdAgentInfo(data);
-    } catch { toast.error('Erreur réseau.'); }
+    } catch (e: any) { toast.error(e.message || 'Agent introuvable.'); }
     finally { setWdAgentSearchLoading(false); }
   };
 
@@ -303,7 +302,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     if (usd > maxWithdraw) { toast.error(`Montant maximum: $${maxWithdraw.toFixed(2)} USD`); return; }
     setWdAgentLoading(true);
     try {
-      const res = await fetch('/api/client/agent-withdrawal', {
+      await apiFetch('/api/client/agent-withdrawal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -316,12 +315,10 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
           ...(wdAgentMsg.trim() && { message: wdAgentMsg.trim() }),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
       toast.success(`Demande envoyée ! ${wdAgentInfo.name} confirmera sous peu.`);
       setIsWithdrawOpen(false);
       resetWithdraw();
-    } catch { toast.error('Erreur réseau.'); }
+    } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setWdAgentLoading(false); }
   };
 
@@ -342,16 +339,14 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     if (type === 'withdrawal' && usd > balance) { toast.error('Solde insuffisant.'); return; }
     setTxCodeLoading(true);
     try {
-      const res = await fetch('/api/client/generate-tx-code', {
+      const data = await apiFetch('/api/client/generate-tx-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId, type, amount: usd }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erreur génération code.'); return; }
       setTxCode({ codeData: data.codeData, expiresAt: data.expiresAt, type });
       setTxCountdown(Math.ceil((data.expiresAt - Date.now()) / 1000));
-    } catch { toast.error('Erreur réseau.'); }
+    } catch (e: any) { toast.error(e.message || 'Erreur de connexion. Veuillez réessayer.'); }
     finally { setTxCodeLoading(false); }
   };
 
@@ -398,33 +393,29 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     if (!otp) { toast.error('Veuillez saisir le code OTP reçu par email.'); return; }
     setConfirmActionLoading(confirmId + ':confirm');
     try {
-      const res = await fetch(`/api/client/confirm-withdrawal/${confirmId}`, {
+      const data = await apiFetch(`/api/client/confirm-withdrawal/${confirmId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId, otpCode: otp }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
       toast.success(`Retrait de $${Number(data.amount).toFixed(2)} confirmé.`);
       setPendingConfirmations(prev => prev.filter(c => c.id !== confirmId));
       setOtpInputs(prev => { const n = { ...prev }; delete n[confirmId]; return n; });
-    } catch { toast.error('Erreur réseau.'); }
+    } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setConfirmActionLoading(null); }
   };
 
   const handleRejectWithdrawal = async (confirmId: string) => {
     setConfirmActionLoading(confirmId + ':reject');
     try {
-      const res = await fetch(`/api/client/reject-withdrawal/${confirmId}`, {
+      await apiFetch(`/api/client/reject-withdrawal/${confirmId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clientId }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
       toast.success('Demande de retrait refusée.');
       setPendingConfirmations(prev => prev.filter(c => c.id !== confirmId));
-    } catch { toast.error('Erreur réseau.'); }
+    } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setConfirmActionLoading(null); }
   };
 

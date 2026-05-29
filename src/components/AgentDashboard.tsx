@@ -24,6 +24,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuth } from '../hooks/useAuth';
 import { motion, AnimatePresence } from 'motion/react';
+import { apiFetch } from '../lib/apiFetch';
 import { useSettings } from '../services/parcelService';
 
 interface AgentDashboardProps {
@@ -233,17 +234,15 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
     if (!agent?.agentCode) return;
     setIsProcessing(true);
     try {
-      const res = await fetch(`/api/agent/withdrawal-request/${req.id}/confirm`, {
+      await apiFetch(`/api/agent/withdrawal-request/${req.id}/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ agentCode: agent.agentCode }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
       toast.success(`Retrait de $${req.amount.toFixed(2)} confirmé pour ${req.clientName} !`);
       await loadWithdrawRequests();
       await loadStats();
-    } catch { toast.error('Erreur réseau.'); }
+    } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setIsProcessing(false); }
   };
 
@@ -253,16 +252,14 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
     const reason = rejectReasonMap[req.id] || '';
     setIsProcessing(true);
     try {
-      const res = await fetch(`/api/agent/withdrawal-request/${req.id}/reject`, {
+      await apiFetch(`/api/agent/withdrawal-request/${req.id}/reject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ agentCode: agent.agentCode, ...(reason && { reason }) }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
       toast.success('Demande refusée.');
       await loadWithdrawRequests();
-    } catch { toast.error('Erreur réseau.'); }
+    } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setIsProcessing(false); }
   };
 
@@ -275,15 +272,13 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
     setFoundClient(null);
     setSearchResults([]);
     try {
-      const res = await fetch(`/api/agent/client-search?q=${encodeURIComponent(q)}&agentCode=${encodeURIComponent(agent.agentCode)}`);
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Client introuvable.'); return; }
+      const data = await apiFetch(`/api/agent/client-search?q=${encodeURIComponent(q)}&agentCode=${encodeURIComponent(agent.agentCode)}`);
       if (data.results?.length > 1) {
         setSearchResults(data.results);
       } else {
         setFoundClient(data.client || data.results?.[0] || null);
       }
-    } catch { toast.error('Erreur réseau.'); }
+    } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setSearching(false); }
   };
 
@@ -295,17 +290,15 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
     if (agent.balance < usd) { toast.error('Solde agent insuffisant pour ce dépôt.'); return; }
     setSubmitting(true);
     try {
-      const res = await fetch('/api/agent/client-transaction', {
+      await apiFetch('/api/agent/client-transaction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ agentCode: agent.agentCode, clientId: foundClient.clientId, type: 'deposit', amount: usd, note: txNote.trim() || undefined }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
       toast.success(`Dépôt de $${usd.toFixed(2)} effectué pour ${foundClient.name} !`);
       setFoundClient(null); setClientSearch(''); setSearchResults([]); setTxAmount(''); setTxNote('');
       await loadStats();
-    } catch { toast.error('Erreur réseau.'); }
+    } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setSubmitting(false); }
   };
 

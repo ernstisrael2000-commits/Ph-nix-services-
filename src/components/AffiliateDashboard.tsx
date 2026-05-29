@@ -87,6 +87,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
+import { apiFetch } from '../lib/apiFetch';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useSettings } from '../services/parcelService';
@@ -223,11 +224,9 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     setPhoneLoading(true);
     setPhoneClient(null);
     try {
-      const res = await fetch(`/api/affiliate/client-search?q=${encodeURIComponent(q)}&affiliateId=${encodeURIComponent(affiliateId)}`);
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Client introuvable.'); return; }
+      const data = await apiFetch(`/api/affiliate/client-search?q=${encodeURIComponent(q)}&affiliateId=${encodeURIComponent(affiliateId)}`);
       setPhoneClient(data.client || data.results?.[0] || null);
-    } catch { toast.error('Erreur réseau.'); }
+    } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setPhoneLoading(false); }
   };
 
@@ -257,17 +256,15 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     if (!phoneClient) { toast.error('Recherchez un client d\'abord.'); return; }
     setDirectSubmitting(true);
     try {
-      const res = await fetch('/api/affiliate/client-direct-tx', {
+      await apiFetch('/api/affiliate/client-direct-tx', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ affiliateId, clientId: phoneClient.clientId, type, amount: usd, note: directNote.trim() || undefined }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
       const label = type === 'deposit' ? 'Dépôt' : 'Retrait';
       toast.success(`${label} de $${usd.toFixed(2)} ${type === 'deposit' ? 'crédité' : 'débité'} pour ${phoneClient.name} !`);
       setPhoneInput(''); setPhoneClient(null); setDirectAmount(''); setDirectNote('');
-    } catch { toast.error('Erreur réseau.'); }
+    } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setDirectSubmitting(false); }
   };
 
@@ -275,30 +272,26 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const handleConfirmWithdrawal = async (txId: string) => {
     setProcessingRequestId(txId);
     try {
-      const res = await fetch(`/api/affiliate/client-withdrawal/${txId}/confirm`, {
+      await apiFetch(`/api/affiliate/client-withdrawal/${txId}/confirm`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ affiliateId }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
       toast.success('Retrait confirmé ! Solde mis à jour.');
       fetchRequests();
-    } catch { toast.error('Erreur réseau.'); }
+    } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setProcessingRequestId(null); }
   };
 
   const handleRejectWithdrawal = async (txId: string) => {
     setProcessingRequestId(txId);
     try {
-      const res = await fetch(`/api/affiliate/client-withdrawal/${txId}/reject`, {
+      await apiFetch(`/api/affiliate/client-withdrawal/${txId}/reject`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ affiliateId, reason: 'Refusé par l\'affilié' }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
       toast.success('Demande rejetée.');
       fetchRequests();
-    } catch { toast.error('Erreur réseau.'); }
+    } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setProcessingRequestId(null); }
   };
 
@@ -306,30 +299,26 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const handleConfirmDeposit = async (txId: string) => {
     setProcessingRequestId(txId);
     try {
-      const res = await fetch(`/api/affiliate/client-deposit/${txId}/confirm`, {
+      await apiFetch(`/api/affiliate/client-deposit/${txId}/confirm`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ affiliateId }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
       toast.success('Dépôt confirmé ! Client crédité.');
       fetchRequests();
-    } catch { toast.error('Erreur réseau.'); }
+    } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setProcessingRequestId(null); }
   };
 
   const handleRejectDeposit = async (txId: string) => {
     setProcessingRequestId(txId);
     try {
-      const res = await fetch(`/api/affiliate/client-deposit/${txId}/reject`, {
+      await apiFetch(`/api/affiliate/client-deposit/${txId}/reject`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ affiliateId, reason: 'Refusé par l\'affilié' }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
       toast.success('Demande rejetée.');
       fetchRequests();
-    } catch { toast.error('Erreur réseau.'); }
+    } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setProcessingRequestId(null); }
   };
 
@@ -351,19 +340,17 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     if (!scanResult) return;
     setScanConfirmLoading(true);
     try {
-      const res = await fetch('/api/affiliate/scan-tx-code', {
+      const data = await apiFetch('/api/affiliate/scan-tx-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ affiliateId, codeData: scanResult }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
       toast.success(data.message || 'Transaction traitée avec succès !');
       setScanResult(null);
       setScannedTxInfo(null);
       setScanning(false);
       fetchRequests();
-    } catch { toast.error('Erreur réseau.'); }
+    } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
     finally { setScanConfirmLoading(false); }
   };
 
