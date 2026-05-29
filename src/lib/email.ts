@@ -1,14 +1,19 @@
 import { Resend } from 'resend';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const FROM_EMAIL = 'ernstisrael2000@gmail.com';
-const ADMIN_EMAIL = 'ernstisrael2000@gmail.com';
+
+// Resend requires a verified domain as FROM.
+// Use RESEND_FROM env var when you have a verified domain (e.g. noreply@votredomaine.com).
+// Falls back to Resend's built-in test domain which works without custom domain setup.
+export const FROM_EMAIL  = process.env.RESEND_FROM  || 'onboarding@resend.dev';
+export const ADMIN_EMAIL = process.env.ADMIN_EMAIL  || 'ernstisrael2000@gmail.com';
 
 let resend: Resend | null = null;
 if (RESEND_API_KEY) {
   resend = new Resend(RESEND_API_KEY);
+  console.log(`[Email] Resend initialisé — FROM: ${FROM_EMAIL}`);
 } else {
-  console.warn('[Email] RESEND_API_KEY non défini — emails désactivés');
+  console.warn('[Email] RESEND_API_KEY absent — emails désactivés');
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -91,19 +96,40 @@ function statusBadge(status: string): string {
   return `<span style="display:inline-block;padding:4px 12px;border-radius:20px;background:${s.bg};color:${s.color};font-size:12px;font-weight:700;">${s.label}</span>`;
 }
 
-// ── Send wrapper ──────────────────────────────────────────────────────────────
+// ── Core send (logs errors, returns result) ───────────────────────────────────
 
-async function send(to: string | string[], subject: string, html: string): Promise<void> {
-  if (!resend) return;
+export interface SendResult {
+  success: boolean;
+  id?: string;
+  error?: string;
+}
+
+export async function send(
+  to: string | string[],
+  subject: string,
+  html: string,
+  type: string,
+): Promise<SendResult> {
+  if (!resend) {
+    console.warn(`[Email] Skipped (no client) — ${type} → ${to}`);
+    return { success: false, error: 'Resend client not initialized' };
+  }
   try {
-    await resend.emails.send({ from: FROM_EMAIL, to, subject, html });
+    const result = await resend.emails.send({ from: FROM_EMAIL, to, subject, html });
+    if (result.error) {
+      console.error(`[Email] Échec envoi "${type}" → ${to}:`, JSON.stringify(result.error));
+      return { success: false, error: JSON.stringify(result.error) };
+    }
+    console.log(`[Email] ✓ "${type}" envoyé → ${to} (id: ${result.data?.id})`);
+    return { success: true, id: result.data?.id };
   } catch (e: any) {
-    console.error('[Email] Erreur envoi:', e?.message || e);
+    console.error(`[Email] Exception "${type}" → ${to}:`, e?.message || e);
+    return { success: false, error: e?.message || String(e) };
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC FUNCTIONS
+// PUBLIC EMAIL FUNCTIONS — each returns SendResult for audit logging
 // ─────────────────────────────────────────────────────────────────────────────
 
 // 1. Dépôt soumis → admin + client
@@ -129,7 +155,7 @@ export async function emailDepositSubmitted(opts: {
       ⚡ Connectez-vous au tableau de bord pour approuver ou refuser ce dépôt.
     </p>`
   );
-  await send(ADMIN_EMAIL, `💰 Dépôt ${fmt(amount)} — ${clientName}`, adminHtml);
+  await send(ADMIN_EMAIL, `💰 Dépôt ${fmt(amount)} — ${clientName}`, adminHtml, 'deposit_submitted_admin');
 
   if (clientEmail) {
     const clientHtml = baseHtml('Dépôt en cours de traitement', '#059669',
@@ -144,7 +170,7 @@ export async function emailDepositSubmitted(opts: {
         Vous serez notifié dès que votre dépôt sera traité.
       </p>`
     );
-    await send(clientEmail, `💰 Votre dépôt de ${fmt(amount)} est en cours`, clientHtml);
+    await send(clientEmail, `💰 Votre dépôt de ${fmt(amount)} est en cours`, clientHtml, 'deposit_submitted_client');
   }
 }
 
@@ -164,7 +190,7 @@ export async function emailDepositApproved(opts: {
       🎉 Votre solde a été mis à jour. Vous pouvez l'utiliser dès maintenant.
     </p>`
   );
-  await send(opts.clientEmail, `✅ Dépôt de ${fmt(opts.amount)} approuvé`, html);
+  await send(opts.clientEmail, `✅ Dépôt de ${fmt(opts.amount)} approuvé`, html, 'deposit_approved');
 }
 
 // 3. Dépôt refusé → client
@@ -184,7 +210,7 @@ export async function emailDepositRejected(opts: {
       Contactez le support si vous avez des questions.
     </p>`
   );
-  await send(opts.clientEmail, `❌ Dépôt de ${fmt(opts.amount)} refusé`, html);
+  await send(opts.clientEmail, `❌ Dépôt de ${fmt(opts.amount)} refusé`, html, 'deposit_rejected');
 }
 
 // 4. Retrait soumis → admin + client
@@ -210,7 +236,7 @@ export async function emailWithdrawalSubmitted(opts: {
       ⚠️ Le solde client a été débité. Traitez ce retrait depuis le tableau de bord.
     </p>`
   );
-  await send(ADMIN_EMAIL, `🏧 Retrait ${fmt(amount)} — ${clientName}`, adminHtml);
+  await send(ADMIN_EMAIL, `🏧 Retrait ${fmt(amount)} — ${clientName}`, adminHtml, 'withdrawal_submitted_admin');
 
   if (clientEmail) {
     const clientHtml = baseHtml('Retrait en cours de traitement', '#7c3aed',
@@ -226,7 +252,7 @@ export async function emailWithdrawalSubmitted(opts: {
         Vous serez notifié dès que votre retrait sera traité.
       </p>`
     );
-    await send(clientEmail, `🏧 Votre retrait de ${fmt(amount)} est en cours`, clientHtml);
+    await send(clientEmail, `🏧 Votre retrait de ${fmt(amount)} est en cours`, clientHtml, 'withdrawal_submitted_client');
   }
 }
 
@@ -246,7 +272,7 @@ export async function emailWithdrawalApproved(opts: {
       Votre argent sera disponible selon le délai de traitement habituel.
     </p>`
   );
-  await send(opts.clientEmail, `✅ Retrait de ${fmt(opts.amount)} approuvé`, html);
+  await send(opts.clientEmail, `✅ Retrait de ${fmt(opts.amount)} approuvé`, html, 'withdrawal_approved');
 }
 
 // 6. Retrait refusé → client
@@ -263,10 +289,10 @@ export async function emailWithdrawalRejected(opts: {
       ${opts.reason ? row('Raison', opts.reason) : ''}
     </table>`
   );
-  await send(opts.clientEmail, `❌ Retrait de ${fmt(opts.amount)} refusé`, html);
+  await send(opts.clientEmail, `❌ Retrait de ${fmt(opts.amount)} refusé`, html, 'withdrawal_rejected');
 }
 
-// 7. OTP retrait agent → client (sécurité)
+// 7. OTP retrait agent → client (code de sécurité)
 export async function emailWithdrawalOtp(opts: {
   clientName: string; clientEmail: string; agentName: string;
   amount: number; otpCode: string; expiresMinutes: number;
@@ -286,17 +312,18 @@ export async function emailWithdrawalOtp(opts: {
     </div>
     <table width="100%" cellpadding="0" cellspacing="0">
       ${row('Agent', agentName)}
-      ${row('Montant', fmt(amount), true)}
-      ${row('Date', dateFr())}
+      ${row('Montant demandé', fmt(amount), true)}
+      ${row('Date de la demande', dateFr())}
     </table>
     <p style="margin:24px 0 0;padding:16px;background:#fef2f2;border-radius:10px;font-size:13px;color:#991b1b;border-left:4px solid #dc2626;">
-      ⚠️ <strong>Ne partagez jamais ce code.</strong> Si vous n'avez pas demandé ce retrait, refusez immédiatement depuis l'application.
+      ⚠️ <strong>Ne partagez jamais ce code par écrit.</strong> Dictez-le uniquement à voix haute à l'agent en face de vous.<br/>
+      Si vous n'avez pas demandé ce retrait, refusez immédiatement depuis l'application.
     </p>`
   );
-  await send(clientEmail, `🔐 Code de confirmation — Retrait de ${fmt(amount)}`, html);
+  await send(clientEmail, `🔐 Code de confirmation — Retrait de ${fmt(amount)}`, html, 'withdrawal_otp');
 }
 
-// 8. Commission affilié générée
+// 8. Commission affilié/agent
 export async function emailAffiliateCommission(opts: {
   affiliateName: string; affiliateEmail?: string;
   amount: number; sourceClientName?: string; type?: string;
@@ -315,10 +342,10 @@ export async function emailAffiliateCommission(opts: {
       🎉 Votre solde a été mis à jour. Consultez votre tableau de bord pour les détails.
     </p>`
   );
-  await send(affiliateEmail, `💎 Commission de ${fmt(amount)} créditée`, html);
+  await send(affiliateEmail, `💎 Commission de ${fmt(amount)} créditée`, html, 'affiliate_commission');
 }
 
-// 9. Retrait agent confirmé par client → admin notification
+// 9. Retrait agent confirmé par client
 export async function emailAgentWithdrawalConfirmed(opts: {
   clientName: string; clientEmail?: string; agentName: string; amount: number;
 }): Promise<void> {
@@ -334,7 +361,7 @@ export async function emailAgentWithdrawalConfirmed(opts: {
       ${row('Statut', statusBadge('confirmed'))}
     </table>`
   );
-  await send(ADMIN_EMAIL, `✅ Retrait agent ${fmt(amount)} confirmé — ${clientName}`, adminHtml);
+  await send(ADMIN_EMAIL, `✅ Retrait agent ${fmt(amount)} confirmé — ${clientName}`, adminHtml, 'agent_withdrawal_confirmed_admin');
 
   if (clientEmail) {
     const clientHtml = baseHtml('✅ Retrait confirmé', '#059669',
@@ -346,15 +373,6 @@ export async function emailAgentWithdrawalConfirmed(opts: {
         ${row('Statut', statusBadge('confirmed'))}
       </table>`
     );
-    await send(clientEmail, `✅ Retrait de ${fmt(amount)} confirmé`, clientHtml);
+    await send(clientEmail, `✅ Retrait de ${fmt(amount)} confirmé`, clientHtml, 'agent_withdrawal_confirmed_client');
   }
-}
-
-// 10. Log email envoyé (retourné pour stockage Firestore)
-export interface EmailLogEntry {
-  type: string;
-  to: string | string[];
-  subject: string;
-  sentAt: Date;
-  success: boolean;
 }

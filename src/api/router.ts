@@ -9,6 +9,7 @@ import {
   emailDepositSubmitted, emailDepositApproved, emailDepositRejected,
   emailWithdrawalSubmitted, emailWithdrawalApproved, emailWithdrawalRejected,
   emailWithdrawalOtp, emailAgentWithdrawalConfirmed, emailAffiliateCommission,
+  ADMIN_EMAIL,
 } from '../lib/email.ts';
 
 const _require = createRequire(import.meta.url);
@@ -146,6 +147,30 @@ function sendAdminEmail(subject: string, text: string): void {
     subject,
     text,
   }).catch((err: any) => console.error('[Email] Erreur envoi:', err.message));
+}
+
+// ── Resend email + Firestore audit log (fire-and-forget) ─────────────────────
+function fireEmail(
+  fn: () => Promise<void>,
+  meta: { type: string; to: string | string[]; clientId?: string; amount?: number }
+): void {
+  fn().then(() => {
+    if (!adminDb) return;
+    adminDb.collection('email_logs').add({
+      ...meta,
+      status: 'sent',
+      sentAt: FieldValue.serverTimestamp(),
+    }).catch(() => {});
+  }).catch((e: any) => {
+    console.error(`[Email] fireEmail error (${meta.type}):`, e?.message || e);
+    if (!adminDb) return;
+    adminDb.collection('email_logs').add({
+      ...meta,
+      status: 'failed',
+      error: e?.message || String(e),
+      sentAt: FieldValue.serverTimestamp(),
+    }).catch(() => {});
+  });
 }
 
 // ─── FCM: send push to a client by clientId (fire-and-forget) ────────────────
@@ -494,14 +519,13 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
       (message ? `Message : ${message}\n` : '')
     );
 
-    // Resend email (fire-and-forget)
+    // Resend email
     adminDb.collection('clients').doc(clientId).get().then(snap => {
       const clientEmail = snap.exists ? snap.data()?.email : undefined;
-      emailDepositSubmitted({
-        clientName, clientEmail,
-        amount: usdAmount || amount,
-        method, txId, walletId: clientWalletId,
-      }).catch(() => {});
+      fireEmail(
+        () => emailDepositSubmitted({ clientName, clientEmail, amount: usdAmount || amount, method, txId, walletId: clientWalletId }),
+        { type: 'deposit_submitted', to: [ADMIN_EMAIL, ...(clientEmail ? [clientEmail] : [])], clientId, amount: usdAmount || amount }
+      );
     }).catch(() => {});
 
     sendPushToAdmins(
@@ -608,12 +632,11 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
       `\n⚠️ Solde débité. Traitez ce retrait depuis le tableau de bord.`
     );
 
-    // Resend email (fire-and-forget)
-    emailWithdrawalSubmitted({
-      clientName, clientEmail: clientData.email,
-      amount: usdAmount || amount,
-      method, accountNumber, accountName,
-    }).catch(() => {});
+    // Resend email
+    fireEmail(
+      () => emailWithdrawalSubmitted({ clientName, clientEmail: clientData.email, amount: usdAmount || amount, method, accountNumber, accountName }),
+      { type: 'withdrawal_submitted', to: [ADMIN_EMAIL, ...(clientData.email ? [clientData.email] : [])], clientId, amount: usdAmount || amount }
+    );
 
     sendPushToAdmins(
       `🏧 Nouveau retrait — ${clientName}`,
@@ -851,15 +874,12 @@ router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
       });
     });
 
-    // Resend email — affiliate/agent commission notification (fire-and-forget)
+    // Resend email — commission agent
     if (type === 'deposit' && commissionAmount > 0 && agentData.email) {
-      emailAffiliateCommission({
-        affiliateName: agentData.name || '',
-        affiliateEmail: agentData.email,
-        amount: commissionAmount,
-        sourceClientName: clientData.name || '',
-        type: 'Dépôt client',
-      }).catch(() => {});
+      fireEmail(
+        () => emailAffiliateCommission({ affiliateName: agentData.name || '', affiliateEmail: agentData.email, amount: commissionAmount, sourceClientName: clientData.name || '', type: 'Dépôt client' }),
+        { type: 'agent_commission', to: agentData.email, amount: commissionAmount }
+      );
     }
 
     res.json({
@@ -1077,16 +1097,14 @@ router.post('/api/agent/initiate-withdrawal', requireDb, async (req, res) => {
       read: false, createdAt: FieldValue.serverTimestamp(),
     });
 
-    // Send OTP email to client (fire-and-forget)
+    // Envoyer le code OTP au client par email
     if (clientData.email) {
-      emailWithdrawalOtp({
-        clientName: clientData.name || '',
-        clientEmail: clientData.email,
-        agentName: agentData.name || '',
-        amount: usd,
-        otpCode: otpPlain,
-        expiresMinutes: 30,
-      }).catch(() => {});
+      fireEmail(
+        () => emailWithdrawalOtp({ clientName: clientData.name || '', clientEmail: clientData.email, agentName: agentData.name || '', amount: usd, otpCode: otpPlain, expiresMinutes: 30 }),
+        { type: 'withdrawal_otp', to: clientData.email, clientId, amount: usd }
+      );
+    } else {
+      console.warn(`[OTP] Client ${clientId} n'a pas d'email — code OTP non envoyé`);
     }
 
     try {
@@ -1271,14 +1289,13 @@ router.post('/api/client/confirm-withdrawal/:confirmId', requireDb, async (req, 
     // Notify any other SSE listeners (e.g., agent watching for confirmation)
     pushClientEvent(clientId, 'withdrawal_resolved', { id: confirmId, status: 'confirmed', amount });
 
-    // Resend confirmation email (fire-and-forget)
+    // Resend email — confirmation retrait agent
     adminDb.collection('clients').doc(clientId).get().then(cSnap => {
-      emailAgentWithdrawalConfirmed({
-        clientName: confirmData.clientName || '',
-        clientEmail: cSnap.exists ? cSnap.data()?.email : undefined,
-        agentName: agentData.name || '',
-        amount,
-      }).catch(() => {});
+      const clientEmail = cSnap.exists ? cSnap.data()?.email : undefined;
+      fireEmail(
+        () => emailAgentWithdrawalConfirmed({ clientName: confirmData.clientName || '', clientEmail, agentName: agentData.name || '', amount }),
+        { type: 'agent_withdrawal_confirmed', to: [ADMIN_EMAIL, ...(clientEmail ? [clientEmail] : [])], clientId, amount }
+      );
     }).catch(() => {});
 
     res.json({ success: true, amount });
@@ -2420,18 +2437,18 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
           type: notifType, txId: txId || '', amount: String(amount),
         });
 
-        // Resend email (fire-and-forget)
+        // Resend email — notification de statut
         const clientEmailSnap = await adminDb.collection('clients').doc(clientId).get().catch(() => null);
         const clientEmail = clientEmailSnap?.exists ? clientEmailSnap.data()?.email : undefined;
         const clientName = txData.clientName || '';
         if (status === 'approved' && isDeposit) {
-          emailDepositApproved({ clientName, clientEmail, amount }).catch(() => {});
+          fireEmail(() => emailDepositApproved({ clientName, clientEmail, amount }), { type: 'deposit_approved', to: clientEmail || '', clientId, amount });
         } else if (status === 'rejected' && isDeposit) {
-          emailDepositRejected({ clientName, clientEmail, amount, reason }).catch(() => {});
+          fireEmail(() => emailDepositRejected({ clientName, clientEmail, amount, reason }), { type: 'deposit_rejected', to: clientEmail || '', clientId, amount });
         } else if (status === 'approved' && isWithdrawal) {
-          emailWithdrawalApproved({ clientName, clientEmail, amount }).catch(() => {});
+          fireEmail(() => emailWithdrawalApproved({ clientName, clientEmail, amount }), { type: 'withdrawal_approved', to: clientEmail || '', clientId, amount });
         } else if (status === 'rejected' && isWithdrawal) {
-          emailWithdrawalRejected({ clientName, clientEmail, amount, reason }).catch(() => {});
+          fireEmail(() => emailWithdrawalRejected({ clientName, clientEmail, amount, reason }), { type: 'withdrawal_rejected', to: clientEmail || '', clientId, amount });
         }
       }
     } catch {}
@@ -2494,6 +2511,20 @@ router.get('/api/admin/agent-fee-records', requireDb, async (req, res) => {
       .limit(100)
       .get();
     res.json({ records: snap.docs.map(serializeDoc) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Admin: email audit logs ────────────────────────────────────────────────────
+router.get('/api/admin/email-logs', requireDb, async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+    const snap = await adminDb.collection('email_logs')
+      .orderBy('sentAt', 'desc')
+      .limit(limit)
+      .get();
+    res.json({ logs: snap.docs.map(serializeDoc) });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

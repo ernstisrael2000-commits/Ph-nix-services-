@@ -1974,6 +1974,157 @@ const AffiliateEditForm = ({
   );
 };
 
+// ── Email Logs Panel ──────────────────────────────────────────────────────────
+function EmailLogsPanel() {
+  const [logs, setLogs] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [filter, setFilter] = React.useState<'all' | 'sent' | 'failed'>('all');
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/email-logs?limit=200');
+      const data = await res.json();
+      setLogs(data.logs || []);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  };
+
+  React.useEffect(() => { load(); }, []);
+
+  const filtered = filter === 'all' ? logs : logs.filter(l => l.status === filter);
+
+  const TYPE_LABELS: Record<string, string> = {
+    deposit_submitted: '💰 Dépôt soumis',
+    deposit_approved:  '✅ Dépôt approuvé',
+    deposit_rejected:  '❌ Dépôt refusé',
+    withdrawal_submitted: '🏧 Retrait soumis',
+    withdrawal_approved:  '✅ Retrait approuvé',
+    withdrawal_rejected:  '❌ Retrait refusé',
+    withdrawal_otp:    '🔐 OTP retrait agent',
+    agent_withdrawal_confirmed: '✅ Retrait agent confirmé',
+    agent_commission:  '💎 Commission agent',
+    affiliate_commission: '💎 Commission affilié',
+  };
+
+  const sentCount  = logs.filter(l => l.status === 'sent').length;
+  const failedCount = logs.filter(l => l.status === 'failed').length;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-xl font-bold">Logs Emails</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Historique de tous les emails envoyés par le système</p>
+        </div>
+        <button
+          onClick={load}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-sm font-bold hover:bg-blue-700 transition-colors"
+        >
+          <LucideIcons.RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          Actualiser
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-2xl border bg-white p-4 text-center">
+          <p className="text-2xl font-black text-gray-800">{logs.length}</p>
+          <p className="text-xs text-gray-500 font-semibold mt-0.5 uppercase tracking-wider">Total</p>
+        </div>
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center">
+          <p className="text-2xl font-black text-emerald-700">{sentCount}</p>
+          <p className="text-xs text-emerald-600 font-semibold mt-0.5 uppercase tracking-wider">Envoyés</p>
+        </div>
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-center">
+          <p className="text-2xl font-black text-red-600">{failedCount}</p>
+          <p className="text-xs text-red-500 font-semibold mt-0.5 uppercase tracking-wider">Échoués</p>
+        </div>
+      </div>
+
+      {/* Filter */}
+      <div className="flex gap-2">
+        {(['all', 'sent', 'failed'] as const).map(f => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors border ${
+              filter === f
+                ? 'bg-primary text-white border-primary'
+                : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            {f === 'all' ? 'Tous' : f === 'sent' ? 'Envoyés' : 'Échoués'}
+          </button>
+        ))}
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <LucideIcons.Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-gray-400">
+          <LucideIcons.Mail className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p className="font-semibold">Aucun email trouvé</p>
+        </div>
+      ) : (
+        <div className="rounded-2xl border bg-white overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b">
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Type</th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Destinataire</th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider hidden sm:table-cell">Montant</th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider hidden md:table-cell">Date</th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Statut</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filtered.map((log: any) => {
+                  const to = Array.isArray(log.to) ? log.to.join(', ') : log.to;
+                  const sentAt = log.sentAt?.seconds
+                    ? new Date(log.sentAt.seconds * 1000).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+                    : '—';
+                  return (
+                    <tr key={log.id} className="hover:bg-gray-50/60 transition-colors">
+                      <td className="px-4 py-3 font-semibold text-gray-800 whitespace-nowrap">
+                        {TYPE_LABELS[log.type] || log.type}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 max-w-[180px] truncate">
+                        {to || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 hidden sm:table-cell">
+                        {log.amount ? `$${Number(log.amount).toFixed(2)}` : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 text-xs hidden md:table-cell whitespace-nowrap">
+                        {sentAt}
+                      </td>
+                      <td className="px-4 py-3">
+                        {log.status === 'sent' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
+                            <LucideIcons.CheckCircle2 className="h-3 w-3" />Envoyé
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-100 text-red-600 text-xs font-bold" title={log.error || ''}>
+                            <LucideIcons.XCircle className="h-3 w-3" />Échec
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
   // Define categorized menu items for better organization
   const menuGroups = [
     {
@@ -2021,6 +2172,7 @@ const AffiliateEditForm = ({
       items: [
         { value: 'wallet-management', label: 'Gestion Wallet', icon: Wallet, permission: 'settings' },
         { value: 'admins', label: 'Administrateurs', icon: Shield, permission: 'super_admin_only' },
+        { value: 'email-logs', label: 'Logs Emails', icon: LucideIcons.Mail, permission: 'settings' },
         { value: 'settings', label: 'Paramètres Généraux', icon: SettingsIcon, permission: 'settings' },
       ]
     }
@@ -7051,6 +7203,10 @@ const AffiliateEditForm = ({
               </div>
             )}
           </div>
+        </TabsContent>
+
+        <TabsContent value="email-logs" className="space-y-6">
+          <EmailLogsPanel />
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-6">
