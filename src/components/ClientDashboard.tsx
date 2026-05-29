@@ -219,11 +219,18 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
 
   // Agent QR mode state
   const [depositMode,    setDepositMode]    = useState<'standard' | 'agent-qr'>('standard');
-  const [withdrawMode,   setWithdrawMode]   = useState<'standard' | 'agent-qr'>('standard');
-  const [agentQrAmount,  setAgentQrAmount]  = useState('');
-  const [txCode,         setTxCode]         = useState<{ codeData: string; expiresAt: number; type: 'deposit' | 'withdrawal' } | null>(null);
-  const [txCodeLoading,  setTxCodeLoading]  = useState(false);
-  const [txCountdown,    setTxCountdown]    = useState(0);
+  const [withdrawMode,         setWithdrawMode]         = useState<'standard' | 'agent-qr' | 'agent-code'>('standard');
+  const [agentQrAmount,        setAgentQrAmount]        = useState('');
+  const [txCode,               setTxCode]               = useState<{ codeData: string; expiresAt: number; type: 'deposit' | 'withdrawal' } | null>(null);
+  const [txCodeLoading,        setTxCodeLoading]        = useState(false);
+  const [txCountdown,          setTxCountdown]          = useState(0);
+  // Agent-code withdrawal state
+  const [wdAgentCodeInput,     setWdAgentCodeInput]     = useState('');
+  const [wdAgentSearchLoading, setWdAgentSearchLoading] = useState(false);
+  const [wdAgentInfo,          setWdAgentInfo]          = useState<{ name: string; agentCode: string | null; affiliateCode: string | null; affiliateId: string | null; available: boolean } | null>(null);
+  const [wdAgentAmount,        setWdAgentAmount]        = useState('');
+  const [wdAgentMsg,           setWdAgentMsg]           = useState('');
+  const [wdAgentLoading,       setWdAgentLoading]       = useState(false);
 
   // Agent-initiated withdrawal confirmations (agent wants to withdraw from client account)
   const [pendingConfirmations,     setPendingConfirmations]     = useState<any[]>([]);
@@ -263,10 +270,59 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     setWithdrawUSD(''); setWithdrawAccount(''); setWithdrawAccountName('');
     setWithdrawMessage(''); setWithdrawCaptchaToken(null); withdrawCaptchaRef.current?.reset();
     setWithdrawMode('standard'); setAgentQrAmount(''); setTxCode(null);
+    setWdAgentCodeInput(''); setWdAgentInfo(null); setWdAgentAmount(''); setWdAgentMsg('');
   };
 
   const resetTransfer = () => {
     setTransferWalletId(''); setTransferUSD(''); setTransferMessage(''); setTransferPreview(null);
+  };
+
+  // Agent-code withdrawal handlers
+  const handleWdAgentLookup = async () => {
+    const code = wdAgentCodeInput.trim();
+    if (!code) { toast.error('Entrez le code agent.'); return; }
+    setWdAgentSearchLoading(true);
+    setWdAgentInfo(null);
+    try {
+      const res = await fetch(`/api/agent/lookup?code=${encodeURIComponent(code)}`);
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Agent introuvable.'); return; }
+      setWdAgentInfo(data);
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setWdAgentSearchLoading(false); }
+  };
+
+  const handleWdAgentWithdraw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!wdAgentInfo) { toast.error("Recherchez un agent d'abord."); return; }
+    if (!wdAgentInfo.available) { toast.error('Cet agent est indisponible.'); return; }
+    const usd = parseFloat(wdAgentAmount);
+    if (isNaN(usd) || usd <= 0) { toast.error('Montant invalide.'); return; }
+    if (usd > balance) { toast.error('Solde insuffisant.'); return; }
+    if (usd < minWithdraw) { toast.error(`Montant minimum: $${minWithdraw.toFixed(2)} USD`); return; }
+    if (usd > maxWithdraw) { toast.error(`Montant maximum: $${maxWithdraw.toFixed(2)} USD`); return; }
+    setWdAgentLoading(true);
+    try {
+      const res = await fetch('/api/client/agent-withdrawal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId,
+          clientName: client?.name || '',
+          amount: usd,
+          ...(wdAgentInfo.agentCode ? { agentCode: wdAgentInfo.agentCode } : {}),
+          ...(wdAgentInfo.affiliateCode ? { affiliateCode: wdAgentInfo.affiliateCode } : {}),
+          ...(wdAgentInfo.affiliateId ? { affiliateId: wdAgentInfo.affiliateId } : {}),
+          ...(wdAgentMsg.trim() && { message: wdAgentMsg.trim() }),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || 'Erreur.'); return; }
+      toast.success(`Demande envoyée ! ${wdAgentInfo.name} confirmera sous peu.`);
+      setIsWithdrawOpen(false);
+      resetWithdraw();
+    } catch { toast.error('Erreur réseau.'); }
+    finally { setWdAgentLoading(false); }
   };
 
   // Countdown timer for QR codes
@@ -1071,17 +1127,21 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
             </div>
           </div>
 
-          <form onSubmit={withdrawMode === 'agent-qr' ? (e: React.FormEvent) => e.preventDefault() : handleWithdraw} className="p-5 space-y-4 bg-white overflow-y-auto flex-1">
+          <form onSubmit={withdrawMode === 'agent-qr' ? (e: React.FormEvent) => e.preventDefault() : withdrawMode === 'agent-code' ? handleWdAgentWithdraw : handleWithdraw} className="p-5 space-y-4 bg-white overflow-y-auto flex-1">
 
             {/* ── Mode selector ── */}
-            <div className="grid grid-cols-2 gap-1.5 p-1 bg-gray-100 rounded-2xl">
+            <div className="grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-2xl">
               <button type="button" onClick={() => { setWithdrawMode('standard'); setTxCode(null); setAgentQrAmount(''); }}
-                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black transition-all ${withdrawMode === 'standard' ? 'bg-white shadow text-rose-700' : 'text-gray-400 hover:text-gray-600'}`}>
-                <Smartphone className="h-3.5 w-3.5" />Standard
+                className={`flex items-center justify-center gap-1.5 py-2 rounded-xl text-[10px] font-black transition-all ${withdrawMode === 'standard' ? 'bg-white shadow text-rose-700' : 'text-gray-400 hover:text-gray-600'}`}>
+                <Smartphone className="h-3 w-3" />Standard
               </button>
               <button type="button" onClick={() => { setWithdrawMode('agent-qr'); setWithdrawMethod(null); }}
-                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-black transition-all ${withdrawMode === 'agent-qr' ? 'bg-white shadow text-rose-700' : 'text-gray-400 hover:text-gray-600'}`}>
-                <QrCode className="h-3.5 w-3.5" />Via Agent
+                className={`flex items-center justify-center gap-1.5 py-2 rounded-xl text-[10px] font-black transition-all ${withdrawMode === 'agent-qr' ? 'bg-white shadow text-rose-700' : 'text-gray-400 hover:text-gray-600'}`}>
+                <QrCode className="h-3 w-3" />QR Agent
+              </button>
+              <button type="button" onClick={() => { setWithdrawMode('agent-code'); setTxCode(null); setAgentQrAmount(''); setWithdrawMethod(null); }}
+                className={`flex items-center justify-center gap-1.5 py-2 rounded-xl text-[10px] font-black transition-all ${withdrawMode === 'agent-code' ? 'bg-white shadow text-rose-700' : 'text-gray-400 hover:text-gray-600'}`}>
+                <MapPin className="h-3 w-3" />Code Agent
               </button>
             </div>
 
@@ -1139,6 +1199,86 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                     </Button>
                   </>
                 )}
+              </div>
+            )}
+
+            {/* ── Mode Code Agent ── */}
+            {withdrawMode === 'agent-code' && (
+              <div className="space-y-4">
+                <div className="bg-teal-50 border border-teal-100 rounded-2xl p-4 flex items-start gap-3">
+                  <MapPin className="h-8 w-8 text-teal-600 shrink-0" />
+                  <div>
+                    <p className="font-black text-teal-800 text-sm">Retrait via Code Agent</p>
+                    <p className="text-[11px] text-teal-600 mt-1 leading-relaxed">Entrez le code de votre agent. Il confirmera la demande et vous remettra le cash.</p>
+                  </div>
+                </div>
+
+                {/* Agent code search */}
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Code Agent</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={wdAgentCodeInput}
+                      onChange={e => { setWdAgentCodeInput(e.target.value); setWdAgentInfo(null); }}
+                      onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleWdAgentLookup())}
+                      placeholder="Ex: RENA001 ou 12345678"
+                      className="h-11 rounded-xl font-mono flex-1"
+                      maxLength={12}
+                    />
+                    <Button type="button" onClick={handleWdAgentLookup}
+                      disabled={wdAgentSearchLoading || !wdAgentCodeInput.trim()}
+                      className="h-11 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 border-0 text-white shrink-0">
+                      {wdAgentSearchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  {wdAgentInfo && (
+                    <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+                      className={`rounded-xl border p-3.5 flex items-center gap-3 ${wdAgentInfo.available ? 'bg-teal-50 border-teal-200' : 'bg-red-50 border-red-200'}`}>
+                      <div className={`h-10 w-10 rounded-xl flex items-center justify-center text-white font-black text-base shrink-0 ${wdAgentInfo.available ? 'bg-teal-500' : 'bg-red-400'}`}>
+                        {wdAgentInfo.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-gray-800">{wdAgentInfo.name}</p>
+                        <p className="text-[10px] font-mono text-gray-400">#{wdAgentInfo.agentCode || wdAgentInfo.affiliateCode}</p>
+                      </div>
+                      <span className={`text-[10px] font-black px-2 py-1 rounded-lg ${wdAgentInfo.available ? 'bg-teal-100 text-teal-700' : 'bg-red-100 text-red-600'}`}>
+                        {wdAgentInfo.available ? '● Disponible' : '● Inactif'}
+                      </span>
+                    </motion.div>
+                  )}
+                </div>
+
+                {/* Amount */}
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant à retirer (USD)</Label>
+                  <Input type="number" value={wdAgentAmount} onChange={e => setWdAgentAmount(e.target.value)}
+                    placeholder="Ex: 20.00" className="h-12 rounded-xl text-lg font-black"
+                    min="0.01" max={balance} step="0.01" />
+                  {wdAgentAmount && !isNaN(parseFloat(wdAgentAmount)) && parseFloat(wdAgentAmount) > 0 && (
+                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-teal-50 border border-teal-100">
+                      <TrendingUp className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                      <p className="text-xs font-black text-teal-700">
+                        ≈ <span className="text-sm">{Math.round(parseFloat(wdAgentAmount) * rate).toLocaleString()} HTG</span> à récupérer
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Message */}
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Message (optionnel)</Label>
+                  <textarea value={wdAgentMsg} onChange={e => setWdAgentMsg(e.target.value)}
+                    placeholder="Notes pour l'agent..."
+                    className="w-full min-h-[60px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-teal-300 transition-all"
+                    maxLength={200} />
+                  <p className="text-[10px] text-gray-400">{wdAgentMsg.length}/200</p>
+                </div>
+
+                <Button type="submit"
+                  disabled={wdAgentLoading || !wdAgentInfo || !wdAgentInfo.available || !wdAgentAmount}
+                  className="w-full h-12 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-black border-0">
+                  {wdAgentLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Soumettre la demande →'}
+                </Button>
               </div>
             )}
 
