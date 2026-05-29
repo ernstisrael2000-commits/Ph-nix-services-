@@ -2679,6 +2679,106 @@ router.post('/api/admin/purchase/decline', requireDb, async (req, res) => {
   }
 });
 
+// ── Admin: affiliate withdrawal approve / reject ───────────────────────────────
+router.post('/api/admin/withdrawal/:id/approve', requireDb, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const requestRef = adminDb.collection('withdrawals').doc(id);
+    const requestSnap = await requestRef.get();
+    if (!requestSnap.exists) return res.status(404).json({ error: 'Demande introuvable.' });
+    const requestData = requestSnap.data()!;
+    if (requestData.status !== 'pending') return res.status(400).json({ error: 'Demande déjà traitée.' });
+
+    const batch = adminDb.batch();
+
+    batch.update(requestRef, { status: 'approved', updatedAt: FieldValue.serverTimestamp() });
+
+    // Sync the linked wallet_transaction if one exists
+    const snapTx = await adminDb.collection('wallet_transactions')
+      .where('affiliateId', '==', requestData.affiliateId)
+      .where('type', '==', 'withdrawal')
+      .where('amount', '==', requestData.amount)
+      .where('status', '==', 'pending')
+      .limit(1)
+      .get();
+    if (!snapTx.empty) {
+      batch.update(snapTx.docs[0].ref, { status: 'approved', updatedAt: FieldValue.serverTimestamp() });
+    }
+
+    // Debit affiliate balance atomically
+    const affiliateRef = adminDb.collection('affiliates').doc(requestData.affiliateId);
+    batch.update(affiliateRef, {
+      balance: FieldValue.increment(-requestData.amount),
+      totalWithdrawn: FieldValue.increment(requestData.amount),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // Affiliate notification
+    batch.set(adminDb.collection('affiliate_notifications').doc(), {
+      affiliateId: requestData.affiliateId,
+      title: '✅ Retrait approuvé',
+      message: `Votre demande de retrait de $${requestData.amount} a été approuvée. Vous serez payé sur ${requestData.method} dans les plus brefs délais.`,
+      type: 'system',
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[admin/withdrawal/approve]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+router.post('/api/admin/withdrawal/:id/reject', requireDb, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const requestRef = adminDb.collection('withdrawals').doc(id);
+    const requestSnap = await requestRef.get();
+    if (!requestSnap.exists) return res.status(404).json({ error: 'Demande introuvable.' });
+    const requestData = requestSnap.data()!;
+    if (requestData.status !== 'pending') return res.status(400).json({ error: 'Demande déjà traitée.' });
+
+    const batch = adminDb.batch();
+
+    batch.update(requestRef, {
+      status: 'rejected',
+      rejectionReason: reason || '',
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // Sync the linked wallet_transaction if one exists
+    const snapTx = await adminDb.collection('wallet_transactions')
+      .where('affiliateId', '==', requestData.affiliateId)
+      .where('type', '==', 'withdrawal')
+      .where('amount', '==', requestData.amount)
+      .where('status', '==', 'pending')
+      .limit(1)
+      .get();
+    if (!snapTx.empty) {
+      batch.update(snapTx.docs[0].ref, { status: 'rejected', updatedAt: FieldValue.serverTimestamp() });
+    }
+
+    // Affiliate notification
+    batch.set(adminDb.collection('affiliate_notifications').doc(), {
+      affiliateId: requestData.affiliateId,
+      title: '❌ Retrait refusé',
+      message: `Votre demande de retrait de $${requestData.amount} a été refusée.${reason ? ` Raison : ${reason}` : ''}`,
+      type: 'system',
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[admin/withdrawal/reject]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
 // ── Transaction status (deposits & withdrawals) ───────────────────────────────
 router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
   try {

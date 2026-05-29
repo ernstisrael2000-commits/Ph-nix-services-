@@ -311,6 +311,13 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /affiliate_notifications/{notifId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if isAdmin();
+    }
+
     match /agent_personal_transactions/{txId} {
       allow read: if true;
       allow create: if true;

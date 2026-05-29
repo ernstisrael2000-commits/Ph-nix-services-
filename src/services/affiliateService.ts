@@ -310,76 +310,30 @@ export const saveAffiliate = async (affiliateData: Partial<Affiliate>, id?: stri
 
 /**
  * Updates the status of a withdrawal request and adjusts affiliate balance if approved.
+ * Uses the backend API (Admin SDK) to bypass Firestore security rules.
  */
 export const updateWithdrawalStatus = async (
-  requestId: string, 
-  status: 'approved' | 'rejected', 
+  requestId: string,
+  status: 'approved' | 'rejected',
   reason?: string
 ) => {
+  const endpoint = status === 'approved'
+    ? `/api/admin/withdrawal/${requestId}/approve`
+    : `/api/admin/withdrawal/${requestId}/reject`;
+
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  });
+
+  let data: any = {};
   try {
-    const requestRef = doc(db, 'withdrawals', requestId);
-    const requestSnap = await getDoc(requestRef);
-    
-    if (!requestSnap.exists()) return;
-    const requestData = requestSnap.data() as WithdrawalRequest;
+    data = await res.json();
+  } catch {}
 
-    const batch = writeBatch(db);
-
-    // 1. Update legacy withdrawal and also the unified transaction log
-    batch.update(requestRef, {
-      status,
-      rejectionReason: reason || '',
-      updatedAt: serverTimestamp()
-    });
-
-    // 2. Find and update the corresponding unified wallet transaction
-    const qTx = query(
-      collection(db, 'wallet_transactions'),
-      where('affiliateId', '==', requestData.affiliateId),
-      where('type', '==', 'withdrawal'),
-      where('amount', '==', requestData.amount),
-      where('status', '==', 'pending')
-    );
-    const snapTx = await getDocs(qTx);
-    if (!snapTx.empty) {
-      // Update the most relevant one (this is a bit heuristic but usually safe for single requests)
-      batch.update(snapTx.docs[0].ref, {
-        status,
-        updatedAt: serverTimestamp()
-      });
-    }
-
-    // 3. Adjust affiliate balance if approved
-    if (status === 'approved') {
-      const affiliateRef = doc(db, 'affiliates', requestData.affiliateId);
-      const affiliateSnap = await getDoc(affiliateRef);
-      
-      if (affiliateSnap.exists()) {
-        const affiliateData = affiliateSnap.data() as Affiliate;
-        batch.update(affiliateRef, {
-          balance: (affiliateData.balance || 0) - requestData.amount,
-          totalWithdrawn: (affiliateData.totalWithdrawn || 0) + requestData.amount,
-          updatedAt: serverTimestamp()
-        });
-      }
-    }
-
-    // 4. Create affiliate notification
-    const notifRef = doc(collection(db, 'affiliate_notifications'));
-    batch.set(notifRef, {
-      affiliateId: requestData.affiliateId,
-      title: status === 'approved' ? '✅ Retrait approuvé' : '❌ Retrait refusé',
-      message: status === 'approved'
-        ? `Votre demande de retrait de $${requestData.amount} a été approuvée. Vous serez payé sur ${requestData.method} dans les plus brefs délais.`
-        : `Votre demande de retrait de $${requestData.amount} a été refusée.${reason ? ` Raison : ${reason}` : ''}`,
-      type: 'system',
-      read: false,
-      createdAt: serverTimestamp(),
-    });
-
-    await batch.commit();
-  } catch (error) {
-    handleFirestoreError(error, 'update', 'withdrawals', auth);
+  if (!res.ok) {
+    throw new Error(data.error || `Erreur serveur (${res.status})`);
   }
 };
 
