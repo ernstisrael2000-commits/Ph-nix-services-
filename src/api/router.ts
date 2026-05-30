@@ -2185,11 +2185,13 @@ router.post('/api/affiliate/client-direct-tx', requireDb, async (req, res) => {
         createdAt: now,
       });
     } else {
-      // Client gives digital credit → client.balance decreases, affiliate.balance increases
+      // Affiliate pays cash to client → both client.balance and affiliate.balance decrease
       if ((clientData.balance || 0) < usd)
         return res.status(400).json({ error: 'Solde client insuffisant.' });
+      if ((affData.balance || 0) < usd)
+        return res.status(400).json({ error: 'Solde affilié insuffisant pour effectuer ce retrait.' });
       batch.update(clientRef, { balance: FieldValue.increment(-usd), updatedAt: now });
-      batch.update(affRef, { balance: FieldValue.increment(usd), updatedAt: now });
+      batch.update(affRef, { balance: FieldValue.increment(-usd), updatedAt: now });
 
       const txRef = adminDb.collection('client_transactions').doc();
       batch.set(txRef, {
@@ -2203,9 +2205,9 @@ router.post('/api/affiliate/client-direct-tx', requireDb, async (req, res) => {
       });
       const affTxRef = adminDb.collection('affiliate_transactions').doc();
       batch.set(affTxRef, {
-        affiliateId, type: 'client_withdrawal_received', amount: usd,
+        affiliateId, type: 'client_withdrawal_given', amount: usd,
         clientId, clientName: clientData.name || '',
-        description: `Retrait de client ${clientData.name}`, status: 'completed',
+        description: `Retrait cash remis à ${clientData.name}`, status: 'completed',
         createdAt: now,
       });
     }
@@ -2261,6 +2263,8 @@ router.post('/api/affiliate/client-withdrawal/:txId/confirm', requireDb, async (
     const amount = txData.amount;
     if ((clientData.balance || 0) < amount)
       return res.status(400).json({ error: 'Solde client insuffisant.' });
+    if ((affData.balance || 0) < amount)
+      return res.status(400).json({ error: 'Solde affilié insuffisant pour effectuer ce retrait.' });
 
     const now = FieldValue.serverTimestamp();
 
@@ -2274,10 +2278,10 @@ router.post('/api/affiliate/client-withdrawal/:txId/confirm', requireDb, async (
     const adminShare = parseFloat((feeAmount - affiliateShare).toFixed(4));
 
     const batch = adminDb.batch();
-    // Client debited full amount
+    // Client debited full amount (loses digital)
     batch.update(clientRef, { balance: FieldValue.increment(-amount), updatedAt: now });
-    // Affiliate credited (full amount minus admin's fee cut)
-    batch.update(affRef, { balance: FieldValue.increment(amount - adminShare), updatedAt: now });
+    // Affiliate also debited (they pay cash out of their float); they keep their fee commission share
+    batch.update(affRef, { balance: FieldValue.increment(-amount + affiliateShare), updatedAt: now });
     batch.update(txRef, { status: 'approved', updatedAt: now, confirmedAt: now, confirmedBy: affiliateId,
       ...(feeAmount > 0 && { fee: feeAmount, affiliateFeeShare: affiliateShare, adminFeeShare: adminShare }),
     });
@@ -2288,9 +2292,9 @@ router.post('/api/affiliate/client-withdrawal/:txId/confirm', requireDb, async (
       });
     }
     batch.set(adminDb.collection('affiliate_transactions').doc(), {
-      affiliateId, type: 'client_withdrawal_received', amount,
+      affiliateId, type: 'client_withdrawal_given', amount,
       clientId: txData.clientId, clientName: txData.clientName || '',
-      description: `Retrait confirmé pour ${txData.clientName}`, status: 'completed',
+      description: `Retrait cash remis à ${txData.clientName}`, status: 'completed',
       ...(feeAmount > 0 && { fee: feeAmount, affiliateFeeShare: affiliateShare }),
       createdAt: now,
     });

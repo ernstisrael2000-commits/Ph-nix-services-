@@ -1719,10 +1719,15 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                                 </div>
                                 <span className="text-lg font-black text-rose-600">${req.amount?.toFixed(2)}</span>
                               </div>
+                              {parseFloat(req.amount) > (affiliate?.balance || 0) && (
+                                <div className="bg-amber-50 border border-amber-100 p-2 rounded-xl">
+                                  <p className="text-[10px] text-amber-700 font-bold">Solde affilié insuffisant pour effectuer ce retrait.</p>
+                                </div>
+                              )}
                               <div className="flex gap-2">
                                 <Button
                                   onClick={() => handleConfirmWithdrawal(req.id)}
-                                  disabled={!!processingRequestId}
+                                  disabled={!!processingRequestId || parseFloat(req.amount) > (affiliate?.balance || 0)}
                                   className="flex-1 h-9 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black rounded-xl border-0"
                                 >
                                   {processingRequestId === req.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Confirmer</>}
