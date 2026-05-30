@@ -724,6 +724,35 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
                           </div>
                         </div>
 
+                        {/* Fee breakdown preview */}
+                        {(() => {
+                          const amt = req.amount || 0;
+                          const wdPct = settings?.agentWithdrawPercent || 0;
+                          const agentSharePct = settings?.agentWithdrawAgentSharePercent ?? 100;
+                          if (amt <= 0 || wdPct <= 0) return null;
+                          const fee = parseFloat((amt * wdPct / 100).toFixed(4));
+                          const agentShare = parseFloat((fee * agentSharePct / 100).toFixed(4));
+                          const netClient = parseFloat((amt - fee).toFixed(4));
+                          return (
+                            <div className="rounded-2xl border border-gray-100 overflow-hidden">
+                              <div className="flex justify-between items-center px-3 py-2 bg-white border-b border-gray-50">
+                                <span className="text-[10px] text-gray-400 font-medium">Frais ({wdPct}%)</span>
+                                <span className="text-xs font-black text-red-400">−${fee.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between items-center px-3 py-2 bg-rose-50 border-b border-rose-100">
+                                <span className="text-[10px] font-black text-rose-700 uppercase tracking-wide">À remettre</span>
+                                <span className="text-sm font-black text-rose-700">${netClient.toFixed(2)} USD</span>
+                              </div>
+                              {agentShare > 0 && (
+                                <div className="flex justify-between items-center px-3 py-2 bg-emerald-50">
+                                  <span className="text-[10px] font-black text-emerald-700 uppercase tracking-wide">Votre commission</span>
+                                  <span className="text-xs font-black text-emerald-700">+${agentShare.toFixed(2)}</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+
                         {/* Reject reason */}
                         <div>
                           <Input
@@ -848,6 +877,9 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
               submitting={submitting}
               onSearch={handleSearchClient}
               onSubmit={handleSubmitDeposit}
+              agentDepositCommissionPercent={settings?.agentDepositCommissionPercent ?? 0}
+              agentWithdrawPercent={settings?.agentWithdrawPercent ?? 0}
+              agentWithdrawAgentSharePercent={settings?.agentWithdrawAgentSharePercent ?? 100}
             />
           </motion.div>
         )}
@@ -1390,6 +1422,9 @@ interface DirectTxFormProps {
   submitting: boolean;
   onSearch: () => void;
   onSubmit: () => void;
+  agentDepositCommissionPercent?: number;
+  agentWithdrawPercent?: number;
+  agentWithdrawAgentSharePercent?: number;
 }
 
 function DirectTxForm({
@@ -1400,11 +1435,20 @@ function DirectTxForm({
   txAmount, setTxAmount,
   txNote, setTxNote,
   submitting, onSearch, onSubmit,
+  agentDepositCommissionPercent = 0,
+  agentWithdrawPercent = 0,
+  agentWithdrawAgentSharePercent = 100,
 }: DirectTxFormProps) {
   const isDeposit = type === 'deposit';
   const usd = parseFloat(txAmount);
-  const htgPreview = !isNaN(usd) && usd > 0 ? usd * rate : 0;
   const color = isDeposit ? 'emerald' : 'rose';
+
+  // Fee preview (authoritative calculation happens server-side)
+  const depositCommission  = !isNaN(usd) && usd > 0 ? parseFloat((usd * agentDepositCommissionPercent / 100).toFixed(4)) : 0;
+  const withdrawTotalFee   = !isNaN(usd) && usd > 0 ? parseFloat((usd * agentWithdrawPercent / 100).toFixed(4)) : 0;
+  const withdrawAgentShare = parseFloat((withdrawTotalFee * agentWithdrawAgentSharePercent / 100).toFixed(4));
+  const withdrawAdminShare = parseFloat((withdrawTotalFee - withdrawAgentShare).toFixed(4));
+  const withdrawNetClient  = !isNaN(usd) && usd > 0 ? parseFloat((usd - withdrawTotalFee).toFixed(4)) : 0;
 
   return (
     <Card className="rounded-[2rem] border-0 shadow-sm border border-gray-100">
@@ -1488,10 +1532,59 @@ function DirectTxForm({
                   placeholder="0.00"
                   className="h-14 rounded-2xl bg-gray-50 border-0 font-black text-2xl text-center focus:ring-2 focus:ring-primary/20"
                 />
-                {htgPreview > 0 && (
-                  <p className="text-xs text-gray-400 text-center mt-1 font-bold">
-                    ≈ {htgPreview.toLocaleString()} HTG
-                  </p>
+                {!isNaN(usd) && usd > 0 && (
+                  <div className="mt-2 rounded-2xl border border-gray-100 overflow-hidden">
+                    {isDeposit ? (
+                      <>
+                        <div className="flex justify-between items-center px-3.5 py-2 bg-white border-b border-gray-50">
+                          <span className="text-[11px] text-gray-500 font-medium">Montant crédité au client</span>
+                          <span className="text-sm font-black text-gray-800">${usd.toFixed(2)} USD</span>
+                        </div>
+                        <div className="flex justify-between items-center px-3.5 py-2 bg-white border-b border-gray-50">
+                          <span className="text-[11px] text-gray-500 font-medium">Débité sur votre solde</span>
+                          <span className="text-sm font-black text-red-500">−${usd.toFixed(2)} USD</span>
+                        </div>
+                        {depositCommission > 0 && (
+                          <div className="flex justify-between items-center px-3.5 py-2 bg-emerald-50">
+                            <span className="text-[11px] font-black text-emerald-800 uppercase tracking-wide">Votre commission</span>
+                            <span className="text-sm font-black text-emerald-700">+${depositCommission.toFixed(2)} USD</span>
+                          </div>
+                        )}
+                        {depositCommission === 0 && (
+                          <div className="flex justify-between items-center px-3.5 py-2 bg-gray-50">
+                            <span className="text-[11px] text-gray-400">≈ en HTG</span>
+                            <span className="text-xs font-bold text-gray-400">{Math.round(usd * rate).toLocaleString()} HTG</span>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex justify-between items-center px-3.5 py-2 bg-white border-b border-gray-50">
+                          <span className="text-[11px] text-gray-500 font-medium">Débité du client</span>
+                          <span className="text-sm font-black text-gray-800">${usd.toFixed(2)} USD</span>
+                        </div>
+                        {agentWithdrawPercent > 0 && (
+                          <div className="flex justify-between items-center px-3.5 py-2 bg-white border-b border-gray-50">
+                            <span className="text-[11px] text-red-500 font-medium">Frais ({agentWithdrawPercent}%)</span>
+                            <span className="text-sm font-black text-red-500">−${withdrawTotalFee.toFixed(2)} USD</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center px-3.5 py-2 bg-rose-50 border-b border-rose-100">
+                          <span className="text-[11px] font-black text-rose-800 uppercase tracking-wide">À remettre au client</span>
+                          <span className="text-base font-black text-rose-700">${withdrawNetClient.toFixed(2)} USD</span>
+                        </div>
+                        {withdrawAgentShare > 0 && (
+                          <div className="flex justify-between items-center px-3.5 py-2 bg-emerald-50">
+                            <span className="text-[11px] font-black text-emerald-800 uppercase tracking-wide">Votre commission</span>
+                            <span className="text-sm font-black text-emerald-700">+${withdrawAgentShare.toFixed(2)} USD</span>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+                {(isNaN(usd) || usd <= 0) && (
+                  <p className="text-[11px] text-gray-400 text-center mt-1 font-medium">Saisissez un montant pour voir le détail</p>
                 )}
               </div>
 

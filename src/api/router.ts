@@ -244,6 +244,23 @@ function pushClientEvent(clientId: string, event: string, data: object): void {
   }
 }
 
+// ── Public: fee preview (no auth – preview only, server calculates authoritatively) ──
+router.get('/api/client/fees', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('settings').doc('global').get();
+    const s = snap.data() || {};
+    res.json({
+      depositFeePercent:              Number(s.depositFeePercent              || 0),
+      withdrawalFeePercent:           Number(s.withdrawalFeePercent           || 0),
+      agentDepositCommissionPercent:  Number(s.agentDepositCommissionPercent  || 0),
+      agentWithdrawPercent:           Number(s.agentWithdrawPercent           || 0),
+      agentWithdrawAgentSharePercent: Number(s.agentWithdrawAgentSharePercent ?? 100),
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Client: SSE event stream (withdrawal confirmations, etc.) ─────────────────
 router.get('/api/client/events/:clientId', (req, res) => {
   const { clientId } = req.params;

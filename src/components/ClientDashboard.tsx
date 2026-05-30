@@ -242,6 +242,24 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   const htgPreview = withdrawUSD && !isNaN(parseFloat(withdrawUSD)) ? parseFloat(withdrawUSD) * rate : 0;
   const transferHtgPreview = transferUSD && !isNaN(parseFloat(transferUSD)) ? parseFloat(transferUSD) * rate : 0;
 
+  // Fee computation (preview only – server calculates authoritatively at approval)
+  const depositFeePercent    = settings?.depositFeePercent    || 0;
+  const withdrawalFeePercent = settings?.withdrawalFeePercent || 0;
+  const depositFeeAmount  = usdPreview > 0 ? parseFloat((usdPreview * depositFeePercent / 100).toFixed(4)) : 0;
+  const depositNetAmount  = usdPreview > 0 ? parseFloat((usdPreview - depositFeeAmount).toFixed(4)) : 0;
+  const withdrawUSDNum    = parseFloat(withdrawUSD) || 0;
+  const withdrawFeeAmount = withdrawUSDNum > 0 ? parseFloat((withdrawUSDNum * withdrawalFeePercent / 100).toFixed(4)) : 0;
+  const withdrawNetAmount = withdrawUSDNum > 0 ? parseFloat((withdrawUSDNum - withdrawFeeAmount).toFixed(4)) : 0;
+  // For agent QR / agent-code modes
+  const agentQrUSDNum        = parseFloat(agentQrAmount) || 0;
+  const agentQrDepositFee    = agentQrUSDNum > 0 ? parseFloat((agentQrUSDNum * depositFeePercent / 100).toFixed(4)) : 0;
+  const agentQrDepositNet    = agentQrUSDNum > 0 ? parseFloat((agentQrUSDNum - agentQrDepositFee).toFixed(4)) : 0;
+  const agentQrWithdrawFee   = agentQrUSDNum > 0 ? parseFloat((agentQrUSDNum * withdrawalFeePercent / 100).toFixed(4)) : 0;
+  const agentQrWithdrawNet   = agentQrUSDNum > 0 ? parseFloat((agentQrUSDNum - agentQrWithdrawFee).toFixed(4)) : 0;
+  const wdAgentAmountNum     = parseFloat(wdAgentAmount) || 0;
+  const wdAgentCodeFee       = wdAgentAmountNum > 0 ? parseFloat((wdAgentAmountNum * withdrawalFeePercent / 100).toFixed(4)) : 0;
+  const wdAgentCodeNet       = wdAgentAmountNum > 0 ? parseFloat((wdAgentAmountNum - wdAgentCodeFee).toFixed(4)) : 0;
+
   const minDeposit  = settings?.minDepositUSD    || 0.01;
   const maxDeposit  = settings?.maxDepositUSD    || 10000;
   const minWithdraw = settings?.minWithdrawalUSD || 0.01;
@@ -921,6 +939,24 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                       <Input type="number" placeholder="Ex: 20.00" value={agentQrAmount}
                         onChange={e => setAgentQrAmount(e.target.value)}
                         className="h-12 rounded-xl text-lg font-black" min="0.01" step="0.01" />
+                      {agentQrUSDNum > 0 && (
+                        <div className="rounded-2xl border border-emerald-100 overflow-hidden">
+                          <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-emerald-50">
+                            <span className="text-[11px] text-gray-500 font-medium">Montant déposé</span>
+                            <span className="text-sm font-black text-gray-800">${agentQrUSDNum.toFixed(2)} USD</span>
+                          </div>
+                          {depositFeePercent > 0 && (
+                            <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-emerald-50">
+                              <span className="text-[11px] text-red-500 font-medium">Frais ({depositFeePercent}%)</span>
+                              <span className="text-sm font-black text-red-500">−${agentQrDepositFee.toFixed(2)} USD</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center px-3.5 py-2.5 bg-emerald-50">
+                            <span className="text-[11px] font-black text-emerald-800 uppercase tracking-wide">Vous recevrez</span>
+                            <span className="text-base font-black text-emerald-700">${agentQrDepositNet.toFixed(2)} USD</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <Button type="button" onClick={() => handleGenerateTxCode('deposit')}
                       disabled={txCodeLoading || !agentQrAmount || parseFloat(agentQrAmount) <= 0}
@@ -1056,11 +1092,21 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               <Input type="number" value={htgAmount} onChange={e => setHtgAmount(e.target.value)}
                 placeholder="Ex: 1 000" className="h-12 rounded-xl text-lg font-black" min="1" step="1" required />
               {usdPreview > 0 && (
-                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-100">
-                  <TrendingUp className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                  <p className="text-xs font-black text-emerald-700">
-                    Vous recevrez ≈ <span className="text-base">${usdPreview.toFixed(2)} USD</span>
-                  </p>
+                <div className="rounded-2xl border border-emerald-100 overflow-hidden">
+                  <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-emerald-50">
+                    <span className="text-[11px] text-gray-500 font-medium">Montant déposé</span>
+                    <span className="text-sm font-black text-gray-800">${usdPreview.toFixed(2)} USD</span>
+                  </div>
+                  {depositFeePercent > 0 && (
+                    <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-emerald-50">
+                      <span className="text-[11px] text-red-500 font-medium">Frais ({depositFeePercent}%)</span>
+                      <span className="text-sm font-black text-red-500">−${depositFeeAmount.toFixed(2)} USD</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center px-3.5 py-2.5 bg-emerald-50">
+                    <span className="text-[11px] font-black text-emerald-800 uppercase tracking-wide">Vous recevrez</span>
+                    <span className="text-base font-black text-emerald-700">${depositNetAmount.toFixed(2)} USD</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -1158,6 +1204,24 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                       {agentQrAmount && parseFloat(agentQrAmount) > balance && (
                         <p className="text-[10px] text-red-500 font-bold">Solde insuffisant (disponible: ${balance.toFixed(2)})</p>
                       )}
+                      {agentQrUSDNum > 0 && agentQrUSDNum <= balance && (
+                        <div className="rounded-2xl border border-rose-100 overflow-hidden">
+                          <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-rose-50">
+                            <span className="text-[11px] text-gray-500 font-medium">Montant demandé</span>
+                            <span className="text-sm font-black text-gray-800">${agentQrUSDNum.toFixed(2)} USD</span>
+                          </div>
+                          {withdrawalFeePercent > 0 && (
+                            <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-rose-50">
+                              <span className="text-[11px] text-red-500 font-medium">Frais ({withdrawalFeePercent}%)</span>
+                              <span className="text-sm font-black text-red-500">−${agentQrWithdrawFee.toFixed(2)} USD</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center px-3.5 py-2.5 bg-rose-50">
+                            <span className="text-[11px] font-black text-rose-800 uppercase tracking-wide">Vous recevrez</span>
+                            <span className="text-base font-black text-rose-700">${agentQrWithdrawNet.toFixed(2)} USD</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <Button type="button" onClick={() => handleGenerateTxCode('withdrawal')}
                       disabled={txCodeLoading || !agentQrAmount || parseFloat(agentQrAmount) <= 0 || parseFloat(agentQrAmount) > balance}
@@ -1245,12 +1309,25 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                   <Input type="number" value={wdAgentAmount} onChange={e => setWdAgentAmount(e.target.value)}
                     placeholder="Ex: 20.00" className="h-12 rounded-xl text-lg font-black"
                     min="0.01" max={balance} step="0.01" />
-                  {wdAgentAmount && !isNaN(parseFloat(wdAgentAmount)) && parseFloat(wdAgentAmount) > 0 && (
-                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-teal-50 border border-teal-100">
-                      <TrendingUp className="h-3.5 w-3.5 text-teal-600 shrink-0" />
-                      <p className="text-xs font-black text-teal-700">
-                        ≈ <span className="text-sm">{Math.round(parseFloat(wdAgentAmount) * rate).toLocaleString()} HTG</span> à récupérer
-                      </p>
+                  {wdAgentAmountNum > 0 && (
+                    <div className="rounded-2xl border border-teal-100 overflow-hidden">
+                      <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-teal-50">
+                        <span className="text-[11px] text-gray-500 font-medium">Montant demandé</span>
+                        <span className="text-sm font-black text-gray-800">${wdAgentAmountNum.toFixed(2)} USD</span>
+                      </div>
+                      {withdrawalFeePercent > 0 && (
+                        <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-teal-50">
+                          <span className="text-[11px] text-red-500 font-medium">Frais ({withdrawalFeePercent}%)</span>
+                          <span className="text-sm font-black text-red-500">−${wdAgentCodeFee.toFixed(2)} USD</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center px-3.5 py-2.5 bg-teal-50">
+                        <span className="text-[11px] font-black text-teal-800 uppercase tracking-wide">Vous recevrez</span>
+                        <span className="text-base font-black text-teal-700">
+                          ${wdAgentCodeNet.toFixed(2)} USD
+                          <span className="text-[10px] font-medium text-gray-400 ml-1">≈ {Math.round(wdAgentCodeNet * rate).toLocaleString()} HTG</span>
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1303,12 +1380,25 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
               <Input type="number" value={withdrawUSD} onChange={e => setWithdrawUSD(e.target.value)}
                 placeholder="Ex: 10.00" className="h-12 rounded-xl text-lg font-black"
                 min="0.01" max={balance} step="0.01" required />
-              {htgPreview > 0 && (
-                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-red-50 border border-red-100">
-                  <TrendingUp className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                  <p className="text-xs font-black text-red-600">
-                    ≈ <span className="text-base">{Math.round(htgPreview).toLocaleString()} HTG</span> que vous recevrez
-                  </p>
+              {withdrawUSDNum > 0 && (
+                <div className="rounded-2xl border border-red-100 overflow-hidden">
+                  <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-red-50">
+                    <span className="text-[11px] text-gray-500 font-medium">Montant demandé</span>
+                    <span className="text-sm font-black text-gray-800">${withdrawUSDNum.toFixed(2)} USD</span>
+                  </div>
+                  {withdrawalFeePercent > 0 && (
+                    <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-red-50">
+                      <span className="text-[11px] text-red-500 font-medium">Frais ({withdrawalFeePercent}%)</span>
+                      <span className="text-sm font-black text-red-500">−${withdrawFeeAmount.toFixed(2)} USD</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center px-3.5 py-2.5 bg-red-50">
+                    <span className="text-[11px] font-black text-red-800 uppercase tracking-wide">Vous recevrez</span>
+                    <span className="text-base font-black text-red-700">
+                      ${withdrawNetAmount.toFixed(2)} USD
+                      <span className="text-[10px] font-medium text-gray-400 ml-1">≈ {Math.round(withdrawNetAmount * rate).toLocaleString()} HTG</span>
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
