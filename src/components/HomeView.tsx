@@ -4,6 +4,7 @@ import {
   Package, Truck, Users, ArrowRight,
   ShoppingBag, Globe, GraduationCap, Wallet,
   MessageCircle, ArrowUp, ChevronRight, Search, X, Zap, TrendingUp, Loader2,
+  Star, BookOpen, Award, Clock,
 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
@@ -370,6 +371,11 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
         )}
       </section>
 
+      {/* ── Formations en vedette ── */}
+      <section>
+        <FeaturedFormations onGoToFormations={() => onViewChange('formations')} />
+      </section>
+
       {/* ── Why Rena ── */}
       <section className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
         <h2 className="text-base font-black text-dark mb-4">Pourquoi choisir Rena ?</h2>
@@ -518,6 +524,165 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// ── Featured Formations section (used on Home) ─────────────────────────────────
+
+const levelGradients: Record<string, string> = {
+  debutant: 'from-emerald-500 to-teal-600',
+  intermediaire: 'from-violet-500 to-purple-700',
+  avance: 'from-rose-500 to-pink-700',
+};
+
+function FeaturedFormations({ onGoToFormations }: { onGoToFormations: () => void }) {
+  const [formations, setFormations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/formations')
+      .then(r => r.json())
+      .then(data => {
+        const all = Array.isArray(data.formations) ? data.formations : [];
+        const sorted = [...all].sort((a, b) => (b.studentsCount || 0) - (a.studentsCount || 0));
+        setFormations(sorted.slice(0, 4));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const totalStudents = formations.reduce((s, f) => s + (f.studentsCount || 0), 0);
+  const certCount = formations.filter(f => f.hasCertificate).length;
+
+  if (!loading && formations.length === 0) return null;
+
+  return (
+    <div className="bg-white rounded-3xl border border-gray-100 p-5 shadow-sm space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2 mb-0.5">
+            <div className="h-7 w-7 rounded-xl bg-violet-100 flex items-center justify-center">
+              <GraduationCap className="h-4 w-4 text-violet-600" />
+            </div>
+            <h2 className="text-base font-black text-gray-900">Formations</h2>
+          </div>
+          <p className="text-xs text-gray-400 pl-9">Développez vos compétences en ligne</p>
+        </div>
+        <button
+          onClick={onGoToFormations}
+          className="text-xs font-bold text-violet-600 hover:text-violet-800 flex items-center gap-0.5 transition-colors"
+        >
+          Voir tout <ArrowRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* Stats pills */}
+      {!loading && formations.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          {[
+            { label: `${formations.length}+ cours`, icon: BookOpen, color: 'text-violet-700 bg-violet-50 border-violet-100' },
+            ...(totalStudents > 0 ? [{ label: `${totalStudents.toLocaleString()} étudiants`, icon: Users, color: 'text-emerald-700 bg-emerald-50 border-emerald-100' }] : []),
+            ...(certCount > 0 ? [{ label: 'Certificats', icon: Award, color: 'text-amber-700 bg-amber-50 border-amber-100' }] : []),
+            { label: 'En ligne', icon: Star, color: 'text-blue-700 bg-blue-50 border-blue-100' },
+          ].map(s => (
+            <div key={s.label} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold shrink-0 ${s.color}`}>
+              <s.icon className="h-3 w-3" />
+              {s.label}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Course grid */}
+      {loading ? (
+        <div className="grid grid-cols-2 gap-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="rounded-2xl overflow-hidden border border-gray-100">
+              <div className="h-28 bg-gray-100 animate-pulse" />
+              <div className="p-2.5 space-y-1.5">
+                <div className="h-3 bg-gray-100 rounded animate-pulse w-3/4" />
+                <div className="h-2.5 bg-gray-100 rounded animate-pulse w-1/2" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          {formations.map((f, i) => (
+            <motion.button
+              key={f.id || i}
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: i * 0.06, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              onClick={onGoToFormations}
+              className="relative rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all group text-left active:scale-[0.98]"
+            >
+              {/* Cover */}
+              <div className="relative overflow-hidden" style={{ aspectRatio: '16/9' }}>
+                {f.coverImage ? (
+                  <img
+                    src={f.coverImage}
+                    alt={f.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                ) : (
+                  <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${levelGradients[f.level] || 'from-violet-500 to-purple-700'}`}>
+                    <GraduationCap className="h-8 w-8 text-white/20" />
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+
+                {/* Badge */}
+                {f.price === 0 ? (
+                  <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-500 text-white leading-none">
+                    Gratuit
+                  </span>
+                ) : (
+                  <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-violet-600 text-white leading-none">
+                    {(f.price || 0).toLocaleString()} HTG
+                  </span>
+                )}
+
+                {/* Title overlay */}
+                <div className="absolute bottom-1.5 left-2 right-2">
+                  <p className="text-white font-black text-[11px] leading-tight line-clamp-2 drop-shadow-sm">
+                    {f.title}
+                  </p>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-2.5 py-2 bg-white flex items-center justify-between gap-1">
+                <p className="text-[9px] text-gray-400 truncate">
+                  {f.instructor || 'Rena Academy'}
+                </p>
+                {f.studentsCount > 0 && (
+                  <p className="text-[9px] text-gray-400 shrink-0 flex items-center gap-0.5">
+                    <Users className="h-2.5 w-2.5" />
+                    {f.studentsCount}
+                  </p>
+                )}
+              </div>
+            </motion.button>
+          ))}
+        </div>
+      )}
+
+      {/* CTA */}
+      {!loading && formations.length > 0 && (
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={onGoToFormations}
+          className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-black text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-violet-500/20 hover:-translate-y-0.5 active:translate-y-0"
+        >
+          <GraduationCap className="h-4 w-4" />
+          Explorer toutes les formations
+          <ArrowRight className="h-4 w-4" />
+        </motion.button>
+      )}
     </div>
   );
 }

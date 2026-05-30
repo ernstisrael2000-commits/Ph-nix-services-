@@ -27,6 +27,9 @@ interface FormationsViewProps {
   onClientLogin?: (client: Client) => void;
   activeTab: 'all' | 'my';
   onTabChange: (tab: 'all' | 'my') => void;
+  searchQuery?: string;
+  onSearchChange?: (q: string) => void;
+  onPlayerChange?: (active: boolean) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -81,7 +84,7 @@ type PaymentStep = 'detail' | 'external-method' | 'form' | 'done';
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-export default function FormationsView({ loggedClient, onOpenWallet, onClientLogin, activeTab, onTabChange }: FormationsViewProps) {
+export default function FormationsView({ loggedClient, onOpenWallet, onClientLogin, activeTab, onTabChange, searchQuery: externalSearch, onSearchChange, onPlayerChange }: FormationsViewProps) {
   const { settings } = useSettings();
 
   // Data
@@ -97,6 +100,11 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Sync external search from FormationsNavbar
+  useEffect(() => {
+    if (externalSearch !== undefined) setSearchQuery(externalSearch);
+  }, [externalSearch]);
 
   // Ownership & progress
   const [purchasedIds, setPurchasedIds] = useState<string[]>([]);
@@ -283,9 +291,19 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
     } catch (err: any) { toast.error(err.message); } finally { setSubmittingPayment(false); }
   };
 
+  // ── Player helpers ──────────────────────────────────────────────────────────
+  const enterPlayer = (f: Formation) => {
+    setPlayerFormation(f);
+    onPlayerChange?.(true);
+  };
+  const exitPlayer = () => {
+    setPlayerFormation(null);
+    onPlayerChange?.(false);
+  };
+
   // ── Render: Player ──────────────────────────────────────────────────────────
   if (playerFormation && loggedClient) {
-    return <CoursePlayer formation={playerFormation} loggedClient={loggedClient} onBack={() => setPlayerFormation(null)} />;
+    return <CoursePlayer formation={playerFormation} loggedClient={loggedClient} onBack={exitPlayer} />;
   }
 
   // ── Render: Detail Page ─────────────────────────────────────────────────────
@@ -297,7 +315,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
         isFav={isFav(selected)}
         loggedClient={loggedClient}
         onBack={closeDetail}
-        onPlay={() => { closeDetail(); setPlayerFormation(selected); }}
+        onPlay={() => { closeDetail(); enterPlayer(selected); }}
         onFavorite={(e) => toggleFavorite(selected, e)}
         onOpenWallet={onOpenWallet}
         paymentStep={paymentStep}
@@ -386,27 +404,54 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
         </DialogContent>
       </Dialog>
 
-      {/* ── SEARCH BAR ──────────────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-gray-100 px-4 py-4">
-        <div className="max-w-2xl mx-auto flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Rechercher une formation…"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 h-10 rounded-xl bg-gray-50 border border-gray-200 text-gray-800 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400/50 focus:bg-white focus:border-violet-300 transition-all"
-            />
+      {/* ── LMS HERO ────────────────────────────────────────────────────────── */}
+      {activeTab === 'all' && !searchQuery && (
+        <div className="bg-gradient-to-br from-slate-900 via-violet-950 to-purple-900 px-4 pt-7 pb-5">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight tracking-tight">
+                  Développez vos<br className="sm:hidden" /> compétences
+                </h1>
+                <p className="text-violet-300 text-sm mt-1.5 font-medium">
+                  Apprenez à votre rythme avec nos formations en ligne
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: `${formations.length} cours`, icon: <BookOpen className="h-3.5 w-3.5" /> },
+                  { label: `${formations.reduce((s, f) => s + (f.studentsCount || 0), 0).toLocaleString() || '0'} étudiants`, icon: <Users className="h-3.5 w-3.5" /> },
+                  { label: 'Certifiants', icon: <Award className="h-3.5 w-3.5" /> },
+                ].map(s => (
+                  <div key={s.label} className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm text-white/90 text-xs font-bold px-3 py-1.5 rounded-full border border-white/10">
+                    {s.icon} {s.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Quick category filter pills */}
+            {categories.filter(c => c !== 'all').length > 0 && (
+              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                <button
+                  onClick={() => setFilterCategory('all')}
+                  className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all shrink-0 border ${filterCategory === 'all' ? 'bg-white text-violet-900 border-white' : 'bg-white/10 text-white/80 hover:bg-white/20 border-white/10'}`}
+                >
+                  Toutes catégories
+                </button>
+                {categories.filter(c => c !== 'all').map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setFilterCategory(cat)}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all shrink-0 border ${filterCategory === cat ? 'bg-white text-violet-900 border-white' : 'bg-white/10 text-white/80 hover:bg-white/20 border-white/10'}`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <button
-            onClick={() => {}}
-            className="h-10 px-5 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl transition-colors text-sm shrink-0"
-          >
-            Chercher
-          </button>
         </div>
-      </div>
+      )}
 
       {/* ── TAB BAR ─────────────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-gray-100 sticky top-14 z-30 shadow-sm">
@@ -471,7 +516,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                 const inProgress = myCourses.find(f => (progressMap[f.id!] ?? 0) > 0 && (progressMap[f.id!] ?? 0) < 100)!;
                 return (
                   <button
-                    onClick={() => { setPlayerFormation(inProgress); }}
+                    onClick={() => { enterPlayer(inProgress); }}
                     className="flex items-center gap-2 ml-auto bg-violet-600 hover:bg-violet-700 text-white rounded-full px-3 py-1.5 text-xs font-black shrink-0 transition-colors"
                   >
                     <Play className="h-3 w-3 fill-white" />
@@ -553,7 +598,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {myCourses.slice(0, 3).map((f, i) => (
-                      <InProgressCard key={f.id} formation={f} pct={progressMap[f.id!] ?? 0} onContinue={() => { closeDetail(); setPlayerFormation(f); }} onDetails={() => openDetail(f)} i={i} />
+                      <InProgressCard key={f.id} formation={f} pct={progressMap[f.id!] ?? 0} onContinue={() => { closeDetail(); enterPlayer(f); }} onDetails={() => openDetail(f)} i={i} />
                     ))}
                   </div>
                 </div>
@@ -659,7 +704,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                   myCourses={myCourses}
                   progressMap={progressMap}
                   favorites={favorites.map(id => formations.find(f => f.id === id)).filter(Boolean) as Formation[]}
-                  onPlay={(f) => { setPlayerFormation(f); }}
+                  onPlay={(f) => { enterPlayer(f); }}
                   onDetails={openDetail}
                   onOpenWallet={onOpenWallet}
                   onTabChange={onTabChange}

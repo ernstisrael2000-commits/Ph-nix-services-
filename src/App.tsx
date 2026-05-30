@@ -22,6 +22,7 @@ import { useSettings } from './services/parcelService';
 import { useFCM } from './hooks/useFCM';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Package, ChevronLeft, Bell, X, WifiOff } from 'lucide-react';
+import FormationsNavbar from './components/FormationsNavbar';
 import { Button } from './components/ui/button';
 import { Affiliate, AdminAccount, Client } from './types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -40,6 +41,8 @@ export default function App() {
   const [isOffline, setIsOffline] = useState(false);
   const [showClientDashboard, setShowClientDashboard] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [formationsSearch, setFormationsSearch] = useState('');
+  const [formationsInPlayer, setFormationsInPlayer] = useState(false);
   
   const [loggedAdmin, setLoggedAdmin] = useState<AdminAccount | null>(() => {
     const saved = localStorage.getItem('rena_admin');
@@ -178,6 +181,19 @@ export default function App() {
           />
         )}
 
+        {view === 'formations' && !formationsInPlayer && (
+          <FormationsNavbar
+            onGoHome={() => { handleViewChange('home'); setFormationsSearch(''); }}
+            loggedClient={loggedClient}
+            onOpenWallet={() => setShowClientDashboard(true)}
+            onRequestAuth={() => setShowAuthModal(true)}
+            activeTab={formationsTab}
+            onTabChange={setFormationsTab}
+            searchQuery={formationsSearch}
+            onSearch={setFormationsSearch}
+          />
+        )}
+
         <AnimatePresence>
           {settings?.showGlobalAnnouncement && settings?.globalAnnouncement && showAnnouncement && (
             <div className="fixed inset-0 z-50 flex items-center justify-center px-4 p-6 pointer-events-none">
@@ -262,7 +278,7 @@ export default function App() {
           />
         )}
 
-        <main className={`animate-in fade-in duration-500 ${view === 'formations' ? 'pt-0' : 'pt-14'} flex-grow relative ${!['admin', 'affiliate'].includes(view) ? 'pb-[74px]' : ''}`}>
+        <main className={`animate-in fade-in duration-500 ${view === 'formations' ? (formationsInPlayer ? 'pt-0' : 'pt-14') : 'pt-14'} flex-grow relative ${!['admin', 'affiliate'].includes(view) ? 'pb-[74px]' : ''}`}>
           {/* Back button only for utility views (tracking, shipping) */}
           {['tracking', 'shipping'].includes(view) && (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">
@@ -318,6 +334,9 @@ export default function App() {
               onClientLogin={handleClientLogin}
               activeTab={formationsTab}
               onTabChange={setFormationsTab}
+              searchQuery={formationsSearch}
+              onSearchChange={setFormationsSearch}
+              onPlayerChange={setFormationsInPlayer}
             />
           )}
 
@@ -348,8 +367,8 @@ export default function App() {
 
         </main>
 
-        {/* Footer — only on non-dashboard views */}
-        {!['admin', 'affiliate'].includes(view) && (
+        {/* Footer — only on non-dashboard, non-formations views */}
+        {!['admin', 'affiliate', 'formations'].includes(view) && (
           <footer className="py-12 border-t mt-auto bg-white pb-24">
             <div className="max-w-7xl mx-auto px-4 text-center">
               <div className="flex items-center justify-center gap-2 mb-4">
