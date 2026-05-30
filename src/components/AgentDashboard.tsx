@@ -126,6 +126,14 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
   const [txNote, setTxNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Success modal (shown after completing a direct transaction or confirming withdrawal)
+  const [agentSuccessModal, setAgentSuccessModal] = useState<{
+    type: 'deposit' | 'withdrawal';
+    clientName: string;
+    htg: number;
+    usd: number;
+  } | null>(null);
+
   // Client withdrawal requests
   const [withdrawRequests, setWithdrawRequests] = useState<ClientWithdrawRequest[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
@@ -273,7 +281,8 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ agentCode: agent.agentCode }),
       });
-      toast.success(`Retrait de $${req.amount.toFixed(2)} confirmé pour ${req.clientName} !`);
+      const htg = Math.round(req.amount * rate);
+      setAgentSuccessModal({ type: 'withdrawal', clientName: req.clientName, htg, usd: req.amount });
       await loadWithdrawRequests();
       await loadStats();
     } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
@@ -389,8 +398,9 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
   // Submit direct deposit (instant, no confirmation needed)
   const handleSubmitDeposit = async () => {
     if (!foundClient || !agent?.agentCode) return;
-    const usd = parseFloat(txAmount);
-    if (isNaN(usd) || usd <= 0) { toast.error('Montant invalide.'); return; }
+    const htg = parseFloat(txAmount);
+    if (isNaN(htg) || htg <= 0) { toast.error('Montant invalide.'); return; }
+    const usd = htg / rate;
     if (agent.balance < usd) { toast.error('Solde agent insuffisant pour ce dépôt.'); return; }
     setSubmitting(true);
     try {
@@ -399,7 +409,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ agentCode: agent.agentCode, clientId: foundClient.clientId, type: 'deposit', amount: usd, note: txNote.trim() || undefined }),
       });
-      toast.success(`Dépôt de $${usd.toFixed(2)} effectué pour ${foundClient.name} !`);
+      setAgentSuccessModal({ type: 'deposit', clientName: foundClient.name, htg, usd });
       setFoundClient(null); setClientSearch(''); setSearchResults([]); setTxAmount(''); setTxNote('');
       await loadStats();
     } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
@@ -1398,6 +1408,46 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
         </DialogContent>
       </Dialog>
 
+      {/* ── Agent Success Modal ── */}
+      {agentSuccessModal && (
+        <Dialog open={true} onOpenChange={() => setAgentSuccessModal(null)}>
+          <DialogContent className="max-w-sm rounded-3xl border-0 p-0 overflow-hidden shadow-2xl">
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 22 }}
+              className="overflow-hidden rounded-3xl"
+            >
+              <div className={`p-8 text-center ${agentSuccessModal.type === 'deposit' ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gradient-to-br from-violet-500 to-purple-700'}`}>
+                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.12, type: 'spring', stiffness: 400, damping: 18 }}>
+                  <div className="h-20 w-20 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle2 className="h-10 w-10 text-white" />
+                  </div>
+                </motion.div>
+                <h2 className="text-2xl font-black text-white">Transaction réussie !</h2>
+                <p className="text-5xl font-black text-white mt-3 tracking-tight">
+                  {Math.round(agentSuccessModal.htg).toLocaleString()} <span className="text-2xl opacity-60">HTG</span>
+                </p>
+                <p className="text-white/55 text-sm font-bold mt-1.5">≈ ${agentSuccessModal.usd.toFixed(2)} USD</p>
+              </div>
+              <div className="bg-white p-6 text-center space-y-4">
+                <p className="text-gray-600 text-sm leading-relaxed">
+                  {agentSuccessModal.type === 'deposit'
+                    ? `Dépôt crédité sur le compte de ${agentSuccessModal.clientName}.`
+                    : `Retrait confirmé pour ${agentSuccessModal.clientName}. Remettez le cash au client.`}
+                </p>
+                <Button
+                  onClick={() => setAgentSuccessModal(null)}
+                  className={`w-full h-12 rounded-2xl font-black border-0 text-white ${agentSuccessModal.type === 'deposit' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-violet-500 hover:bg-violet-600'}`}
+                >
+                  Fermer
+                </Button>
+              </div>
+            </motion.div>
+          </DialogContent>
+        </Dialog>
+      )}
+
     </div>
   );
 }
@@ -1440,15 +1490,17 @@ function DirectTxForm({
   agentWithdrawAgentSharePercent = 100,
 }: DirectTxFormProps) {
   const isDeposit = type === 'deposit';
-  const usd = parseFloat(txAmount);
+  const htg = parseFloat(txAmount) || 0;
+  const usd = htg > 0 ? htg / rate : 0;
   const color = isDeposit ? 'emerald' : 'rose';
 
   // Fee preview (authoritative calculation happens server-side)
-  const depositCommission  = !isNaN(usd) && usd > 0 ? parseFloat((usd * agentDepositCommissionPercent / 100).toFixed(4)) : 0;
-  const withdrawTotalFee   = !isNaN(usd) && usd > 0 ? parseFloat((usd * agentWithdrawPercent / 100).toFixed(4)) : 0;
+  const depositCommission  = usd > 0 ? parseFloat((usd * agentDepositCommissionPercent / 100).toFixed(4)) : 0;
+  const withdrawTotalFee   = usd > 0 ? parseFloat((usd * agentWithdrawPercent / 100).toFixed(4)) : 0;
   const withdrawAgentShare = parseFloat((withdrawTotalFee * agentWithdrawAgentSharePercent / 100).toFixed(4));
   const withdrawAdminShare = parseFloat((withdrawTotalFee - withdrawAgentShare).toFixed(4));
-  const withdrawNetClient  = !isNaN(usd) && usd > 0 ? parseFloat((usd - withdrawTotalFee).toFixed(4)) : 0;
+  const withdrawNetClient  = usd > 0 ? parseFloat((usd - withdrawTotalFee).toFixed(4)) : 0;
+  const withdrawNetHTG     = htg > 0 ? Math.max(0, Math.round(htg - htg * agentWithdrawPercent / 100)) : 0;
 
   return (
     <Card className="rounded-[2rem] border-0 shadow-sm border border-gray-100">
@@ -1521,24 +1573,27 @@ function DirectTxForm({
               {/* Amount */}
               <div>
                 <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 block">
-                  Montant (USD)
+                  Montant (HTG)
                 </Label>
                 <Input
                   type="number"
-                  min="0.01"
-                  step="0.01"
+                  min="1"
+                  step="1"
                   value={txAmount}
                   onChange={e => setTxAmount(e.target.value)}
-                  placeholder="0.00"
+                  placeholder="Ex: 2 700"
                   className="h-14 rounded-2xl bg-gray-50 border-0 font-black text-2xl text-center focus:ring-2 focus:ring-primary/20"
                 />
-                {!isNaN(usd) && usd > 0 && (
+                {htg > 0 && (
                   <div className="mt-2 rounded-2xl border border-gray-100 overflow-hidden">
                     {isDeposit ? (
                       <>
                         <div className="flex justify-between items-center px-3.5 py-2 bg-white border-b border-gray-50">
                           <span className="text-[11px] text-gray-500 font-medium">Montant crédité au client</span>
-                          <span className="text-sm font-black text-gray-800">${usd.toFixed(2)} USD</span>
+                          <span className="text-sm font-black text-gray-800">
+                            {Math.round(htg).toLocaleString()} HTG
+                            <span className="text-[10px] text-gray-400 ml-1">≈ ${usd.toFixed(2)}</span>
+                          </span>
                         </div>
                         <div className="flex justify-between items-center px-3.5 py-2 bg-white border-b border-gray-50">
                           <span className="text-[11px] text-gray-500 font-medium">Débité sur votre solde</span>
@@ -1550,28 +1605,28 @@ function DirectTxForm({
                             <span className="text-sm font-black text-emerald-700">+${depositCommission.toFixed(2)} USD</span>
                           </div>
                         )}
-                        {depositCommission === 0 && (
-                          <div className="flex justify-between items-center px-3.5 py-2 bg-gray-50">
-                            <span className="text-[11px] text-gray-400">≈ en HTG</span>
-                            <span className="text-xs font-bold text-gray-400">{Math.round(usd * rate).toLocaleString()} HTG</span>
-                          </div>
-                        )}
                       </>
                     ) : (
                       <>
                         <div className="flex justify-between items-center px-3.5 py-2 bg-white border-b border-gray-50">
                           <span className="text-[11px] text-gray-500 font-medium">Débité du client</span>
-                          <span className="text-sm font-black text-gray-800">${usd.toFixed(2)} USD</span>
+                          <span className="text-sm font-black text-gray-800">
+                            {Math.round(htg).toLocaleString()} HTG
+                            <span className="text-[10px] text-gray-400 ml-1">≈ ${usd.toFixed(2)}</span>
+                          </span>
                         </div>
                         {agentWithdrawPercent > 0 && (
                           <div className="flex justify-between items-center px-3.5 py-2 bg-white border-b border-gray-50">
                             <span className="text-[11px] text-red-500 font-medium">Frais ({agentWithdrawPercent}%)</span>
-                            <span className="text-sm font-black text-red-500">−${withdrawTotalFee.toFixed(2)} USD</span>
+                            <span className="text-sm font-black text-red-500">−{Math.round(htg * agentWithdrawPercent / 100).toLocaleString()} HTG</span>
                           </div>
                         )}
                         <div className="flex justify-between items-center px-3.5 py-2 bg-rose-50 border-b border-rose-100">
                           <span className="text-[11px] font-black text-rose-800 uppercase tracking-wide">À remettre au client</span>
-                          <span className="text-base font-black text-rose-700">${withdrawNetClient.toFixed(2)} USD</span>
+                          <span className="text-base font-black text-rose-700">
+                            {withdrawNetHTG.toLocaleString()} HTG
+                            <span className="text-[10px] text-gray-400 ml-1">≈ ${withdrawNetClient.toFixed(2)}</span>
+                          </span>
                         </div>
                         {withdrawAgentShare > 0 && (
                           <div className="flex justify-between items-center px-3.5 py-2 bg-emerald-50">
@@ -1583,19 +1638,19 @@ function DirectTxForm({
                     )}
                   </div>
                 )}
-                {(isNaN(usd) || usd <= 0) && (
+                {htg <= 0 && (
                   <p className="text-[11px] text-gray-400 text-center mt-1 font-medium">Saisissez un montant pour voir le détail</p>
                 )}
               </div>
 
               {/* Warnings */}
-              {isDeposit && !isNaN(usd) && usd > 0 && usd > agent.balance && (
+              {isDeposit && htg > 0 && usd > agent.balance && (
                 <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-100">
                   <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
                   <p className="text-xs text-red-600 font-bold">Votre solde agent est insuffisant (${agent.balance.toFixed(2)} disponible)</p>
                 </div>
               )}
-              {!isDeposit && !isNaN(usd) && usd > 0 && usd > foundClient.balance && (
+              {!isDeposit && htg > 0 && usd > foundClient.balance && (
                 <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-100">
                   <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
                   <p className="text-xs text-red-600 font-bold">Solde client insuffisant (${foundClient.balance.toFixed(2)} disponible)</p>
@@ -1630,8 +1685,8 @@ function DirectTxForm({
                   <>
                     {isDeposit ? <ArrowDownLeft className="h-4 w-4 mr-2" /> : <ArrowUpRight className="h-4 w-4 mr-2" />}
                     {isDeposit
-                      ? `Confirmer le dépôt${txAmount && !isNaN(parseFloat(txAmount)) ? ` — $${parseFloat(txAmount).toFixed(2)}` : ''}`
-                      : `Envoyer la demande${txAmount && !isNaN(parseFloat(txAmount)) ? ` — $${parseFloat(txAmount).toFixed(2)}` : ''}`
+                      ? `Confirmer le dépôt${htg > 0 ? ` — ${Math.round(htg).toLocaleString()} HTG` : ''}`
+                      : `Envoyer la demande${htg > 0 ? ` — ${Math.round(htg).toLocaleString()} HTG` : ''}`
                     }
                   </>
                 )}

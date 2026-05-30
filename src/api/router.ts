@@ -2972,6 +2972,17 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
           type: notifType, txId: txId || '', amount: String(amount),
         });
 
+        // SSE push for approved transactions (triggers real-time success modal in client UI)
+        if (status === 'approved') {
+          const settingsSnap = await adminDb.collection('settings').doc('global').get().catch(() => null);
+          const exchRate = Number(settingsSnap?.data()?.exchangeRate || 135);
+          pushClientEvent(clientId, 'tx_approved', {
+            type: isDeposit ? 'deposit' : 'withdrawal',
+            htg: Math.round(Number(amount) * exchRate),
+            usd: Number(amount),
+          });
+        }
+
         // Resend email — notification de statut
         const clientEmailSnap = await adminDb.collection('clients').doc(clientId).get().catch(() => null);
         const clientEmail = clientEmailSnap?.exists ? clientEmailSnap.data()?.email : undefined;

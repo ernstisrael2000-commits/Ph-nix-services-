@@ -238,27 +238,48 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   const [confirmActionLoading,     setConfirmActionLoading]     = useState<string | null>(null);
   const [otpInputs,                setOtpInputs]                = useState<Record<string, string>>({});
 
+  // Success modal (shown when a deposit/withdrawal is approved)
+  const [txSuccessModal, setTxSuccessModal] = useState<{
+    type: 'deposit' | 'withdrawal';
+    agentName?: string;
+    htg: number;
+    usd: number;
+  } | null>(null);
+
   const usdPreview = htgAmount && !isNaN(parseFloat(htgAmount)) ? parseFloat(htgAmount) / rate : 0;
-  const htgPreview = withdrawUSD && !isNaN(parseFloat(withdrawUSD)) ? parseFloat(withdrawUSD) * rate : 0;
   const transferHtgPreview = transferUSD && !isNaN(parseFloat(transferUSD)) ? parseFloat(transferUSD) * rate : 0;
 
   // Fee computation (preview only – server calculates authoritatively at approval)
+  // All withdrawal/QR inputs are in HTG; server always receives USD
   const depositFeePercent    = settings?.depositFeePercent    || 0;
   const withdrawalFeePercent = settings?.withdrawalFeePercent || 0;
   const depositFeeAmount  = usdPreview > 0 ? parseFloat((usdPreview * depositFeePercent / 100).toFixed(4)) : 0;
   const depositNetAmount  = usdPreview > 0 ? parseFloat((usdPreview - depositFeeAmount).toFixed(4)) : 0;
-  const withdrawUSDNum    = parseFloat(withdrawUSD) || 0;
-  const withdrawFeeAmount = withdrawUSDNum > 0 ? parseFloat((withdrawUSDNum * withdrawalFeePercent / 100).toFixed(4)) : 0;
-  const withdrawNetAmount = withdrawUSDNum > 0 ? parseFloat((withdrawUSDNum - withdrawFeeAmount).toFixed(4)) : 0;
-  // For agent QR / agent-code modes
-  const agentQrUSDNum        = parseFloat(agentQrAmount) || 0;
-  const agentQrDepositFee    = agentQrUSDNum > 0 ? parseFloat((agentQrUSDNum * depositFeePercent / 100).toFixed(4)) : 0;
-  const agentQrDepositNet    = agentQrUSDNum > 0 ? parseFloat((agentQrUSDNum - agentQrDepositFee).toFixed(4)) : 0;
-  const agentQrWithdrawFee   = agentQrUSDNum > 0 ? parseFloat((agentQrUSDNum * withdrawalFeePercent / 100).toFixed(4)) : 0;
-  const agentQrWithdrawNet   = agentQrUSDNum > 0 ? parseFloat((agentQrUSDNum - agentQrWithdrawFee).toFixed(4)) : 0;
-  const wdAgentAmountNum     = parseFloat(wdAgentAmount) || 0;
-  const wdAgentCodeFee       = wdAgentAmountNum > 0 ? parseFloat((wdAgentAmountNum * withdrawalFeePercent / 100).toFixed(4)) : 0;
-  const wdAgentCodeNet       = wdAgentAmountNum > 0 ? parseFloat((wdAgentAmountNum - wdAgentCodeFee).toFixed(4)) : 0;
+  // Standard withdrawal — input is HTG
+  const withdrawHTGNum    = parseFloat(withdrawUSD) || 0;
+  const withdrawUSDNum    = withdrawHTGNum > 0 ? withdrawHTGNum / rate : 0;
+  const withdrawFeeHTG    = withdrawHTGNum > 0 ? Math.round(withdrawHTGNum * withdrawalFeePercent / 100) : 0;
+  const withdrawFeeAmount = withdrawFeeHTG / rate;
+  const withdrawNetHTG    = Math.max(0, withdrawHTGNum - withdrawFeeHTG);
+  const withdrawNetAmount = withdrawNetHTG / rate;
+  // Agent QR deposit/withdrawal — input is HTG
+  const agentQrHTGNum        = parseFloat(agentQrAmount) || 0;
+  const agentQrUSDNum        = agentQrHTGNum > 0 ? agentQrHTGNum / rate : 0;
+  const agentQrDepositFeeHTG = agentQrHTGNum > 0 ? Math.round(agentQrHTGNum * depositFeePercent / 100) : 0;
+  const agentQrDepositNetHTG = Math.max(0, agentQrHTGNum - agentQrDepositFeeHTG);
+  const agentQrDepositFee    = agentQrDepositFeeHTG / rate;
+  const agentQrDepositNet    = agentQrDepositNetHTG / rate;
+  const agentQrWithdrawFeeHTG= agentQrHTGNum > 0 ? Math.round(agentQrHTGNum * withdrawalFeePercent / 100) : 0;
+  const agentQrWithdrawNetHTG= Math.max(0, agentQrHTGNum - agentQrWithdrawFeeHTG);
+  const agentQrWithdrawFee   = agentQrWithdrawFeeHTG / rate;
+  const agentQrWithdrawNet   = agentQrWithdrawNetHTG / rate;
+  // Agent-code withdrawal — input is HTG
+  const wdAgentHTGNum    = parseFloat(wdAgentAmount) || 0;
+  const wdAgentAmountNum = wdAgentHTGNum > 0 ? wdAgentHTGNum / rate : 0;
+  const wdAgentCodeFeeHTG= wdAgentHTGNum > 0 ? Math.round(wdAgentHTGNum * withdrawalFeePercent / 100) : 0;
+  const wdAgentCodeNetHTG= Math.max(0, wdAgentHTGNum - wdAgentCodeFeeHTG);
+  const wdAgentCodeFee   = wdAgentCodeFeeHTG / rate;
+  const wdAgentCodeNet   = wdAgentCodeNetHTG / rate;
 
   const minDeposit  = settings?.minDepositUSD    || 0.01;
   const maxDeposit  = settings?.maxDepositUSD    || 10000;
@@ -313,11 +334,12 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     e.preventDefault();
     if (!wdAgentInfo) { toast.error("Recherchez un agent d'abord."); return; }
     if (!wdAgentInfo.available) { toast.error('Cet agent est indisponible.'); return; }
-    const usd = parseFloat(wdAgentAmount);
-    if (isNaN(usd) || usd <= 0) { toast.error('Montant invalide.'); return; }
+    const htg = parseFloat(wdAgentAmount);
+    if (isNaN(htg) || htg <= 0) { toast.error('Montant invalide.'); return; }
+    const usd = htg / rate;
     if (usd > balance) { toast.error('Solde insuffisant.'); return; }
-    if (usd < minWithdraw) { toast.error(`Montant minimum: $${minWithdraw.toFixed(2)} USD`); return; }
-    if (usd > maxWithdraw) { toast.error(`Montant maximum: $${maxWithdraw.toFixed(2)} USD`); return; }
+    if (usd < minWithdraw) { toast.error(`Montant minimum: ${Math.round(minWithdraw * rate).toLocaleString()} HTG`); return; }
+    if (usd > maxWithdraw) { toast.error(`Montant maximum: ${Math.round(maxWithdraw * rate).toLocaleString()} HTG`); return; }
     setWdAgentLoading(true);
     try {
       await apiFetch('/api/client/agent-withdrawal', {
@@ -352,8 +374,9 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   }, [txCode]);
 
   const handleGenerateTxCode = async (type: 'deposit' | 'withdrawal') => {
-    const usd = parseFloat(agentQrAmount);
-    if (isNaN(usd) || usd <= 0) { toast.error('Entrez un montant valide.'); return; }
+    const htg = parseFloat(agentQrAmount);
+    if (isNaN(htg) || htg <= 0) { toast.error('Entrez un montant valide.'); return; }
+    const usd = htg / rate;
     if (type === 'withdrawal' && usd > balance) { toast.error('Solde insuffisant.'); return; }
     setTxCodeLoading(true);
     try {
@@ -399,6 +422,13 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
       try {
         const { id } = JSON.parse((e as MessageEvent).data);
         setPendingConfirmations(prev => prev.filter((c: any) => c.id !== id));
+      } catch { /* ignore parse errors */ }
+    });
+
+    es.addEventListener('tx_approved', (e: Event) => {
+      try {
+        const data = JSON.parse((e as MessageEvent).data);
+        setTxSuccessModal(data);
       } catch { /* ignore parse errors */ }
     });
 
@@ -485,10 +515,11 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
 
   const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
-    const usd = parseFloat(withdrawUSD);
-    if (isNaN(usd) || usd <= 0)  { toast.error('Montant invalide.'); return; }
-    if (usd < minWithdraw)        { toast.error(`Montant minimum: $${minWithdraw.toFixed(2)} USD`); return; }
-    if (usd > maxWithdraw)        { toast.error(`Montant maximum: $${maxWithdraw.toFixed(2)} USD`); return; }
+    const htg = parseFloat(withdrawUSD);
+    if (isNaN(htg) || htg <= 0)  { toast.error('Montant invalide.'); return; }
+    const usd = htg / rate;
+    if (usd < minWithdraw)        { toast.error(`Montant minimum: ${Math.round(minWithdraw * rate).toLocaleString()} HTG`); return; }
+    if (usd > maxWithdraw)        { toast.error(`Montant maximum: ${Math.round(maxWithdraw * rate).toLocaleString()} HTG`); return; }
     if (usd > balance)            { toast.error('Solde insuffisant.'); return; }
     if (!withdrawMethod)          { toast.error('Choisissez une méthode de retrait.'); return; }
     if (!withdrawAccount)         { toast.error('Numéro/adresse de réception requis.'); return; }
@@ -498,11 +529,10 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
       await submitClientWithdrawal(client!, usd, withdrawMethod.name, withdrawAccount,
         withdrawCaptchaToken || undefined, withdrawMessage || undefined,
         withdrawAccountName || undefined, rate);
-      const htgEq = Math.round(usd * rate);
       const num = settings?.whatsappAdminNumber || WHATSAPP_NUMBER;
       const msg = `Bonjour Rena 👋,\n\nDemande de *RETRAIT* :\n` +
         `👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n` +
-        `💵 Montant: *$${usd.toFixed(2)} USD*\n≈ *${htgEq.toLocaleString()} HTG* (taux: ${rate})\n` +
+        `💰 Montant: *${htg.toLocaleString()} HTG*\n≈ *$${usd.toFixed(2)} USD* (taux: ${rate})\n` +
         `💳 Via: *${withdrawMethod.name}*\n📞 Compte: *${withdrawAccount}*` +
         (withdrawAccountName ? `\n👤 Bénéficiaire: *${withdrawAccountName}*` : '') +
         (withdrawMessage ? `\n💬 Message: *${withdrawMessage}*` : '') +
@@ -935,25 +965,31 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                       </div>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant à déposer (USD)</Label>
-                      <Input type="number" placeholder="Ex: 20.00" value={agentQrAmount}
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant à déposer (HTG)</Label>
+                      <Input type="number" placeholder="Ex: 2 700" value={agentQrAmount}
                         onChange={e => setAgentQrAmount(e.target.value)}
-                        className="h-12 rounded-xl text-lg font-black" min="0.01" step="0.01" />
-                      {agentQrUSDNum > 0 && (
+                        className="h-12 rounded-xl text-lg font-black" min="1" step="1" />
+                      {agentQrHTGNum > 0 && (
                         <div className="rounded-2xl border border-emerald-100 overflow-hidden">
                           <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-emerald-50">
                             <span className="text-[11px] text-gray-500 font-medium">Montant déposé</span>
-                            <span className="text-sm font-black text-gray-800">${agentQrUSDNum.toFixed(2)} USD</span>
+                            <span className="text-sm font-black text-gray-800">
+                              {agentQrHTGNum.toLocaleString()} HTG
+                              <span className="text-[10px] font-medium text-gray-400 ml-1">≈ ${agentQrUSDNum.toFixed(2)}</span>
+                            </span>
                           </div>
                           {depositFeePercent > 0 && (
                             <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-emerald-50">
                               <span className="text-[11px] text-red-500 font-medium">Frais ({depositFeePercent}%)</span>
-                              <span className="text-sm font-black text-red-500">−${agentQrDepositFee.toFixed(2)} USD</span>
+                              <span className="text-sm font-black text-red-500">−{agentQrDepositFeeHTG.toLocaleString()} HTG</span>
                             </div>
                           )}
                           <div className="flex justify-between items-center px-3.5 py-2.5 bg-emerald-50">
                             <span className="text-[11px] font-black text-emerald-800 uppercase tracking-wide">Vous recevrez</span>
-                            <span className="text-base font-black text-emerald-700">${agentQrDepositNet.toFixed(2)} USD</span>
+                            <span className="text-base font-black text-emerald-700">
+                              {agentQrDepositNetHTG.toLocaleString()} HTG
+                              <span className="text-[10px] font-medium text-gray-400 ml-1">≈ ${agentQrDepositNet.toFixed(2)}</span>
+                            </span>
                           </div>
                         </div>
                       )}
@@ -971,7 +1007,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                         <QRCode value={txCode.codeData} size={200} />
                       </div>
                       <div>
-                        <p className="font-black text-gray-800">Dépôt de <span className="text-emerald-600">${parseFloat(agentQrAmount).toFixed(2)} USD</span></p>
+                        <p className="font-black text-gray-800">Dépôt de <span className="text-emerald-600">{agentQrHTGNum.toLocaleString()} HTG</span><span className="text-gray-400 text-xs font-normal ml-1.5">≈ ${agentQrUSDNum.toFixed(2)}</span></p>
                         <p className="text-xs text-gray-400 mt-0.5">Présentez ce code à l'agent pour qu'il le scanne</p>
                       </div>
                       <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-black ${txCountdown < 120 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
@@ -1195,36 +1231,42 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                       </div>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant à retirer (USD)</Label>
-                      <Input type="number" placeholder="Ex: 20.00" value={agentQrAmount}
+                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant à retirer (HTG)</Label>
+                      <Input type="number" placeholder="Ex: 2 700" value={agentQrAmount}
                         onChange={e => setAgentQrAmount(e.target.value)}
-                        className="h-12 rounded-xl text-lg font-black" min="0.01" step="0.01"
-                        max={balance}
+                        className="h-12 rounded-xl text-lg font-black" min="1" step="1"
+                        max={Math.floor(balance * rate)}
                       />
-                      {agentQrAmount && parseFloat(agentQrAmount) > balance && (
-                        <p className="text-[10px] text-red-500 font-bold">Solde insuffisant (disponible: ${balance.toFixed(2)})</p>
+                      {agentQrHTGNum > 0 && agentQrUSDNum > balance && (
+                        <p className="text-[10px] text-red-500 font-bold">Solde insuffisant (disponible: {Math.floor(balance * rate).toLocaleString()} HTG)</p>
                       )}
-                      {agentQrUSDNum > 0 && agentQrUSDNum <= balance && (
+                      {agentQrHTGNum > 0 && agentQrUSDNum <= balance && (
                         <div className="rounded-2xl border border-rose-100 overflow-hidden">
                           <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-rose-50">
                             <span className="text-[11px] text-gray-500 font-medium">Montant demandé</span>
-                            <span className="text-sm font-black text-gray-800">${agentQrUSDNum.toFixed(2)} USD</span>
+                            <span className="text-sm font-black text-gray-800">
+                              {agentQrHTGNum.toLocaleString()} HTG
+                              <span className="text-[10px] font-medium text-gray-400 ml-1">≈ ${agentQrUSDNum.toFixed(2)}</span>
+                            </span>
                           </div>
                           {withdrawalFeePercent > 0 && (
                             <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-rose-50">
                               <span className="text-[11px] text-red-500 font-medium">Frais ({withdrawalFeePercent}%)</span>
-                              <span className="text-sm font-black text-red-500">−${agentQrWithdrawFee.toFixed(2)} USD</span>
+                              <span className="text-sm font-black text-red-500">−{agentQrWithdrawFeeHTG.toLocaleString()} HTG</span>
                             </div>
                           )}
                           <div className="flex justify-between items-center px-3.5 py-2.5 bg-rose-50">
                             <span className="text-[11px] font-black text-rose-800 uppercase tracking-wide">Vous recevrez</span>
-                            <span className="text-base font-black text-rose-700">${agentQrWithdrawNet.toFixed(2)} USD</span>
+                            <span className="text-base font-black text-rose-700">
+                              {agentQrWithdrawNetHTG.toLocaleString()} HTG
+                              <span className="text-[10px] font-medium text-gray-400 ml-1">≈ ${agentQrWithdrawNet.toFixed(2)}</span>
+                            </span>
                           </div>
                         </div>
                       )}
                     </div>
                     <Button type="button" onClick={() => handleGenerateTxCode('withdrawal')}
-                      disabled={txCodeLoading || !agentQrAmount || parseFloat(agentQrAmount) <= 0 || parseFloat(agentQrAmount) > balance}
+                      disabled={txCodeLoading || !agentQrAmount || parseFloat(agentQrAmount) <= 0 || agentQrUSDNum > balance}
                       className="w-full h-12 bg-rose-500 hover:bg-rose-600 text-white font-black rounded-xl border-0">
                       {txCodeLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <><QrCode className="h-4 w-4 mr-2" />Générer le Code QR</>}
                     </Button>
@@ -1236,18 +1278,21 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                         <QRCode value={txCode.codeData} size={200} />
                       </div>
                       <div>
-                        <p className="font-black text-gray-800">Retrait de <span className="text-rose-600">${parseFloat(agentQrAmount).toFixed(2)} USD</span></p>
+                        <p className="font-black text-gray-800">Retrait de <span className="text-rose-600">{agentQrHTGNum.toLocaleString()} HTG</span><span className="text-gray-400 text-xs font-normal ml-1.5">≈ ${agentQrUSDNum.toFixed(2)}</span></p>
                         <p className="text-xs text-gray-400 mt-0.5">Présentez ce code à l'agent pour qu'il le scanne</p>
                       </div>
-                      {agentQrWithdrawFee > 0 && (
+                      {agentQrWithdrawFeeHTG > 0 && (
                         <div className="w-full rounded-2xl border border-rose-100 overflow-hidden text-left">
                           <div className="flex justify-between items-center px-3.5 py-2 bg-white border-b border-rose-50">
                             <span className="text-[11px] text-red-500 font-medium">Frais ({withdrawalFeePercent}%)</span>
-                            <span className="text-sm font-black text-red-500">−${agentQrWithdrawFee.toFixed(2)} USD</span>
+                            <span className="text-sm font-black text-red-500">−{agentQrWithdrawFeeHTG.toLocaleString()} HTG</span>
                           </div>
                           <div className="flex justify-between items-center px-3.5 py-2.5 bg-rose-50">
                             <span className="text-[11px] font-black text-rose-800 uppercase tracking-wide">Vous recevrez</span>
-                            <span className="text-base font-black text-rose-700">${agentQrWithdrawNet.toFixed(2)} USD</span>
+                            <span className="text-base font-black text-rose-700">
+                              {agentQrWithdrawNetHTG.toLocaleString()} HTG
+                              <span className="text-[10px] font-medium text-gray-400 ml-1">≈ ${agentQrWithdrawNet.toFixed(2)}</span>
+                            </span>
                           </div>
                         </div>
                       )}
@@ -1258,7 +1303,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                     </div>
                     <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-start gap-2">
                       <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
-                      <p className="text-xs text-blue-800">Après le scan, l'agent vous remet exactement <span className="font-black">${agentQrWithdrawNet.toFixed(2)} USD</span> en cash et votre solde est débité instantanément.</p>
+                      <p className="text-xs text-blue-800">Après le scan, l'agent vous remet exactement <span className="font-black">{agentQrWithdrawNetHTG.toLocaleString()} HTG</span> en cash et votre solde est débité instantanément.</p>
                     </div>
                     <Button type="button" onClick={() => { setTxCode(null); setAgentQrAmount(''); }}
                       variant="outline" className="w-full h-11 rounded-xl border-gray-200 text-gray-500 text-sm font-bold">
@@ -1317,27 +1362,30 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
 
                 {/* Amount */}
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant à retirer (USD)</Label>
+                  <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant à retirer (HTG)</Label>
                   <Input type="number" value={wdAgentAmount} onChange={e => setWdAgentAmount(e.target.value)}
-                    placeholder="Ex: 20.00" className="h-12 rounded-xl text-lg font-black"
-                    min="0.01" max={balance} step="0.01" />
-                  {wdAgentAmountNum > 0 && (
+                    placeholder="Ex: 2 700" className="h-12 rounded-xl text-lg font-black"
+                    min="1" max={Math.floor(balance * rate)} step="1" />
+                  {wdAgentHTGNum > 0 && (
                     <div className="rounded-2xl border border-teal-100 overflow-hidden">
                       <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-teal-50">
                         <span className="text-[11px] text-gray-500 font-medium">Montant demandé</span>
-                        <span className="text-sm font-black text-gray-800">${wdAgentAmountNum.toFixed(2)} USD</span>
+                        <span className="text-sm font-black text-gray-800">
+                          {wdAgentHTGNum.toLocaleString()} HTG
+                          <span className="text-[10px] font-medium text-gray-400 ml-1">≈ ${wdAgentAmountNum.toFixed(2)}</span>
+                        </span>
                       </div>
                       {withdrawalFeePercent > 0 && (
                         <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-teal-50">
                           <span className="text-[11px] text-red-500 font-medium">Frais ({withdrawalFeePercent}%)</span>
-                          <span className="text-sm font-black text-red-500">−${wdAgentCodeFee.toFixed(2)} USD</span>
+                          <span className="text-sm font-black text-red-500">−{wdAgentCodeFeeHTG.toLocaleString()} HTG</span>
                         </div>
                       )}
                       <div className="flex justify-between items-center px-3.5 py-2.5 bg-teal-50">
                         <span className="text-[11px] font-black text-teal-800 uppercase tracking-wide">Vous recevrez</span>
                         <span className="text-base font-black text-teal-700">
-                          ${wdAgentCodeNet.toFixed(2)} USD
-                          <span className="text-[10px] font-medium text-gray-400 ml-1">≈ {Math.round(wdAgentCodeNet * rate).toLocaleString()} HTG</span>
+                          {wdAgentCodeNetHTG.toLocaleString()} HTG
+                          <span className="text-[10px] font-medium text-gray-400 ml-1">≈ ${wdAgentCodeNet.toFixed(2)}</span>
                         </span>
                       </div>
                     </div>
@@ -1388,27 +1436,30 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant à retirer (USD)</Label>
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant à retirer (HTG)</Label>
               <Input type="number" value={withdrawUSD} onChange={e => setWithdrawUSD(e.target.value)}
-                placeholder="Ex: 10.00" className="h-12 rounded-xl text-lg font-black"
-                min="0.01" max={balance} step="0.01" required />
-              {withdrawUSDNum > 0 && (
+                placeholder="Ex: 1 350" className="h-12 rounded-xl text-lg font-black"
+                min="1" max={Math.floor(balance * rate)} step="1" required />
+              {withdrawHTGNum > 0 && (
                 <div className="rounded-2xl border border-red-100 overflow-hidden">
                   <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-red-50">
                     <span className="text-[11px] text-gray-500 font-medium">Montant demandé</span>
-                    <span className="text-sm font-black text-gray-800">${withdrawUSDNum.toFixed(2)} USD</span>
+                    <span className="text-sm font-black text-gray-800">
+                      {withdrawHTGNum.toLocaleString()} HTG
+                      <span className="text-[10px] font-medium text-gray-400 ml-1">≈ ${withdrawUSDNum.toFixed(2)}</span>
+                    </span>
                   </div>
                   {withdrawalFeePercent > 0 && (
                     <div className="flex justify-between items-center px-3.5 py-2.5 bg-white border-b border-red-50">
                       <span className="text-[11px] text-red-500 font-medium">Frais ({withdrawalFeePercent}%)</span>
-                      <span className="text-sm font-black text-red-500">−${withdrawFeeAmount.toFixed(2)} USD</span>
+                      <span className="text-sm font-black text-red-500">−{withdrawFeeHTG.toLocaleString()} HTG</span>
                     </div>
                   )}
                   <div className="flex justify-between items-center px-3.5 py-2.5 bg-red-50">
                     <span className="text-[11px] font-black text-red-800 uppercase tracking-wide">Vous recevrez</span>
                     <span className="text-base font-black text-red-700">
-                      ${withdrawNetAmount.toFixed(2)} USD
-                      <span className="text-[10px] font-medium text-gray-400 ml-1">≈ {Math.round(withdrawNetAmount * rate).toLocaleString()} HTG</span>
+                      {withdrawNetHTG.toLocaleString()} HTG
+                      <span className="text-[10px] font-medium text-gray-400 ml-1">≈ ${withdrawNetAmount.toFixed(2)}</span>
                     </span>
                   </div>
                 </div>
@@ -1560,6 +1611,47 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* ── Success Modal — shown when a deposit/withdrawal is approved ── */}
+      {txSuccessModal && (
+        <Dialog open={true} onOpenChange={() => setTxSuccessModal(null)}>
+          <DialogContent className="max-w-sm rounded-3xl border-0 p-0 overflow-hidden shadow-2xl">
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 22 }}
+              className="overflow-hidden rounded-3xl"
+            >
+              <div className={`p-8 text-center ${txSuccessModal.type === 'deposit' ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gradient-to-br from-violet-500 to-purple-700'}`}>
+                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.12, type: 'spring', stiffness: 400, damping: 18 }}>
+                  <div className="h-20 w-20 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle2 className="h-10 w-10 text-white" />
+                  </div>
+                </motion.div>
+                <h2 className="text-2xl font-black text-white">Transaction réussie !</h2>
+                <p className="text-5xl font-black text-white mt-3 tracking-tight">
+                  {Math.round(txSuccessModal.htg).toLocaleString()} <span className="text-2xl opacity-60">HTG</span>
+                </p>
+                <p className="text-white/55 text-sm font-bold mt-1.5">≈ ${Number(txSuccessModal.usd).toFixed(2)} USD</p>
+              </div>
+              <div className="bg-white p-6 text-center space-y-4">
+                <p className="text-gray-600 text-sm leading-relaxed">
+                  {txSuccessModal.type === 'deposit'
+                    ? `Votre dépôt${txSuccessModal.agentName ? ` via l'agent ${txSuccessModal.agentName}` : ''} a été crédité sur votre compte.`
+                    : `Votre retrait${txSuccessModal.agentName ? ` chez l'agent ${txSuccessModal.agentName}` : ''} a été traité avec succès.`}
+                  {' '}Merci de faire confiance à Rena ! 🙏
+                </p>
+                <Button
+                  onClick={() => setTxSuccessModal(null)}
+                  className={`w-full h-12 rounded-2xl font-black border-0 text-white ${txSuccessModal.type === 'deposit' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-violet-500 hover:bg-violet-600'}`}
+                >
+                  Fermer
+                </Button>
+              </div>
+            </motion.div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
