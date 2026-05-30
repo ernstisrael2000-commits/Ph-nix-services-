@@ -2802,21 +2802,37 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
     const clientSnap = await clientRef.get();
     if (clientSnap.exists) {
       if (status === 'approved' && txData.type === 'deposit') {
-        // Apply deposit fee if configured
+        // Apply deposit fee and split between admin + referring affiliate
         let netAmount = txData.amount;
-        let feeAmount = 0;
         try {
           const settingsSnap = await adminDb.collection('settings').doc('global').get();
-          const feePercent = settingsSnap.exists ? (settingsSnap.data()!.depositFeePercent || 0) : 0;
+          const sData = settingsSnap.exists ? settingsSnap.data()! : {};
+          const feePercent = sData.depositFeePercent || 0;
+          const affiliateSharePct = sData.affiliateDepositFeeSharePercent || 0;
           if (feePercent > 0) {
-            feeAmount = parseFloat((txData.amount * feePercent / 100).toFixed(4));
-            netAmount = txData.amount - feeAmount;
-          }
-          if (feeAmount > 0) {
-            batch.update(adminDb.collection('settings').doc('global'), {
-              feesBalance: FieldValue.increment(feeAmount),
-              updatedAt: FieldValue.serverTimestamp(),
-            });
+            const feeAmount = parseFloat((txData.amount * feePercent / 100).toFixed(4));
+            if (feeAmount > 0) {
+              netAmount = txData.amount - feeAmount;
+              const affiliateShare = parseFloat((feeAmount * affiliateSharePct / 100).toFixed(4));
+              const adminShare = parseFloat((feeAmount - affiliateShare).toFixed(4));
+              if (adminShare > 0) {
+                batch.update(adminDb.collection('settings').doc('global'), {
+                  feesBalance: FieldValue.increment(adminShare),
+                  updatedAt: FieldValue.serverTimestamp(),
+                });
+              }
+              // Credit referring affiliate's share
+              if (affiliateShare > 0) {
+                const sponsorId = clientSnap.data()!.directSponsorId as string | undefined;
+                if (sponsorId) {
+                  batch.update(adminDb.collection('affiliates').doc(sponsorId), {
+                    balance: FieldValue.increment(affiliateShare),
+                    totalEarnings: FieldValue.increment(affiliateShare),
+                    updatedAt: FieldValue.serverTimestamp(),
+                  });
+                }
+              }
+            }
           }
         } catch {}
         batch.update(clientRef, {
@@ -2824,17 +2840,33 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
           updatedAt: FieldValue.serverTimestamp(),
         });
       } else if (status === 'approved' && txData.type === 'withdrawal') {
-        // Apply withdrawal fee if configured
+        // Apply withdrawal fee and split between admin + referring affiliate
         try {
           const settingsSnap = await adminDb.collection('settings').doc('global').get();
-          const feePercent = settingsSnap.exists ? (settingsSnap.data()!.withdrawalFeePercent || 0) : 0;
+          const sData = settingsSnap.exists ? settingsSnap.data()! : {};
+          const feePercent = sData.withdrawalFeePercent || 0;
+          const affiliateSharePct = sData.affiliateWithdrawalFeeSharePercent || 0;
           if (feePercent > 0) {
             const feeAmount = parseFloat((txData.amount * feePercent / 100).toFixed(4));
             if (feeAmount > 0) {
-              batch.update(adminDb.collection('settings').doc('global'), {
-                feesBalance: FieldValue.increment(feeAmount),
-                updatedAt: FieldValue.serverTimestamp(),
-              });
+              const affiliateShare = parseFloat((feeAmount * affiliateSharePct / 100).toFixed(4));
+              const adminShare = parseFloat((feeAmount - affiliateShare).toFixed(4));
+              if (adminShare > 0) {
+                batch.update(adminDb.collection('settings').doc('global'), {
+                  feesBalance: FieldValue.increment(adminShare),
+                  updatedAt: FieldValue.serverTimestamp(),
+                });
+              }
+              if (affiliateShare > 0) {
+                const sponsorId = clientSnap.data()!.directSponsorId as string | undefined;
+                if (sponsorId) {
+                  batch.update(adminDb.collection('affiliates').doc(sponsorId), {
+                    balance: FieldValue.increment(affiliateShare),
+                    totalEarnings: FieldValue.increment(affiliateShare),
+                    updatedAt: FieldValue.serverTimestamp(),
+                  });
+                }
+              }
             }
           }
         } catch {}

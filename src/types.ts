@@ -232,8 +232,12 @@ export interface AppSettings {
   maxWithdrawalUSD?: number;
   // Fees
   depositFeePercent?: number;
+  withdrawalFeePercent?: number;
   transferFeePercent?: number;
   feesBalance?: number;
+  // Affiliate fee sharing (% of the fee that goes to the referring affiliate)
+  affiliateDepositFeeSharePercent?: number;
+  affiliateWithdrawalFeeSharePercent?: number;
   // Agent fee engine
   agentDepositCommissionPercent?: number;
   agentWithdrawPercent?: number;

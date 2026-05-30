@@ -7659,7 +7659,7 @@ function EmailLogsPanel() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label className="text-xs font-bold text-gray-500">Frais Dépôt (%)</Label>
+                      <Label className="text-xs font-bold text-gray-500">Frais Dépôt Client (%)</Label>
                       <Input
                         type="number"
                         min="0"
@@ -7673,7 +7673,21 @@ function EmailLogsPanel() {
                       <p className="text-[10px] text-gray-400">Ex: 2 = 2% déduit à l'approbation</p>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-xs font-bold text-gray-500">Frais Transfert (%)</Label>
+                      <Label className="text-xs font-bold text-gray-500">Frais Retrait Client (%)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="20"
+                        step="0.1"
+                        placeholder="0"
+                        value={pendingSettings?.withdrawalFeePercent ?? settings?.withdrawalFeePercent ?? ''}
+                        onChange={(e) => setPendingSettings(prev => ({ ...prev, withdrawalFeePercent: parseFloat(e.target.value) || 0 }))}
+                        className="rounded-xl border-gray-100 font-bold text-center"
+                      />
+                      <p className="text-[10px] text-gray-400">Ex: 2 = 2% déduit au retrait</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold text-gray-500">Frais Transfert Wallet (%)</Label>
                       <Input
                         type="number"
                         min="0"
@@ -7684,7 +7698,65 @@ function EmailLogsPanel() {
                         onChange={(e) => setPendingSettings(prev => ({ ...prev, transferFeePercent: parseFloat(e.target.value) || 0 }))}
                         className="rounded-xl border-gray-100 font-bold text-center"
                       />
-                      <p className="text-[10px] text-gray-400">Ex: 1 = 1% déduit du montant</p>
+                      <p className="text-[10px] text-gray-400">Ex: 1 = 1% déduit du transfert</p>
+                    </div>
+                  </div>
+
+                  {/* ── Affiliate fee sharing ── */}
+                  <div className="space-y-3 pt-4 border-t border-dashed border-gray-200">
+                    <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest flex items-center gap-1.5">
+                      <span>🤝</span> Part Affilié sur les Frais Clients
+                    </p>
+                    <p className="text-[11px] text-gray-400">Portion des frais reversée à l'affilié parrain du client à chaque approbation.</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold text-gray-500">Part Affilié — Frais Dépôt (%)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          placeholder="0"
+                          value={pendingSettings?.affiliateDepositFeeSharePercent ?? settings?.affiliateDepositFeeSharePercent ?? ''}
+                          onChange={(e) => setPendingSettings(prev => ({ ...prev, affiliateDepositFeeSharePercent: parseFloat(e.target.value) || 0 }))}
+                          className="rounded-xl border-gray-100 font-bold text-center"
+                        />
+                        <p className="text-[10px] text-gray-400">% du frais dépôt reversé à l'affilié</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold text-gray-500">Part Admin — Frais Dépôt (%)</Label>
+                        <Input
+                          type="number"
+                          readOnly
+                          value={100 - (pendingSettings?.affiliateDepositFeeSharePercent ?? settings?.affiliateDepositFeeSharePercent ?? 0)}
+                          className="rounded-xl border-gray-100 font-bold text-center bg-gray-50 text-gray-500"
+                        />
+                        <p className="text-[10px] text-gray-400">Calculé automatiquement</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold text-gray-500">Part Affilié — Frais Retrait (%)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          placeholder="0"
+                          value={pendingSettings?.affiliateWithdrawalFeeSharePercent ?? settings?.affiliateWithdrawalFeeSharePercent ?? ''}
+                          onChange={(e) => setPendingSettings(prev => ({ ...prev, affiliateWithdrawalFeeSharePercent: parseFloat(e.target.value) || 0 }))}
+                          className="rounded-xl border-gray-100 font-bold text-center"
+                        />
+                        <p className="text-[10px] text-gray-400">% du frais retrait reversé à l'affilié</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold text-gray-500">Part Admin — Frais Retrait (%)</Label>
+                        <Input
+                          type="number"
+                          readOnly
+                          value={100 - (pendingSettings?.affiliateWithdrawalFeeSharePercent ?? settings?.affiliateWithdrawalFeeSharePercent ?? 0)}
+                          className="rounded-xl border-gray-100 font-bold text-center bg-gray-50 text-gray-500"
+                        />
+                        <p className="text-[10px] text-gray-400">Calculé automatiquement</p>
+                      </div>
                     </div>
                   </div>
 
@@ -7753,7 +7825,10 @@ function EmailLogsPanel() {
                     onClick={async () => {
                       await updateSettings({
                         depositFeePercent: pendingSettings.depositFeePercent !== undefined ? pendingSettings.depositFeePercent : (settings?.depositFeePercent || 0),
+                        withdrawalFeePercent: pendingSettings.withdrawalFeePercent !== undefined ? pendingSettings.withdrawalFeePercent : (settings?.withdrawalFeePercent || 0),
                         transferFeePercent: pendingSettings.transferFeePercent !== undefined ? pendingSettings.transferFeePercent : (settings?.transferFeePercent || 0),
+                        affiliateDepositFeeSharePercent: pendingSettings.affiliateDepositFeeSharePercent !== undefined ? pendingSettings.affiliateDepositFeeSharePercent : (settings?.affiliateDepositFeeSharePercent || 0),
+                        affiliateWithdrawalFeeSharePercent: pendingSettings.affiliateWithdrawalFeeSharePercent !== undefined ? pendingSettings.affiliateWithdrawalFeeSharePercent : (settings?.affiliateWithdrawalFeeSharePercent || 0),
                         agentDepositCommissionPercent: pendingSettings.agentDepositCommissionPercent !== undefined ? pendingSettings.agentDepositCommissionPercent : (settings?.agentDepositCommissionPercent || 0),
                         agentWithdrawPercent: pendingSettings.agentWithdrawPercent !== undefined ? pendingSettings.agentWithdrawPercent : (settings?.agentWithdrawPercent || 0),
                         agentWithdrawAgentSharePercent: pendingSettings.agentWithdrawAgentSharePercent !== undefined ? pendingSettings.agentWithdrawAgentSharePercent : (settings?.agentWithdrawAgentSharePercent ?? 100),
