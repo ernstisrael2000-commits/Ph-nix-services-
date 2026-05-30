@@ -1239,6 +1239,18 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                         <p className="font-black text-gray-800">Retrait de <span className="text-rose-600">${parseFloat(agentQrAmount).toFixed(2)} USD</span></p>
                         <p className="text-xs text-gray-400 mt-0.5">Présentez ce code à l'agent pour qu'il le scanne</p>
                       </div>
+                      {agentQrWithdrawFee > 0 && (
+                        <div className="w-full rounded-2xl border border-rose-100 overflow-hidden text-left">
+                          <div className="flex justify-between items-center px-3.5 py-2 bg-white border-b border-rose-50">
+                            <span className="text-[11px] text-red-500 font-medium">Frais ({withdrawalFeePercent}%)</span>
+                            <span className="text-sm font-black text-red-500">−${agentQrWithdrawFee.toFixed(2)} USD</span>
+                          </div>
+                          <div className="flex justify-between items-center px-3.5 py-2.5 bg-rose-50">
+                            <span className="text-[11px] font-black text-rose-800 uppercase tracking-wide">Vous recevrez</span>
+                            <span className="text-base font-black text-rose-700">${agentQrWithdrawNet.toFixed(2)} USD</span>
+                          </div>
+                        </div>
+                      )}
                       <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-black ${txCountdown < 120 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                         <Clock className="h-4 w-4" />
                         Expire dans {Math.floor(txCountdown / 60)}:{String(txCountdown % 60).padStart(2, '0')}
@@ -1246,7 +1258,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                     </div>
                     <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-start gap-2">
                       <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
-                      <p className="text-xs text-blue-800">Après le scan, l'agent vous remet le cash et votre solde est débité instantanément.</p>
+                      <p className="text-xs text-blue-800">Après le scan, l'agent vous remet exactement <span className="font-black">${agentQrWithdrawNet.toFixed(2)} USD</span> en cash et votre solde est débité instantanément.</p>
                     </div>
                     <Button type="button" onClick={() => { setTxCode(null); setAgentQrAmount(''); }}
                       variant="outline" className="w-full h-11 rounded-xl border-gray-200 text-gray-500 text-sm font-bold">

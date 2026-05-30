@@ -825,13 +825,14 @@ router.post('/api/agent/client-transaction', requireDb, async (req, res) => {
           balance: FieldValue.increment(-usd),
           updatedAt: FieldValue.serverTimestamp(),
         });
-        // Agent: receives (usd - adminShare) — client digital balance minus what admin takes
+        // Agent: float increases by the net cash they hand to the client (usd - totalFee),
+        // commission credited separately for their share of the fee.
         txn.update(agentRef, {
-          balance: FieldValue.increment(usd - adminShareFee),
+          balance: FieldValue.increment(usd - totalFee),
           commissionBalance: FieldValue.increment(agentShareFee),
           updatedAt: FieldValue.serverTimestamp(),
         });
-        // Admin treasury gets admin share
+        // Admin treasury gets its share of the fee
         if (adminShareFee > 0) {
           const settingsRef = adminDb.collection('settings').doc('global');
           txn.update(settingsRef, {
@@ -1465,9 +1466,10 @@ router.post('/api/agent/withdrawal-request/:txId/confirm', requireDb, async (req
         updatedAt: FieldValue.serverTimestamp(),
       });
 
-      // Credit agent balance (they receive the digital value for cash they give)
+      // Credit agent balance: float increases by the net cash they hand to the client,
+      // commission credited separately for their share of the fee.
       txn.update(agentRef, {
-        balance: FieldValue.increment(amount - adminShareFee),
+        balance: FieldValue.increment(amount - totalFee),
         commissionBalance: FieldValue.increment(agentShareFee),
         updatedAt: FieldValue.serverTimestamp(),
       });
@@ -1498,12 +1500,13 @@ router.post('/api/agent/withdrawal-request/:txId/confirm', requireDb, async (req
         });
       }
 
-      // Client notification
+      // Client notification — show net amount they actually receive
+      const netForNotif = parseFloat((amount - totalFee).toFixed(4));
       txn.set(adminDb.collection('client_notifications').doc(), {
         clientId: txData.clientId,
         type: 'withdrawal_approved',
         title: '✅ Retrait confirmé par l\'agent',
-        message: `Votre retrait de $${amount.toFixed(2)} via l'agent ${agentData.name} a été confirmé. Récupérez vos fonds auprès de l'agent.`,
+        message: `Votre retrait a été confirmé par l'agent ${agentData.name}. Récupérez $${netForNotif.toFixed(2)} USD en cash auprès de l'agent.`,
         amount, read: false, createdAt: FieldValue.serverTimestamp(),
       });
 
@@ -1516,10 +1519,11 @@ router.post('/api/agent/withdrawal-request/:txId/confirm', requireDb, async (req
       });
     });
 
+    const netForPush = parseFloat((amount - totalFee).toFixed(4));
     sendFcmToClient(
       txData.clientId,
       '✅ Retrait confirmé',
-      `Votre retrait de $${amount.toFixed(2)} a été confirmé par l'agent ${agentData.name}. Vous pouvez récupérer vos fonds.`,
+      `Votre retrait a été confirmé par l'agent ${agentData.name}. Récupérez $${netForPush.toFixed(2)} USD en cash.`,
       { type: 'withdrawal_approved', txId }
     );
 
@@ -4441,6 +4445,28 @@ router.post('/api/affiliate/scan-tx-code', requireDb, async (req, res) => {
     if (type === 'withdrawal' && (clientSnap.balance || 0) < amount)
       return res.status(400).json({ error: `Solde client insuffisant ($${(clientSnap.balance || 0).toFixed(2)} disponible).` });
 
+    // Load fee settings
+    const feeSettingsSnap = await adminDb.collection('settings').doc('global').get();
+    const feeSettings = feeSettingsSnap.exists ? feeSettingsSnap.data()! : {};
+
+    // Compute fees for this operation
+    let feeAmount = 0, affiliateShare = 0, adminShare = 0, netToClient = amount;
+    if (type === 'deposit') {
+      const feePercent = Number(feeSettings.depositFeePercent || 0);
+      const affSharePct = Number(feeSettings.affiliateDepositFeeSharePercent || 0);
+      feeAmount = feePercent > 0 ? parseFloat((amount * feePercent / 100).toFixed(4)) : 0;
+      affiliateShare = feeAmount > 0 ? parseFloat((feeAmount * affSharePct / 100).toFixed(4)) : 0;
+      adminShare = parseFloat((feeAmount - affiliateShare).toFixed(4));
+      netToClient = parseFloat((amount - feeAmount).toFixed(4));
+    } else {
+      const feePercent = Number(feeSettings.withdrawalFeePercent || 0);
+      const affSharePct = Number(feeSettings.affiliateWithdrawalFeeSharePercent || 0);
+      feeAmount = feePercent > 0 ? parseFloat((amount * feePercent / 100).toFixed(4)) : 0;
+      affiliateShare = feeAmount > 0 ? parseFloat((feeAmount * affSharePct / 100).toFixed(4)) : 0;
+      adminShare = parseFloat((feeAmount - affiliateShare).toFixed(4));
+      netToClient = parseFloat((amount - feeAmount).toFixed(4));
+    }
+
     await adminDb.runTransaction(async (tx: any) => {
       const freshCode = (await tx.get(codeRef)).data();
       if (freshCode.used) throw new Error('Code déjà utilisé.');
@@ -4453,22 +4479,35 @@ router.post('/api/affiliate/scan-tx-code', requireDb, async (req, res) => {
         method: 'Agent QR Code',
         status: 'completed',
         description: `${type === 'deposit' ? 'Dépôt' : 'Retrait'} via QR Code — Agent: ${aff.name || affiliateId}`,
+        ...(feeAmount > 0 && { fee: feeAmount, affiliateFeeShare: affiliateShare, adminFeeShare: adminShare }),
         createdAt: now, processedAt: now,
       });
       tx.update(codeRef, { used: true, usedAt: now, usedBy: affiliateId });
       if (type === 'deposit') {
-        tx.update(affRef, { balance: FieldValue.increment(-amount) });
-        tx.update(clientRef, { balance: FieldValue.increment(amount) });
+        // Affiliate spends (amount - affiliateShare) from their float; client receives net amount
+        tx.update(affRef, { balance: FieldValue.increment(-(amount - affiliateShare)) });
+        tx.update(clientRef, { balance: FieldValue.increment(netToClient) });
+        if (adminShare > 0) {
+          tx.update(adminDb.collection('settings').doc('global'), {
+            feesBalance: FieldValue.increment(adminShare),
+          });
+        }
       } else {
+        // Client debited full amount; affiliate receives net cash they hand out + their fee share
         tx.update(clientRef, { balance: FieldValue.increment(-amount) });
-        tx.update(affRef, { balance: FieldValue.increment(amount) });
+        tx.update(affRef, { balance: FieldValue.increment(amount - adminShare) });
+        if (adminShare > 0) {
+          tx.update(adminDb.collection('settings').doc('global'), {
+            feesBalance: FieldValue.increment(adminShare),
+          });
+        }
       }
     });
 
     res.json({
-      success: true, type, amount,
+      success: true, type, amount, netToClient, fee: feeAmount,
       clientName: code.clientName,
-      message: `${type === 'deposit' ? 'Dépôt' : 'Retrait'} de $${amount.toFixed(2)} traité pour ${code.clientName}`,
+      message: `${type === 'deposit' ? 'Dépôt' : 'Retrait'} de $${amount.toFixed(2)} traité pour ${code.clientName}${feeAmount > 0 ? ` (frais: $${feeAmount.toFixed(2)}, client reçoit $${netToClient.toFixed(2)})` : ''}`,
     });
   } catch (e: any) {
     if (e.message === 'Code déjà utilisé.') return res.status(409).json({ error: e.message });
