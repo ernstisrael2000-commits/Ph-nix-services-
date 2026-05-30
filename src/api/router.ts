@@ -2242,14 +2242,35 @@ router.post('/api/affiliate/client-withdrawal/:txId/confirm', requireDb, async (
       return res.status(400).json({ error: 'Solde client insuffisant.' });
 
     const now = FieldValue.serverTimestamp();
+
+    // Load withdrawal fee settings
+    const settingsSnap = await adminDb.collection('settings').doc('global').get();
+    const sData = settingsSnap.exists ? settingsSnap.data()! : {};
+    const feePercent = Number(sData.withdrawalFeePercent || 0);
+    const affiliateSharePct = Number(sData.affiliateWithdrawalFeeSharePercent || 0);
+    const feeAmount = feePercent > 0 ? parseFloat((amount * feePercent / 100).toFixed(4)) : 0;
+    const affiliateShare = feeAmount > 0 ? parseFloat((feeAmount * affiliateSharePct / 100).toFixed(4)) : 0;
+    const adminShare = parseFloat((feeAmount - affiliateShare).toFixed(4));
+
     const batch = adminDb.batch();
+    // Client debited full amount
     batch.update(clientRef, { balance: FieldValue.increment(-amount), updatedAt: now });
-    batch.update(affRef, { balance: FieldValue.increment(amount), updatedAt: now });
-    batch.update(txRef, { status: 'approved', updatedAt: now, confirmedAt: now, confirmedBy: affiliateId });
+    // Affiliate credited (full amount minus admin's fee cut)
+    batch.update(affRef, { balance: FieldValue.increment(amount - adminShare), updatedAt: now });
+    batch.update(txRef, { status: 'approved', updatedAt: now, confirmedAt: now, confirmedBy: affiliateId,
+      ...(feeAmount > 0 && { fee: feeAmount, affiliateFeeShare: affiliateShare, adminFeeShare: adminShare }),
+    });
+    if (adminShare > 0) {
+      batch.update(adminDb.collection('settings').doc('global'), {
+        feesBalance: FieldValue.increment(adminShare),
+        updatedAt: now,
+      });
+    }
     batch.set(adminDb.collection('affiliate_transactions').doc(), {
       affiliateId, type: 'client_withdrawal_received', amount,
       clientId: txData.clientId, clientName: txData.clientName || '',
       description: `Retrait confirmé pour ${txData.clientName}`, status: 'completed',
+      ...(feeAmount > 0 && { fee: feeAmount, affiliateFeeShare: affiliateShare }),
       createdAt: now,
     });
 
@@ -2323,14 +2344,36 @@ router.post('/api/affiliate/client-deposit/:txId/confirm', requireDb, async (req
 
     const clientRef = adminDb.collection('clients').doc(txData.clientId);
     const now = FieldValue.serverTimestamp();
+
+    // Load deposit fee settings
+    const settingsSnap = await adminDb.collection('settings').doc('global').get();
+    const sData = settingsSnap.exists ? settingsSnap.data()! : {};
+    const feePercent = Number(sData.depositFeePercent || 0);
+    const affiliateSharePct = Number(sData.affiliateDepositFeeSharePercent || 0);
+    const feeAmount = feePercent > 0 ? parseFloat((amount * feePercent / 100).toFixed(4)) : 0;
+    const affiliateShare = feeAmount > 0 ? parseFloat((feeAmount * affiliateSharePct / 100).toFixed(4)) : 0;
+    const adminShare = parseFloat((feeAmount - affiliateShare).toFixed(4));
+    const netToClient = parseFloat((amount - feeAmount).toFixed(4));
+
     const batch = adminDb.batch();
-    batch.update(affRef, { balance: FieldValue.increment(-amount), updatedAt: now });
-    batch.update(clientRef, { balance: FieldValue.increment(amount), updatedAt: now });
-    batch.update(txRef, { status: 'approved', updatedAt: now, confirmedAt: now });
+    // Affiliate spends (amount - affiliateShare) from their float
+    batch.update(affRef, { balance: FieldValue.increment(-(amount - affiliateShare)), updatedAt: now });
+    // Client receives net amount (after fee)
+    batch.update(clientRef, { balance: FieldValue.increment(netToClient), updatedAt: now });
+    batch.update(txRef, { status: 'approved', updatedAt: now, confirmedAt: now,
+      ...(feeAmount > 0 && { fee: feeAmount, affiliateFeeShare: affiliateShare, adminFeeShare: adminShare }),
+    });
+    if (adminShare > 0) {
+      batch.update(adminDb.collection('settings').doc('global'), {
+        feesBalance: FieldValue.increment(adminShare),
+        updatedAt: now,
+      });
+    }
     batch.set(adminDb.collection('affiliate_transactions').doc(), {
       affiliateId, type: 'client_deposit_given', amount,
       clientId: txData.clientId, clientName: txData.clientName || '',
       description: `Dépôt confirmé pour ${txData.clientName}`, status: 'completed',
+      ...(feeAmount > 0 && { fee: feeAmount, affiliateFeeShare: affiliateShare }),
       createdAt: now,
     });
 
