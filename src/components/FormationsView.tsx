@@ -8,7 +8,8 @@ import {
   ChevronDown, ChevronUp, Video, Download, ExternalLink,
   Smartphone, CreditCard, Send, AlertCircle, Search,
   Heart, Trophy, BarChart3, Sparkles, Filter, Grid,
-  BookMarked, ArrowRight, Shield, LogIn
+  BookMarked, ArrowRight, Shield, LogIn,
+  Cpu, ShoppingBag, Palette, Briefcase
 } from 'lucide-react';
 import { Dialog, DialogContent } from './ui/dialog';
 import CoursePlayer from './CoursePlayer';
@@ -355,7 +356,13 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
 
   // ── Render: Catalog ─────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#f8f9ff] relative overflow-x-hidden">
+      {/* Ambient background blobs */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+        <div className="absolute -top-28 -left-20 w-96 h-96 rounded-full bg-violet-500 opacity-[0.07] blur-3xl" />
+        <div className="absolute top-1/2 -right-16 w-80 h-80 rounded-full bg-indigo-500 opacity-[0.07] blur-3xl" />
+        <div className="absolute bottom-1/4 left-10 w-72 h-72 rounded-full bg-purple-500 opacity-[0.05] blur-3xl" />
+      </div>
 
       {/* ── Login prompt dialog ─────────────────────────────────────────────── */}
       <Dialog open={showLoginPrompt} onOpenChange={open => { setShowLoginPrompt(open); if (!open) setPendingFormation(null); }}>
@@ -404,51 +411,38 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
         </DialogContent>
       </Dialog>
 
-      {/* ── LMS HERO ────────────────────────────────────────────────────────── */}
+      {/* ── PREMIUM HERO CARD ─────────────────────────────────────────────────── */}
       {activeTab === 'all' && !searchQuery && (
-        <div className="bg-gradient-to-br from-slate-900 via-violet-950 to-purple-900 px-4 pt-7 pb-5">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-black text-white leading-tight tracking-tight">
-                  Développez vos<br className="sm:hidden" /> compétences
-                </h1>
-                <p className="text-violet-300 text-sm mt-1.5 font-medium">
-                  Apprenez à votre rythme avec nos formations en ligne
+        <div className="px-4 pt-5 pb-1">
+          <div className="max-w-4xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+              className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-indigo-600 via-violet-700 to-purple-900 p-6 min-h-[186px] flex flex-col justify-between shadow-xl shadow-violet-900/20"
+            >
+              <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+              <div className="absolute bottom-0 left-0 w-36 h-36 bg-indigo-300/15 rounded-full -ml-12 -mb-12 blur-xl" />
+
+              <span className="inline-flex items-center bg-amber-400 text-amber-900 font-black text-[10px] px-3 py-1.5 rounded-full uppercase tracking-wider w-fit relative z-10">
+                ✨ {formations.length > 0 ? `${formations.length}+` : ''} formations disponibles
+              </span>
+
+              <div className="relative z-10 mt-4">
+                <h2 className="text-[22px] sm:text-2xl font-black text-white leading-snug mb-1.5">
+                  Apprenez des compétences<br />concrètes et monétisables.
+                </h2>
+                <p className="text-white/60 text-xs font-semibold mb-4">
+                  Formations professionnelles adaptées à vos objectifs.
                 </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { label: `${formations.length} cours`, icon: <BookOpen className="h-3.5 w-3.5" /> },
-                  { label: `${formations.reduce((s, f) => s + (f.studentsCount || 0), 0).toLocaleString() || '0'} étudiants`, icon: <Users className="h-3.5 w-3.5" /> },
-                  { label: 'Certifiants', icon: <Award className="h-3.5 w-3.5" /> },
-                ].map(s => (
-                  <div key={s.label} className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm text-white/90 text-xs font-bold px-3 py-1.5 rounded-full border border-white/10">
-                    {s.icon} {s.label}
-                  </div>
-                ))}
-              </div>
-            </div>
-            {/* Quick category filter pills */}
-            {categories.filter(c => c !== 'all').length > 0 && (
-              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                 <button
-                  onClick={() => setFilterCategory('all')}
-                  className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all shrink-0 border ${filterCategory === 'all' ? 'bg-white text-violet-900 border-white' : 'bg-white/10 text-white/80 hover:bg-white/20 border-white/10'}`}
+                  onClick={() => onTabChange('all')}
+                  className="bg-white text-violet-700 font-black text-sm px-5 py-2.5 rounded-full w-fit shadow-md hover:bg-violet-50 active:scale-95 transition-all flex items-center gap-2 animate-[pulse-cta_2.5s_ease-in-out_infinite]"
                 >
-                  Toutes catégories
+                  👉 Explorer les formations
                 </button>
-                {categories.filter(c => c !== 'all').map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => setFilterCategory(cat)}
-                    className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all shrink-0 border ${filterCategory === cat ? 'bg-white text-violet-900 border-white' : 'bg-white/10 text-white/80 hover:bg-white/20 border-white/10'}`}
-                  >
-                    {cat}
-                  </button>
-                ))}
               </div>
-            )}
+            </motion.div>
           </div>
         </div>
       )}
@@ -544,68 +538,10 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
 
           {/* ── ALL COURSES TAB ──────────────────────────────────────────── */}
           {activeTab === 'all' && (
-            <motion.div key="all" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.div key="all" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-7">
 
-              {/* Filters panel */}
-              <AnimatePresence>
-                {showFilters && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden mb-6"
-                  >
-                    <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
-                      <div className="flex flex-wrap gap-4">
-                        <div>
-                          <p className="text-xs font-black text-gray-500 uppercase tracking-wider mb-2">Niveau</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {['all', 'debutant', 'intermediaire', 'avance'].map(lvl => (
-                              <button key={lvl} onClick={() => setFilterLevel(lvl)}
-                                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${filterLevel === lvl ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-gray-500 border-gray-200 hover:border-violet-300'}`}>
-                                {lvl === 'all' ? 'Tous' : levelLabels[lvl]}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        {categories.length > 2 && (
-                          <div>
-                            <p className="text-xs font-black text-gray-500 uppercase tracking-wider mb-2">Catégorie</p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {categories.map(cat => (
-                                <button key={cat} onClick={() => setFilterCategory(cat)}
-                                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${filterCategory === cat ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-gray-500 border-gray-200 hover:border-slate-300'}`}>
-                                  {cat === 'all' ? 'Toutes' : cat}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* ── My courses in progress (if logged) */}
-              {loggedClient && myCourses.length > 0 && (
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-black text-gray-900">Continuer l'apprentissage</h2>
-                    <button onClick={() => onTabChange('my')} className="text-sm text-violet-600 font-bold hover:underline flex items-center gap-1">
-                      Voir tout <ChevronRight className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {myCourses.slice(0, 3).map((f, i) => (
-                      <InProgressCard key={f.id} formation={f} pct={progressMap[f.id!] ?? 0} onContinue={() => { closeDetail(); enterPlayer(f); }} onDetails={() => openDetail(f)} i={i} />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ── Search results mode */}
               {searchQuery ? (
+                /* ── Search results */
                 <div>
                   <p className="text-sm text-gray-500 font-semibold mb-5">
                     {filtered.length} résultat{filtered.length !== 1 ? 's' : ''} pour "<span className="text-violet-600">{searchQuery}</span>"
@@ -620,54 +556,220 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                 </div>
               ) : (
                 <>
-                  {/* ── Les plus populaires */}
+                  {/* ── 1. Categories with icon boxes */}
+                  {categories.filter(c => c !== 'all').length > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-[15px] font-black text-gray-900">Catégories</h3>
+                        <button
+                          onClick={() => setShowFilters(v => !v)}
+                          className={`text-xs font-bold flex items-center gap-1 transition-colors ${showFilters ? 'text-violet-700' : 'text-gray-400 hover:text-violet-600'}`}
+                        >
+                          <Filter className="h-3 w-3" /> {showFilters ? 'Fermer' : 'Filtres'}
+                        </button>
+                      </div>
+
+                      {/* Filters panel */}
+                      <AnimatePresence>
+                        {showFilters && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden mb-4"
+                          >
+                            <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm mb-3">
+                              <p className="text-[11px] font-black text-gray-400 uppercase tracking-wider mb-2">Niveau</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {['all', 'debutant', 'intermediaire', 'avance'].map(lvl => (
+                                  <button key={lvl} onClick={() => setFilterLevel(lvl)}
+                                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${filterLevel === lvl ? 'bg-violet-600 text-white shadow-sm shadow-violet-400/30' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>
+                                    {lvl === 'all' ? 'Tous' : levelLabels[lvl]}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {/* Category icon boxes - horizontal scroll */}
+                      <div className="flex gap-4 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">
+                        {['all', ...categories.filter(c => c !== 'all')].map(cat => {
+                          const Icon = getCategoryIcon(cat);
+                          const active = filterCategory === cat;
+                          return (
+                            <button
+                              key={cat}
+                              onClick={() => setFilterCategory(cat)}
+                              className="flex flex-col items-center gap-1.5 shrink-0 transition-all active:scale-95"
+                            >
+                              <div className={`w-[58px] h-[58px] rounded-[18px] flex items-center justify-center transition-all relative overflow-hidden ${
+                                active
+                                  ? 'bg-violet-600 shadow-lg shadow-violet-300/50'
+                                  : 'bg-white shadow-sm hover:shadow-md hover:bg-violet-50'
+                              }`}>
+                                {active && <div className="absolute inset-0 bg-white/10 rounded-[18px]" />}
+                                <Icon className={`h-6 w-6 relative z-10 ${active ? 'text-white' : 'text-violet-600'}`} />
+                              </div>
+                              <span className={`text-[10px] font-bold whitespace-nowrap leading-none ${active ? 'text-violet-700' : 'text-gray-400'}`}>
+                                {cat === 'all' ? 'Tous' : cat.length > 9 ? cat.slice(0, 8) + '…' : cat}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── 2. Continue learning (if in-progress courses) */}
+                  {loggedClient && myCourses.filter(f => (progressMap[f.id!] ?? 0) > 0 && (progressMap[f.id!] ?? 0) < 100).length > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-[15px] font-black text-gray-900">Continuer l'apprentissage</h3>
+                        <button onClick={() => onTabChange('my')} className="text-xs text-violet-600 font-bold flex items-center gap-1 hover:gap-1.5 transition-all">
+                          Voir tout <ChevronRight className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <div className="space-y-3">
+                        {myCourses.filter(f => (progressMap[f.id!] ?? 0) > 0 && (progressMap[f.id!] ?? 0) < 100).slice(0, 2).map(f => (
+                          <ContinueLearningMiniCard
+                            key={f.id}
+                            formation={f}
+                            pct={progressMap[f.id!] ?? 0}
+                            onResume={() => enterPlayer(f)}
+                            onDetails={() => openDetail(f)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── 3. Popular — featured card + horizontal scroll */}
                   {popularCourses.length > 0 && (
-                    <Section title="Les plus populaires" icon={<TrendingUp className="h-4 w-4 text-violet-600" />}>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {popularCourses.map((f, i) => <CourseCard key={f.id} formation={f} i={i} owned={isOwned(f)} fav={isFav(f)} disc={discount(f)} onOpen={() => openDetail(f)} onFav={(e) => toggleFavorite(f, e)} />)}
-                      </div>
-                    </Section>
+                    <div>
+                      <h3 className="text-[15px] font-black text-gray-900 mb-3">Formations Populaires</h3>
+                      <FeaturedCourseCard
+                        formation={popularCourses[0]}
+                        owned={isOwned(popularCourses[0])}
+                        fav={isFav(popularCourses[0])}
+                        disc={discount(popularCourses[0])}
+                        onOpen={() => openDetail(popularCourses[0])}
+                        onFav={e => toggleFavorite(popularCourses[0], e)}
+                      />
+                      {popularCourses.length > 1 && (
+                        <div className="flex gap-3 overflow-x-auto no-scrollbar mt-3 -mx-4 px-4 pb-1">
+                          {popularCourses.slice(1).map(f => (
+                            <CompactCourseCard
+                              key={f.id}
+                              formation={f}
+                              owned={isOwned(f)}
+                              fav={isFav(f)}
+                              disc={discount(f)}
+                              onOpen={() => openDetail(f)}
+                              onFav={e => toggleFavorite(f, e)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   )}
 
-                  {/* ── Cours gratuits (uniquement ceux pas déjà dans populaires) */}
+                  {/* ── 4. Free courses — horizontal scroll */}
                   {freeCourses.filter(f => !popularCourses.find(p => p.id === f.id)).length > 0 && (
-                    <Section title="Cours gratuits" icon={<Zap className="h-4 w-4 text-emerald-500" />}>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {freeCourses.filter(f => !popularCourses.find(p => p.id === f.id)).slice(0, 6).map((f, i) => <CourseCard key={f.id} formation={f} i={i} owned={isOwned(f)} fav={isFav(f)} disc={discount(f)} onOpen={() => openDetail(f)} onFav={(e) => toggleFavorite(f, e)} />)}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="h-6 w-6 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                          <Zap className="h-3.5 w-3.5 text-emerald-600" />
+                        </span>
+                        <h3 className="text-[15px] font-black text-gray-900">Cours gratuits</h3>
                       </div>
-                    </Section>
+                      <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">
+                        {freeCourses.filter(f => !popularCourses.find(p => p.id === f.id)).slice(0, 8).map(f => (
+                          <CompactCourseCard
+                            key={f.id}
+                            formation={f}
+                            owned={isOwned(f)}
+                            fav={isFav(f)}
+                            disc={discount(f)}
+                            onOpen={() => openDetail(f)}
+                            onFav={e => toggleFavorite(f, e)}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   )}
 
-                  {/* ── Nouveautés (uniquement ceux pas déjà affichés) */}
+                  {/* ── 5. New courses — 2-col grid */}
                   {(() => {
                     const shownIds = new Set([...popularCourses.map(f => f.id), ...freeCourses.map(f => f.id)]);
                     const novelties = newCourses.filter(f => !shownIds.has(f.id));
                     return novelties.length > 0 ? (
-                      <Section title="Nouveautés" icon={<Sparkles className="h-4 w-4 text-amber-500" />}>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {novelties.map((f, i) => <CourseCard key={f.id} formation={f} i={i} owned={isOwned(f)} fav={isFav(f)} disc={discount(f)} onOpen={() => openDetail(f)} onFav={(e) => toggleFavorite(f, e)} />)}
+                      <div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="h-6 w-6 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                            <Sparkles className="h-3.5 w-3.5 text-amber-600" />
+                          </span>
+                          <h3 className="text-[15px] font-black text-gray-900">Nouveautés</h3>
                         </div>
-                      </Section>
+                        <div className="grid grid-cols-2 gap-3">
+                          {novelties.map((f, i) => (
+                            <NewCourseGridCard
+                              key={f.id}
+                              formation={f}
+                              i={i}
+                              owned={isOwned(f)}
+                              onOpen={() => openDetail(f)}
+                            />
+                          ))}
+                        </div>
+                      </div>
                     ) : null;
                   })()}
 
-                  {/* ── CTA Banner */}
-                  <div className="mt-6 bg-gradient-to-br from-slate-900 to-violet-950 rounded-2xl p-6 sm:p-8 text-center text-white">
-                    <h3 className="text-xl font-black mb-2">Prêt à transformer votre carrière ?</h3>
-                    <p className="text-gray-400 text-sm mb-4 max-w-md mx-auto">
-                      Rejoignez plus de {formations.reduce((s, f) => s + (f.studentsCount || 0), 0).toLocaleString()} apprenants et accédez à l'intégralité du catalogue.
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                      <button onClick={() => setSearchQuery('')} className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 rounded-xl font-bold transition-colors text-sm">
-                        Commencer maintenant
+                  {/* ── 6. Certificate banner */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                    className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-700 to-purple-900 p-6 text-white shadow-lg shadow-violet-900/20"
+                  >
+                    <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-3xl" />
+                    <div className="absolute top-0 left-0 w-32 h-32 bg-indigo-300/10 rounded-full -ml-10 -mt-10 blur-2xl" />
+                    <div className="relative z-10">
+                      <Award className="h-10 w-10 mb-3 text-amber-300" />
+                      <h4 className="text-lg font-black mb-1.5">Certificats Rena Academy</h4>
+                      <p className="text-white/70 text-sm mb-5 max-w-xs leading-relaxed">
+                        Obtenez un certificat reconnu après chaque formation complétée.
+                      </p>
+                      <button
+                        onClick={() => loggedClient ? onTabChange('my') : onOpenWallet()}
+                        className="bg-white text-violet-700 font-black text-sm px-5 py-2.5 rounded-full hover:bg-violet-50 active:scale-95 transition-all inline-flex items-center gap-2 shadow-md"
+                      >
+                        👉 {loggedClient ? 'Voir mes certificats' : 'Se connecter'}
                       </button>
-                      {!loggedClient && (
-                        <button onClick={onOpenWallet} className="px-6 py-2.5 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-colors border border-white/20 text-sm">
-                          Se connecter
-                        </button>
-                      )}
                     </div>
-                  </div>
+                  </motion.div>
+
+                  {/* ── 7. User stats */}
+                  {loggedClient && myCourses.length > 0 && (
+                    <div className="grid grid-cols-3 gap-3 pb-4">
+                      {[
+                        { value: myCourses.length, label: 'Formations' },
+                        { value: myCourses.filter(f => (progressMap[f.id!] ?? 0) > 0 && (progressMap[f.id!] ?? 0) < 100).length, label: 'En cours' },
+                        { value: myCourses.filter(f => (progressMap[f.id!] ?? 0) >= 100).length, label: 'Terminés' },
+                      ].map(s => (
+                        <motion.div
+                          key={s.label}
+                          whileTap={{ scale: 0.96 }}
+                          className="bg-white p-4 rounded-2xl shadow-sm text-center border border-white/80 hover:shadow-md transition-all cursor-default"
+                        >
+                          <span className="block text-2xl font-black text-violet-700">{s.value}</span>
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">{s.label}</span>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </motion.div>
@@ -1573,6 +1675,258 @@ function PurchaseCard({
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Premium catalog sub-components ─────────────────────────────────────────────
+
+function getCategoryIcon(cat: string): React.FC<{ className?: string }> {
+  const l = cat.toLowerCase();
+  if (l === 'all' || l === 'tous' || l === 'toutes') return Grid;
+  if (l.includes('ia') || l.includes('intelligence') || l.includes('ai') || l.includes('tech')) return Cpu;
+  if (l.includes('marketing') || l.includes('publicité') || l.includes('ads')) return TrendingUp;
+  if (l.includes('business') || l.includes('entreprise') || l.includes('gestion')) return Briefcase;
+  if (l.includes('trading') || l.includes('finance') || l.includes('bourse') || l.includes('crypto')) return BarChart3;
+  if (l.includes('design') || l.includes('ui') || l.includes('ux') || l.includes('graphi')) return Palette;
+  if (l.includes('ecommerce') || l.includes('e-commerce') || l.includes('dropship') || l.includes('vente')) return ShoppingBag;
+  if (l.includes('dev') || l.includes('code') || l.includes('web') || l.includes('program')) return Globe;
+  if (l.includes('photo') || l.includes('vidéo') || l.includes('video') || l.includes('créa')) return Sparkles;
+  return GraduationCap;
+}
+
+function FeaturedCourseCard({ formation, owned, fav, disc, onOpen, onFav }: {
+  formation: Formation; owned: boolean; fav: boolean; disc: number;
+  onOpen: () => void; onFav: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <motion.div
+      whileTap={{ scale: 0.985 }}
+      onClick={onOpen}
+      className="bg-white rounded-3xl overflow-hidden shadow-[0px_10px_32px_rgba(0,0,0,0.06)] border border-gray-50 group cursor-pointer"
+    >
+      {/* Cover image */}
+      <div className="relative h-48 w-full overflow-hidden">
+        {formation.coverImage ? (
+          <img src={formation.coverImage} alt={formation.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+        ) : (
+          <div className={`w-full h-full bg-gradient-to-br ${levelGradients[formation.level] || 'from-violet-600 to-indigo-800'} flex items-center justify-center`}>
+            <GraduationCap className="h-20 w-20 text-white/15" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+        {formation.category && (
+          <span className="absolute top-4 left-4 bg-violet-600/90 backdrop-blur-sm text-white text-[10px] font-black px-3 py-1 rounded-full">
+            {formation.category}
+          </span>
+        )}
+        {formation.price === 0 && (
+          <span className="absolute top-4 right-4 bg-emerald-500 text-white text-[10px] font-black px-3 py-1 rounded-full">Gratuit</span>
+        )}
+        {disc > 0 && (
+          <span className="absolute top-4 right-4 bg-rose-500 text-white text-[10px] font-black px-3 py-1 rounded-full">-{disc}%</span>
+        )}
+        <button onClick={onFav} className={`absolute bottom-4 right-4 h-8 w-8 rounded-full flex items-center justify-center transition-all shadow-md ${fav ? 'bg-rose-500 text-white' : 'bg-black/30 backdrop-blur-sm text-white hover:bg-rose-500'}`}>
+          <Heart className={`h-3.5 w-3.5 ${fav ? 'fill-white' : ''}`} />
+        </button>
+        {owned && (
+          <div className="absolute bottom-4 left-4 bg-emerald-500 text-white text-[10px] font-black px-3 py-1 rounded-full flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3 fill-white" /> Accès activé
+          </div>
+        )}
+      </div>
+
+      {/* Body */}
+      <div className="p-5">
+        {formation.rating ? (
+          <div className="flex items-center gap-1.5 mb-2">
+            <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+            <span className="text-xs font-black text-gray-800">{formation.rating.toFixed(1)}</span>
+            {formation.studentsCount ? (
+              <span className="text-[11px] text-gray-400">({formation.studentsCount.toLocaleString()} étudiants)</span>
+            ) : null}
+          </div>
+        ) : null}
+
+        <h5 className="text-base font-black text-gray-900 mb-1 leading-snug line-clamp-2">{formation.title}</h5>
+        {formation.instructor && (
+          <p className="text-xs font-semibold text-gray-400 mb-4 flex items-center gap-1">
+            <span className="h-4 w-4 rounded-full bg-gray-100 inline-flex items-center justify-center shrink-0">
+              <User className="h-2.5 w-2.5 text-gray-400" />
+            </span>
+            {formation.instructor}
+          </p>
+        )}
+
+        <div className="flex items-center gap-4 mb-5">
+          {formation.totalDuration && (
+            <div className="flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5 text-gray-300" />
+              <span className="text-[11px] text-gray-500 font-semibold">{formation.totalDuration}</span>
+            </div>
+          )}
+          {formation.level && (
+            <div className="flex items-center gap-1">
+              <BarChart3 className="h-3.5 w-3.5 text-gray-300" />
+              <span className="text-[11px] text-gray-500 font-semibold">{levelLabels[formation.level] || formation.level}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-1">
+            <BookOpen className="h-3.5 w-3.5 text-gray-300" />
+            <span className="text-[11px] text-gray-500 font-semibold">{(formation.modules || []).length} modules</span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-xl font-black text-violet-700">
+              {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
+            </span>
+            {formation.originalPrice && formation.originalPrice > formation.price && (
+              <span className="text-xs text-gray-400 line-through">{formation.originalPrice.toLocaleString()}</span>
+            )}
+          </div>
+          <button
+            onClick={e => { e.stopPropagation(); onOpen(); }}
+            className="flex-1 max-w-[160px] bg-violet-600 text-white font-black text-xs py-2.5 rounded-xl hover:bg-violet-700 active:scale-95 transition-all shadow-sm shadow-violet-400/30 flex items-center justify-center gap-1.5"
+          >
+            {owned ? '▶ Continuer' : '👉 Voir le cours'}
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function CompactCourseCard({ formation, owned, fav, disc, onOpen, onFav }: {
+  formation: Formation; owned: boolean; fav: boolean; disc: number;
+  onOpen: () => void; onFav: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <motion.div
+      whileTap={{ scale: 0.97 }}
+      onClick={onOpen}
+      className="min-w-[200px] max-w-[200px] bg-white rounded-2xl overflow-hidden shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all cursor-pointer group shrink-0 border border-gray-50"
+    >
+      <div className="relative h-[108px] overflow-hidden">
+        {formation.coverImage ? (
+          <img src={formation.coverImage} alt={formation.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+        ) : (
+          <div className={`w-full h-full bg-gradient-to-br ${levelGradients[formation.level] || 'from-violet-500 to-indigo-700'} flex items-center justify-center`}>
+            <GraduationCap className="h-8 w-8 text-white/20" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+        {formation.price === 0 && (
+          <span className="absolute top-2 left-2 bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">Gratuit</span>
+        )}
+        {disc > 0 && (
+          <span className="absolute top-2 left-2 bg-rose-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">-{disc}%</span>
+        )}
+        {owned && (
+          <span className="absolute bottom-2 left-2 bg-emerald-500/90 backdrop-blur-sm text-white text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-0.5">
+            <CheckCircle2 className="h-2.5 w-2.5 fill-white" /> Accès
+          </span>
+        )}
+        <button onClick={onFav} className={`absolute top-2 right-2 h-6 w-6 rounded-full flex items-center justify-center transition-all ${fav ? 'bg-rose-500 text-white' : 'bg-black/25 backdrop-blur-sm text-white/80'}`}>
+          <Heart className={`h-3 w-3 ${fav ? 'fill-white' : ''}`} />
+        </button>
+      </div>
+      <div className="p-3">
+        <h6 className="text-[11px] font-black text-gray-900 line-clamp-2 leading-snug mb-2">{formation.title}</h6>
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-black text-violet-700">
+            {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
+          </span>
+          {formation.rating ? (
+            <div className="flex items-center gap-0.5">
+              <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
+              <span className="text-[10px] font-black text-gray-700">{formation.rating.toFixed(1)}</span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function NewCourseGridCard({ formation, i, owned, onOpen }: {
+  formation: Formation; i: number; owned: boolean; onOpen: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.94 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay: i * 0.07, ease: [0.22, 1, 0.36, 1] }}
+      onClick={onOpen}
+      className="flex flex-col gap-2 group cursor-pointer active:scale-[0.97] transition-transform"
+    >
+      <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-gray-100 shadow-sm">
+        {formation.coverImage ? (
+          <img src={formation.coverImage} alt={formation.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+        ) : (
+          <div className={`w-full h-full bg-gradient-to-br ${levelGradients[formation.level] || 'from-violet-500 to-indigo-700'} flex items-center justify-center`}>
+            <GraduationCap className="h-8 w-8 text-white/20" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+        <div className="absolute top-2 right-2 bg-amber-400 text-amber-900 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide">
+          Nouveau
+        </div>
+        {owned && (
+          <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">
+            Accès
+          </div>
+        )}
+      </div>
+      <h6 className="text-[11px] font-black text-gray-900 leading-tight line-clamp-2">{formation.title}</h6>
+      <span className="text-sm font-black text-violet-700">
+        {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
+      </span>
+    </motion.div>
+  );
+}
+
+function ContinueLearningMiniCard({ formation, pct, onResume, onDetails }: {
+  formation: Formation; pct: number; onResume: () => void; onDetails: () => void;
+}) {
+  return (
+    <div className="bg-white border border-violet-50 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
+      <div className="flex gap-3 mb-3">
+        <div className="w-[60px] h-[60px] rounded-xl overflow-hidden shrink-0">
+          {formation.coverImage ? (
+            <img src={formation.coverImage} alt={formation.title} className="w-full h-full object-cover" />
+          ) : (
+            <div className={`w-full h-full bg-gradient-to-br ${levelGradients[formation.level] || 'from-violet-500 to-purple-700'} flex items-center justify-center`}>
+              <GraduationCap className="h-6 w-6 text-white/30" />
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h5
+            className="font-black text-gray-900 text-sm leading-tight mb-0.5 line-clamp-2 cursor-pointer hover:text-violet-700 transition-colors"
+            onClick={onDetails}
+          >
+            {formation.title}
+          </h5>
+          <p className="text-[11px] text-gray-400 font-semibold">{100 - pct}% restant</p>
+          <div className="mt-2 w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${pct}%` }}
+              transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
+              className="h-full bg-gradient-to-r from-violet-600 to-indigo-500 rounded-full"
+            />
+          </div>
+          <p className="text-right text-[10px] font-black text-violet-600 mt-0.5">{pct}% complété</p>
+        </div>
+      </div>
+      <button
+        onClick={onResume}
+        className="w-full bg-violet-50 text-violet-700 border border-violet-100 font-black text-xs py-2.5 rounded-xl hover:bg-violet-100 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+      >
+        <Play className="h-3.5 w-3.5 fill-violet-700" /> Reprendre
+      </button>
     </div>
   );
 }

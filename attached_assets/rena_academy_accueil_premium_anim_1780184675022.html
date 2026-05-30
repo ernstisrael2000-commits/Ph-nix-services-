@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+
+<html class="light" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .glass {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+        }
+        .active-nav-after::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            width: 4px;
+            height: 4px;
+            background-color: #3525cd;
+            border-radius: 50%;
+        }
+
+        /* Entrance Animations */
+        .reveal {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Shimmer Effect for Categories */
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .shimmer-load {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        /* Ambient Motion Background */
+        @keyframes float {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(2%, 5%) rotate(5deg); }
+            66% { transform: translate(-3%, 2%) rotate(-3deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
+        }
+        .bg-ambient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.15;
+            animation: float 20s infinite ease-in-out;
+        }
+
+        /* CTA Pulse Animation */
+        @keyframes pulse-soft {
+            0% { box-shadow: 0 0 0 0 rgba(53, 37, 205, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(53, 37, 205, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(53, 37, 205, 0); }
+        }
+        .btn-pulse {
+            animation: pulse-soft 2s infinite;
+        }
+
+        /* Accessibility */
+        @media (prefers-reduced-motion: reduce) {
+            .reveal, .blob, .btn-pulse, .shimmer-load, * {
+                animation: none !important;
+                transition: none !important;
+                transform: none !important;
+                opacity: 1 !important;
+            }
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-low": "#eff4ff",
+                        "surface-container": "#e6eeff",
+                        "tertiary": "#005338",
+                        "outline-variant": "#c7c4d8",
+                        "on-tertiary-fixed": "#002113",
+                        "secondary-fixed-dim": "#d2bbff",
+                        "secondary": "#712ae2",
+                        "surface-dim": "#d0dbed",
+                        "tertiary-container": "#006e4b",
+                        "on-secondary-fixed": "#25005a",
+                        "tertiary-fixed": "#6ffbbe",
+                        "on-primary-container": "#dad7ff",
+                        "error": "#ba1a1a",
+                        "on-tertiary-container": "#67f4b7",
+                        "primary-fixed": "#e2dfff",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-variant": "#d9e3f6",
+                        "on-surface": "#121c2a",
+                        "outline": "#777587",
+                        "on-error": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-fixed-variant": "#5a00c6",
+                        "surface-bright": "#f8f9ff",
+                        "inverse-primary": "#c3c0ff",
+                        "on-secondary-container": "#fffbff",
+                        "primary-container": "#4f46e5",
+                        "secondary-fixed": "#eaddff",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "on-primary": "#ffffff",
+                        "primary": "#3525cd",
+                        "surface-tint": "#4d44e3",
+                        "background": "#f8f9ff",
+                        "surface": "#f8f9ff",
+                        "on-error-container": "#93000a",
+                        "on-primary-fixed": "#0f0069",
+                        "primary-fixed-dim": "#c3c0ff",
+                        "on-primary-fixed-variant": "#3323cc",
+                        "on-secondary": "#ffffff",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "secondary-container": "#8a4cfc",
+                        "inverse-surface": "#27313f",
+                        "surface-container-highest": "#d9e3f6",
+                        "on-background": "#121c2a",
+                        "surface-container-high": "#dee9fc",
+                        "on-surface-variant": "#464555"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px",
+                        "3xl": "1.5rem"
+                    },
+                    "spacing": {
+                        "stack-md": "24px",
+                        "stack-sm": "12px",
+                        "base": "8px",
+                        "gutter": "16px",
+                        "margin-mobile": "20px",
+                        "margin-tablet": "32px",
+                        "stack-lg": "40px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Inter"],
+                        "display": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "label-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "display": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                        "headline-lg-mobile": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                        "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md antialiased pb-32">
+<!-- Ambient Background Elements -->
+<div class="bg-ambient">
+<div class="blob bg-primary w-[300px] h-[300px] top-[-10%] left-[-10%]"></div>
+<div class="blob bg-secondary w-[250px] h-[250px] bottom-[20%] right-[-5%]"></div>
+<div class="blob bg-tertiary-fixed w-[200px] h-[200px] top-[40%] left-[10%]"></div>
+</div>
+<!-- TopAppBar -->
+<header class="sticky top-0 z-50 w-full px-margin-mobile py-stack-sm flex flex-col gap-base bg-white/70 backdrop-blur-xl border-b border-white/20 shadow-sm transition-all duration-300" id="mainHeader">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center overflow-hidden">
+<img alt="Profil" class="w-full h-full object-cover" data-alt="A professional close-up portrait of a young male professional with a friendly smile, set against a clean, soft-focus office background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCxZ0RC1tf78duv39OLLVBJV79WxDxicsbLYZElxbLjWPg-qoJSU0kdIpD1Q9V8frqAp4-wN3LrmYgknuuBWEP7C_j6Uk8RMl-JrhygRFrTmA38l_2WCbrSv4iRCxIv7rkXqo6ZXF74e5ENNSbXshtM-EalvnwwK95_-IH-JkmDBtXb_5nUlFyrE7_fQ4D5bmae3rFNO22LLebxhw4aqLVChXwsicx9J0vuaXSOzTn_2SB7k4UOzhxpeAkUY5xN1V--ayQPuGTrCxKW"/>
+</div>
+<div>
+<span class="font-label-md text-label-md text-on-surface-variant">Bonjour 👋</span>
+<h1 class="font-display text-headline-md text-primary block leading-tight">Rena Academy</h1>
+</div>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-primary/5 active:scale-90 transition-all duration-200">
+<span class="material-symbols-outlined text-primary" data-icon="notifications">notifications</span>
+</button>
+</div>
+<div class="mt-2 transition-all duration-500 transform translate-x-0" id="headerContent">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Développez vos compétences</h2>
+<p class="font-label-md text-label-md text-on-surface-variant">Explorez des formations professionnelles adaptées à vos objectifs.</p>
+</div>
+</header>
+<!-- Search Bar -->
+<div class="px-margin-mobile mt-stack-md reveal">
+<div class="relative group">
+<div class="absolute inset-y-0 left-4 flex items-center pointer-events-none transition-transform duration-300 group-focus-within:translate-x-1">
+<span class="material-symbols-outlined text-outline" data-icon="search">search</span>
+</div>
+<input class="w-full pl-12 pr-4 py-4 bg-white/70 border border-white/30 rounded-full glass shadow-sm focus:ring-4 focus:ring-primary/20 focus:border-primary/50 focus:scale-[1.02] outline-none transition-all duration-300 placeholder:text-outline/70 font-label-md" placeholder="Rechercher une formation..." type="text"/>
+</div>
+</div>
+<!-- Hero Section -->
+<section class="px-margin-mobile mt-stack-lg reveal">
+<div class="relative overflow-hidden rounded-3xl bg-primary-container p-6 min-h-[180px] flex flex-col justify-center shadow-lg transform transition-transform hover:scale-[1.01]">
+<div class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+<div class="absolute bottom-0 left-0 w-24 h-24 bg-secondary/20 rounded-full -ml-8 -mb-8 blur-xl"></div>
+<span class="inline-flex items-center px-3 py-1 rounded-full bg-amber-400 text-on-background font-label-sm text-[10px] mb-3 uppercase tracking-wider font-bold">
+                +100 formations disponibles
+            </span>
+<h3 class="font-headline-md text-white mb-4">Apprenez des compétences concrètes et monétisables.</h3>
+<button class="bg-white text-primary font-label-md px-6 py-3 rounded-full w-max shadow-sm hover:bg-surface-container active:scale-95 transition-all">
+                👉 Explorer les formations
+            </button>
+</div>
+</section>
+<!-- Categories -->
+<section class="mt-stack-lg">
+<div class="px-margin-mobile flex justify-between items-center mb-stack-sm reveal">
+<h4 class="font-headline-md text-on-surface">Catégories</h4>
+<button class="text-primary font-label-md active:scale-95 transition-all">Voir tout</button>
+</div>
+<div class="flex overflow-x-auto gap-4 px-margin-mobile hide-scrollbar reveal">
+<!-- Category Items -->
+<div class="flex flex-col items-center gap-2 min-w-[80px] transform hover:scale-105 active:scale-95 transition-all cursor-pointer">
+<div class="w-16 h-16 rounded-2xl bg-white shadow-sm flex items-center justify-center hover:bg-primary-container group transition-colors overflow-hidden relative">
+<div class="shimmer-load absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none"></div>
+<span class="material-symbols-outlined text-primary group-hover:text-white transition-colors" data-icon="smart_toy">smart_toy</span>
+</div>
+<span class="font-label-sm text-on-surface-variant">IA</span>
+</div>
+<div class="flex flex-col items-center gap-2 min-w-[80px] transform hover:scale-105 active:scale-95 transition-all cursor-pointer">
+<div class="w-16 h-16 rounded-2xl bg-white shadow-sm flex items-center justify-center hover:bg-primary-container group transition-colors overflow-hidden relative">
+<div class="shimmer-load absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none"></div>
+<span class="material-symbols-outlined text-primary group-hover:text-white transition-colors" data-icon="ads_click">ads_click</span>
+</div>
+<span class="font-label-sm text-on-surface-variant">Marketing</span>
+</div>
+<div class="flex flex-col items-center gap-2 min-w-[80px] transform hover:scale-105 active:scale-95 transition-all cursor-pointer">
+<div class="w-16 h-16 rounded-2xl bg-white shadow-sm flex items-center justify-center hover:bg-primary-container group transition-colors overflow-hidden relative">
+<div class="shimmer-load absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none"></div>
+<span class="material-symbols-outlined text-primary group-hover:text-white transition-colors" data-icon="code">code</span>
+</div>
+<span class="font-label-sm text-on-surface-variant">Dev Web</span>
+</div>
+<div class="flex flex-col items-center gap-2 min-w-[80px] transform hover:scale-105 active:scale-95 transition-all cursor-pointer">
+<div class="w-16 h-16 rounded-2xl bg-white shadow-sm flex items-center justify-center hover:bg-primary-container group transition-colors overflow-hidden relative">
+<div class="shimmer-load absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none"></div>
+<span class="material-symbols-outlined text-primary group-hover:text-white transition-colors" data-icon="trending_up">trending_up</span>
+</div>
+<span class="font-label-sm text-on-surface-variant">Business</span>
+</div>
+<div class="flex flex-col items-center gap-2 min-w-[80px] transform hover:scale-105 active:scale-95 transition-all cursor-pointer">
+<div class="w-16 h-16 rounded-2xl bg-white shadow-sm flex items-center justify-center hover:bg-primary-container group transition-colors overflow-hidden relative">
+<div class="shimmer-load absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none"></div>
+<span class="material-symbols-outlined text-primary group-hover:text-white transition-colors" data-icon="candlestick_chart">candlestick_chart</span>
+</div>
+<span class="font-label-sm text-on-surface-variant">Trading</span>
+</div>
+<div class="flex flex-col items-center gap-2 min-w-[80px] transform hover:scale-105 active:scale-95 transition-all cursor-pointer">
+<div class="w-16 h-16 rounded-2xl bg-white shadow-sm flex items-center justify-center hover:bg-primary-container group transition-colors overflow-hidden relative">
+<div class="shimmer-load absolute inset-0 opacity-0 group-hover:opacity-100 pointer-events-none"></div>
+<span class="material-symbols-outlined text-primary group-hover:text-white transition-colors" data-icon="shopping_cart">shopping_cart</span>
+</div>
+<span class="font-label-sm text-on-surface-variant">E-com</span>
+</div>
+</div>
+</section>
+<!-- Popular Course Card -->
+<section class="px-margin-mobile mt-stack-lg reveal">
+<h4 class="font-headline-md text-on-surface mb-stack-sm">Formations Populaires</h4>
+<div class="bg-white rounded-3xl overflow-hidden shadow-[0px_10px_30px_rgba(0,0,0,0.04)] border border-white/40 group">
+<div class="relative h-48 w-full overflow-hidden">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="High-tech digital interface showcasing glowing AI neural networks." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDmp4voQu4FELLFYXsseSEWGxnVDvlbwRkJnFSlvyim7wbGJdXiwGsgEVvdydFZXBgUpr4Wdpt3xIvdoGf98regPzVjr0AJSvKz7klTCWSs4VJ8vNEMRwg5ikOC96oyzXYoDvmvyju-8ZkEVa3G5jWvpztCDY-p5whFGrn2Zg-VNhbKYeXAsamfyLg2VfHt2t5hRQljZvmdZWyyhLnZ0TBg5bhE6_f238k0OsLtjYBNS9s0rkUZESXxAM9n0oFuGpEVcrDYXw5ICko1"/>
+<div class="absolute top-4 left-4 bg-primary text-white font-label-sm px-3 py-1 rounded-full backdrop-blur-sm">Intelligence Artificielle</div>
+</div>
+<div class="p-5">
+<div class="flex items-center gap-2 mb-2">
+<span class="material-symbols-outlined text-amber-500 text-sm" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-sm text-on-surface">4.8 (12,540 étudiants)</span>
+</div>
+<h5 class="font-headline-md text-on-surface mb-1">Maîtriser ChatGPT pour générer des revenus</h5>
+<p class="font-label-md text-on-surface-variant mb-4">Rena Academy Expert</p>
+<div class="flex items-center gap-4 mb-6">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-outline text-sm" data-icon="schedule">schedule</span>
+<span class="font-label-sm text-on-surface-variant">8h 30min</span>
+</div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-outline text-sm" data-icon="bar_chart">bar_chart</span>
+<span class="font-label-sm text-on-surface-variant">Débutant</span>
+</div>
+</div>
+<div class="flex items-center justify-between gap-4">
+<div class="flex items-baseline gap-2">
+<span class="text-2xl font-bold text-primary">$29.99</span>
+<span class="text-sm text-outline-variant line-through">$59.99</span>
+</div>
+<button class="flex-1 bg-primary text-white font-label-md py-3 rounded-xl hover:bg-secondary transition-all shadow-sm active:scale-95 btn-pulse">
+                        👉 Acheter maintenant
+                    </button>
+</div>
+</div>
+</div>
+</section>
+<!-- Continue Learning Section -->
+<section class="px-margin-mobile mt-stack-lg reveal" id="progressSection">
+<h4 class="font-headline-md text-on-surface mb-stack-sm">Continuer l'apprentissage</h4>
+<div class="bg-surface-container-low rounded-3xl p-5 flex flex-col gap-4 border border-primary/5">
+<div class="flex gap-4">
+<div class="w-20 h-20 rounded-2xl bg-white overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Marketing analytics dashboard" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBkvNogjrGXQWU9iOAV2ED1jv1KdVS1s6Vwidigkzrt6CCUmFMbjlDoFQGOk5e31mBHb3MGfu1rt-OyCJ2AVKp0ta8k5f78hLhQwDGinKPIPjNAtQLX9FYRiTsGClZyiIh9oZfLGkpNGSaj9smLunIS8vfoW2ON9qykuRJeqP6mrk0-WZq1gICJk1uxljG_DpFbYvjFysI6ZoZLJPsr-TkOQJfQjIM5mgNcmBNBl-O4HrWuqEB8F7jR5xJ0IkIeaEhi64jDPhrgWxuH"/>
+</div>
+<div class="flex-1">
+<h5 class="font-label-md text-on-surface leading-tight mb-1">Marketing Digital Complet 2024</h5>
+<p class="font-label-sm text-on-surface-variant">2h 15m restantes</p>
+<div class="mt-3 w-full h-2 bg-white rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-primary to-secondary w-0 rounded-full shadow-inner transition-all duration-1000 ease-out" id="progressBar"></div>
+</div>
+<p class="mt-1 text-right font-label-sm text-primary"><span id="progressText">0</span>% complété</p>
+</div>
+</div>
+<button class="w-full bg-white text-primary border border-primary/20 font-label-md py-3 rounded-2xl hover:bg-white/80 active:scale-95 transition-all">
+                👉 Reprendre
+            </button>
+</div>
+</section>
+<!-- Recommended Section -->
+<section class="mt-stack-lg reveal">
+<div class="px-margin-mobile flex justify-between items-center mb-stack-sm">
+<h4 class="font-headline-md text-on-surface">Recommandé pour vous</h4>
+<button class="text-primary font-label-md active:scale-95 transition-all">Tout voir</button>
+</div>
+<div class="flex overflow-x-auto gap-4 px-margin-mobile hide-scrollbar">
+<!-- Card 1 -->
+<div class="min-w-[260px] bg-white rounded-2xl overflow-hidden shadow-sm transition-transform hover:-translate-y-1">
+<div class="h-32 relative">
+<img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDaVCYS7Lk2muIZPw2KpucL0zdOa_qgTtzt0r0U9_vDqOBVSLv_ppBePte-XWVCNOLEMB67y11L1hYFhgKbehdP1Xk0j17EmHeo7AhDlVZa7DXlSyHpkV7NB13dL_1jfQ6SvxvCkgXjM5DpoVo3uligYf3wplKiFzbETlQYY2vmJz-egKJYZRxrCPI0HPYG25Ld0brlXMUsdoerk_VGtpo8qextvbcHqmfiVenJDsjt-zWzn5edVs6fBGOKlzMhVXCBznxpED6ibkTv"/>
+</div>
+<div class="p-4">
+<h6 class="font-label-md text-on-surface line-clamp-1">Trading &amp; Finance Personnelle</h6>
+<div class="flex items-center justify-between mt-3">
+<span class="font-bold text-primary">$19.99</span>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-amber-500 text-xs" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="text-[10px] font-bold">4.9</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="min-w-[260px] bg-white rounded-2xl overflow-hidden shadow-sm transition-transform hover:-translate-y-1">
+<div class="h-32 relative">
+<img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCyh1ZBLyaI5NHFxc07p36xGyOi1hS8hl0YBsNJgEXOuSagEZR364ajKkR3uHBcR9nfPpUPHot_2RkQd3-5mLzSn6p__XNCBvrBBvmBzLe2Q651nQU5ZHUuVlTIeHvhjFEejV4ynkCImv_CPfruaLbddqvYKtpDolddByxDcbi6D0QRc46Owt0yeZeR7hCZfEi8lfOLT4jhwZv7puS-GsZcQ0nh3GUgwlfV50OUCSdO4XAcS0bZ6-f9t066Wbd0UGuemT27cQ9SZVlG"/>
+</div>
+<div class="p-4">
+<h6 class="font-label-md text-on-surface line-clamp-1">E-commerce: De 0 à 10k/mois</h6>
+<div class="flex items-center justify-between mt-3">
+<span class="font-bold text-primary">$49.99</span>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-amber-500 text-xs" data-icon="star" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="text-[10px] font-bold">4.7</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- New Courses Grid -->
+<section class="px-margin-mobile mt-stack-lg reveal">
+<h4 class="font-headline-md text-on-surface mb-stack-sm">Nouveautés</h4>
+<div class="grid grid-cols-2 gap-4">
+<div class="flex flex-col gap-2 group cursor-pointer">
+<div class="relative aspect-[4/3] rounded-2xl overflow-hidden shadow-sm bg-white">
+<img class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLQ8jxexWUzu23FLuGGTQ-y12jwhD8pqWtTiedCPiM99mFSq8ecYYDF_NZKy6PRCJFtoc_Lz97TZ38cbfn6fZ7djwUQQNfa2aF4ORnce6cIbKwmA0-okyhvrAOZ9CXVgPLUOoG-hcNVR9y3k16xBZwzONaJw8AOUMMD_RECpRxn600UYEcCoox1BCguUytOFjMkmKb5D4QZ6s4maenefOPU7B3ZQflDC-eeXUgD76OgSh59Q1eSGwgzkESiw2quaTqc7z4-OudNyJb"/>
+<div class="absolute top-2 right-2 bg-amber-400 text-on-background text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Nouveau</div>
+</div>
+<h6 class="font-label-sm text-on-surface leading-tight">Masterclass Design UI/UX</h6>
+<span class="text-primary font-bold text-sm">$34.99</span>
+</div>
+<div class="flex flex-col gap-2 group cursor-pointer">
+<div class="relative aspect-[4/3] rounded-2xl overflow-hidden shadow-sm bg-white">
+<img class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBLGlBtWbZWvlL4i9kH_SXsxzhlU--iKqTTeRFDD0Yh-lxgvJFEJKjzMRw1G0DLpgXeSSlqArrmEKHnB6QczpkbjKL35cZZt1xNU4g1vuoj9SQ4d8zbVbiJeNfcYmuGgr5RzL2euXYEi67WQGlubmTbEsxgx3Xi_RpCJMrPI4Ce_VHh6dTHe0nGxBbrDkX631xkZ7Er1mF6lArXLdiNo-F1jrc8GPO5lHqOe2F4ts6UqKP8TM9xrqbAG77l5oFYDp1C23xTkMWA7qI4"/>
+<div class="absolute top-2 right-2 bg-amber-400 text-on-background text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Nouveau</div>
+</div>
+<h6 class="font-label-sm text-on-surface leading-tight">Stratégie TikTok Ads</h6>
+<span class="text-primary font-bold text-sm">$24.99</span>
+</div>
+</div>
+</section>
+<!-- Certificates Section -->
+<section class="px-margin-mobile mt-stack-lg reveal">
+<div class="bg-gradient-to-br from-secondary to-primary rounded-3xl p-6 text-white shadow-lg overflow-hidden relative group">
+<div class="absolute -right-8 -bottom-8 w-40 h-40 bg-white/10 rounded-full blur-3xl transition-transform duration-700 group-hover:scale-150"></div>
+<div class="relative z-10">
+<span class="material-symbols-outlined text-4xl mb-4 transition-transform group-hover:rotate-12" data-icon="workspace_premium">workspace_premium</span>
+<h4 class="font-headline-md mb-2">Certificats Rena Academy</h4>
+<p class="font-label-md text-white/80 mb-6">Obtenez un certificat après chaque formation complétée.</p>
+<button class="bg-white text-primary font-label-md px-6 py-3 rounded-full hover:bg-surface-container active:scale-95 transition-all">
+                    👉 Voir mes certificats
+                </button>
+</div>
+</div>
+</section>
+<!-- User Stats -->
+<section class="px-margin-mobile mt-stack-lg mb-8 reveal">
+<div class="grid grid-cols-3 gap-3">
+<div class="bg-white p-4 rounded-2xl shadow-sm text-center border border-white/50 hover:shadow-md transition-all active:scale-95">
+<span class="block text-2xl font-bold text-primary">12</span>
+<span class="text-[10px] font-label-sm text-on-surface-variant uppercase tracking-tight">Formations</span>
+</div>
+<div class="bg-white p-4 rounded-2xl shadow-sm text-center border border-white/50 hover:shadow-md transition-all active:scale-95">
+<span class="block text-2xl font-bold text-primary">84h</span>
+<span class="text-[10px] font-label-sm text-on-surface-variant uppercase tracking-tight">Apprentissage</span>
+</div>
+<div class="bg-white p-4 rounded-2xl shadow-sm text-center border border-white/50 hover:shadow-md transition-all active:scale-95">
+<span class="block text-2xl font-bold text-primary">5</span>
+<span class="text-[10px] font-label-sm text-on-surface-variant uppercase tracking-tight">Certificats</span>
+</div>
+</div>
+</section>
+<!-- Bottom Navigation -->
+<nav class="fixed bottom-6 left-0 right-0 z-50 flex justify-around items-center py-3 px-6 bg-white/80 dark:bg-surface-container-highest/80 backdrop-blur-md mx-margin-mobile rounded-full w-[calc(100%-40px)] border border-white/30 shadow-[0px_10px_30px_rgba(0,0,0,0.08)]">
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-label-sm text-[10px]">Accueil</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary relative active-nav-after active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="school">school</span>
+<span class="font-label-sm text-[10px] font-bold">Formations</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="play_circle">play_circle</span>
+<span class="font-label-sm text-[10px]">Mes cours</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="workspace_premium">workspace_premium</span>
+<span class="font-label-sm text-[10px]">Certificats</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-label-sm text-[10px]">Profil</span>
+</a>
+</nav>
+<script>
+        // Entrance Animations with IntersectionObserver
+        const revealCallback = (entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
+                }
+            });
+        };
+
+        const revealObserver = new IntersectionObserver(revealCallback, {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        });
+
+        document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+        // Progress Bar Animation
+        const progressObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const bar = document.getElementById('progressBar');
+                    const text = document.getElementById('progressText');
+                    const target = 65;
+                    
+                    bar.style.width = target + '%';
+                    
+                    let current = 0;
+                    const interval = setInterval(() => {
+                        if (current >= target) {
+                            clearInterval(interval);
+                        } else {
+                            current++;
+                            text.innerText = current;
+                        }
+                    }, 15);
+                    
+                    progressObserver.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.5 });
+
+        const progressSection = document.getElementById('progressSection');
+        if (progressSection) progressObserver.observe(progressSection);
+
+        // Sticky Header Shrink Effect
+        window.addEventListener('scroll', () => {
+            const header = document.getElementById('mainHeader');
+            const content = document.getElementById('headerContent');
+            if (window.scrollY > 50) {
+                header.classList.add('py-base', 'shadow-md');
+                header.classList.remove('py-stack-sm');
+                content.classList.add('opacity-0', 'max-h-0', 'pointer-events-none', 'mt-0');
+                content.classList.remove('opacity-100', 'max-h-40', 'mt-2');
+            } else {
+                header.classList.remove('py-base', 'shadow-md');
+                header.classList.add('py-stack-sm');
+                content.classList.remove('opacity-0', 'max-h-0', 'pointer-events-none', 'mt-0');
+                content.classList.add('opacity-100', 'max-h-40', 'mt-2');
+            }
+        });
+
+        // Category items click feedback
+        document.querySelectorAll('.cursor-pointer').forEach(item => {
+            item.addEventListener('click', function() {
+                const inner = this.querySelector('.group');
+                if(inner) {
+                    inner.classList.add('bg-primary-container');
+                    setTimeout(() => inner.classList.remove('bg-primary-container'), 200);
+                }
+            });
+        });
+    </script>
+</body></html>
