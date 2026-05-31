@@ -1,21 +1,15 @@
-import { Resend } from 'resend';
 import nodemailer from 'nodemailer';
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASS = process.env.SMTP_PASS;
 
-export const FROM_EMAIL  = process.env.RESEND_FROM  || SMTP_USER || 'noreply@rena.ht';
-export const ADMIN_EMAIL = process.env.ADMIN_EMAIL  || SMTP_USER || 'ernstisrael2000@gmail.com';
+export const FROM_EMAIL  = SMTP_USER || 'noreply@rena.ht';
+export const ADMIN_EMAIL = process.env.ADMIN_EMAIL || SMTP_USER || 'ernstisrael2000@gmail.com';
 
-let resend: Resend | null = null;
-if (RESEND_API_KEY) {
-  resend = new Resend(RESEND_API_KEY);
-  console.log(`[Email] Resend initialisé — FROM: ${FROM_EMAIL}`);
-} else if (SMTP_USER && SMTP_PASS) {
+if (SMTP_USER && SMTP_PASS) {
   console.log(`[Email] Mode SMTP activé — FROM: ${SMTP_USER}`);
 } else {
-  console.warn('[Email] Aucun service email configuré (RESEND_API_KEY ou SMTP_USER/SMTP_PASS requis)');
+  console.warn('[Email] Aucun service email configuré (SMTP_USER/SMTP_PASS requis)');
 }
 
 function getSmtpTransport() {
@@ -121,24 +115,6 @@ export async function send(
     return { success: false, error: 'No recipient' };
   }
 
-  // Try Resend first
-  if (resend) {
-    try {
-      const result = await resend.emails.send({ from: FROM_EMAIL, to: validTo, subject, html });
-      if (result.error) {
-        console.error(`[Email] Resend échec "${type}" → ${validTo}:`, JSON.stringify(result.error));
-        // fall through to SMTP
-      } else {
-        console.log(`[Email] ✓ Resend "${type}" → ${validTo} (id: ${result.data?.id})`);
-        return { success: true, id: result.data?.id };
-      }
-    } catch (e: any) {
-      console.error(`[Email] Resend exception "${type}":`, e?.message);
-      // fall through to SMTP
-    }
-  }
-
-  // SMTP fallback (or primary when no Resend key)
   const smtp = getSmtpTransport();
   if (smtp) {
     try {
