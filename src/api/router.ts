@@ -2468,6 +2468,44 @@ router.post('/api/affiliate/submit-client-deposit', requireDb, async (req, res) 
   }
 });
 
+// ── Affiliate: submit own deposit request (with walletType) ──────────────────
+router.post('/api/affiliate/submit-deposit', requireDb, async (req, res) => {
+  try {
+    const { affiliateId, amount, method, walletType } = req.body;
+    if (!affiliateId || !amount || !method)
+      return res.status(400).json({ error: 'Paramètres manquants.' });
+    const usd = Number(amount);
+    if (isNaN(usd) || usd <= 0)
+      return res.status(400).json({ error: 'Montant invalide.' });
+
+    const affSnap = await adminDb.collection('affiliates').doc(affiliateId).get();
+    if (!affSnap.exists) return res.status(404).json({ error: 'Affilié introuvable.' });
+    const affData = affSnap.data()!;
+    const isCommissions = walletType === 'commissions';
+    const walletLabel = isCommissions ? 'Wallet Commissions' : 'Wallet Principal';
+
+    const txRef = adminDb.collection('wallet_transactions').doc();
+    await txRef.set({
+      affiliateId,
+      affiliateName: affData.name || '',
+      type: 'deposit',
+      amount: usd,
+      status: 'pending',
+      method,
+      walletType: walletType || 'principal',
+      walletLabel,
+      description: `Demande de dépôt — ${walletLabel} — via ${method}`,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[affiliate/submit-deposit]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
 // ── Affiliate: submit own withdrawal (personal) ───────────────────────────────
 router.post('/api/affiliate/submit-withdrawal', requireDb, async (req, res) => {
   try {
@@ -2885,12 +2923,12 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
                   updatedAt: FieldValue.serverTimestamp(),
                 });
               }
-              // Credit referring affiliate's share
+              // Credit referring affiliate's share → commissionBalance
               if (affiliateShare > 0) {
                 const sponsorId = clientSnap.data()!.directSponsorId as string | undefined;
                 if (sponsorId) {
                   batch.update(adminDb.collection('affiliates').doc(sponsorId), {
-                    balance: FieldValue.increment(affiliateShare),
+                    commissionBalance: FieldValue.increment(affiliateShare),
                     totalEarnings: FieldValue.increment(affiliateShare),
                     updatedAt: FieldValue.serverTimestamp(),
                   });
@@ -2925,7 +2963,7 @@ router.post('/api/admin/transaction/status', requireDb, async (req, res) => {
                 const sponsorId = clientSnap.data()!.directSponsorId as string | undefined;
                 if (sponsorId) {
                   batch.update(adminDb.collection('affiliates').doc(sponsorId), {
-                    balance: FieldValue.increment(affiliateShare),
+                    commissionBalance: FieldValue.increment(affiliateShare),
                     totalEarnings: FieldValue.increment(affiliateShare),
                     updatedAt: FieldValue.serverTimestamp(),
                   });

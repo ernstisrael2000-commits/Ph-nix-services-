@@ -5,7 +5,7 @@ import {
   Clock, XCircle, Shield, Trash2,
   TrendingUp, Globe, Smartphone, CreditCard as CardIcon,
   Building2, Bitcoin, Info, ChevronDown,
-  Eye, EyeOff, Send, User, QrCode, Search, MapPin,
+  Eye, EyeOff, Send, User, QrCode, Search, MapPin, Phone,
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import ReCAPTCHA from 'react-google-recaptcha';
@@ -228,7 +228,8 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   // Agent-code withdrawal state
   const [wdAgentCodeInput,     setWdAgentCodeInput]     = useState('');
   const [wdAgentSearchLoading, setWdAgentSearchLoading] = useState(false);
-  const [wdAgentInfo,          setWdAgentInfo]          = useState<{ name: string; agentCode: string | null; affiliateCode: string | null; affiliateId: string | null; available: boolean } | null>(null);
+  const [wdAgentInfo,          setWdAgentInfo]          = useState<{ name: string; phone: string; agentCode: string | null; affiliateCode: string | null; affiliateId: string | null; available: boolean } | null>(null);
+  const [withdrawSuccessInfo,  setWithdrawSuccessInfo]  = useState<{ name: string; phone: string; code: string; amountHTG: string } | null>(null);
   const [wdAgentAmount,        setWdAgentAmount]        = useState('');
   const [wdAgentMsg,           setWdAgentMsg]           = useState('');
   const [wdAgentLoading,       setWdAgentLoading]       = useState(false);
@@ -355,7 +356,12 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
           ...(wdAgentMsg.trim() && { message: wdAgentMsg.trim() }),
         }),
       });
-      toast.success(`Demande envoyée ! ${wdAgentInfo.name} confirmera sous peu.`);
+      setWithdrawSuccessInfo({
+        name: wdAgentInfo.name,
+        phone: wdAgentInfo.phone || '',
+        code: wdAgentInfo.agentCode || wdAgentInfo.affiliateCode || '',
+        amountHTG: htg.toLocaleString(),
+      });
       setIsWithdrawOpen(false);
       resetWithdraw();
     } catch (e: any) { toast.error(e.message || 'Erreur réseau.'); }
@@ -1633,6 +1639,80 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* ── Agent Withdrawal Confirmation Popup ── */}
+      {withdrawSuccessInfo && (
+        <Dialog open={true} onOpenChange={() => setWithdrawSuccessInfo(null)}>
+          <DialogContent className="max-w-sm rounded-3xl border-0 p-0 overflow-hidden shadow-2xl">
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 22 }}
+              className="overflow-hidden rounded-3xl"
+            >
+              {/* Header */}
+              <div className="bg-gradient-to-br from-teal-500 to-emerald-600 p-7 text-center relative">
+                <button onClick={() => setWithdrawSuccessInfo(null)} className="absolute top-4 right-4 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
+                  <X className="h-4 w-4 text-white" />
+                </button>
+                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.12, type: 'spring', stiffness: 400, damping: 18 }}>
+                  <div className="h-20 w-20 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-4 shadow-lg">
+                    <CheckCircle2 className="h-10 w-10 text-white" />
+                  </div>
+                </motion.div>
+                <h2 className="text-xl font-black text-white">Demande envoyée !</h2>
+                <p className="text-4xl font-black text-white mt-2 tracking-tight">
+                  {withdrawSuccessInfo.amountHTG} <span className="text-xl opacity-60">HTG</span>
+                </p>
+                <p className="text-white/70 text-sm font-semibold mt-1">Retrait via Agent</p>
+              </div>
+
+              {/* Body */}
+              <div className="bg-white p-6 space-y-4">
+                <p className="text-center text-gray-500 text-sm leading-relaxed">
+                  Votre demande de retrait a été transmise à l'agent ci-dessous. Il vous contactera pour finaliser la transaction.
+                </p>
+
+                {/* Agent card */}
+                <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4 flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-2xl bg-teal-500 flex items-center justify-center text-white font-black text-lg shrink-0 shadow-md shadow-teal-200">
+                    {withdrawSuccessInfo.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-black text-gray-900 text-base">{withdrawSuccessInfo.name}</p>
+                    {withdrawSuccessInfo.code && (
+                      <p className="text-xs font-mono text-gray-400 mt-0.5">Code : #{withdrawSuccessInfo.code}</p>
+                    )}
+                    {withdrawSuccessInfo.phone && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Phone className="h-3.5 w-3.5 text-teal-500 shrink-0" />
+                        <span className="text-sm font-black text-teal-700">{withdrawSuccessInfo.phone}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="shrink-0">
+                    <span className="text-[10px] font-black px-2 py-1 rounded-lg bg-teal-100 text-teal-700">● Disponible</span>
+                  </div>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex items-start gap-2">
+                  <Clock className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-amber-700 font-semibold leading-relaxed">
+                    L'agent confirmera et vous remettra les fonds en personne. Votre solde sera débité à la confirmation.
+                  </p>
+                </div>
+
+                <Button
+                  onClick={() => setWithdrawSuccessInfo(null)}
+                  className="w-full h-12 rounded-2xl font-black border-0 text-white bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 shadow-lg shadow-teal-100"
+                >
+                  Compris, merci !
+                </Button>
+              </div>
+            </motion.div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* ── Success Modal — shown when a deposit/withdrawal is approved ── */}
       {txSuccessModal && (

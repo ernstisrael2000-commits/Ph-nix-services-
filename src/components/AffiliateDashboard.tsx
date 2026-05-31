@@ -504,7 +504,13 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         await submitAgentDepositRequest(affiliateId, agentCode, amount);
         toast.success("Demande envoyée à l'agent !");
       } else {
-        await submitDepositRequest(affiliate!, amount, depositMethod);
+        const res = await fetch('/api/affiliate/submit-deposit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ affiliateId, amount, method: depositMethod, walletType: depositWallet }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Erreur serveur');
         toast.success('Demande de dépôt soumise !');
         const adminPhone = settings?.whatsappAdminNumber || '+50944813185';
         const msg = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Rena.\n\nMontant: ${amount} $\nMéthode: ${depositMethod}\nWallet: ${walletLabel}\nID Wallet: ${affiliate!.walletId}\nNom: ${affiliate!.name}`;
