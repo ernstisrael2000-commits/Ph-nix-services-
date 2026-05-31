@@ -265,8 +265,8 @@ export default function App() {
           )}
         </AnimatePresence>
         
-        {/* ── Bottom Nav — hidden on dashboard views ── */}
-        {!['admin', 'affiliate'].includes(view) && (
+        {/* ── Bottom Nav — hidden on dashboard and formations views ── */}
+        {!['admin', 'affiliate', 'formations'].includes(view) && (
           <BottomNav
             currentView={view}
             onViewChange={handleViewChange}
@@ -278,7 +278,7 @@ export default function App() {
           />
         )}
 
-        <main className={`animate-in fade-in duration-500 ${view === 'formations' ? (formationsInPlayer ? 'pt-0' : 'pt-14') : 'pt-14'} flex-grow relative ${!['admin', 'affiliate'].includes(view) ? 'pb-[74px]' : ''}`}>
+        <main className={`animate-in fade-in duration-500 ${view === 'formations' ? (formationsInPlayer ? 'pt-0' : 'pt-14') : 'pt-14'} flex-grow relative ${!['admin', 'affiliate', 'formations'].includes(view) ? 'pb-[74px]' : ''}`}>
           {/* Back button only for utility views (tracking, shipping) */}
           {['tracking', 'shipping'].includes(view) && (
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-2">

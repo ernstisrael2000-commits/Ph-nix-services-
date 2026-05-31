@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  ChevronLeft, BookMarked, GraduationCap,
-  Wallet, LogIn, Menu, Grid3X3, Heart, Award, X
+  ChevronLeft, BookMarked,
+  Wallet, Menu, Grid3X3, Heart, Award, X
 } from 'lucide-react';
 import { Client } from '../types';
 import { useSettings } from '../services/parcelService';
@@ -113,26 +113,8 @@ export default function FormationsNavbar({
 
           <div className="flex-1" />
 
-          {/* Right: avatar + burger */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* User avatar */}
-            {loggedClient ? (
-              <button
-                onClick={onOpenWallet}
-                className="h-8 w-8 rounded-full bg-violet-600 flex items-center justify-center text-white text-[11px] font-black shadow-sm hover:bg-violet-700 transition-colors"
-                title={loggedClient.name}
-              >
-                {loggedClient.name.charAt(0).toUpperCase()}
-              </button>
-            ) : (
-              <button
-                onClick={onRequestAuth}
-                className="flex items-center gap-1.5 h-8 px-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold transition-all shadow-sm shadow-violet-500/20"
-              >
-                <LogIn className="h-3 w-3" />
-                <span className="hidden sm:inline">Connexion</span>
-              </button>
-            )}
+          {/* Right: burger only */}
+          <div className="flex items-center shrink-0">
 
             {/* Burger menu button */}
             <div className="relative" ref={menuRef}>
