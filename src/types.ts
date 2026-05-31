@@ -441,6 +441,7 @@ export interface Formation {
   pdfUrl?: string;
   resources?: FormationResource[];
   published: boolean;
+  comingSoon?: boolean;
   instructor?: string;
   instructorBio?: string;
   instructorAvatar?: string;

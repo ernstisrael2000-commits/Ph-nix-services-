@@ -114,8 +114,11 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   // Withdrawal
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [withdrawMethod, setWithdrawMethod] = useState<'MonCash' | 'NatCash' | 'Physical'>('MonCash');
+  const [withdrawMethod, setWithdrawMethod] = useState<'MonCash' | 'NatCash' | 'Physical' | 'Agent' | 'Admin' | 'Virement'>('MonCash');
   const [accountNumber, setAccountNumber] = useState('');
+  const [agentCodeWithdraw, setAgentCodeWithdraw] = useState('');
+  const [verifiedAgentNameWithdraw, setVerifiedAgentNameWithdraw] = useState<string | null>(null);
+  const [isValidatingAgentWithdraw, setIsValidatingAgentWithdraw] = useState(false);
 
   // Transfer
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -215,6 +218,21 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     };
     validateAgent();
   }, [agentCode, depositMethod]);
+
+  // Agent validation for withdrawal
+  useEffect(() => {
+    const validateAgent = async () => {
+      if (withdrawMethod === 'Agent' && agentCodeWithdraw.length === 8) {
+        setIsValidatingAgentWithdraw(true);
+        try {
+          const agent = await getAgentByCode(agentCodeWithdraw);
+          setVerifiedAgentNameWithdraw(agent ? agent.name : null);
+        } catch { setVerifiedAgentNameWithdraw(null); }
+        finally { setIsValidatingAgentWithdraw(false); }
+      } else { setVerifiedAgentNameWithdraw(null); }
+    };
+    validateAgent();
+  }, [agentCodeWithdraw, withdrawMethod]);
 
   // Client lookup for commandes tab (legacy)
   useEffect(() => {
@@ -432,7 +450,8 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
     const exchangeRate = settings?.exchangeRate || 146;
     const minWithdrawUSD = 20 / exchangeRate;
     if (amount < minWithdrawUSD) { toast.error(`Montant minimum: ${(20 / exchangeRate).toFixed(2)} $`); return; }
-    if (withdrawMethod !== 'Physical' && !accountNumber.trim()) { toast.error('Numéro de compte requis.'); return; }
+    if (withdrawMethod === 'Agent' && !verifiedAgentNameWithdraw) { toast.error('Agent non identifié.'); return; }
+    if (withdrawMethod !== 'Physical' && withdrawMethod !== 'Agent' && !accountNumber.trim()) { toast.error('Numéro de compte requis.'); return; }
     setIsSubmitting(true);
     try {
       const res = await fetch('/api/affiliate/submit-withdrawal', {
@@ -442,7 +461,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
           affiliateId,
           amount,
           method: withdrawMethod,
-          accountNumber: withdrawMethod === 'Physical' ? 'Bureau Juvénat' : accountNumber.trim(),
+          accountNumber: withdrawMethod === 'Physical' ? 'Bureau Juvénat' : withdrawMethod === 'Agent' ? `Agent: ${agentCodeWithdraw}` : accountNumber.trim(),
           walletType: withdrawWallet,
         }),
       });
@@ -450,6 +469,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
       if (!res.ok) throw new Error(data.error || 'Erreur serveur');
       toast.success("Demande de retrait soumise ! Vous recevrez un email de confirmation.");
       setIsWithdrawModalOpen(false); setWithdrawAmount(''); setAccountNumber(''); setWithdrawWallet('principal');
+      setAgentCodeWithdraw(''); setVerifiedAgentNameWithdraw(null);
     } catch (error: any) {
       toast.error(error.message || 'Erreur lors du retrait.');
     } finally { setIsSubmitting(false); }
@@ -856,7 +876,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode</Label>
-                      <Select value={withdrawMethod} onValueChange={(v: any) => setWithdrawMethod(v)}>
+                      <Select value={withdrawMethod} onValueChange={(v: any) => { setWithdrawMethod(v); setAccountNumber(''); setAgentCodeWithdraw(''); setVerifiedAgentNameWithdraw(null); }}>
                         <SelectTrigger className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-bold">
                           <SelectValue />
                         </SelectTrigger>
@@ -873,13 +893,38 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                               NatCash (Natcom)
                             </div>
                           </SelectItem>
+                          <SelectItem value="Agent" className="font-bold">Via Agent (Retrait physique agent)</SelectItem>
                           <SelectItem value="Admin" className="font-bold">Admin (Espèces directes)</SelectItem>
                           <SelectItem value="Virement" className="font-bold">Virement Bancaire</SelectItem>
-                          <SelectItem value="Physical" className="font-bold">Retrait Physique (Bureau Juvénat)</SelectItem>
+                          <SelectItem value="Physical" className="font-bold">Bureau Juvénat (Physique)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    {withdrawMethod !== 'Physical' && (
+                    {withdrawMethod === 'Agent' && (
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Code Agent (8 chiffres)</Label>
+                        <div className="relative">
+                          <Input maxLength={8} placeholder="Entrez le code agent" value={agentCodeWithdraw}
+                            onChange={e => setAgentCodeWithdraw(e.target.value)}
+                            className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg tracking-[0.2em] pl-11" />
+                          <Users className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-500" />
+                          {isValidatingAgentWithdraw && <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-indigo-500" />}
+                        </div>
+                        {verifiedAgentNameWithdraw && (
+                          <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            <span className="text-xs font-black text-emerald-700">Agent : {verifiedAgentNameWithdraw}</span>
+                          </div>
+                        )}
+                        {!verifiedAgentNameWithdraw && agentCodeWithdraw.length === 8 && !isValidatingAgentWithdraw && (
+                          <div className="bg-red-50 border border-red-100 p-3 rounded-xl flex items-center gap-2">
+                            <AlertCircle className="h-4 w-4 text-red-500" />
+                            <span className="text-xs font-black text-red-700">Agent introuvable.</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {withdrawMethod !== 'Physical' && withdrawMethod !== 'Agent' && (
                       <div className="space-y-2">
                         <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
                           {withdrawMethod === 'Virement' ? 'Numéro de compte bancaire / IBAN' : 'Numéro de compte'}

@@ -768,20 +768,21 @@ function CourseCard({ formation, i, owned, fav, disc, onOpen, onFav }: {
   formation: Formation; i: number; owned: boolean; fav: boolean; disc: number;
   onOpen: () => void; onFav: (e: React.MouseEvent) => void;
 }) {
+  const isComingSoon = !!formation.comingSoon;
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: i * 0.06, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      onClick={onOpen}
-      className="bg-white rounded-[24px] border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 cursor-pointer overflow-hidden group flex flex-col"
+      onClick={isComingSoon ? undefined : onOpen}
+      className={`bg-white rounded-[24px] border border-gray-100 shadow-sm transition-all duration-300 overflow-hidden group flex flex-col ${isComingSoon ? 'cursor-default opacity-90' : 'hover:shadow-xl hover:-translate-y-1.5 cursor-pointer'}`}
     >
       {/* Cover */}
       <div className="relative h-48 overflow-hidden shrink-0">
         {formation.coverImage ? (
-          <img src={formation.coverImage} alt={formation.title} className="w-full h-full object-cover group-hover:scale-108 transition-transform duration-700" />
+          <img src={formation.coverImage} alt={formation.title} className={`w-full h-full object-cover transition-transform duration-700 ${isComingSoon ? 'grayscale-[30%]' : 'group-hover:scale-108'}`} />
         ) : (
-          <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${levelGradients[formation.level] || 'from-violet-500 to-purple-700'}`}>
+          <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${isComingSoon ? 'from-gray-400 to-gray-600' : levelGradients[formation.level] || 'from-violet-500 to-purple-700'}`}>
             <GraduationCap className="h-16 w-16 text-white/20" />
           </div>
         )}
@@ -789,44 +790,66 @@ function CourseCard({ formation, i, owned, fav, disc, onOpen, onFav }: {
 
         {/* Badges */}
         <div className="absolute top-3 left-3 flex flex-wrap gap-1.5">
-          {formation.price === 0 && (
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-500 text-white shadow-lg shadow-emerald-500/30">Gratuit</span>
-          )}
-          {disc > 0 && (
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-500 text-white shadow-lg shadow-rose-500/30">-{disc}%</span>
-          )}
-          {formation.hasCertificate && (
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-400/90 text-amber-900 backdrop-blur-sm flex items-center gap-1 shadow-sm">
-              <BadgeCheck className="h-2.5 w-2.5" /> Certifiant
+          {isComingSoon ? (
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-orange-500 text-white shadow-lg shadow-orange-500/40 flex items-center gap-1">
+              <Clock className="h-2.5 w-2.5" /> À venir
             </span>
+          ) : (
+            <>
+              {formation.price === 0 && (
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-500 text-white shadow-lg shadow-emerald-500/30">Gratuit</span>
+              )}
+              {disc > 0 && (
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-500 text-white shadow-lg shadow-rose-500/30">-{disc}%</span>
+              )}
+              {formation.hasCertificate && (
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-400/90 text-amber-900 backdrop-blur-sm flex items-center gap-1 shadow-sm">
+                  <BadgeCheck className="h-2.5 w-2.5" /> Certifiant
+                </span>
+              )}
+            </>
           )}
         </div>
 
         {/* Favorite */}
-        <button onClick={onFav}
-          className={`absolute top-3 right-3 h-8 w-8 rounded-full flex items-center justify-center backdrop-blur-md transition-all shadow-sm ${fav ? 'bg-rose-500 text-white scale-110' : 'bg-black/25 text-white/80 hover:bg-black/40 hover:scale-110'}`}>
-          <Heart className={`h-3.5 w-3.5 ${fav ? 'fill-white' : ''}`} />
-        </button>
+        {!isComingSoon && (
+          <button onClick={onFav}
+            className={`absolute top-3 right-3 h-8 w-8 rounded-full flex items-center justify-center backdrop-blur-md transition-all shadow-sm ${fav ? 'bg-rose-500 text-white scale-110' : 'bg-black/25 text-white/80 hover:bg-black/40 hover:scale-110'}`}>
+            <Heart className={`h-3.5 w-3.5 ${fav ? 'fill-white' : ''}`} />
+          </button>
+        )}
 
         {/* Owned badge */}
-        {owned && (
+        {owned && !isComingSoon && (
           <div className="absolute bottom-3 left-3 bg-emerald-500 text-white px-3 py-1.5 rounded-full text-[10px] font-black flex items-center gap-1.5 shadow-lg shadow-emerald-500/30">
             <CheckCircle2 className="h-3 w-3 fill-white" /> Accès activé
           </div>
         )}
 
-        {/* Play hover */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
-          <div className="bg-white/95 backdrop-blur-sm rounded-full p-4 shadow-2xl scale-75 group-hover:scale-100 transition-transform duration-300">
-            <Play className="h-6 w-6 text-violet-700 fill-violet-700" />
+        {/* Coming Soon overlay */}
+        {isComingSoon && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+            <div className="bg-white/95 backdrop-blur-sm rounded-2xl px-4 py-2.5 shadow-xl flex items-center gap-2">
+              <Lock className="h-4 w-4 text-orange-500" />
+              <span className="text-xs font-black text-orange-600 uppercase tracking-widest">Bientôt disponible</span>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Play hover (only for non-coming-soon) */}
+        {!isComingSoon && (
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
+            <div className="bg-white/95 backdrop-blur-sm rounded-full p-4 shadow-2xl scale-75 group-hover:scale-100 transition-transform duration-300">
+              <Play className="h-6 w-6 text-violet-700 fill-violet-700" />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Body */}
       <div className="p-5 flex flex-col flex-1">
         {formation.category && (
-          <span className="text-[10px] font-black text-violet-500 uppercase tracking-widest mb-2">{formation.category}</span>
+          <span className={`text-[10px] font-black uppercase tracking-widest mb-2 ${isComingSoon ? 'text-orange-400' : 'text-violet-500'}`}>{formation.category}</span>
         )}
         <h3 className="font-black text-gray-900 text-sm mb-2 line-clamp-2 leading-snug">{formation.title}</h3>
         {formation.instructor && (
@@ -837,25 +860,43 @@ function CourseCard({ formation, i, owned, fav, disc, onOpen, onFav }: {
             {formation.instructor}
           </p>
         )}
-        <div className="flex items-center gap-3 text-xs text-gray-400 mb-2.5">
-          {formation.totalDuration && <span className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-full"><Clock className="h-3 w-3 text-violet-400" />{formation.totalDuration}</span>}
-          <span className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-full"><BookOpen className="h-3 w-3 text-violet-400" />{(formation.modules || []).length} modules</span>
-        </div>
-        <div className="mb-3">
-          <StarRating rating={formation.rating || 0} size="xs" />
-        </div>
+        {!isComingSoon && (
+          <div className="flex items-center gap-3 text-xs text-gray-400 mb-2.5">
+            {formation.totalDuration && <span className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-full"><Clock className="h-3 w-3 text-violet-400" />{formation.totalDuration}</span>}
+            <span className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-full"><BookOpen className="h-3 w-3 text-violet-400" />{(formation.modules || []).length} modules</span>
+          </div>
+        )}
+        {!isComingSoon && (
+          <div className="mb-3">
+            <StarRating rating={formation.rating || 0} size="xs" />
+          </div>
+        )}
+        {isComingSoon && formation.shortDescription && (
+          <p className="text-xs text-gray-400 mb-3 line-clamp-2">{formation.shortDescription}</p>
+        )}
         <div className="mt-auto flex items-center justify-between pt-3 border-t border-gray-50">
           <div>
-            <span className="text-base font-black text-violet-700">
-              {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
-            </span>
-            {formation.originalPrice && formation.originalPrice > formation.price && (
-              <span className="text-xs text-gray-400 line-through ml-1.5">{formation.originalPrice.toLocaleString()}</span>
+            {isComingSoon ? (
+              <span className="text-sm font-black text-orange-500 flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" />
+                {formation.price > 0 ? `${(formation.price || 0).toLocaleString()} HTG` : 'Prix à venir'}
+              </span>
+            ) : (
+              <>
+                <span className="text-base font-black text-violet-700">
+                  {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
+                </span>
+                {formation.originalPrice && formation.originalPrice > formation.price && (
+                  <span className="text-xs text-gray-400 line-through ml-1.5">{formation.originalPrice.toLocaleString()}</span>
+                )}
+              </>
             )}
           </div>
-          <span className="h-8 w-8 rounded-full bg-violet-50 flex items-center justify-center group-hover:bg-violet-100 group-hover:scale-110 transition-all">
-            <ChevronRight className="h-4 w-4 text-violet-600" />
-          </span>
+          {!isComingSoon && (
+            <span className="h-8 w-8 rounded-full bg-violet-50 flex items-center justify-center group-hover:bg-violet-100 group-hover:scale-110 transition-all">
+              <ChevronRight className="h-4 w-4 text-violet-600" />
+            </span>
+          )}
         </div>
       </div>
     </motion.div>

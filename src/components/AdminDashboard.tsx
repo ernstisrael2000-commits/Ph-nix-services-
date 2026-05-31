@@ -1127,7 +1127,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   const [formationToDelete, setFormationToDelete] = useState<Formation | null>(null);
   const [formationFormData, setFormationFormData] = useState<Partial<Formation>>({
     title: '', description: '', shortDescription: '', coverImage: '', previewVideoUrl: '',
-    price: 0, originalPrice: undefined, level: 'debutant', published: false,
+    price: 0, originalPrice: undefined, level: 'debutant', published: false, comingSoon: false,
     modules: [], chapters: [], resources: [], pdfUrl: '',
     instructor: '', instructorBio: '', instructorAvatar: '',
     language: 'Français', totalDuration: '', hasCertificate: false,
@@ -2566,7 +2566,7 @@ function EmailLogsPanel() {
       setEditingFormation(null);
       setFormationFormData({
         title: '', description: '', shortDescription: '', coverImage: '',
-        price: 0, originalPrice: undefined, level: 'debutant', published: false,
+        price: 0, originalPrice: undefined, level: 'debutant', published: false, comingSoon: false,
         modules: [], chapters: [], resources: [], pdfUrl: '',
         instructor: '', instructorBio: '', instructorAvatar: '',
         language: 'Français', totalDuration: '', hasCertificate: false,
@@ -4341,9 +4341,19 @@ function EmailLogsPanel() {
                           </TableCell>
                           <TableCell className="text-sm text-gray-500">{(formation.modules || []).length} modules</TableCell>
                           <TableCell>
-                            <Badge variant="outline" className={formation.published ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-gray-500 bg-gray-50 border-gray-200'}>
-                              {formation.published ? 'Publié' : 'Brouillon'}
-                            </Badge>
+                            {formation.comingSoon ? (
+                              <Badge variant="outline" className="text-orange-600 bg-orange-50 border-orange-200">
+                                À venir
+                              </Badge>
+                            ) : formation.published ? (
+                              <Badge variant="outline" className="text-emerald-700 bg-emerald-50 border-emerald-200">
+                                Publié
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-gray-500 bg-gray-50 border-gray-200">
+                                Brouillon
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
@@ -9134,11 +9144,20 @@ function EmailLogsPanel() {
                   </span>
                 </label>
                 <label className="flex items-center gap-3 cursor-pointer">
-                  <button type="button" onClick={() => setFormationFormData(p => ({ ...p, published: !p.published }))}
+                  <button type="button" onClick={() => setFormationFormData(p => ({ ...p, comingSoon: !p.comingSoon, published: p.comingSoon ? p.published : false }))}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${formationFormData.comingSoon ? 'bg-orange-400' : 'bg-gray-200'}`}>
+                    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${formationFormData.comingSoon ? 'translate-x-5' : 'translate-x-0'}`} />
+                  </button>
+                  <span className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                    <LucideIcons.Clock className="h-4 w-4 text-orange-400" /> À venir (pas encore disponible)
+                  </span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <button type="button" onClick={() => setFormationFormData(p => ({ ...p, published: !p.published, comingSoon: !p.published ? false : p.comingSoon }))}
                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${formationFormData.published ? 'bg-emerald-500' : 'bg-gray-200'}`}>
                     <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${formationFormData.published ? 'translate-x-5' : 'translate-x-0'}`} />
                   </button>
-                  <span className="text-sm font-medium text-gray-700">Publié (visible pour les clients)</span>
+                  <span className="text-sm font-medium text-gray-700">Publié (visible et achetable)</span>
                 </label>
               </div>
             </div>

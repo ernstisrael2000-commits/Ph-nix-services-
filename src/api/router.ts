@@ -3468,9 +3468,9 @@ router.use('/api/formations', requireDb);
 
 router.get('/api/formations', async (_req, res) => {
   try {
-    const snap = await adminDb.collection('formations')
-      .where('published', '==', true).orderBy('createdAt', 'desc').get();
-    res.json({ formations: snap.docs.map(serializeDoc) });
+    const snap = await adminDb.collection('formations').orderBy('createdAt', 'desc').get();
+    const formations = snap.docs.map(serializeDoc).filter((f: any) => f.published || f.comingSoon);
+    res.json({ formations });
   } catch (e: any) {
     console.error('[formations public GET]', e);
     res.status(500).json({ error: e.message || 'Erreur.' });
