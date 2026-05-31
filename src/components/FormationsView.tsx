@@ -356,13 +356,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
 
   // ── Render: Catalog ─────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#f8f9ff] relative overflow-x-hidden">
-      {/* Ambient background blobs */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-        <div className="absolute -top-28 -left-20 w-96 h-96 rounded-full bg-violet-500 opacity-[0.07] blur-3xl" />
-        <div className="absolute top-1/2 -right-16 w-80 h-80 rounded-full bg-indigo-500 opacity-[0.07] blur-3xl" />
-        <div className="absolute bottom-1/4 left-10 w-72 h-72 rounded-full bg-purple-500 opacity-[0.05] blur-3xl" />
-      </div>
+    <div className="min-h-screen bg-[#f8f9ff]">
 
       {/* ── Login prompt dialog ─────────────────────────────────────────────── */}
       <Dialog open={showLoginPrompt} onOpenChange={open => { setShowLoginPrompt(open); if (!open) setPendingFormation(null); }}>
@@ -732,11 +726,9 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
-                    className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-700 to-purple-900 p-6 text-white shadow-lg shadow-violet-900/20"
+                    className="rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-700 to-purple-900 p-6 text-white shadow-lg shadow-violet-900/20"
                   >
-                    <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-3xl" />
-                    <div className="absolute top-0 left-0 w-32 h-32 bg-indigo-300/10 rounded-full -ml-10 -mt-10 blur-2xl" />
-                    <div className="relative z-10">
+                    <div>
                       <Award className="h-10 w-10 mb-3 text-amber-300" />
                       <h4 className="text-lg font-black mb-1.5">Certificats Rena Academy</h4>
                       <p className="text-white/70 text-sm mb-5 max-w-xs leading-relaxed">
