@@ -405,38 +405,26 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
         </DialogContent>
       </Dialog>
 
-      {/* ── PREMIUM HERO CARD ─────────────────────────────────────────────────── */}
-      {activeTab === 'all' && !searchQuery && (
-        <div className="px-4 pt-5 pb-1">
-          <div className="max-w-4xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-              className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-indigo-600 via-violet-700 to-purple-900 p-6 min-h-[186px] flex flex-col justify-between shadow-xl shadow-violet-900/20"
-            >
-              <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
-              <div className="absolute bottom-0 left-0 w-36 h-36 bg-indigo-300/15 rounded-full -ml-12 -mb-12 blur-xl" />
-
-              <span className="inline-flex items-center bg-amber-400 text-amber-900 font-black text-[10px] px-3 py-1.5 rounded-full uppercase tracking-wider w-fit relative z-10">
-                ✨ {formations.length > 0 ? `${formations.length}+` : ''} formations disponibles
-              </span>
-
-              <div className="relative z-10 mt-4">
-                <h2 className="text-[22px] sm:text-2xl font-black text-white leading-snug mb-1.5">
-                  Apprenez des compétences<br />concrètes et monétisables.
-                </h2>
-                <p className="text-white/60 text-xs font-semibold mb-4">
-                  Formations professionnelles adaptées à vos objectifs.
-                </p>
-                <button
-                  onClick={() => onTabChange('all')}
-                  className="bg-white text-violet-700 font-black text-sm px-5 py-2.5 rounded-full w-fit shadow-md hover:bg-violet-50 active:scale-95 transition-all flex items-center gap-2 animate-[pulse-cta_2.5s_ease-in-out_infinite]"
-                >
-                  👉 Explorer les formations
-                </button>
-              </div>
-            </motion.div>
+      {/* ── SEARCH BAR (replaces hero card) ────────────────────────────────── */}
+      {activeTab === 'all' && (
+        <div className="px-4 pt-4 pb-1 max-w-4xl mx-auto">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Rechercher un cours, instructeur…"
+              value={searchQuery}
+              onChange={e => onSearchChange?.(e.target.value)}
+              className="w-full h-12 pl-11 pr-10 rounded-2xl bg-white border border-gray-200 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:border-violet-300 transition-all shadow-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => onSearchChange?.('')}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
       )}
