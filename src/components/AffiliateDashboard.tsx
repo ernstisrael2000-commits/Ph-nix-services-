@@ -84,6 +84,10 @@ import {
   QrCode,
   Camera,
   ScanLine,
+  Building2,
+  Coins,
+  ShieldCheck,
+  Smartphone,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -734,62 +738,110 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                     <span className="text-[9px] font-black uppercase tracking-widest text-emerald-700">Dépôt</span>
                   </button>
                 } />
-                <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
-                  <DialogHeader className="p-7 bg-emerald-600 text-white relative">
-                    <DialogTitle className="text-xl font-black">Recharger mon Compte</DialogTitle>
-                    <DialogDescription className="text-emerald-100 text-sm">Choisissez le wallet à créditer et la méthode.</DialogDescription>
-                    <DialogClose className="absolute right-5 top-5 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
-                      <X className="h-4 w-4" />
+                <DialogContent className="w-[96%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
+                  {/* Header */}
+                  <div className="relative bg-gradient-to-br from-emerald-500 to-teal-600 p-6 pb-8">
+                    <DialogClose className="absolute right-4 top-4 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
+                      <X className="h-4 w-4 text-white" />
                     </DialogClose>
-                  </DialogHeader>
-                  <div className="p-7 space-y-5 max-h-[70vh] overflow-y-auto">
-                    {/* Wallet selector */}
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Wallet à créditer</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          onClick={() => setDepositWallet('principal')}
-                          className={`p-3 rounded-2xl border-2 text-left transition-all ${depositWallet === 'principal' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-100 bg-gray-50'}`}
-                        >
-                          <p className={`text-[9px] font-black uppercase tracking-widest ${depositWallet === 'principal' ? 'text-emerald-600' : 'text-gray-400'}`}>Wallet Principal</p>
-                          <p className={`text-base font-black mt-0.5 ${depositWallet === 'principal' ? 'text-emerald-700' : 'text-gray-500'}`}>{(affiliate.balance || 0).toFixed(2)} $</p>
+                    <div className="flex items-center gap-3 mb-1">
+                      <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                        <PlusCircle className="h-5 w-5 text-white" />
+                      </div>
+                      <div>
+                        <DialogTitle className="text-lg font-black text-white leading-tight">Recharger mon Compte</DialogTitle>
+                        <DialogDescription className="text-emerald-100 text-[11px] font-medium">Choisissez votre méthode de paiement</DialogDescription>
+                      </div>
+                    </div>
+                    {/* Wallet pills */}
+                    <div className="flex gap-2 mt-4">
+                      <button onClick={() => setDepositWallet('principal')}
+                        className={`flex-1 rounded-2xl px-3 py-2.5 text-left transition-all border-2 ${depositWallet === 'principal' ? 'bg-white border-white shadow-lg' : 'bg-white/15 border-white/30 hover:bg-white/25'}`}>
+                        <p className={`text-[9px] font-black uppercase tracking-widest ${depositWallet === 'principal' ? 'text-emerald-600' : 'text-white/70'}`}>Principal</p>
+                        <p className={`text-base font-black ${depositWallet === 'principal' ? 'text-emerald-700' : 'text-white'}`}>{(affiliate.balance || 0).toFixed(2)} $</p>
+                      </button>
+                      <button onClick={() => setDepositWallet('commissions')}
+                        className={`flex-1 rounded-2xl px-3 py-2.5 text-left transition-all border-2 ${depositWallet === 'commissions' ? 'bg-white border-white shadow-lg' : 'bg-white/15 border-white/30 hover:bg-white/25'}`}>
+                        <p className={`text-[9px] font-black uppercase tracking-widest ${depositWallet === 'commissions' ? 'text-amber-600' : 'text-white/70'}`}>Commissions</p>
+                        <p className={`text-base font-black ${depositWallet === 'commissions' ? 'text-amber-700' : 'text-white'}`}>{(affiliate.totalEarnings || 0).toFixed(2)} $</p>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
+                    {/* Payment method cards */}
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Méthode de paiement</p>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {/* MonCash */}
+                        <button onClick={() => setDepositMethod('MonCash')}
+                          className={`relative rounded-2xl p-3.5 border-2 text-left transition-all ${depositMethod === 'MonCash' ? 'border-emerald-500 bg-emerald-50 shadow-md shadow-emerald-100' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                          {depositMethod === 'MonCash' && <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center"><CheckCircle2 className="h-2.5 w-2.5 text-white fill-white" /></div>}
+                          <div className="h-9 w-9 rounded-xl bg-red-50 flex items-center justify-center mb-2 overflow-hidden">
+                            {settings?.moncashLogoUrl ? <img src={settings.moncashLogoUrl} alt="MonCash" className="h-7 w-7 object-contain" referrerPolicy="no-referrer" /> : <Smartphone className="h-5 w-5 text-red-500" />}
+                          </div>
+                          <p className="text-xs font-black text-gray-800">MonCash</p>
+                          <p className="text-[10px] text-gray-400 font-medium">Digicel</p>
                         </button>
-                        <button
-                          onClick={() => setDepositWallet('commissions')}
-                          className={`p-3 rounded-2xl border-2 text-left transition-all ${depositWallet === 'commissions' ? 'border-amber-500 bg-amber-50' : 'border-gray-100 bg-gray-50'}`}
-                        >
-                          <p className={`text-[9px] font-black uppercase tracking-widest ${depositWallet === 'commissions' ? 'text-amber-600' : 'text-gray-400'}`}>Wallet Commissions</p>
-                          <p className={`text-base font-black mt-0.5 ${depositWallet === 'commissions' ? 'text-amber-700' : 'text-gray-500'}`}>{(affiliate.totalEarnings || 0).toFixed(2)} $</p>
+
+                        {/* NatCash */}
+                        <button onClick={() => setDepositMethod('NatCash')}
+                          className={`relative rounded-2xl p-3.5 border-2 text-left transition-all ${depositMethod === 'NatCash' ? 'border-emerald-500 bg-emerald-50 shadow-md shadow-emerald-100' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                          {depositMethod === 'NatCash' && <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center"><CheckCircle2 className="h-2.5 w-2.5 text-white fill-white" /></div>}
+                          <div className="h-9 w-9 rounded-xl bg-blue-50 flex items-center justify-center mb-2 overflow-hidden">
+                            {settings?.natcashLogoUrl ? <img src={settings.natcashLogoUrl} alt="NatCash" className="h-7 w-7 object-contain" referrerPolicy="no-referrer" /> : <Smartphone className="h-5 w-5 text-blue-500" />}
+                          </div>
+                          <p className="text-xs font-black text-gray-800">NatCash</p>
+                          <p className="text-[10px] text-gray-400 font-medium">Natcom</p>
+                        </button>
+
+                        {/* Via Agent */}
+                        <button onClick={() => { setDepositMethod('Agent'); setAgentCode(''); setVerifiedAgentName(null); }}
+                          className={`relative rounded-2xl p-3.5 border-2 text-left transition-all ${depositMethod === 'Agent' ? 'border-emerald-500 bg-emerald-50 shadow-md shadow-emerald-100' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                          {depositMethod === 'Agent' && <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center"><CheckCircle2 className="h-2.5 w-2.5 text-white fill-white" /></div>}
+                          <div className="h-9 w-9 rounded-xl bg-indigo-50 flex items-center justify-center mb-2">
+                            <Users className="h-5 w-5 text-indigo-500" />
+                          </div>
+                          <p className="text-xs font-black text-gray-800">Via Agent</p>
+                          <p className="text-[10px] text-gray-400 font-medium">Physique</p>
+                        </button>
+
+                        {/* Virement */}
+                        <button onClick={() => setDepositMethod('Virement')}
+                          className={`relative rounded-2xl p-3.5 border-2 text-left transition-all ${depositMethod === 'Virement' ? 'border-emerald-500 bg-emerald-50 shadow-md shadow-emerald-100' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                          {depositMethod === 'Virement' && <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center"><CheckCircle2 className="h-2.5 w-2.5 text-white fill-white" /></div>}
+                          <div className="h-9 w-9 rounded-xl bg-violet-50 flex items-center justify-center mb-2">
+                            <Building2 className="h-5 w-5 text-violet-500" />
+                          </div>
+                          <p className="text-xs font-black text-gray-800">Virement</p>
+                          <p className="text-[10px] text-gray-400 font-medium">Bancaire</p>
+                        </button>
+
+                        {/* Crypto */}
+                        <button onClick={() => setDepositMethod('Crypto')}
+                          className={`relative rounded-2xl p-3.5 border-2 text-left transition-all ${depositMethod === 'Crypto' ? 'border-emerald-500 bg-emerald-50 shadow-md shadow-emerald-100' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                          {depositMethod === 'Crypto' && <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center"><CheckCircle2 className="h-2.5 w-2.5 text-white fill-white" /></div>}
+                          <div className="h-9 w-9 rounded-xl bg-amber-50 flex items-center justify-center mb-2">
+                            <Coins className="h-5 w-5 text-amber-500" />
+                          </div>
+                          <p className="text-xs font-black text-gray-800">Crypto</p>
+                          <p className="text-[10px] text-gray-400 font-medium">USDT / BTC</p>
+                        </button>
+
+                        {/* Admin */}
+                        <button onClick={() => setDepositMethod('Admin')}
+                          className={`relative rounded-2xl p-3.5 border-2 text-left transition-all ${depositMethod === 'Admin' ? 'border-emerald-500 bg-emerald-50 shadow-md shadow-emerald-100' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                          {depositMethod === 'Admin' && <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center"><CheckCircle2 className="h-2.5 w-2.5 text-white fill-white" /></div>}
+                          <div className="h-9 w-9 rounded-xl bg-rose-50 flex items-center justify-center mb-2">
+                            <ShieldCheck className="h-5 w-5 text-rose-500" />
+                          </div>
+                          <p className="text-xs font-black text-gray-800">Admin</p>
+                          <p className="text-[10px] text-gray-400 font-medium">Espèces directes</p>
                         </button>
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode</Label>
-                      <Select value={depositMethod} onValueChange={setDepositMethod}>
-                        <SelectTrigger className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-bold">
-                          <SelectValue placeholder="Méthode" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-2xl">
-                          <SelectItem value="MonCash" className="font-bold">
-                            <div className="flex items-center gap-2">
-                              {settings?.moncashLogoUrl && <img src={settings.moncashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
-                              MonCash (Digicel)
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="NatCash" className="font-bold">
-                            <div className="flex items-center gap-2">
-                              {settings?.natcashLogoUrl && <img src={settings.natcashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
-                              NatCash (Natcom)
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="Admin" className="font-bold">Admin (Espèces directes)</SelectItem>
-                          <SelectItem value="Agent" className="font-bold">Via Agent (Physique)</SelectItem>
-                          <SelectItem value="Virement" className="font-bold">Virement Bancaire</SelectItem>
-                          <SelectItem value="Crypto" className="font-bold">Crypto (USDT / BTC)</SelectItem>
-                          <SelectItem value="Physical" className="font-bold">Bureau / Proxy</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+
+                    {/* Agent code field */}
                     {depositMethod === 'Agent' && (
                       <div className="space-y-2">
                         <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Code Agent (8 chiffres)</Label>
@@ -797,8 +849,8 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                           <Input maxLength={8} placeholder="Entrez le code agent" value={agentCode}
                             onChange={e => setAgentCode(e.target.value)}
                             className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg tracking-[0.2em] pl-11" />
-                          <Users className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
-                          {isValidatingAgent && <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
+                          <Users className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-500" />
+                          {isValidatingAgent && <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-indigo-500" />}
                         </div>
                         {verifiedAgentName && (
                           <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl flex items-center gap-2">
@@ -814,25 +866,36 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                         )}
                       </div>
                     )}
+
+                    {/* Amount */}
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant ($)</Label>
                       <div className="relative">
                         <Input type="number" placeholder="Ex: 50" value={depositAmount}
                           onChange={e => setDepositAmount(e.target.value)}
-                          className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg pl-11" />
-                        <PlusCircle className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
+                          className="h-13 rounded-2xl border-gray-100 bg-gray-50 font-black text-xl pl-12 focus:ring-2 focus:ring-emerald-300" />
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500 font-black text-lg">$</span>
+                      </div>
+                      {/* Quick amounts */}
+                      <div className="flex gap-2 flex-wrap">
+                        {[10, 25, 50, 100].map(v => (
+                          <button key={v} onClick={() => setDepositAmount(String(v))}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black border transition-all ${depositAmount === String(v) ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-gray-50 text-gray-500 border-gray-100 hover:border-emerald-300 hover:text-emerald-600'}`}>
+                            {v} $
+                          </button>
+                        ))}
                       </div>
                     </div>
-                    <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl flex items-start gap-2">
+
+                    <div className="bg-amber-50 border border-amber-100 p-3.5 rounded-2xl flex items-start gap-2.5">
                       <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                       <p className="text-[10px] text-amber-800 font-bold leading-relaxed">L'admin contactera sur WhatsApp pour valider le transfert avant de créditer votre compte.</p>
                     </div>
-                  </div>
-                  <DialogFooter className="px-7 pb-7">
-                    <Button onClick={handleDepositRequest} disabled={isSubmitting} className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl">
-                      {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Envoyer la Demande'}
+
+                    <Button onClick={handleDepositRequest} disabled={isSubmitting} className="w-full h-13 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black rounded-2xl shadow-lg shadow-emerald-200 text-base transition-all active:scale-[0.98]">
+                      {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Envoyer la Demande →</>}
                     </Button>
-                  </DialogFooter>
+                  </div>
                 </DialogContent>
               </Dialog>
 
