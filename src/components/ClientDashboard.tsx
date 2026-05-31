@@ -1039,17 +1039,28 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-2">
-                  {depositMethods.map(m => (
-                    <button key={m.id} type="button" onClick={() => setDepositMethod(m)}
-                      className={`flex flex-col items-center gap-1 p-2.5 rounded-2xl border-2 transition-all text-center ${
-                        depositMethod?.id === m.id
-                          ? 'border-emerald-400 bg-emerald-50 ring-2 ring-emerald-200'
-                          : 'border-gray-100 bg-white hover:border-gray-200'
-                      }`}>
-                      <span className="text-lg">{m.icon}</span>
-                      <span className="text-[10px] font-black text-gray-700 leading-tight">{m.name}</span>
-                    </button>
-                  ))}
+                  {depositMethods.map(m => {
+                    const logoUrl = m.id === 'moncash' ? (settings as any)?.moncashLogoUrl
+                      : m.id === 'natcash' ? (settings as any)?.natcashLogoUrl
+                      : null;
+                    return (
+                      <button key={m.id} type="button" onClick={() => setDepositMethod(m)}
+                        className={`flex flex-col items-center gap-1.5 p-2.5 rounded-2xl border-2 transition-all text-center ${
+                          depositMethod?.id === m.id
+                            ? 'border-emerald-400 bg-emerald-50 ring-2 ring-emerald-200'
+                            : 'border-gray-100 bg-white hover:border-gray-200'
+                        }`}>
+                        {logoUrl ? (
+                          <div className="h-8 w-8 rounded-lg overflow-hidden flex items-center justify-center bg-gray-50">
+                            <img src={logoUrl} alt={m.name} className="h-7 w-7 object-contain" referrerPolicy="no-referrer" />
+                          </div>
+                        ) : (
+                          <span className="text-lg">{m.icon}</span>
+                        )}
+                        <span className="text-[10px] font-black text-gray-700 leading-tight">{m.name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1420,17 +1431,28 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-2">
-                  {withdrawalMethods.map(m => (
-                    <button key={m.id} type="button" onClick={() => setWithdrawMethod(m)}
-                      className={`flex flex-col items-center gap-1 p-2.5 rounded-2xl border-2 transition-all text-center ${
-                        withdrawMethod?.id === m.id
-                          ? 'border-red-400 bg-red-50 ring-2 ring-red-200'
-                          : 'border-gray-100 bg-white hover:border-gray-200'
-                      }`}>
-                      <span className="text-lg">{m.icon}</span>
-                      <span className="text-[10px] font-black text-gray-700 leading-tight">{m.name}</span>
-                    </button>
-                  ))}
+                  {withdrawalMethods.map(m => {
+                    const logoUrl = m.id === 'moncash' ? (settings as any)?.moncashLogoUrl
+                      : m.id === 'natcash' ? (settings as any)?.natcashLogoUrl
+                      : null;
+                    return (
+                      <button key={m.id} type="button" onClick={() => setWithdrawMethod(m)}
+                        className={`flex flex-col items-center gap-1.5 p-2.5 rounded-2xl border-2 transition-all text-center ${
+                          withdrawMethod?.id === m.id
+                            ? 'border-red-400 bg-red-50 ring-2 ring-red-200'
+                            : 'border-gray-100 bg-white hover:border-gray-200'
+                        }`}>
+                        {logoUrl ? (
+                          <div className="h-8 w-8 rounded-lg overflow-hidden flex items-center justify-center bg-gray-50">
+                            <img src={logoUrl} alt={m.name} className="h-7 w-7 object-contain" referrerPolicy="no-referrer" />
+                          </div>
+                        ) : (
+                          <span className="text-lg">{m.icon}</span>
+                        )}
+                        <span className="text-[10px] font-black text-gray-700 leading-tight">{m.name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>

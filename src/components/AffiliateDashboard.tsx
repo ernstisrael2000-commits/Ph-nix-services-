@@ -908,61 +908,110 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                     <span className="text-[9px] font-black uppercase tracking-widest text-indigo-700">Retrait</span>
                   </button>
                 } />
-                <DialogContent className="w-[94%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
-                  <DialogHeader className="p-7 bg-indigo-600 text-white relative">
-                    <DialogTitle className="text-xl font-black">Retrait de Fonds</DialogTitle>
-                    <DialogDescription className="text-indigo-100 text-sm">Choisissez le wallet à débiter et la méthode.</DialogDescription>
-                    <DialogClose className="absolute right-5 top-5 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
-                      <X className="h-4 w-4" />
+                <DialogContent className="w-[96%] sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-0 shadow-2xl">
+                  {/* Header */}
+                  <div className="relative bg-gradient-to-br from-indigo-500 to-purple-600 p-6 pb-8">
+                    <DialogClose className="absolute right-4 top-4 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">
+                      <X className="h-4 w-4 text-white" />
                     </DialogClose>
-                  </DialogHeader>
-                  <div className="p-7 space-y-5 max-h-[70vh] overflow-y-auto">
-                    {/* Wallet selector */}
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Wallet à débiter</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          onClick={() => setWithdrawWallet('principal')}
-                          className={`p-3 rounded-2xl border-2 text-left transition-all ${withdrawWallet === 'principal' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-100 bg-gray-50'}`}
-                        >
-                          <p className={`text-[9px] font-black uppercase tracking-widest ${withdrawWallet === 'principal' ? 'text-indigo-600' : 'text-gray-400'}`}>Wallet Principal</p>
-                          <p className={`text-base font-black mt-0.5 ${withdrawWallet === 'principal' ? 'text-indigo-700' : 'text-gray-500'}`}>{(affiliate.balance || 0).toFixed(2)} $</p>
+                    <div className="flex items-center gap-3 mb-1">
+                      <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center">
+                        <MinusCircle className="h-5 w-5 text-white" />
+                      </div>
+                      <div>
+                        <DialogTitle className="text-lg font-black text-white leading-tight">Retrait de Fonds</DialogTitle>
+                        <DialogDescription className="text-indigo-100 text-[11px] font-medium">Choisissez votre méthode de retrait</DialogDescription>
+                      </div>
+                    </div>
+                    {/* Wallet pills */}
+                    <div className="flex gap-2 mt-4">
+                      <button onClick={() => setWithdrawWallet('principal')}
+                        className={`flex-1 rounded-2xl px-3 py-2.5 text-left transition-all border-2 ${withdrawWallet === 'principal' ? 'bg-white border-white shadow-lg' : 'bg-white/15 border-white/30 hover:bg-white/25'}`}>
+                        <p className={`text-[9px] font-black uppercase tracking-widest ${withdrawWallet === 'principal' ? 'text-indigo-600' : 'text-white/70'}`}>Principal</p>
+                        <p className={`text-base font-black ${withdrawWallet === 'principal' ? 'text-indigo-700' : 'text-white'}`}>{(affiliate.balance || 0).toFixed(2)} $</p>
+                      </button>
+                      <button onClick={() => setWithdrawWallet('commissions')}
+                        className={`flex-1 rounded-2xl px-3 py-2.5 text-left transition-all border-2 ${withdrawWallet === 'commissions' ? 'bg-white border-white shadow-lg' : 'bg-white/15 border-white/30 hover:bg-white/25'}`}>
+                        <p className={`text-[9px] font-black uppercase tracking-widest ${withdrawWallet === 'commissions' ? 'text-amber-600' : 'text-white/70'}`}>Commissions</p>
+                        <p className={`text-base font-black ${withdrawWallet === 'commissions' ? 'text-amber-700' : 'text-white'}`}>{(affiliate.totalEarnings || 0).toFixed(2)} $</p>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
+                    {/* Payment method cards */}
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Méthode de retrait</p>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {/* MonCash */}
+                        <button onClick={() => { setWithdrawMethod('MonCash'); setAccountNumber(''); setAgentCodeWithdraw(''); setVerifiedAgentNameWithdraw(null); }}
+                          className={`relative rounded-2xl p-3.5 border-2 text-left transition-all ${withdrawMethod === 'MonCash' ? 'border-indigo-500 bg-indigo-50 shadow-md shadow-indigo-100' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                          {withdrawMethod === 'MonCash' && <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-indigo-500 flex items-center justify-center"><CheckCircle2 className="h-2.5 w-2.5 text-white fill-white" /></div>}
+                          <div className="h-9 w-9 rounded-xl bg-red-50 flex items-center justify-center mb-2 overflow-hidden">
+                            {settings?.moncashLogoUrl ? <img src={settings.moncashLogoUrl} alt="MonCash" className="h-7 w-7 object-contain" referrerPolicy="no-referrer" /> : <Smartphone className="h-5 w-5 text-red-500" />}
+                          </div>
+                          <p className="text-xs font-black text-gray-800">MonCash</p>
+                          <p className="text-[10px] text-gray-400 font-medium">Digicel</p>
                         </button>
-                        <button
-                          onClick={() => setWithdrawWallet('commissions')}
-                          className={`p-3 rounded-2xl border-2 text-left transition-all ${withdrawWallet === 'commissions' ? 'border-amber-500 bg-amber-50' : 'border-gray-100 bg-gray-50'}`}
-                        >
-                          <p className={`text-[9px] font-black uppercase tracking-widest ${withdrawWallet === 'commissions' ? 'text-amber-600' : 'text-gray-400'}`}>Wallet Commissions</p>
-                          <p className={`text-base font-black mt-0.5 ${withdrawWallet === 'commissions' ? 'text-amber-700' : 'text-gray-500'}`}>{(affiliate.totalEarnings || 0).toFixed(2)} $</p>
+
+                        {/* NatCash */}
+                        <button onClick={() => { setWithdrawMethod('NatCash'); setAccountNumber(''); setAgentCodeWithdraw(''); setVerifiedAgentNameWithdraw(null); }}
+                          className={`relative rounded-2xl p-3.5 border-2 text-left transition-all ${withdrawMethod === 'NatCash' ? 'border-indigo-500 bg-indigo-50 shadow-md shadow-indigo-100' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                          {withdrawMethod === 'NatCash' && <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-indigo-500 flex items-center justify-center"><CheckCircle2 className="h-2.5 w-2.5 text-white fill-white" /></div>}
+                          <div className="h-9 w-9 rounded-xl bg-blue-50 flex items-center justify-center mb-2 overflow-hidden">
+                            {settings?.natcashLogoUrl ? <img src={settings.natcashLogoUrl} alt="NatCash" className="h-7 w-7 object-contain" referrerPolicy="no-referrer" /> : <Smartphone className="h-5 w-5 text-blue-500" />}
+                          </div>
+                          <p className="text-xs font-black text-gray-800">NatCash</p>
+                          <p className="text-[10px] text-gray-400 font-medium">Natcom</p>
+                        </button>
+
+                        {/* Via Agent */}
+                        <button onClick={() => { setWithdrawMethod('Agent'); setAccountNumber(''); setAgentCodeWithdraw(''); setVerifiedAgentNameWithdraw(null); }}
+                          className={`relative rounded-2xl p-3.5 border-2 text-left transition-all ${withdrawMethod === 'Agent' ? 'border-indigo-500 bg-indigo-50 shadow-md shadow-indigo-100' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                          {withdrawMethod === 'Agent' && <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-indigo-500 flex items-center justify-center"><CheckCircle2 className="h-2.5 w-2.5 text-white fill-white" /></div>}
+                          <div className="h-9 w-9 rounded-xl bg-indigo-50 flex items-center justify-center mb-2">
+                            <Users className="h-5 w-5 text-indigo-500" />
+                          </div>
+                          <p className="text-xs font-black text-gray-800">Via Agent</p>
+                          <p className="text-[10px] text-gray-400 font-medium">Physique</p>
+                        </button>
+
+                        {/* Virement */}
+                        <button onClick={() => { setWithdrawMethod('Virement'); setAccountNumber(''); setAgentCodeWithdraw(''); setVerifiedAgentNameWithdraw(null); }}
+                          className={`relative rounded-2xl p-3.5 border-2 text-left transition-all ${withdrawMethod === 'Virement' ? 'border-indigo-500 bg-indigo-50 shadow-md shadow-indigo-100' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                          {withdrawMethod === 'Virement' && <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-indigo-500 flex items-center justify-center"><CheckCircle2 className="h-2.5 w-2.5 text-white fill-white" /></div>}
+                          <div className="h-9 w-9 rounded-xl bg-violet-50 flex items-center justify-center mb-2">
+                            <Building2 className="h-5 w-5 text-violet-500" />
+                          </div>
+                          <p className="text-xs font-black text-gray-800">Virement</p>
+                          <p className="text-[10px] text-gray-400 font-medium">Bancaire</p>
+                        </button>
+
+                        {/* Admin */}
+                        <button onClick={() => { setWithdrawMethod('Admin'); setAccountNumber(''); setAgentCodeWithdraw(''); setVerifiedAgentNameWithdraw(null); }}
+                          className={`relative rounded-2xl p-3.5 border-2 text-left transition-all ${withdrawMethod === 'Admin' ? 'border-indigo-500 bg-indigo-50 shadow-md shadow-indigo-100' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                          {withdrawMethod === 'Admin' && <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-indigo-500 flex items-center justify-center"><CheckCircle2 className="h-2.5 w-2.5 text-white fill-white" /></div>}
+                          <div className="h-9 w-9 rounded-xl bg-rose-50 flex items-center justify-center mb-2">
+                            <ShieldCheck className="h-5 w-5 text-rose-500" />
+                          </div>
+                          <p className="text-xs font-black text-gray-800">Admin</p>
+                          <p className="text-[10px] text-gray-400 font-medium">Espèces directes</p>
+                        </button>
+
+                        {/* Bureau Juvénat */}
+                        <button onClick={() => { setWithdrawMethod('Physical'); setAccountNumber(''); setAgentCodeWithdraw(''); setVerifiedAgentNameWithdraw(null); }}
+                          className={`relative rounded-2xl p-3.5 border-2 text-left transition-all ${withdrawMethod === 'Physical' ? 'border-indigo-500 bg-indigo-50 shadow-md shadow-indigo-100' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                          {withdrawMethod === 'Physical' && <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-indigo-500 flex items-center justify-center"><CheckCircle2 className="h-2.5 w-2.5 text-white fill-white" /></div>}
+                          <div className="h-9 w-9 rounded-xl bg-teal-50 flex items-center justify-center mb-2">
+                            <MapPin className="h-5 w-5 text-teal-500" />
+                          </div>
+                          <p className="text-xs font-black text-gray-800">Bureau</p>
+                          <p className="text-[10px] text-gray-400 font-medium">Juvénat</p>
                         </button>
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Méthode</Label>
-                      <Select value={withdrawMethod} onValueChange={(v: any) => { setWithdrawMethod(v); setAccountNumber(''); setAgentCodeWithdraw(''); setVerifiedAgentNameWithdraw(null); }}>
-                        <SelectTrigger className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-bold">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-2xl">
-                          <SelectItem value="MonCash" className="font-bold">
-                            <div className="flex items-center gap-2">
-                              {settings?.moncashLogoUrl && <img src={settings.moncashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
-                              MonCash (Digicel)
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="NatCash" className="font-bold">
-                            <div className="flex items-center gap-2">
-                              {settings?.natcashLogoUrl && <img src={settings.natcashLogoUrl} alt="" className="h-4 w-auto" referrerPolicy="no-referrer" />}
-                              NatCash (Natcom)
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="Agent" className="font-bold">Via Agent (Retrait physique agent)</SelectItem>
-                          <SelectItem value="Admin" className="font-bold">Admin (Espèces directes)</SelectItem>
-                          <SelectItem value="Virement" className="font-bold">Virement Bancaire</SelectItem>
-                          <SelectItem value="Physical" className="font-bold">Bureau Juvénat (Physique)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+
+                    {/* Agent code */}
                     {withdrawMethod === 'Agent' && (
                       <div className="space-y-2">
                         <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Code Agent (8 chiffres)</Label>
@@ -987,10 +1036,12 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                         )}
                       </div>
                     )}
+
+                    {/* Numéro de compte (sauf Physical et Agent) */}
                     {withdrawMethod !== 'Physical' && withdrawMethod !== 'Agent' && (
                       <div className="space-y-2">
                         <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                          {withdrawMethod === 'Virement' ? 'Numéro de compte bancaire / IBAN' : 'Numéro de compte'}
+                          {withdrawMethod === 'Virement' ? 'Numéro de compte / IBAN' : 'Numéro de compte'}
                         </Label>
                         <Input
                           placeholder={withdrawMethod === 'Virement' ? 'IBAN ou n° de compte' : 'Ex: 44XXXXXX'}
@@ -999,30 +1050,41 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                         />
                       </div>
                     )}
+
+                    {/* Info bureau */}
                     {withdrawMethod === 'Physical' && (
-                      <div className="bg-blue-50 border border-blue-100 p-3 rounded-xl flex items-start gap-2">
-                        <AlertTriangle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
-                        <p className="text-[10px] text-blue-800 font-bold leading-relaxed">Le retrait s'effectue à notre bureau de Juvénat sur présentation d'une pièce d'identité.</p>
+                      <div className="bg-teal-50 border border-teal-100 p-3.5 rounded-2xl flex items-start gap-2.5">
+                        <MapPin className="h-4 w-4 text-teal-500 shrink-0 mt-0.5" />
+                        <p className="text-[10px] text-teal-800 font-bold leading-relaxed">Le retrait s'effectue à notre bureau de Juvénat sur présentation d'une pièce d'identité.</p>
                       </div>
                     )}
+
+                    {/* Montant */}
                     <div className="space-y-2">
                       <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant ($)</Label>
                       <div className="relative">
                         <Input type="number" placeholder={`Min ${(20 / (settings?.exchangeRate || 146)).toFixed(2)}`}
                           value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)}
-                          className="h-12 rounded-2xl border-gray-100 bg-gray-50 font-black text-lg pl-11" />
-                        <MinusCircle className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-500" />
+                          className="h-13 rounded-2xl border-gray-100 bg-gray-50 font-black text-xl pl-12 focus:ring-2 focus:ring-indigo-300" />
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-500 font-black text-lg">$</span>
+                      </div>
+                      <div className="flex gap-2 flex-wrap">
+                        {[10, 25, 50, 100].map(v => (
+                          <button key={v} onClick={() => setWithdrawAmount(String(v))}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-black border transition-all ${withdrawAmount === String(v) ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-gray-50 text-gray-500 border-gray-100 hover:border-indigo-300 hover:text-indigo-600'}`}>
+                            {v} $
+                          </button>
+                        ))}
                       </div>
                       <p className="text-[10px] text-gray-400 font-bold">
                         Solde {withdrawWallet === 'commissions' ? 'Commissions' : 'Principal'} : {withdrawWallet === 'commissions' ? (affiliate.totalEarnings || 0).toFixed(2) : (affiliate.balance || 0).toFixed(2)} $
                       </p>
                     </div>
-                  </div>
-                  <DialogFooter className="px-7 pb-7">
-                    <Button onClick={handleWithdraw} disabled={isSubmitting} className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl">
-                      {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirmer le Retrait'}
+
+                    <Button onClick={handleWithdraw} disabled={isSubmitting} className="w-full h-13 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-black rounded-2xl shadow-lg shadow-indigo-200 text-base transition-all active:scale-[0.98]">
+                      {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Confirmer le Retrait →</>}
                     </Button>
-                  </DialogFooter>
+                  </div>
                 </DialogContent>
               </Dialog>
 
