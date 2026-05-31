@@ -2057,7 +2057,7 @@ router.patch('/api/admin/affiliate-requests/:id', requireDb, async (req, res) =>
       await batch.commit();
       // Email notification
       fireEmail(
-        () => emailDepositApproved({ clientName: reqData.clientName || '', clientEmail: clientData.email || undefined, amount: htgAmount / (reqData.exchangeRate || 146), method: reqData.method || '' }),
+        () => emailDepositApproved({ clientName: reqData.clientName || '', clientEmail: clientData.email || undefined, amount: htgAmount / (reqData.exchangeRate || 146) }),
         { type: 'affiliate_deposit_approved', to: [ADMIN_EMAIL, ...(clientData.email ? [clientData.email] : [])], clientId: reqData.clientId, amount: htgAmount }
       );
     } else {
@@ -2066,7 +2066,7 @@ router.patch('/api/admin/affiliate-requests/:id', requireDb, async (req, res) =>
       await reqRef.update({ status: 'declined', resolvedAt: FieldValue.serverTimestamp() });
       // Email notification
       fireEmail(
-        () => emailDepositRejected({ clientName: reqData.clientName || '', clientEmail: clientEmail2, amount: reqData.amount || 0, method: reqData.method || '' }),
+        () => emailDepositRejected({ clientName: reqData.clientName || '', clientEmail: clientEmail2, amount: reqData.amount || 0 }),
         { type: 'affiliate_deposit_declined', to: [ADMIN_EMAIL, ...(clientEmail2 ? [clientEmail2] : [])], clientId: reqData.clientId, amount: reqData.amount }
       );
     }
@@ -2564,9 +2564,8 @@ router.post('/api/affiliate/submit-withdrawal', requireDb, async (req, res) => {
         amount: usd,
         method,
         accountNumber,
-        affiliateCode: affData.code || '',
       }),
-      { type: 'affiliate_withdrawal_submitted', to: [ADMIN_EMAIL, ...(affData.email ? [affData.email] : [])], affiliateId, amount: usd }
+      { type: 'affiliate_withdrawal_submitted', to: [ADMIN_EMAIL, ...(affData.email ? [affData.email] : [])], clientId: affiliateId, amount: usd }
     );
 
     res.json({ success: true });
@@ -2622,6 +2621,149 @@ router.get('/api/admin/wallet/stats', requireDb, async (req, res) => {
   }
 });
 
+// ── Helper: auto-trigger affiliate commissions (server-side) ─────────────────
+async function triggerAffiliateCommissions(
+  directAffiliateId: string,
+  type: 'purchase' | 'subscription' | 'virtual_card',
+  itemName?: string
+) {
+  try {
+    const settingsSnap = await adminDb.collection('settings').doc('global').get();
+    const settings = settingsSnap.exists ? settingsSnap.data()! : {};
+    const exchangeRate = settings.exchangeRate || 146;
+
+    const isStreaming = itemName && ['netflix','prime','paramount','disney','hbo','iptv','spotify','video','streaming']
+      .some(k => (itemName || '').toLowerCase().includes(k));
+
+    let directHTG: number, parentHTG: number, grandparentHTG: number, pointsEarned: number;
+    if (type === 'virtual_card') {
+      directHTG     = settings.commissionVirtualCardHTG        || 350;
+      parentHTG     = settings.commissionVirtualCardParentHTG  || 40;
+      grandparentHTG= settings.commissionVirtualCardGpHTG      || 10;
+      pointsEarned  = 25;
+    } else if (type === 'subscription') {
+      directHTG     = settings.commissionSubscriptionHTG        || 75;
+      parentHTG     = settings.commissionSubscriptionParentHTG  || 15;
+      grandparentHTG= settings.commissionSubscriptionGpHTG      || 10;
+      pointsEarned  = isStreaming ? 5 : 10;
+    } else {
+      directHTG     = settings.commissionPurchaseHTG        || 2;
+      parentHTG     = settings.commissionPurchaseParentHTG  || 0.5;
+      grandparentHTG= settings.commissionPurchaseGpHTG      || 0.5;
+      pointsEarned  = 1;
+    }
+
+    const directUSD      = directHTG      / exchangeRate;
+    const parentUSD      = parentHTG      / exchangeRate;
+    const grandparentUSD = grandparentHTG / exchangeRate;
+
+    const affRef  = adminDb.collection('affiliates').doc(directAffiliateId);
+    const affSnap = await affRef.get();
+    if (!affSnap.exists) return;
+    const aff = affSnap.data()!;
+
+    const batch = adminDb.batch();
+
+    batch.update(affRef, {
+      balance:       FieldValue.increment(directUSD),
+      directRevenue: FieldValue.increment(directUSD),
+      totalEarnings: FieldValue.increment(directUSD),
+      points:        FieldValue.increment(pointsEarned),
+      monthlySales:  FieldValue.increment(1),
+      updatedAt:     FieldValue.serverTimestamp(),
+    });
+
+    const saleRef = adminDb.collection('sales').doc();
+    batch.set(saleRef, {
+      affiliateId: directAffiliateId, affiliateName: aff.name,
+      type, itemName: itemName || (type === 'virtual_card' ? 'Carte MasterCard' : 'Produit'),
+      commission: directUSD, commissionHTG: directHTG,
+      points: pointsEarned, createdAt: FieldValue.serverTimestamp(),
+    });
+
+    const n1 = adminDb.collection('notifications').doc();
+    batch.set(n1, {
+      affiliateId: directAffiliateId,
+      title: 'Nouvelle Vente !',
+      message: `Félicitations ! Vous avez gagné ${directHTG} Goud et ${pointsEarned} points.`,
+      type: 'revenue', read: false, createdAt: FieldValue.serverTimestamp(),
+    });
+
+    if (aff.parentAffiliateId) {
+      const parentRef  = adminDb.collection('affiliates').doc(aff.parentAffiliateId);
+      const parentSnap = await parentRef.get();
+      if (parentSnap.exists) {
+        batch.update(parentRef, {
+          balance: FieldValue.increment(parentUSD), indirectRevenue: FieldValue.increment(parentUSD),
+          totalEarnings: FieldValue.increment(parentUSD), updatedAt: FieldValue.serverTimestamp(),
+        });
+        const n2 = adminDb.collection('notifications').doc();
+        batch.set(n2, {
+          affiliateId: aff.parentAffiliateId, title: 'Commission Directe (Filleul)',
+          message: `Niveau 1: Vous avez reçu ${parentHTG} Goud (~${parentUSD.toFixed(2)} $) suite à une vente de ${aff.name}.`,
+          type: 'revenue', read: false, createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    if (aff.grandparentAffiliateId) {
+      const gpRef  = adminDb.collection('affiliates').doc(aff.grandparentAffiliateId);
+      const gpSnap = await gpRef.get();
+      if (gpSnap.exists) {
+        batch.update(gpRef, {
+          balance: FieldValue.increment(grandparentUSD), indirectRevenue: FieldValue.increment(grandparentUSD),
+          totalEarnings: FieldValue.increment(grandparentUSD), updatedAt: FieldValue.serverTimestamp(),
+        });
+        const n3 = adminDb.collection('notifications').doc();
+        batch.set(n3, {
+          affiliateId: aff.grandparentAffiliateId, title: 'Commission Indirecte (Filleul N2)',
+          message: `Niveau 2: Vous avez reçu ${grandparentHTG} Goud (~${grandparentUSD.toFixed(2)} $) via l'affilié ${aff.name}.`,
+          type: 'revenue', read: false, createdAt: FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    await batch.commit();
+    console.log(`[Commission] ✓ Auto-attribuée à ${aff.name} (${type}) — direct: ${directHTG} HTG`);
+  } catch (e: any) {
+    console.error('[Commission] Erreur auto-commission:', e?.message);
+  }
+}
+
+// ── Manual commission route (admin) ──────────────────────────────────────────
+router.post('/api/admin/affiliate/manual-commission', requireDb, async (req, res) => {
+  try {
+    const { affiliateId, amountHTG, reason } = req.body;
+    if (!affiliateId || !amountHTG) return res.status(400).json({ error: 'Paramètres manquants.' });
+
+    const settingsSnap = await adminDb.collection('settings').doc('global').get();
+    const exchangeRate = settingsSnap.exists ? (settingsSnap.data()!.exchangeRate || 146) : 146;
+    const amountUSD = Number(amountHTG) / exchangeRate;
+
+    const affRef  = adminDb.collection('affiliates').doc(affiliateId);
+    const affSnap = await affRef.get();
+    if (!affSnap.exists) return res.status(404).json({ error: 'Affilié introuvable.' });
+
+    const batch = adminDb.batch();
+    batch.update(affRef, {
+      balance: FieldValue.increment(amountUSD), totalEarnings: FieldValue.increment(amountUSD),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    const notifRef = adminDb.collection('notifications').doc();
+    batch.set(notifRef, {
+      affiliateId, title: 'Commission Manuelle',
+      message: `Vous avez reçu une commission manuelle de ${amountHTG} Goud (~${amountUSD.toFixed(2)} $)${reason ? ` — ${reason}` : ''}.`,
+      type: 'revenue', read: false, createdAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    res.json({ success: true, amountUSD: amountUSD.toFixed(4) });
+  } catch (e: any) {
+    console.error('[manual-commission]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
 // ── Purchase ──────────────────────────────────────────────────────────────────
 router.post('/api/client/purchase', requireDb, async (req, res) => {
   try {
@@ -2642,19 +2784,6 @@ router.post('/api/client/purchase', requireDb, async (req, res) => {
       balance: Math.max(0, (clientData.balance || 0) - amount),
       updatedAt: FieldValue.serverTimestamp(),
     });
-    if (directSponsorId) {
-      const affRef = adminDb.collection('affiliates').doc(directSponsorId);
-      const affSnap = await affRef.get();
-      if (affSnap.exists) {
-        const aff = affSnap.data()!;
-        batch.update(affRef, {
-          commissionBalance: (aff.commissionBalance || 0) + amount,
-          totalEarnings: (aff.totalEarnings || 0) + amount,
-          monthlySales: (aff.monthlySales || 0) + amount,
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-      }
-    }
     const txRef = adminDb.collection('client_transactions').doc();
     batch.set(txRef, {
       clientId, clientName, type: 'purchase', amount, status: 'completed',
@@ -2669,10 +2798,17 @@ router.post('/api/client/purchase', requireDb, async (req, res) => {
       type: 'client_purchase', clientId, clientName,
       clientPhone: clientPhone || '', clientWalletId: clientWalletId || '',
       transactionId: txRef.id, amount, productName, productPrice,
-      directSponsorId: directSponsorId || null, status: 'completed',
+      directSponsorId: directSponsorId || null,
+      commissionAutoSent: !!directSponsorId,
+      status: 'completed',
       read: false, createdAt: FieldValue.serverTimestamp(),
     });
     await batch.commit();
+
+    // Auto-trigger commissions for the affiliate chain (fire-and-forget)
+    if (directSponsorId) {
+      triggerAffiliateCommissions(directSponsorId, 'purchase', productName).catch(() => {});
+    }
 
     sendFcmToClient(
       clientId,
@@ -2696,50 +2832,27 @@ router.post('/api/client/purchase', requireDb, async (req, res) => {
 
 router.post('/api/admin/purchase/approve', requireDb, async (req, res) => {
   try {
-    const { notifId, transactionId, clientId, amount, directSponsorId } = req.body;
-    if (!notifId || !transactionId || !clientId || !amount)
+    const { notifId, transactionId, clientId } = req.body;
+    if (!notifId || !transactionId)
       return res.status(400).json({ error: 'Paramètres manquants.' });
 
-    const clientRef = adminDb.collection('clients').doc(clientId);
-    const clientSnap = await clientRef.get();
-    if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
-    const clientData = clientSnap.data()!;
-    if ((clientData.balance || 0) < amount)
-      return res.status(400).json({ error: 'Solde client insuffisant.' });
-
     const batch = adminDb.batch();
-    batch.update(clientRef, {
-      balance: Math.max(0, (clientData.balance || 0) - amount),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-    if (directSponsorId) {
-      const affRef = adminDb.collection('affiliates').doc(directSponsorId);
-      const affSnap = await affRef.get();
-      if (affSnap.exists) {
-        const aff = affSnap.data()!;
-        batch.update(affRef, {
-          commissionBalance: (aff.commissionBalance || 0) + amount,
-          totalEarnings: (aff.totalEarnings || 0) + amount,
-          monthlySales: (aff.monthlySales || 0) + amount,
-          updatedAt: FieldValue.serverTimestamp(),
-        });
-      }
-    }
     batch.update(adminDb.collection('client_transactions').doc(transactionId), {
-      status: 'completed', affiliateCredited: !!directSponsorId,
-      updatedAt: FieldValue.serverTimestamp(),
+      status: 'completed', updatedAt: FieldValue.serverTimestamp(),
     });
     batch.update(adminDb.collection('admin_notifications').doc(notifId), {
       status: 'approved', read: true, resolvedAt: FieldValue.serverTimestamp(),
     });
     await batch.commit();
 
-    sendFcmToClient(
-      clientId,
-      '✅ Achat approuvé',
-      `Votre achat de $${Number(amount).toFixed(2)} a été approuvé. Merci pour votre confiance !`,
-      { type: 'purchase_approved', txId: transactionId }
-    );
+    if (clientId) {
+      sendFcmToClient(
+        clientId,
+        '✅ Service traité',
+        'Votre service a été traité avec succès. Merci pour votre confiance !',
+        { type: 'purchase_approved', txId: transactionId }
+      );
+    }
 
     res.json({ success: true });
   } catch (e: any) {
@@ -3598,6 +3711,11 @@ router.post('/api/formations/purchases/wallet', async (req, res) => {
       });
     }
     await batch.commit();
+
+    // Auto-commission pour le parrain du client (formation)
+    if (price > 0 && clientData.directSponsorId) {
+      triggerAffiliateCommissions(clientData.directSponsorId, 'subscription', formationTitle || 'Formation').catch(() => {});
+    }
 
     // Email admin + client pour achat formation
     if (price > 0) {

@@ -43,7 +43,6 @@ import {
   awardMonthlyPrizes, 
   clearMonthlyWinners, 
   useMonthlyRankings, 
-  recordPurchase, 
   searchAffiliatesByName, 
   getAffiliateReferrals,
   useAllClients,
@@ -599,13 +598,11 @@ const AffiliateTableBody = React.memo(({
   affiliates, 
   searchQuery, 
   onEdit, 
-  onRecordSale, 
   onDelete 
 }: { 
   affiliates: any[], 
   searchQuery: string, 
   onEdit: (a: any) => void, 
-  onRecordSale: (a: any) => void, 
   onDelete: (a: any) => void 
 }) => {
   const filtered = React.useMemo(() => {
@@ -667,9 +664,6 @@ const AffiliateTableBody = React.memo(({
             <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent-light hover:text-primary" onClick={() => onEdit(a)}>
                 <LucideIcons.Edit2 className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-primary hover:bg-accent-light" onClick={() => onRecordSale(a)}>
-                <LucideIcons.DollarSign className="h-4 w-4" />
               </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-red-500 hover:bg-red-50" onClick={() => onDelete(a)}>
                 <LucideIcons.Trash2 className="h-4 w-4" />
@@ -924,8 +918,8 @@ function PurchaseNotifCard({
         <div className="flex items-center justify-between text-[10px] text-gray-400">
           <span>{notif.createdAt?.toDate ? format(notif.createdAt.toDate(), 'dd MMM yyyy, HH:mm', { locale: fr }) : ''}</span>
           {(notif as any).directSponsorId && (
-            <span className="inline-flex items-center gap-1 font-black px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
-              Affilié à créditer
+            <span className="inline-flex items-center gap-1 font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+              ✓ Commission envoyée
             </span>
           )}
         </div>
@@ -2185,24 +2179,31 @@ function EmailLogsPanel() {
   const [isAffiliateDeleteConfirmOpen, setIsAffiliateDeleteConfirmOpen] = useState(false);
   const [affiliateToDelete, setAffiliateToDelete] = useState<Affiliate | null>(null);
 
-  const [isRecordSaleDialogOpen, setIsRecordSaleDialogOpen] = useState(false);
-  const [selectedAffiliateForSale, setSelectedAffiliateForSale] = useState<Affiliate | null>(null);
-  const [saleType, setSaleType] = useState<'purchase' | 'subscription' | 'virtual_card'>('purchase');
-  const [saleItemName, setSaleItemName] = useState('');
-  const [isRecordingSale, setIsRecordingSale] = useState(false);
+  const [isManualCommissionOpen, setIsManualCommissionOpen] = useState(false);
+  const [manualCommissionAffiliateId, setManualCommissionAffiliateId] = useState<string>('');
+  const [manualCommissionAffiliateName, setManualCommissionAffiliateName] = useState<string>('');
+  const [manualCommissionHTG, setManualCommissionHTG] = useState<string>('');
+  const [manualCommissionReason, setManualCommissionReason] = useState<string>('');
+  const [isSubmittingManualCommission, setIsSubmittingManualCommission] = useState(false);
 
-  const handleRecordSale = async () => {
-    if (!selectedAffiliateForSale?.id) return;
-    setIsRecordingSale(true);
+  const handleManualCommission = async () => {
+    if (!manualCommissionAffiliateId || !manualCommissionHTG) return;
+    setIsSubmittingManualCommission(true);
     try {
-      await recordPurchase(selectedAffiliateForSale.id, saleType, saleItemName);
-      toast.success("Vente enregistrée avec succès !");
-      setIsRecordSaleDialogOpen(false);
-      setSaleItemName('');
-    } catch (error) {
-      toast.error("Erreur lors de l'enregistrement de la vente.");
+      const res = await fetch('/api/admin/affiliate/manual-commission', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ affiliateId: manualCommissionAffiliateId, amountHTG: Number(manualCommissionHTG), reason: manualCommissionReason }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Erreur');
+      toast.success(`Commission de ${manualCommissionHTG} HTG envoyée à ${manualCommissionAffiliateName} !`);
+      setIsManualCommissionOpen(false);
+      setManualCommissionHTG('');
+      setManualCommissionReason('');
+    } catch (err: any) {
+      toast.error(err.message || 'Erreur lors de l\'envoi de la commission.');
     } finally {
-      setIsRecordingSale(false);
+      setIsSubmittingManualCommission(false);
     }
   };
   const [editingAffiliate, setEditingAffiliate] = useState<Affiliate | null>(null);
@@ -5110,31 +5111,6 @@ function EmailLogsPanel() {
                   </TabsTrigger>
                 </TabsList>
               </div>
-              <div className="flex gap-2 w-full sm:w-auto">
-                <Button onClick={() => {
-                  setEditingAffiliate(null);
-                  setAffiliateFormData({ 
-                    name: '', 
-                    username: '', 
-                    password: '', 
-                    code: '',
-                    balance: 0,
-                    referredClients: 0,
-                    points: 0,
-                    level: 'Bronze',
-                    directRevenue: 0,
-                    indirectRevenue: 0,
-                    totalEarnings: 0,
-                    parentAffiliateId: '',
-                    grandparentAffiliateId: '',
-                    additionalSponsors: []
-                  });
-                  setIsAffiliateDialogOpen(true);
-                }} className="w-full sm:w-auto bg-primary hover:bg-[#1D4ED8] text-white flex items-center justify-center gap-2 shadow-md border-0 h-10 px-6 rounded-xl font-black text-xs">
-                  <PlusCircle className="h-4 w-4" />
-                  Nouvel Affilié
-                </Button>
-              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto pt-6 custom-scrollbar">
@@ -5236,10 +5212,6 @@ function EmailLogsPanel() {
                               setAffiliateFormData(a);
                               setIsAffiliateDialogOpen(true);
                             }}
-                            onRecordSale={(a) => {
-                              setSelectedAffiliateForSale(a);
-                              setIsRecordSaleDialogOpen(true);
-                            }}
                             onDelete={(a) => handleOpenAffiliateDeleteDialog(a)}
                           />
                         </TableBody>
@@ -5328,17 +5300,6 @@ function EmailLogsPanel() {
                                 <Button 
                                   size="sm" 
                                   variant="ghost" 
-                                  className="rounded-xl h-9 w-9 p-0 bg-primary/5 text-primary hover:bg-primary/10"
-                                  onClick={() => {
-                                    setSelectedAffiliateForSale(a);
-                                    setIsRecordSaleDialogOpen(true);
-                                  }}
-                                >
-                                  <DollarSign className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost" 
                                   className="rounded-xl h-9 w-9 p-0 bg-red-50 text-red-500 hover:bg-red-100"
                                   onClick={() => handleOpenAffiliateDeleteDialog(a)}
                                 >
@@ -5355,7 +5316,7 @@ function EmailLogsPanel() {
                     <div className="text-center py-20 text-gray-400">
                       <Users className="h-16 w-16 mx-auto mb-4 opacity-10" />
                       <p className="text-lg font-medium">Aucun affilié trouvé</p>
-                      <p className="text-sm">Essayez une autre recherche ou créez un nouvel affilié.</p>
+                      <p className="text-sm">Essayez une autre recherche.</p>
                     </div>
                   )}
                 </CardContent>
@@ -7021,6 +6982,16 @@ function EmailLogsPanel() {
                                     <p className="text-xs text-gray-500 font-bold">{(notif as any).productPrice}</p>
                                   )}
                                   <p className="font-black text-dark text-base">{(notif.amount || 0).toLocaleString()} HTG</p>
+                                  {(notif as any).directSponsorId && (
+                                    <div className="flex items-center gap-1.5 pt-1">
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                                        ✓ Commission auto-envoyée
+                                      </span>
+                                      <span className="text-[10px] text-gray-400 font-medium">
+                                        Parrain: {affiliates.find(a => a.id === (notif as any).directSponsorId)?.name || '—'}
+                                      </span>
+                                    </div>
+                                  )}
                                   <div className="flex flex-wrap gap-x-3 gap-y-0.5">
                                     {(notif as any).clientWalletId && (
                                       <span className="text-[10px] font-mono text-gray-400">Wallet #{(notif as any).clientWalletId}</span>
@@ -7083,6 +7054,23 @@ function EmailLogsPanel() {
                                   >
                                     📲 WhatsApp
                                   </a>
+                                )}
+                                {(notif as any).directSponsorId && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-9 px-3 rounded-xl text-xs font-black border-violet-200 text-violet-600 hover:bg-violet-50 gap-1"
+                                    onClick={() => {
+                                      const sponsorId = (notif as any).directSponsorId;
+                                      const sponsorName = affiliates.find(a => a.id === sponsorId)?.name || '';
+                                      setManualCommissionAffiliateId(sponsorId);
+                                      setManualCommissionAffiliateName(sponsorName);
+                                      setManualCommissionReason(`Vente: ${(notif as any).productName || 'Service'}`);
+                                      setIsManualCommissionOpen(true);
+                                    }}
+                                  >
+                                    <DollarSign className="h-4 w-4" /> + Commission
+                                  </Button>
                                 )}
                               </div>
                             )}
@@ -7548,6 +7536,57 @@ function EmailLogsPanel() {
                     >
                       Enregistrer les paramètres
                     </Button>
+
+                    {/* Commission Rates */}
+                    <div className="space-y-3 pt-4 border-t border-dashed">
+                      <h4 className="text-xs font-black text-dark uppercase tracking-wide flex items-center gap-2">
+                        <LucideIcons.Percent className="h-4 w-4 text-violet-500" />
+                        Taux de commissions affiliés (HTG)
+                      </h4>
+                      <p className="text-[10px] text-gray-400">Ces montants sont crédités automatiquement à chaque achat/vente.</p>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { key: 'commissionPurchaseHTG', label: 'Achat — Direct (HTG)', placeholder: '2' },
+                          { key: 'commissionPurchaseParentHTG', label: 'Achat — Parrain (HTG)', placeholder: '0.5' },
+                          { key: 'commissionSubscriptionHTG', label: 'Abonnement — Direct (HTG)', placeholder: '75' },
+                          { key: 'commissionSubscriptionParentHTG', label: 'Abonnement — Parrain (HTG)', placeholder: '15' },
+                          { key: 'commissionVirtualCardHTG', label: 'Carte Virtuelle — Direct (HTG)', placeholder: '350' },
+                          { key: 'commissionVirtualCardParentHTG', label: 'Carte Virtuelle — Parrain (HTG)', placeholder: '40' },
+                        ].map(({ key, label, placeholder }) => (
+                          <div key={key} className="space-y-1">
+                            <Label className="text-[10px] font-bold text-gray-500">{label}</Label>
+                            <Input
+                              type="number"
+                              placeholder={placeholder}
+                              value={(pendingSettings as any)?.[key] ?? (settings as any)?.[key] ?? placeholder}
+                              onChange={(e) => setPendingSettings(prev => ({ ...prev, [key]: parseFloat(e.target.value) }))}
+                              className="rounded-xl border-gray-100 h-9 text-sm"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        onClick={async () => {
+                          const commissionKeys = [
+                            'commissionPurchaseHTG', 'commissionPurchaseParentHTG',
+                            'commissionSubscriptionHTG', 'commissionSubscriptionParentHTG',
+                            'commissionVirtualCardHTG', 'commissionVirtualCardParentHTG',
+                          ];
+                          const dataToUpdate: Record<string, number> = {};
+                          commissionKeys.forEach(k => {
+                            dataToUpdate[k] = (pendingSettings as any)[k] !== undefined
+                              ? (pendingSettings as any)[k]
+                              : (settings as any)?.[k] ?? 0;
+                          });
+                          await updateSettings(dataToUpdate);
+                          toast.success("Taux de commissions mis à jour !");
+                        }}
+                        className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl"
+                      >
+                        Enregistrer les taux de commission
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
@@ -8249,58 +8288,52 @@ function EmailLogsPanel() {
       </div>
 
       {/* Record Sale Dialog */}
-      <Dialog open={isRecordSaleDialogOpen} onOpenChange={setIsRecordSaleDialogOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+      <Dialog open={isManualCommissionOpen} onOpenChange={setIsManualCommissionOpen}>
+        <DialogContent className="sm:max-w-[380px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-primary" />
-              Enregistrer une vente
+              <DollarSign className="h-5 w-5 text-violet-600" />
+              Commission manuelle
             </DialogTitle>
             <DialogDescription>
-              Attribuez une vente à <span className="font-bold text-gray-900">{selectedAffiliateForSale?.name}</span>.
+              Ajouter une commission à <span className="font-bold text-gray-900">{manualCommissionAffiliateName}</span>.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label>Type de vente</Label>
-              <Select value={saleType} onValueChange={(v: any) => setSaleType(v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner le type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="purchase">Top Up / Autres (2 $)</SelectItem>
-                  <SelectItem value="subscription">Streaming / Abonnement (75 $+)</SelectItem>
-                  <SelectItem value="virtual_card">Carte Virtuelle (350 $)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            {saleType === 'subscription' && (
-              <div className="space-y-2">
-                <Label>Nom de l'abonnement (Netflix, Prime...)</Label>
-                <Input 
-                  placeholder="Ex: Netflix Premium" 
-                  value={saleItemName}
-                  onChange={(e) => setSaleItemName(e.target.value)}
-                  className="rounded-xl"
-                />
-                <p className="text-[10px] text-blue-600 font-bold">
-                  Note: Netflix / Prime = 75 $ direct + 15 $ (P1) + 10 $ (P2).
+              <Label>Montant (HTG)</Label>
+              <Input
+                type="number"
+                placeholder="Ex: 75"
+                value={manualCommissionHTG}
+                onChange={(e) => setManualCommissionHTG(e.target.value)}
+                className="rounded-xl"
+              />
+              {manualCommissionHTG && (
+                <p className="text-[10px] text-gray-500">
+                  ≈ {(Number(manualCommissionHTG) / (settings?.exchangeRate || 146)).toFixed(4)} $
                 </p>
-              </div>
-            )}
-
-            <div className="bg-accent-light/50 p-3 rounded-lg border border-accent-light">
-              <p className="text-xs text-primary font-medium">
-                Note: L'affilié reçoit le gain direct. Le parrain direct et le parrain indirect reçoivent leurs commissions respectives automatiquement.
-              </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Raison (optionnel)</Label>
+              <Input
+                placeholder="Ex: Vente Netflix Premium"
+                value={manualCommissionReason}
+                onChange={(e) => setManualCommissionReason(e.target.value)}
+                className="rounded-xl"
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsRecordSaleDialogOpen(false)}>Annuler</Button>
-            <Button onClick={handleRecordSale} disabled={isRecordingSale} className="bg-primary hover:bg-[#1D4ED8] text-white">
-              {isRecordingSale ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-              Confirmer la vente
+            <Button variant="outline" onClick={() => setIsManualCommissionOpen(false)}>Annuler</Button>
+            <Button
+              onClick={handleManualCommission}
+              disabled={isSubmittingManualCommission || !manualCommissionHTG}
+              className="bg-violet-600 hover:bg-violet-700 text-white"
+            >
+              {isSubmittingManualCommission ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+              Envoyer
             </Button>
           </DialogFooter>
         </DialogContent>
