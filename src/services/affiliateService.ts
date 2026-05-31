@@ -1100,6 +1100,32 @@ export const ensureWalletId = async (affiliate: Affiliate) => {
 };
 
 /**
+ * Ensures an affiliate has a unique 8-digit commission wallet ID.
+ */
+export const ensureCommissionWalletId = async (affiliate: Affiliate) => {
+  if (affiliate.commissionWalletId) return affiliate.commissionWalletId;
+
+  let isUnique = false;
+  let newId = '';
+
+  while (!isUnique) {
+    newId = 'C' + Math.floor(1000000 + Math.random() * 9000000).toString();
+    const q = query(collection(db, 'affiliates'), where('commissionWalletId', '==', newId));
+    const snap = await getDocs(q);
+    if (snap.empty) isUnique = true;
+  }
+
+  if (affiliate.id) {
+    await updateDoc(doc(db, 'affiliates', affiliate.id), {
+      commissionWalletId: newId,
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  return newId;
+};
+
+/**
  * Searches for an affiliate by wallet ID.
  */
 export const findAffiliateByWalletId = async (walletId: string): Promise<Affiliate | null> => {

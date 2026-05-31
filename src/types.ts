@@ -91,7 +91,9 @@ export interface Affiliate {
   indirectRevenue: number;
   totalEarnings: number;
   totalWithdrawn?: number;
+  commissionBalance?: number;
   walletId?: string;
+  commissionWalletId?: string;
   info?: any;
   createdAt: any;
   updatedAt: any;

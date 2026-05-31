@@ -2648,7 +2648,7 @@ router.post('/api/client/purchase', requireDb, async (req, res) => {
       if (affSnap.exists) {
         const aff = affSnap.data()!;
         batch.update(affRef, {
-          balance: (aff.balance || 0) + amount,
+          commissionBalance: (aff.commissionBalance || 0) + amount,
           totalEarnings: (aff.totalEarnings || 0) + amount,
           monthlySales: (aff.monthlySales || 0) + amount,
           updatedAt: FieldValue.serverTimestamp(),
@@ -2718,7 +2718,7 @@ router.post('/api/admin/purchase/approve', requireDb, async (req, res) => {
       if (affSnap.exists) {
         const aff = affSnap.data()!;
         batch.update(affRef, {
-          balance: (aff.balance || 0) + amount,
+          commissionBalance: (aff.commissionBalance || 0) + amount,
           totalEarnings: (aff.totalEarnings || 0) + amount,
           monthlySales: (aff.monthlySales || 0) + amount,
           updatedAt: FieldValue.serverTimestamp(),

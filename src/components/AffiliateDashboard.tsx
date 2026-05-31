@@ -11,6 +11,7 @@ import {
   useNotifications,
   markNotificationAsRead,
   ensureWalletId,
+  ensureCommissionWalletId,
   submitTransfer,
   submitDepositRequest,
   useWalletTransactions,
@@ -446,10 +447,18 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
   const unreadCount = notifications.filter(n => !n.read).length;
   const recentTx = transactions.slice(0, 5);
 
+  // Ensure both wallet IDs exist
+  useEffect(() => {
+    if (affiliate && !affiliateLoading) {
+      if (!affiliate.walletId) ensureWalletId(affiliate).catch(() => {});
+      if (!affiliate.commissionWalletId) ensureCommissionWalletId(affiliate).catch(() => {});
+    }
+  }, [affiliate?.id, affiliateLoading]);
+
   const handleWithdraw = async () => {
     const amount = parseFloat(withdrawAmount);
     if (isNaN(amount) || amount <= 0) { toast.error('Montant invalide.'); return; }
-    const walletBalance = withdrawWallet === 'commissions' ? (affiliate!.totalEarnings || 0) : affiliate!.balance;
+    const walletBalance = withdrawWallet === 'commissions' ? (affiliate!.commissionBalance || 0) : affiliate!.balance;
     if (amount > walletBalance) { toast.error('Solde insuffisant.'); return; }
     const exchangeRate = settings?.exchangeRate || 146;
     const minWithdrawUSD = 20 / exchangeRate;
@@ -769,7 +778,8 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                       <button onClick={() => setDepositWallet('commissions')}
                         className={`flex-1 rounded-2xl px-3 py-2.5 text-left transition-all border-2 ${depositWallet === 'commissions' ? 'bg-white border-white shadow-lg' : 'bg-white/15 border-white/30 hover:bg-white/25'}`}>
                         <p className={`text-[9px] font-black uppercase tracking-widest ${depositWallet === 'commissions' ? 'text-amber-600' : 'text-white/70'}`}>Commissions</p>
-                        <p className={`text-base font-black ${depositWallet === 'commissions' ? 'text-amber-700' : 'text-white'}`}>{(affiliate.totalEarnings || 0).toFixed(2)} $</p>
+                        <p className={`text-base font-black ${depositWallet === 'commissions' ? 'text-amber-700' : 'text-white'}`}>{(affiliate.commissionBalance || 0).toFixed(2)} $</p>
+                        {affiliate.commissionWalletId && <p className={`text-[8px] font-mono mt-0.5 ${depositWallet === 'commissions' ? 'text-amber-500' : 'text-white/40'}`}>#{affiliate.commissionWalletId}</p>}
                       </button>
                     </div>
                   </div>
@@ -939,7 +949,8 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                       <button onClick={() => setWithdrawWallet('commissions')}
                         className={`flex-1 rounded-2xl px-3 py-2.5 text-left transition-all border-2 ${withdrawWallet === 'commissions' ? 'bg-white border-white shadow-lg' : 'bg-white/15 border-white/30 hover:bg-white/25'}`}>
                         <p className={`text-[9px] font-black uppercase tracking-widest ${withdrawWallet === 'commissions' ? 'text-amber-600' : 'text-white/70'}`}>Commissions</p>
-                        <p className={`text-base font-black ${withdrawWallet === 'commissions' ? 'text-amber-700' : 'text-white'}`}>{(affiliate.totalEarnings || 0).toFixed(2)} $</p>
+                        <p className={`text-base font-black ${withdrawWallet === 'commissions' ? 'text-amber-700' : 'text-white'}`}>{(affiliate.commissionBalance || 0).toFixed(2)} $</p>
+                        {affiliate.commissionWalletId && <p className={`text-[8px] font-mono mt-0.5 ${withdrawWallet === 'commissions' ? 'text-amber-500' : 'text-white/40'}`}>#{affiliate.commissionWalletId}</p>}
                       </button>
                     </div>
                   </div>
@@ -1083,7 +1094,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                         ))}
                       </div>
                       <p className="text-[10px] text-gray-400 font-bold">
-                        Solde {withdrawWallet === 'commissions' ? 'Commissions' : 'Principal'} : {withdrawWallet === 'commissions' ? (affiliate.totalEarnings || 0).toFixed(2) : (affiliate.balance || 0).toFixed(2)} $
+                        Solde {withdrawWallet === 'commissions' ? 'Commissions' : 'Principal'} : {withdrawWallet === 'commissions' ? (affiliate.commissionBalance || 0).toFixed(2) : (affiliate.balance || 0).toFixed(2)} $
                       </p>
                     </div>
 

@@ -48,7 +48,6 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
   const [clearingNotifs, setClearingNotifs] = useState(false);
   const formationsDropdownRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const notifPanelRef = useRef<HTMLDivElement>(null);
 
   const { notifications: clientNotifs, unreadCount: clientUnreadCount } = useClientNotifications(loggedClient?.id || null);
 
@@ -77,13 +76,10 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
       if (formationsDropdownRef.current && !formationsDropdownRef.current.contains(e.target as Node)) {
         setFormationsDropdownOpen(false);
       }
-      if (notifPanelRef.current && !notifPanelRef.current.contains(e.target as Node)) {
-        setShowNotifPanel(false);
-      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [menuOpen, formationsDropdownOpen, showNotifPanel]);
+  }, [menuOpen, formationsDropdownOpen]);
 
   useEffect(() => {
     if (menuOpen) document.body.style.overflow = 'hidden';
@@ -180,9 +176,9 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
             <div className="flex items-center gap-2 shrink-0">
               {/* Client notification bell */}
               {loggedClient && (
-                <div className="relative" ref={notifPanelRef}>
+                <>
                   <button
-                    onClick={() => setShowNotifPanel(v => !v)}
+                    onClick={() => setShowNotifPanel(true)}
                     className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors"
                     aria-label="Notifications"
                   >
@@ -193,22 +189,28 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                       </span>
                     )}
                   </button>
-                  {showNotifPanel && (
-                    <div className="absolute top-full right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+
+                  {/* Notification modal — centered popup */}
+                  <Dialog open={showNotifPanel} onOpenChange={v => { setShowNotifPanel(v); if (!v) setConfirmClearNotifs(false); }}>
+                    <DialogContent className="max-w-sm w-full rounded-3xl border-0 p-0 overflow-hidden shadow-2xl">
                       {/* Header */}
-                      <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50/50">
+                      <div className="flex items-center justify-between px-5 py-4 border-b bg-gradient-to-r from-primary/5 to-primary/10">
                         <div className="flex items-center gap-2">
-                          <Bell className="h-4 w-4 text-primary" />
-                          <span className="text-sm font-black text-dark">Notifications</span>
-                          {clientUnreadCount > 0 && (
-                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-primary text-white">{clientUnreadCount}</span>
-                          )}
+                          <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center">
+                            <Bell className="h-4 w-4 text-primary" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-gray-900">Notifications</p>
+                            {clientUnreadCount > 0 && (
+                              <p className="text-[10px] text-primary font-bold">{clientUnreadCount} non lue{clientUnreadCount > 1 ? 's' : ''}</p>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center gap-2">
                           {clientUnreadCount > 0 && (
                             <button
                               onClick={async () => { await markAllClientNotificationsRead(loggedClient.id!); }}
-                              className="text-[10px] text-primary font-bold hover:underline flex items-center gap-1"
+                              className="text-[10px] text-primary font-bold hover:underline flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-primary/10 transition-colors"
                             >
                               <CheckCheck className="h-3 w-3" /> Tout lire
                             </button>
@@ -217,11 +219,14 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                       </div>
 
                       {/* Notification list */}
-                      <div className="max-h-72 overflow-y-auto">
+                      <div className="max-h-[60vh] overflow-y-auto">
                         {clientNotifs.length === 0 ? (
-                          <div className="py-8 text-center text-gray-400 text-sm">
-                            <Bell className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                            <p>Aucune notification</p>
+                          <div className="py-12 text-center text-gray-400">
+                            <div className="h-16 w-16 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-3">
+                              <Bell className="h-8 w-8 opacity-30" />
+                            </div>
+                            <p className="text-sm font-semibold">Aucune notification</p>
+                            <p className="text-xs mt-1 text-gray-300">Tout est calme pour l'instant</p>
                           </div>
                         ) : (
                           clientNotifs.slice(0, 20).map(notif => {
@@ -230,24 +235,24 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                             const iconBg = notif.type === 'deposit_approved' ? 'bg-emerald-100' :
                               notif.type === 'withdrawal_approved' ? 'bg-blue-100' :
                               isRejected ? 'bg-red-100' : 'bg-gray-100';
-                            const titleColor = isApproved ? 'text-emerald-700' : isRejected ? 'text-red-700' : 'text-dark';
+                            const titleColor = isApproved ? 'text-emerald-700' : isRejected ? 'text-red-700' : 'text-gray-900';
                             return (
                               <button
                                 key={notif.id}
                                 onClick={() => markClientNotificationRead(notif.id!)}
-                                className={`w-full flex items-start gap-3 px-4 py-3 text-left border-b last:border-0 transition-colors ${notif.read ? 'hover:bg-gray-50' : 'bg-blue-50/50 hover:bg-blue-50'}`}
+                                className={`w-full flex items-start gap-3 px-5 py-3.5 text-left border-b last:border-0 transition-colors ${notif.read ? 'hover:bg-gray-50' : 'bg-blue-50/40 hover:bg-blue-50'}`}
                               >
-                                <div className={`shrink-0 mt-0.5 h-8 w-8 rounded-xl flex items-center justify-center ${iconBg}`}>
+                                <div className={`shrink-0 mt-0.5 h-9 w-9 rounded-2xl flex items-center justify-center ${iconBg}`}>
                                   {notif.type === 'deposit_approved' ? <TrendingUp className="h-4 w-4 text-emerald-600" /> :
                                    notif.type === 'withdrawal_approved' ? <TrendingDown className="h-4 w-4 text-blue-600" /> :
                                    isRejected ? <X className="h-4 w-4 text-red-600" /> :
                                    <Info className="h-4 w-4 text-gray-500" />}
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <p className={`text-xs font-black leading-snug ${notif.read ? 'text-gray-600' : titleColor}`}>{notif.title}</p>
-                                  <p className="text-[11px] text-gray-500 mt-0.5 leading-snug line-clamp-2">{notif.message}</p>
+                                  <p className={`text-xs font-black leading-snug ${notif.read ? 'text-gray-500' : titleColor}`}>{notif.title}</p>
+                                  <p className="text-[11px] text-gray-400 mt-0.5 leading-snug line-clamp-2">{notif.message}</p>
                                   {notif.createdAt && (
-                                    <p className="text-[9px] text-gray-400 mt-1">
+                                    <p className="text-[9px] text-gray-300 mt-1 font-semibold">
                                       {new Date(notif.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                                     </p>
                                   )}
@@ -261,10 +266,10 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
 
                       {/* Footer — delete history */}
                       {clientNotifs.length > 0 && (
-                        <div className="border-t px-4 py-2.5 flex items-center justify-end bg-gray-50/50">
+                        <div className="border-t px-5 py-3 flex items-center justify-end bg-gray-50/50">
                           {confirmClearNotifs ? (
                             <div className="flex items-center gap-2">
-                              <span className="text-[10px] text-red-500 font-bold">Supprimer tout ?</span>
+                              <span className="text-[11px] text-red-500 font-bold">Supprimer tout ?</span>
                               <button
                                 disabled={clearingNotifs}
                                 onClick={async () => {
@@ -273,13 +278,13 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                                   setClearingNotifs(false);
                                   setConfirmClearNotifs(false);
                                 }}
-                                className="text-[10px] font-black text-red-600 hover:text-red-800 px-2 py-0.5 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
+                                className="text-[11px] font-black text-red-600 hover:text-red-800 px-2.5 py-1 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
                               >
-                                {clearingNotifs ? '...' : 'Oui'}
+                                {clearingNotifs ? '...' : 'Confirmer'}
                               </button>
                               <button
                                 onClick={() => setConfirmClearNotifs(false)}
-                                className="text-[10px] font-bold text-gray-400 hover:text-gray-600 transition-colors"
+                                className="text-[11px] font-bold text-gray-400 hover:text-gray-600 transition-colors"
                               >
                                 Annuler
                               </button>
@@ -287,16 +292,16 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                           ) : (
                             <button
                               onClick={() => setConfirmClearNotifs(true)}
-                              className="text-[10px] font-bold text-gray-400 hover:text-red-500 flex items-center gap-1 transition-colors"
+                              className="text-[11px] font-bold text-gray-400 hover:text-red-500 flex items-center gap-1.5 transition-colors"
                             >
                               <Trash2 className="h-3 w-3" /> Supprimer l'historique
                             </button>
                           )}
                         </div>
                       )}
-                    </div>
-                  )}
-                </div>
+                    </DialogContent>
+                  </Dialog>
+                </>
               )}
 
               {/* Client wallet */}
