@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  ChevronLeft, Search, BookMarked, GraduationCap, X,
-  Wallet, LogIn, Menu, Grid3X3, Heart, Award, User
+  ChevronLeft, BookMarked, GraduationCap,
+  Wallet, LogIn, Menu, Grid3X3, Heart, Award, X
 } from 'lucide-react';
 import { Client } from '../types';
 import { useSettings } from '../services/parcelService';
@@ -24,7 +24,6 @@ export default function FormationsNavbar({
   activeTab, onTabChange, searchQuery, onSearch,
 }: FormationsNavbarProps) {
   const { settings } = useSettings();
-  const [searchFocused, setSearchFocused] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -112,30 +111,7 @@ export default function FormationsNavbar({
             </div>
           </div>
 
-          <div className="h-5 w-px bg-gray-100 shrink-0 hidden sm:block" />
-
-          {/* Search bar */}
-          <div className={`relative flex-1 transition-all duration-300 ${searchFocused ? 'max-w-full' : 'max-w-sm'}`}>
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none z-10" />
-            <input
-              type="text"
-              placeholder="Rechercher un cours…"
-              value={searchQuery}
-              onChange={e => onSearch(e.target.value)}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
-              className="w-full h-9 pl-9 pr-8 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:bg-white focus:border-violet-300 transition-all"
-            />
-            {searchQuery && (
-              <button
-                onMouseDown={e => e.preventDefault()}
-                onClick={() => onSearch('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 z-10"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
+          <div className="flex-1" />
 
           {/* Right: avatar + burger */}
           <div className="flex items-center gap-1.5 shrink-0">
