@@ -441,87 +441,25 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
         </div>
       )}
 
-      {/* ── TAB BAR ─────────────────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-gray-100 sticky top-14 z-30 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-1">
-            <button
-              onClick={() => onTabChange('all')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${activeTab === 'all' ? 'text-violet-700 bg-violet-50' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
-            >
-              <Grid className="h-4 w-4" /> Catalogue
-            </button>
-            <button
-              onClick={() => onTabChange('my')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all relative ${activeTab === 'my' ? 'text-violet-700 bg-violet-50' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
-            >
-              <BookMarked className="h-4 w-4" />
-              Mes cours
+      {/* ── "Mes cours" sub-header (only on my tab) ─────────────────────────── */}
+      {activeTab === 'my' && loggedClient && (
+        <div className="bg-white border-b border-gray-100 px-4 sticky top-14 z-30">
+          <div className="max-w-7xl mx-auto flex items-center justify-between py-2.5">
+            <div className="flex items-center gap-2">
+              <BookMarked className="h-4 w-4 text-violet-600" />
+              <span className="font-black text-gray-900 text-sm">Mes Cours</span>
               {myCourses.length > 0 && (
-                <span className="bg-violet-600 text-white text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full">
-                  {myCourses.length}
+                <span className="bg-violet-100 text-violet-700 text-[10px] font-black px-2 py-0.5 rounded-full">
+                  {myCourses.length} actif{myCourses.length > 1 ? 's' : ''}
                 </span>
-              )}
-            </button>
-            <div className="flex-1" />
-            <button
-              onClick={() => setShowFilters(v => !v)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${showFilters ? 'bg-violet-50 text-violet-700 border-violet-200' : 'text-gray-500 border-gray-200 hover:border-gray-300'}`}
-            >
-              <Filter className="h-3.5 w-3.5" /> Filtres
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── STUDENT FEATURES BAR ─────────────────────────────────────────── */}
-      {loggedClient && (
-        <div className="bg-violet-50 border-b border-violet-100 px-4 py-3">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
-              {/* Stats pills */}
-              <div className="flex items-center gap-1.5 bg-white rounded-full px-3 py-1.5 border border-violet-100 shrink-0">
-                <BookMarked className="h-3.5 w-3.5 text-violet-500" />
-                <span className="text-xs font-black text-violet-700">{myCourses.length}</span>
-                <span className="text-[10px] text-gray-400 font-semibold">inscrits</span>
-              </div>
-              <div className="flex items-center gap-1.5 bg-white rounded-full px-3 py-1.5 border border-violet-100 shrink-0">
-                <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
-                <span className="text-xs font-black text-emerald-700">
-                  {myCourses.filter(f => (progressMap[f.id!] ?? 0) > 0 && (progressMap[f.id!] ?? 0) < 100).length}
-                </span>
-                <span className="text-[10px] text-gray-400 font-semibold">en cours</span>
-              </div>
-              <div className="flex items-center gap-1.5 bg-white rounded-full px-3 py-1.5 border border-violet-100 shrink-0">
-                <Trophy className="h-3.5 w-3.5 text-amber-500" />
-                <span className="text-xs font-black text-amber-700">
-                  {myCourses.filter(f => (progressMap[f.id!] ?? 0) >= 100).length}
-                </span>
-                <span className="text-[10px] text-gray-400 font-semibold">terminés</span>
-              </div>
-              {/* Continue learning shortcut */}
-              {myCourses.find(f => (progressMap[f.id!] ?? 0) > 0 && (progressMap[f.id!] ?? 0) < 100) && (() => {
-                const inProgress = myCourses.find(f => (progressMap[f.id!] ?? 0) > 0 && (progressMap[f.id!] ?? 0) < 100)!;
-                return (
-                  <button
-                    onClick={() => { enterPlayer(inProgress); }}
-                    className="flex items-center gap-2 ml-auto bg-violet-600 hover:bg-violet-700 text-white rounded-full px-3 py-1.5 text-xs font-black shrink-0 transition-colors"
-                  >
-                    <Play className="h-3 w-3 fill-white" />
-                    Reprendre · {inProgress.title.slice(0, 20)}{inProgress.title.length > 20 ? '…' : ''}
-                    <span className="ml-1 opacity-80">{progressMap[inProgress.id!]}%</span>
-                  </button>
-                );
-              })()}
-              {/* Favorites shortcut */}
-              {favorites.length > 0 && (
-                <div className="flex items-center gap-1.5 bg-white rounded-full px-3 py-1.5 border border-rose-100 shrink-0">
-                  <Heart className="h-3.5 w-3.5 text-rose-500 fill-rose-500" />
-                  <span className="text-xs font-black text-rose-700">{favorites.length}</span>
-                  <span className="text-[10px] text-gray-400 font-semibold">favoris</span>
-                </div>
               )}
             </div>
+            <button
+              onClick={() => onTabChange('all')}
+              className="text-xs text-violet-600 font-bold flex items-center gap-1 hover:gap-1.5 transition-all"
+            >
+              Catalogue <ChevronRight className="h-3 w-3" />
+            </button>
           </div>
         </div>
       )}
@@ -802,6 +740,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                   onDetails={openDetail}
                   onOpenWallet={onOpenWallet}
                   onTabChange={onTabChange}
+                  allFormations={formations}
                 />
               )}
             </motion.div>
@@ -977,107 +916,273 @@ function InProgressCard({ formation, pct, onContinue, onDetails, i }: {
   );
 }
 
-function StudentDashboard({ loggedClient, myCourses, progressMap, favorites, onPlay, onDetails, onOpenWallet, onTabChange }: {
+// Category color pills for the "Mes cours" cards
+const categoryColors: Record<string, { bg: string; text: string }> = {
+  default: { bg: 'bg-indigo-900', text: 'text-indigo-200' },
+  développement: { bg: 'bg-slate-800', text: 'text-slate-200' },
+  development: { bg: 'bg-slate-800', text: 'text-slate-200' },
+  marketing: { bg: 'bg-rose-800', text: 'text-rose-200' },
+  design: { bg: 'bg-blue-800', text: 'text-blue-200' },
+  business: { bg: 'bg-amber-700', text: 'text-amber-100' },
+  trading: { bg: 'bg-emerald-800', text: 'text-emerald-200' },
+  finance: { bg: 'bg-emerald-800', text: 'text-emerald-200' },
+  ia: { bg: 'bg-violet-800', text: 'text-violet-200' },
+};
+
+function getCategoryColors(cat?: string) {
+  if (!cat) return categoryColors.default;
+  const key = cat.toLowerCase();
+  for (const k of Object.keys(categoryColors)) {
+    if (key.includes(k)) return categoryColors[k];
+  }
+  return categoryColors.default;
+}
+
+function StudentDashboard({ loggedClient, myCourses, progressMap, favorites, onPlay, onDetails, onOpenWallet, onTabChange, allFormations }: {
   loggedClient: Client; myCourses: Formation[]; progressMap: Record<string, number>;
   favorites: Formation[]; onPlay: (f: Formation) => void; onDetails: (f: Formation) => void;
-  onOpenWallet: () => void; onTabChange: (t: 'all' | 'my') => void;
+  onOpenWallet: () => void; onTabChange: (t: 'all' | 'my') => void; allFormations: Formation[];
 }) {
-  const completedCount = myCourses.filter(f => (progressMap[f.id!] ?? 0) >= 100).length;
-  const avgProgress = myCourses.length > 0 ? Math.round(myCourses.reduce((s, f) => s + (progressMap[f.id!] ?? 0), 0) / myCourses.length) : 0;
+  const [subTab, setSubTab] = useState<'all' | 'inprogress' | 'done'>('all');
+  const [localSearch, setLocalSearch] = useState('');
+
+  const inProgress = myCourses.filter(f => (progressMap[f.id!] ?? 0) > 0 && (progressMap[f.id!] ?? 0) < 100);
+  const completed = myCourses.filter(f => (progressMap[f.id!] ?? 0) >= 100);
+  const notStarted = myCourses.filter(f => (progressMap[f.id!] ?? 0) === 0);
+
+  const visibleCourses = (() => {
+    let base = subTab === 'inprogress' ? inProgress : subTab === 'done' ? completed : myCourses;
+    if (localSearch.trim()) {
+      const q = localSearch.toLowerCase();
+      base = base.filter(f => f.title.toLowerCase().includes(q) || (f.instructor || '').toLowerCase().includes(q));
+    }
+    return base;
+  })();
+
+  const recommended = allFormations
+    .filter(f => !myCourses.find(m => m.id === f.id))
+    .sort((a, b) => (b.studentsCount || 0) - (a.studentsCount || 0))
+    .slice(0, 6);
 
   return (
-    <div className="space-y-8">
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: 'Cours achetés', value: myCourses.length, icon: <BookOpen className="h-5 w-5 text-violet-500" />, bg: 'bg-violet-50' },
-          { label: 'Terminés', value: completedCount, icon: <Trophy className="h-5 w-5 text-amber-500" />, bg: 'bg-amber-50' },
-          { label: 'Progression moy.', value: `${avgProgress}%`, icon: <BarChart3 className="h-5 w-5 text-emerald-500" />, bg: 'bg-emerald-50' },
-          { label: 'Favoris', value: favorites.length, icon: <Heart className="h-5 w-5 text-rose-500" />, bg: 'bg-rose-50' },
-        ].map(s => (
-          <div key={s.label} className={`${s.bg} rounded-2xl p-4 border border-white`}>
-            <div className="mb-2">{s.icon}</div>
-            <p className="text-2xl font-black text-gray-900">{s.value}</p>
-            <p className="text-xs text-gray-500 font-semibold mt-0.5">{s.label}</p>
-          </div>
+    <div className="space-y-6">
+
+      {/* ── Search bar */}
+      <div className="relative">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+        <input
+          type="text"
+          placeholder="Rechercher dans mes cours..."
+          value={localSearch}
+          onChange={e => setLocalSearch(e.target.value)}
+          className="w-full h-11 pl-10 pr-4 rounded-2xl bg-white border border-gray-200 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-400/40 focus:border-violet-300 transition-all shadow-sm"
+        />
+        {localSearch && (
+          <button onClick={() => setLocalSearch('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {/* ── Sub-tabs */}
+      <div className="flex items-center gap-2">
+        {([
+          { id: 'all', label: 'Tous', count: myCourses.length },
+          { id: 'inprogress', label: 'En cours', count: inProgress.length },
+          { id: 'done', label: 'Terminés', count: completed.length },
+        ] as { id: 'all' | 'inprogress' | 'done'; label: string; count: number }[]).map(t => (
+          <button
+            key={t.id}
+            onClick={() => setSubTab(t.id)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+              subTab === t.id
+                ? 'bg-violet-600 text-white shadow-sm shadow-violet-400/30'
+                : 'bg-white border border-gray-200 text-gray-500 hover:border-violet-300 hover:text-violet-600'
+            }`}
+          >
+            {t.label}
+            {t.count > 0 && (
+              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+                subTab === t.id ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+              }`}>
+                {t.count}
+              </span>
+            )}
+          </button>
         ))}
       </div>
 
-      {/* My courses in progress */}
-      <div>
-        <h3 className="text-base font-black text-gray-900 mb-4">Mes cours en cours</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {myCourses.map((f, i) => {
+      {/* ── Course cards (reference style: full-width, large) */}
+      {visibleCourses.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-3xl border border-gray-100">
+          <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-3">
+            <BookOpen className="h-7 w-7 text-gray-400" />
+          </div>
+          <p className="font-black text-gray-700 mb-1">
+            {subTab === 'inprogress' ? 'Aucun cours en cours' : subTab === 'done' ? 'Aucun cours terminé' : 'Aucun résultat'}
+          </p>
+          <p className="text-sm text-gray-400">
+            {subTab === 'all' && localSearch ? 'Essayez un autre mot-clé.' : 'Explorez le catalogue pour commencer.'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {subTab === 'all' && inProgress.length > 0 && !localSearch && (
+            <h3 className="text-sm font-black text-gray-500 uppercase tracking-wider pt-1">Continuer l'apprentissage</h3>
+          )}
+          {visibleCourses.map((f, i) => {
             const pct = progressMap[f.id!] ?? 0;
+            const catColors = getCategoryColors(f.category);
             return (
-              <motion.div key={f.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow">
-                <div className="relative h-40 overflow-hidden shrink-0">
+              <motion.div
+                key={f.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05, ease: [0.22, 1, 0.36, 1] }}
+                className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden"
+              >
+                {/* Category pill */}
+                {f.category && (
+                  <div className="px-5 pt-4 pb-0">
+                    <span className={`inline-block text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${catColors.bg} ${catColors.text}`}>
+                      {f.category}
+                    </span>
+                  </div>
+                )}
+
+                {/* Cover image */}
+                <div className="relative h-44 mx-4 mt-3 rounded-2xl overflow-hidden">
                   {f.coverImage ? (
                     <img src={f.coverImage} alt={f.title} className="w-full h-full object-cover" />
                   ) : (
                     <div className={`w-full h-full bg-gradient-to-br ${levelGradients[f.level] || 'from-violet-500 to-purple-700'} flex items-center justify-center`}>
-                      <GraduationCap className="h-12 w-12 text-white/20" />
+                      <GraduationCap className="h-14 w-14 text-white/20" />
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-                  {f.category && (
-                    <span className="absolute top-3 left-3 text-[10px] font-black text-violet-300 uppercase tracking-wider">{f.category}</span>
-                  )}
                   {pct === 100 && (
-                    <div className="absolute top-3 right-3 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <div className="absolute top-3 right-3 bg-emerald-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-lg">
                       <Trophy className="h-2.5 w-2.5" /> Terminé
                     </div>
                   )}
                 </div>
-                <div className="p-4 flex flex-col flex-1">
-                  <h4 className="font-black text-gray-900 text-sm mb-1 line-clamp-2">{f.title}</h4>
-                  {f.instructor && <p className="text-xs text-gray-400 mb-3">{f.instructor}</p>}
-                  <div className="mb-1">
+
+                {/* Card body */}
+                <div className="px-5 pt-4 pb-5">
+                  <h4 className="font-black text-gray-900 text-base leading-snug mb-1 line-clamp-2">{f.title}</h4>
+                  {f.instructor && (
+                    <p className="text-xs text-gray-400 mb-3 flex items-center gap-1">
+                      <User className="h-3 w-3" /> {f.instructor}
+                    </p>
+                  )}
+
+                  {/* Progress */}
+                  <div className="mb-1.5">
                     <ProgressBar pct={pct} />
                   </div>
-                  <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
-                    <span>{pct}% complété</span>
-                    <span>{(f.modules || []).length} modules</span>
+                  <div className="flex items-center justify-between text-xs mb-4">
+                    <span className="text-gray-500 font-semibold">{pct}% terminé</span>
+                    <span className="text-gray-400">{(f.modules || []).length} modules</span>
                   </div>
-                  <div className="flex gap-2 mt-auto">
-                    <button onClick={() => onPlay(f)}
-                      className="flex-1 h-9 bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5">
-                      <Play className="h-3.5 w-3.5 fill-white" /> {pct > 0 ? 'Continuer' : 'Commencer'}
-                    </button>
-                    <button onClick={() => onDetails(f)} className="h-9 px-3 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs transition-colors">
-                      Détails
-                    </button>
-                  </div>
+
+                  {/* CTA button */}
+                  <button
+                    onClick={() => onPlay(f)}
+                    className="w-full h-11 bg-gray-900 hover:bg-gray-800 text-white font-black text-sm rounded-xl transition-colors flex items-center justify-center gap-2"
+                  >
+                    {pct === 0 ? 'Commencer le cours' : pct === 100 ? 'Revoir le cours' : 'Continuer le cours'}
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
                 </div>
               </motion.div>
             );
           })}
         </div>
-      </div>
+      )}
 
-      {/* Favorites */}
-      {favorites.length > 0 && (
+      {/* ── Not started (only on "Tous" tab) */}
+      {subTab === 'all' && !localSearch && notStarted.length > 0 && (
         <div>
-          <h3 className="text-base font-black text-gray-900 mb-4 flex items-center gap-2">
-            <Heart className="h-4 w-4 text-rose-500 fill-rose-500" /> Mes favoris
-          </h3>
-          <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-50">
-            {favorites.map(f => (
-              <div key={f.id} className="flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => onDetails(f)}>
-                <div className={`h-10 w-10 rounded-xl overflow-hidden shrink-0 bg-gradient-to-br ${levelGradients[f.level] || 'from-violet-500 to-purple-700'} flex items-center justify-center`}>
-                  {f.coverImage ? <img src={f.coverImage} alt={f.title} className="w-full h-full object-cover" /> : <GraduationCap className="h-5 w-5 text-white/40" />}
+          <h3 className="text-sm font-black text-gray-500 uppercase tracking-wider mb-3">Pas encore commencé</h3>
+          <div className="space-y-3">
+            {notStarted.map(f => (
+              <div
+                key={f.id}
+                onClick={() => onPlay(f)}
+                className="bg-white rounded-2xl border border-gray-100 flex items-center gap-3 p-3 cursor-pointer hover:shadow-sm transition-all"
+              >
+                <div className={`h-14 w-14 rounded-xl overflow-hidden shrink-0 bg-gradient-to-br ${levelGradients[f.level] || 'from-violet-500 to-purple-700'} flex items-center justify-center`}>
+                  {f.coverImage
+                    ? <img src={f.coverImage} alt={f.title} className="w-full h-full object-cover" />
+                    : <GraduationCap className="h-7 w-7 text-white/30" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-gray-900 text-sm truncate">{f.title}</p>
-                  <p className="text-xs text-gray-400">{f.totalDuration || `${(f.modules || []).length} modules`}</p>
+                  <p className="font-black text-gray-900 text-sm truncate">{f.title}</p>
+                  <p className="text-xs text-gray-400">{(f.modules || []).length} modules · {f.totalDuration || '—'}</p>
                 </div>
-                <ChevronRight className="h-4 w-4 text-gray-300 shrink-0" />
+                <div className="h-9 w-9 rounded-full bg-violet-50 flex items-center justify-center shrink-0">
+                  <Play className="h-4 w-4 text-violet-600 fill-violet-600 ml-0.5" />
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
+
+      {/* ── Recommended for you */}
+      {recommended.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-black text-gray-900">Recommandé pour vous</h3>
+            <button onClick={() => onTabChange('all')} className="text-xs text-violet-600 font-bold flex items-center gap-1">
+              Voir tout <ChevronRight className="h-3 w-3" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {recommended.slice(0, 4).map((f, i) => (
+              <motion.div
+                key={f.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 + i * 0.06 }}
+                onClick={() => onDetails(f)}
+                className="bg-white rounded-2xl border border-gray-100 overflow-hidden cursor-pointer hover:shadow-md transition-all"
+              >
+                <div className="relative h-28 overflow-hidden">
+                  {f.coverImage ? (
+                    <img src={f.coverImage} alt={f.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className={`w-full h-full bg-gradient-to-br ${levelGradients[f.level] || 'from-violet-500 to-purple-700'} flex items-center justify-center`}>
+                      <GraduationCap className="h-8 w-8 text-white/20" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                </div>
+                <div className="p-3">
+                  <p className="font-black text-gray-900 text-xs line-clamp-2 leading-snug mb-1">{f.title}</p>
+                  <p className="text-[10px] text-gray-400">{f.totalDuration || `${(f.modules || []).length} modules`}</p>
+                  {f.instructor && <p className="text-[10px] text-gray-400 truncate">Par {f.instructor}</p>}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Certificate banner */}
+      <div className="rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-700 to-purple-900 p-6 text-white shadow-lg">
+        <Award className="h-9 w-9 mb-3 text-amber-300" />
+        <h4 className="text-base font-black mb-1">Certificats Rena Academy</h4>
+        <p className="text-white/70 text-sm mb-4 leading-relaxed">
+          Complétez une formation pour obtenir votre certificat reconnu.
+        </p>
+        <button
+          onClick={onOpenWallet}
+          className="bg-white text-violet-700 font-black text-sm px-5 py-2.5 rounded-full hover:bg-violet-50 active:scale-95 transition-all inline-flex items-center gap-2 shadow-md"
+        >
+          👉 Voir mes certificats
+        </button>
+      </div>
+
     </div>
   );
 }
