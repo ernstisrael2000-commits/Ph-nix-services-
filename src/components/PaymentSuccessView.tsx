@@ -17,8 +17,36 @@ export default function PaymentSuccessView({ referenceId, onClose }: Props) {
   const [attempts, setAttempts] = useState(0);
   const MAX = 40;
 
+  // On mount: call /verify first (asks MonCash API directly) then fall back to polling /status
   useEffect(() => {
-    if (status === 'completed' || status === 'failed' || status === 'cancelled') return;
+    let cancelled = false;
+    async function verifyNow() {
+      try {
+        const res  = await fetch('/api/payments/moncash/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ referenceId }),
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.status === 'completed') {
+          setUsd(data.usdAmount); setHtg(data.htgAmount); setStatus('completed');
+        } else if (data.status === 'failed' || data.status === 'cancelled') {
+          setStatus(data.status);
+        } else {
+          setStatus('pending');
+        }
+      } catch {
+        if (!cancelled) setStatus('pending');
+      }
+    }
+    verifyNow();
+    return () => { cancelled = true; };
+  }, [referenceId]);
+
+  // Polling fallback while pending
+  useEffect(() => {
+    if (status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'checking') return;
     const timer = setTimeout(async () => {
       try {
         const res  = await fetch(`/api/payments/moncash/status/${referenceId}`);
@@ -126,8 +154,8 @@ export default function PaymentSuccessView({ referenceId, onClose }: Props) {
             <div className="bg-red-50 border border-red-100 rounded-2xl p-4 text-center">
               <p className="text-sm text-red-700 font-bold leading-relaxed">
                 {status === 'cancelled'
-                  ? 'Vous avez annulé le paiement. Aucun montant n\'a été débité.'
-                  : 'Le paiement n\'a pas pu être traité. Aucun montant n\'a été débité.'}
+                  ? "Vous avez annulé le paiement. Aucun montant n'a été débité."
+                  : "Le paiement n'a pas pu être traité. Aucun montant n'a été débité."}
               </p>
             </div>
           )}
