@@ -4682,38 +4682,19 @@ router.post('/api/affiliate/scan-tx-code', requireDb, async (req, res) => {
   }
 });
 
-// ── MonCash Payment Integration ───────────────────────────────────────────────
-const MONCASH_CLIENT_ID      = process.env.MONCASH_CONNECT_PUBLIC_KEY  || process.env.MONCASH_PUBLIC_KEY          || '';
-const MONCASH_CLIENT_SECRET  = process.env.MONCASH_CONNECT_SECRET_KEY  || process.env.MONCASH_SECRET_KEY          || '';
-const MONCASH_WEBHOOK_SECRET = process.env.MONCASH_WEBHOOK_SECRET      || '';
-const MONCASH_MODE           = process.env.MONCASH_MODE                || 'live';
-const MONCASH_REST_BASE      = MONCASH_MODE === 'sandbox'
-  ? 'https://sandbox.moncashbutton.digicelgroup.com/Api'
-  : 'https://moncashbutton.digicelgroup.com/Api';
-const MONCASH_GATEWAY_BASE   = MONCASH_MODE === 'sandbox'
-  ? 'https://sandbox.moncashbutton.digicelgroup.com/Moncash-middleware'
-  : 'https://moncashbutton.digicelgroup.com/Moncash-middleware';
+// ── MonCash Connect Payment Integration ───────────────────────────────────────
+// MonCashConnect (moncashconnect.com) is an independent gateway — NOT Digicel's API.
+// Auth: simple Bearer token with the secret key — no OAuth2.
+const MCC_SECRET_KEY     = process.env.MONCASH_CONNECT_SECRET_KEY || process.env.MONCASH_SECRET_KEY || '';
+const MCC_WEBHOOK_SECRET = process.env.MONCASH_WEBHOOK_SECRET     || '';
+const MCC_BASE_URL       = process.env.MONCASH_CONNECT_BASE_URL   || 'https://api.moncashconnect.ht';
 
-// Cache the OAuth token in memory (expires in ~60s per MonCash docs)
-let _moncashToken: string | null = null;
-let _moncashTokenExp = 0;
-
-async function getMoncashToken(): Promise<string> {
-  if (_moncashToken && Date.now() < _moncashTokenExp) return _moncashToken;
-  const creds = Buffer.from(`${MONCASH_CLIENT_ID}:${MONCASH_CLIENT_SECRET}`).toString('base64');
-  const res = await fetch(`${MONCASH_REST_BASE}/oauth/token`, {
-    method: 'POST',
-    headers: { 'Accept': 'application/json', 'Authorization': `Basic ${creds}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'scope=read,write&grant_type=client_credentials',
-  });
-  if (!res.ok) {
-    const err: any = await res.json().catch(() => ({}));
-    throw new Error(err.error_description || err.error || `MonCash auth failed: ${res.status}`);
-  }
-  const data: any = await res.json();
-  _moncashToken    = data.access_token;
-  _moncashTokenExp = Date.now() + (Number(data.expires_in || 55) - 5) * 1000;
-  return _moncashToken!;
+function mccHeaders() {
+  return {
+    'Content-Type' : 'application/json',
+    'Accept'       : 'application/json',
+    'Authorization': `Bearer ${MCC_SECRET_KEY}`,
+  };
 }
 
 function generateMoncashRef(): string {
@@ -4729,7 +4710,7 @@ router.post('/api/payments/moncash/initiate', requireDb, async (req, res) => {
     const { clientId, clientName, clientWalletId, htgAmount, exchangeRate } = req.body;
     if (!clientId || !clientName || !htgAmount)
       return res.status(400).json({ error: 'Paramètres manquants.' });
-    if (!MONCASH_CLIENT_ID || !MONCASH_CLIENT_SECRET)
+    if (!MCC_SECRET_KEY)
       return res.status(503).json({ error: "Service MonCash non configuré. Contactez l'administrateur." });
 
     const htg = Number(htgAmount);
@@ -4757,32 +4738,35 @@ router.post('/api/payments/moncash/initiate', requireDb, async (req, res) => {
       if (!ex.exists) unique = true;
     }
 
-    // Step 1: get OAuth2 token
-    const token = await getMoncashToken();
+    const proto     = (req.headers['x-forwarded-proto'] as string) || 'https';
+    const host      = (req.headers['x-forwarded-host']  as string) || (req.headers.host as string) || '';
+    const returnUrl = `${proto}://${host}/?moncash_ref=${referenceId}`;
 
-    // Step 2: create payment → MonCash returns a short-lived token
-    const mcRes = await fetch(`${MONCASH_REST_BASE}/v1/CreatePayment`, {
+    // MonCashConnect API: POST /pay-create → returns { paymentUrl, referenceId }
+    const mcRes = await fetch(`${MCC_BASE_URL}/pay-create`, {
       method : 'POST',
-      headers: { 'Accept': 'application/json', 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ amount: htg, orderId: referenceId }),
+      headers: mccHeaders(),
+      body   : JSON.stringify({ amount: htg, referenceId, returnUrl }),
     });
-    const mcData: any = await mcRes.json().catch(() => ({}));
-    if (!mcRes.ok || !mcData.payment_token?.token)
-      return res.status(502).json({ error: mcData.message || mcData.error || "Impossible d'initier le paiement MonCash." });
+    const rawText = await mcRes.text();
+    console.log(`[moncash/initiate] mcc status=${mcRes.status} body=${rawText.slice(0, 400)}`);
 
-    const paymentToken = mcData.payment_token.token;
-    const paymentUrl   = `${MONCASH_GATEWAY_BASE}/Payment/Redirect?token=${paymentToken}`;
+    let mcData: any = {};
+    try { mcData = JSON.parse(rawText); } catch {}
+
+    if (!mcRes.ok || !mcData.paymentUrl)
+      return res.status(502).json({ error: mcData.message || mcData.error || "Impossible d'initier le paiement MonCash." });
 
     await adminDb.collection('moncash_deposits').doc(referenceId).set({
       clientId, clientName, clientWalletId: clientWalletId || '',
       referenceId, htgAmount: htg, usdAmount, exchangeRate: rate,
-      status: 'pending', provider: 'moncash', mode: MONCASH_MODE, webhookReceived: false,
-      paymentToken, paymentUrl,
+      status: 'pending', provider: 'moncashconnect', webhookReceived: false,
+      paymentUrl: mcData.paymentUrl,
       createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
     });
 
-    console.log(`[moncash/initiate] ref=${referenceId} htg=${htg} usd=${usdAmount} client=${clientId} mode=${MONCASH_MODE}`);
-    res.json({ success: true, paymentUrl, referenceId });
+    console.log(`[moncash/initiate] ✅ ref=${referenceId} htg=${htg} usd=${usdAmount} client=${clientId}`);
+    res.json({ success: true, paymentUrl: mcData.paymentUrl, referenceId });
   } catch (e: any) {
     console.error('[moncash/initiate]', e);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
@@ -4801,12 +4785,12 @@ router.get('/api/payments/moncash/status/:referenceId', requireDb, async (req, r
   }
 });
 
-// POST /api/payments/moncash/verify  — verify payment directly with MonCash API by orderId
+// POST /api/payments/moncash/verify  — verify payment directly with MonCashConnect API
 router.post('/api/payments/moncash/verify', requireDb, async (req, res) => {
   try {
     const { referenceId } = req.body;
     if (!referenceId) return res.status(400).json({ error: 'referenceId manquant.' });
-    if (!MONCASH_CLIENT_ID || !MONCASH_CLIENT_SECRET)
+    if (!MCC_SECRET_KEY)
       return res.status(503).json({ error: 'MonCash non configuré.' });
 
     const snap = await adminDb.collection('moncash_deposits').doc(referenceId).get();
@@ -4814,16 +4798,19 @@ router.post('/api/payments/moncash/verify', requireDb, async (req, res) => {
     const d = snap.data()!;
     if (d.status !== 'pending') return res.json({ referenceId, status: d.status, usdAmount: d.usdAmount, htgAmount: d.htgAmount });
 
-    const token = await getMoncashToken();
-    const mcRes = await fetch(`${MONCASH_REST_BASE}/v1/RetrieveOrderPayment`, {
+    // MonCashConnect: POST /pay-check or GET /pay-status/:referenceId
+    const mcRes = await fetch(`${MCC_BASE_URL}/pay-check`, {
       method : 'POST',
-      headers: { 'Accept': 'application/json', 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ orderId: referenceId }),
+      headers: mccHeaders(),
+      body   : JSON.stringify({ referenceId }),
     });
-    const mcData: any = await mcRes.json().catch(() => ({}));
+    const rawText = await mcRes.text();
+    console.log(`[moncash/verify] mcc status=${mcRes.status} body=${rawText.slice(0, 300)}`);
+    let mcData: any = {};
+    try { mcData = JSON.parse(rawText); } catch {}
 
-    const mcStatus = (mcData?.payment?.message || '').toLowerCase();
-    const transactionId = mcData?.payment?.transaction_id || '';
+    const mcStatus = (mcData?.status || mcData?.payment?.status || '').toLowerCase();
+    const transactionId = mcData?.transactionId || mcData?.transaction_id || mcData?.payment?.transaction_id || '';
 
     if (['transaction_success', 'success'].includes(mcStatus) || mcData?.payment?.cost > 0) {
       // Payment confirmed — trigger same logic as webhook
@@ -4901,7 +4888,7 @@ router.post('/api/webhooks/moncash', async (req, res) => {
   try {
     const rawBody: string = (req as any).rawBody || JSON.stringify(req.body);
 
-    if (MONCASH_WEBHOOK_SECRET) {
+    if (MCC_WEBHOOK_SECRET) {
       const sigHeader = (
         req.headers['x-moncash-signature'] ||
         req.headers['x-webhook-signature']  ||
@@ -4911,7 +4898,7 @@ router.post('/api/webhooks/moncash', async (req, res) => {
         console.warn('[webhook/moncash] Missing signature header');
         return res.status(401).json({ error: 'Signature manquante.' });
       }
-      const expected = createHmac('sha256', MONCASH_WEBHOOK_SECRET).update(rawBody).digest('hex');
+      const expected = createHmac('sha256', MCC_WEBHOOK_SECRET).update(rawBody).digest('hex');
       const sig = sigHeader.replace(/^sha256=/, '');
       if (sig !== expected) {
         console.warn('[webhook/moncash] Invalid HMAC signature');
