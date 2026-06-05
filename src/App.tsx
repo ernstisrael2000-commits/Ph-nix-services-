@@ -46,6 +46,7 @@ export default function App() {
   const [formationsSearch, setFormationsSearch] = useState('');
   const [formationsInPlayer, setFormationsInPlayer] = useState(false);
   const [moncashReturnRef, setMoncashReturnRef] = useState<string | null>(null);
+  const [isProductDetailOpen, setIsProductDetailOpen] = useState(false);
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(() =>
     window.location.pathname === '/payment-success'
   );
@@ -287,7 +288,7 @@ export default function App() {
         </AnimatePresence>
         
         {/* ── Bottom Nav — hidden on dashboard and formations views ── */}
-        {!['admin', 'affiliate', 'formations'].includes(view) && (
+        {!['admin', 'affiliate', 'formations'].includes(view) && !isProductDetailOpen && (
           <BottomNav
             currentView={view}
             onViewChange={handleViewChange}
@@ -330,6 +331,7 @@ export default function App() {
               loggedClient={loggedClient}
               onOpenWallet={() => setShowClientDashboard(true)}
               onViewChange={handleViewChange}
+              onProductDetailChange={setIsProductDetailOpen}
             />
           )}
 

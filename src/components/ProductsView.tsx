@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as LucideIcons from 'lucide-react';
 import {
@@ -80,11 +80,12 @@ interface ProductsViewProps {
   loggedClient?: Client | null;
   onOpenWallet?: () => void;
   onViewChange: (view: any) => void;
+  onProductDetailChange?: (open: boolean) => void;
 }
 
 type TabKey = 'cards' | 'games' | 'products';
 
-export default function ProductsView({ loggedClient, onOpenWallet, onViewChange }: ProductsViewProps) {
+export default function ProductsView({ loggedClient, onOpenWallet, onViewChange, onProductDetailChange }: ProductsViewProps) {
   const { products, loading: productsLoading } = useProducts();
   const { games, loading: gamesLoading } = useGames();
   const { cards, loading: cardsLoading } = useCardTopups();
@@ -114,6 +115,10 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange 
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [isProductDetailOpen, setIsProductDetailOpen] = useState(false);
   const [customAmountUSD, setCustomAmountUSD] = useState('');
+
+  useEffect(() => {
+    onProductDetailChange?.(isProductDetailOpen);
+  }, [isProductDetailOpen]);
 
   // Game catalog
   const [selectedGame, setSelectedGame] = useState<any>(null);
