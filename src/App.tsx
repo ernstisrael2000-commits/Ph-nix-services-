@@ -12,6 +12,7 @@ import ServicesView from './components/ServicesView';
 import AffiliateLogin from './components/AffiliateLogin';
 import AffiliateDashboard from './components/AffiliateDashboard';
 import ClientDashboard from './components/ClientDashboard';
+import PaymentSuccessView from './components/PaymentSuccessView';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 import LoadingScreen from './components/LoadingScreen';
 import { Toaster } from './components/ui/sonner';
@@ -43,6 +44,7 @@ export default function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [formationsSearch, setFormationsSearch] = useState('');
   const [formationsInPlayer, setFormationsInPlayer] = useState(false);
+  const [moncashReturnRef, setMoncashReturnRef] = useState<string | null>(null);
   
   const [loggedAdmin, setLoggedAdmin] = useState<AdminAccount | null>(() => {
     const saved = localStorage.getItem('rena_admin');
@@ -79,6 +81,16 @@ export default function App() {
       }
     };
     testConnection();
+  }, []);
+
+  // Detect MonCash return redirect (?moncash_ref=xxx after payment)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('moncash_ref');
+    if (ref) {
+      setMoncashReturnRef(ref);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, []);
 
   // Bootstrap Super Admin via API (idempotent — creates only if no admin exists)
@@ -399,6 +411,16 @@ export default function App() {
               onLogout={handleClientLogout}
               open={showClientDashboard}
               onClose={() => setShowClientDashboard(false)}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* MonCash Payment Return View */}
+        <AnimatePresence>
+          {moncashReturnRef && (
+            <PaymentSuccessView
+              referenceId={moncashReturnRef}
+              onClose={() => { setMoncashReturnRef(null); setShowClientDashboard(true); }}
             />
           )}
         </AnimatePresence>
