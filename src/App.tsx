@@ -13,6 +13,7 @@ import AffiliateLogin from './components/AffiliateLogin';
 import AffiliateDashboard from './components/AffiliateDashboard';
 import ClientDashboard from './components/ClientDashboard';
 import PaymentSuccessView from './components/PaymentSuccessView';
+import PaymentSuccessPage from './components/PaymentSuccessPage';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 import LoadingScreen from './components/LoadingScreen';
 import { Toaster } from './components/ui/sonner';
@@ -45,6 +46,9 @@ export default function App() {
   const [formationsSearch, setFormationsSearch] = useState('');
   const [formationsInPlayer, setFormationsInPlayer] = useState(false);
   const [moncashReturnRef, setMoncashReturnRef] = useState<string | null>(null);
+  const [showPaymentSuccess, setShowPaymentSuccess] = useState(() =>
+    window.location.pathname === '/payment-success'
+  );
   
   const [loggedAdmin, setLoggedAdmin] = useState<AdminAccount | null>(() => {
     const saved = localStorage.getItem('rena_admin');
@@ -83,13 +87,18 @@ export default function App() {
     testConnection();
   }, []);
 
-  // Detect MonCash return redirect (?moncash_ref=xxx after payment)
+  // Detect MonCash return redirect (?moncash_ref=xxx after payment) — legacy support
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ref = params.get('moncash_ref');
     if (ref) {
       setMoncashReturnRef(ref);
       window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    // Detect MonCashConnect v2 return: /payment-success path
+    if (window.location.pathname === '/payment-success') {
+      setShowPaymentSuccess(true);
+      window.history.replaceState({}, document.title, '/');
     }
   }, []);
 
@@ -415,12 +424,21 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* MonCash Payment Return View */}
+        {/* MonCash Payment Return View — legacy (?moncash_ref=xxx) */}
         <AnimatePresence>
           {moncashReturnRef && (
             <PaymentSuccessView
               referenceId={moncashReturnRef}
               onClose={() => { setMoncashReturnRef(null); setShowClientDashboard(true); }}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* MonCashConnect v2 Payment Return (/payment-success path) */}
+        <AnimatePresence>
+          {showPaymentSuccess && (
+            <PaymentSuccessPage
+              onClose={() => { setShowPaymentSuccess(false); setShowClientDashboard(true); }}
             />
           )}
         </AnimatePresence>

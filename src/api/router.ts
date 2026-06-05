@@ -1,6 +1,6 @@
 import express from 'express';
 import nodemailer from 'nodemailer';
-import { createHash, createHmac, randomInt, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomInt, randomBytes, timingSafeEqual } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { initializeApp, cert, getApps, App } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -4689,6 +4689,12 @@ const MCC_SECRET_KEY     = process.env.MONCASH_CONNECT_SECRET_KEY || process.env
 const MCC_WEBHOOK_SECRET = process.env.MONCASH_WEBHOOK_SECRET     || '';
 const MCC_BASE_URL       = process.env.MONCASH_CONNECT_BASE_URL   || 'https://api.moncashconnect.ht';
 
+// ── MonCashConnect v2 (Supabase endpoint) ────────────────────────────────────
+const MCCV2_SECRET_KEY     = process.env.MONCASHCONNECT_SECRET_KEY     || MCC_SECRET_KEY;
+const MCCV2_WEBHOOK_SECRET = process.env.MONCASHCONNECT_WEBHOOK_SECRET || MCC_WEBHOOK_SECRET;
+const MCCV2_APP_URL        = process.env.APP_URL || '';
+const MCCV2_API_URL        = 'https://hvlmeoqyxaguzcujpmit.supabase.co/functions/v1/pay-create';
+
 function mccHeaders() {
   return {
     'Content-Type' : 'application/json',
@@ -5021,6 +5027,239 @@ router.get('/api/admin/moncash-deposits', requireDb, async (req, res) => {
     const snap = await q.limit(Number(lim) || 200).get();
     res.json({ deposits: snap.docs.map((d: any) => serializeDoc(d)), total: snap.size });
   } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── MonCashConnect v2: POST /api/deposit/create ───────────────────────────────
+router.post('/api/deposit/create', requireDb, async (req, res) => {
+  try {
+    const { clientId, clientName, clientWalletId, amount, exchangeRate } = req.body;
+    if (!clientId || !clientName || !amount)
+      return res.status(400).json({ error: 'Paramètres manquants.' });
+
+    const htg = Number(amount);
+    if (isNaN(htg) || htg <= 0)
+      return res.status(400).json({ error: 'Montant invalide.' });
+
+    if (!MCCV2_SECRET_KEY)
+      return res.status(503).json({ error: "Service MonCashConnect non configuré. Contactez l'administrateur." });
+
+    const settingsSnap = await adminDb.collection('settings').doc('global').get();
+    const sData = settingsSnap.exists ? settingsSnap.data()! : {};
+    const rate  = Number(exchangeRate || sData.exchangeRate || 135);
+    const usdAmount = parseFloat((htg / rate).toFixed(4));
+
+    const minD = Number(sData.minDepositUSD || 0);
+    const maxD = Number(sData.maxDepositUSD || Infinity);
+    if (minD > 0 && usdAmount < minD)
+      return res.status(400).json({ error: `Montant minimum: $${minD.toFixed(2)} USD` });
+    if (maxD < Infinity && usdAmount > maxD)
+      return res.status(400).json({ error: `Montant maximum: $${maxD.toFixed(2)} USD` });
+
+    const clientSnap = await adminDb.collection('clients').doc(clientId).get();
+    if (!clientSnap.exists)
+      return res.status(404).json({ error: 'Client introuvable.' });
+
+    let referenceId = '';
+    let unique = false;
+    while (!unique) {
+      referenceId = generateMoncashRef();
+      const ex = await adminDb.collection('moncash_deposits').doc(referenceId).get();
+      if (!ex.exists) unique = true;
+    }
+
+    const returnUrl = MCCV2_APP_URL
+      ? `${MCCV2_APP_URL}/payment-success`
+      : (() => {
+          const proto = (req.headers['x-forwarded-proto'] as string) || 'https';
+          const host  = (req.headers['x-forwarded-host']  as string) || (req.headers.host as string) || '';
+          return `${proto}://${host}/payment-success`;
+        })();
+
+    const mcRes = await fetch(MCCV2_API_URL, {
+      method : 'POST',
+      headers: {
+        'Authorization': `Bearer ${MCCV2_SECRET_KEY}`,
+        'Content-Type' : 'application/json',
+      },
+      body: JSON.stringify({ amount: htg, referenceId, returnUrl }),
+    });
+    const rawText = await mcRes.text();
+    console.log(`[deposit/create] status=${mcRes.status} body=${rawText.slice(0, 400)}`);
+
+    let mcData: any = {};
+    try { mcData = JSON.parse(rawText); } catch {}
+
+    if (!mcRes.ok || !mcData.paymentUrl)
+      return res.status(502).json({ error: mcData.message || mcData.error || "Impossible d'initier le paiement MonCash." });
+
+    await adminDb.collection('moncash_deposits').doc(referenceId).set({
+      clientId, clientName, clientWalletId: clientWalletId || '',
+      referenceId, htgAmount: htg, usdAmount, exchangeRate: rate,
+      status: 'pending', provider: 'moncashconnect', webhookReceived: false,
+      paymentUrl: mcData.paymentUrl, source: 'moncashconnect_v2',
+      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    console.log(`[deposit/create] ✅ ref=${referenceId} htg=${htg} usd=${usdAmount} client=${clientId}`);
+    res.json({ success: true, paymentUrl: mcData.paymentUrl, referenceId });
+  } catch (e: any) {
+    console.error('[deposit/create]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── MonCashConnect v2: POST /api/webhooks/moncashconnect ──────────────────────
+router.post('/api/webhooks/moncashconnect', async (req, res) => {
+  if (!adminDb) return res.status(503).json({ error: 'DB non disponible.' });
+  try {
+    const rawBody: string = (req as any).rawBody || JSON.stringify(req.body);
+    const signature = (req.headers['x-mcc-signature'] || '') as string;
+    const timestamp = (req.headers['x-mcc-timestamp'] || '') as string;
+
+    // Reject requests older than 5 minutes
+    if (timestamp) {
+      const ts = Number(timestamp);
+      if (!isNaN(ts) && Date.now() - ts > 5 * 60 * 1000) {
+        console.warn('[webhook/moncashconnect] Timestamp expiré');
+        return res.status(401).json({ error: 'Requête expirée.' });
+      }
+    }
+
+    // Verify HMAC-SHA256 signature using timingSafeEqual
+    if (MCCV2_WEBHOOK_SECRET) {
+      if (!signature) {
+        console.warn('[webhook/moncashconnect] Signature manquante');
+        return res.status(401).json({ error: 'Signature manquante.' });
+      }
+      const expected = 'sha256=' + createHmac('sha256', MCCV2_WEBHOOK_SECRET).update(rawBody).digest('hex');
+      let valid = false;
+      try {
+        valid = timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+      } catch { valid = false; }
+      if (!valid) {
+        console.warn('[webhook/moncashconnect] Signature invalide');
+        return res.status(401).json({ error: 'Signature invalide.' });
+      }
+    }
+
+    const event = JSON.parse(rawBody);
+    const { reference, status, transactionId } = event;
+    if (!reference) return res.status(400).json({ error: 'reference manquant.' });
+
+    const depositRef  = adminDb.collection('moncash_deposits').doc(reference);
+    const depositSnap = await depositRef.get();
+    if (!depositSnap.exists) {
+      console.warn('[webhook/moncashconnect] Not found:', reference);
+      return res.status(404).json({ error: 'Transaction introuvable.' });
+    }
+    const deposit = depositSnap.data()!;
+
+    // Idempotency: skip if already processed
+    if (deposit.status !== 'pending') {
+      console.log('[webhook/moncashconnect] Already processed:', reference, deposit.status);
+      return res.status(200).json({ ok: true, skipped: true });
+    }
+
+    const wStatus = (status || '').toLowerCase();
+
+    if (['completed', 'success', 'paid', 'approved'].includes(wStatus)) {
+      const settingsSnap = await adminDb.collection('settings').doc('global').get();
+      const sData    = settingsSnap.exists ? settingsSnap.data()! : {};
+      const feePct   = Number(sData.depositFeePercent || 0);
+      const affPct   = Number(sData.affiliateDepositFeeSharePercent || 0);
+      const exchRate = Number(sData.exchangeRate || 135);
+
+      let netUsd      = deposit.usdAmount;
+      const batch     = adminDb.batch();
+      const clientRef = adminDb.collection('clients').doc(deposit.clientId);
+
+      if (feePct > 0) {
+        const feeAmt = parseFloat((deposit.usdAmount * feePct / 100).toFixed(4));
+        if (feeAmt > 0) {
+          netUsd = parseFloat((deposit.usdAmount - feeAmt).toFixed(4));
+          const affShare   = parseFloat((feeAmt * affPct / 100).toFixed(4));
+          const adminShare = parseFloat((feeAmt - affShare).toFixed(4));
+          if (adminShare > 0)
+            batch.update(adminDb.collection('settings').doc('global'), {
+              feesBalance: FieldValue.increment(adminShare),
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+          if (affShare > 0) {
+            try {
+              const cSnap    = await clientRef.get();
+              const sponsorId = cSnap.exists ? cSnap.data()!.directSponsorId : null;
+              if (sponsorId)
+                batch.update(adminDb.collection('affiliates').doc(sponsorId), {
+                  commissionBalance: FieldValue.increment(affShare),
+                  totalEarnings:     FieldValue.increment(affShare),
+                  updatedAt:         FieldValue.serverTimestamp(),
+                });
+            } catch {}
+          }
+        }
+      }
+
+      // BEGIN TRANSACTION (Firestore batch)
+      batch.update(depositRef, {
+        status: 'completed', webhookReceived: true, netUsdAmount: netUsd,
+        ...(transactionId && { providerTransactionId: transactionId }),
+        completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+      batch.update(clientRef, {
+        balance: FieldValue.increment(netUsd), updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      const txRef = adminDb.collection('client_transactions').doc();
+      batch.set(txRef, {
+        clientId: deposit.clientId, clientName: deposit.clientName,
+        type: 'deposit', amount: netUsd, usdAmount: netUsd,
+        htgAmount: deposit.htgAmount, exchangeRate: deposit.exchangeRate,
+        status: 'completed', method: 'MonCash', provider: 'moncashconnect',
+        referenceId: reference, ...(transactionId && { providerTransactionId: transactionId }),
+        description: `Dépôt MonCash — ${Number(deposit.htgAmount).toLocaleString()} HTG — Réf: ${reference}`,
+        createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      const notifRef = adminDb.collection('client_notifications').doc();
+      batch.set(notifRef, {
+        clientId: deposit.clientId, type: 'deposit_approved',
+        title: '✅ Dépôt MonCash confirmé',
+        message: `${Number(deposit.htgAmount).toLocaleString()} HTG (≈ $${netUsd.toFixed(2)}) crédités sur votre compte.`,
+        amount: netUsd, referenceId: reference, read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit(); // COMMIT
+
+      try { pushClientEvent(deposit.clientId, 'tx_approved', { type: 'deposit', htg: Math.round(netUsd * exchRate), usd: netUsd }); } catch {}
+      sendFcmToClient(
+        deposit.clientId,
+        '✅ Dépôt MonCash confirmé',
+        `${Number(deposit.htgAmount).toLocaleString()} HTG crédités automatiquement.`,
+        { type: 'deposit_approved', referenceId: reference }
+      );
+      console.log(`[webhook/moncashconnect] ✅ Credited $${netUsd} to ${deposit.clientId} ref=${reference}`);
+
+    } else if (['failed', 'cancelled', 'error', 'rejected'].includes(wStatus)) {
+      await depositRef.update({
+        status: wStatus === 'cancelled' ? 'cancelled' : 'failed',
+        webhookReceived: true, updatedAt: FieldValue.serverTimestamp(),
+      });
+      sendFcmToClient(
+        deposit.clientId,
+        '❌ Dépôt MonCash échoué',
+        `Votre dépôt de ${Number(deposit.htgAmount).toLocaleString()} HTG n'a pas abouti.`,
+        { type: 'deposit_failed', referenceId: reference }
+      );
+    } else {
+      await depositRef.update({ lastWebhookStatus: wStatus, updatedAt: FieldValue.serverTimestamp() });
+    }
+
+    res.status(200).json({ ok: true });
+  } catch (e: any) {
+    console.error('[webhook/moncashconnect]', e);
     res.status(500).json({ error: e.message });
   }
 });

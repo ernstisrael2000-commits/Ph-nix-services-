@@ -2443,7 +2443,7 @@ function EmailLogsPanel() {
   );
   
   const unreadClientNotifCount = React.useMemo(() => adminClientNotifs.filter(n => !n.read).length, [adminClientNotifs]);
-  const totalPending = pendingRegistrations.length + pendingWithdrawals.length + pendingDeposits.length + pendingTransfersCount + unreadClientNotifCount;
+  const totalPending = pendingRegistrations.length + pendingWithdrawals.length + pendingTransfersCount + unreadClientNotifCount;
 
   useEffect(() => {
     if (totalPending > 0) {
@@ -2465,11 +2465,6 @@ function EmailLogsPanel() {
   const allPendingRequests = React.useMemo(() => {
     const registrations = pendingRegistrations.map(r => ({ ...r, type: 'registration' as const }));
     const withdrawals = pendingWithdrawals.map(w => ({ ...w, type: 'withdrawal' as const, name: w.affiliateName }));
-    const deposits = pendingDeposits.map(d => ({ 
-      ...d, 
-      type: 'deposit_request' as const, 
-      name: affiliates.find(a => a.id === d.affiliateId)?.name || 'Affilié inconnu' 
-    }));
     const clientDeposits = pendingClientRequests
       .filter(t => t.type === 'deposit')
       .map(t => ({ ...t, type: 'client_deposit_req' as const, name: t.clientName || 'Client' }));
@@ -2477,14 +2472,14 @@ function EmailLogsPanel() {
       .filter(t => t.type === 'withdrawal')
       .map(t => ({ ...t, type: 'client_withdrawal_req' as const, name: t.clientName || 'Client' }));
 
-    let combined = [...registrations, ...withdrawals, ...deposits, ...clientDeposits, ...clientWithdrawals];
+    let combined = [...registrations, ...withdrawals, ...clientDeposits, ...clientWithdrawals];
 
     if (notifFilter === 'registration') {
       combined = combined.filter(r => r.type === 'registration');
     } else if (notifFilter === 'withdrawal') {
       combined = combined.filter(r => r.type === 'withdrawal');
     } else if (notifFilter === 'deposit') {
-      combined = combined.filter(r => r.type === 'deposit_request' || r.type === 'client_deposit_req');
+      combined = combined.filter(r => r.type === 'client_deposit_req');
     } else if (notifFilter === 'client_tx') {
       combined = combined.filter(r => r.type === 'client_deposit_req' || r.type === 'client_withdrawal_req');
     }
@@ -2501,7 +2496,7 @@ function EmailLogsPanel() {
       const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
       return dateB - dateA;
     });
-  }, [pendingRegistrations, pendingWithdrawals, pendingDeposits, pendingClientRequests, affiliates, notifFilter, notifSearch]);
+  }, [pendingRegistrations, pendingWithdrawals, pendingClientRequests, affiliates, notifFilter, notifSearch]);
 
   // Memoize filtered and sorted lists for performance
   const winnersQueue = React.useMemo(() => {
@@ -4019,11 +4014,6 @@ function EmailLogsPanel() {
                               {item.value === 'withdrawals' && pendingWithdrawals.length > 0 && (
                                 <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-red-600 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
                                   {pendingWithdrawals.length}
-                                </span>
-                              )}
-                              {item.value === 'wallet-tx' && pendingDeposits.length > 0 && (
-                                <span className="absolute top-2 right-2 flex min-w-[20px] h-5 px-1 items-center justify-center rounded-full bg-emerald-600 animate-pulse text-[10px] font-black text-white border-2 border-white shadow-md z-10">
-                                  {pendingDeposits.length}
                                 </span>
                               )}
                               {item.value === 'client-requests' && (pendingClientRequests.length + affiliateClientRequests.filter(r => r.status === 'pending').length) > 0 && (
@@ -5643,52 +5633,6 @@ function EmailLogsPanel() {
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <h2 className="text-xl font-bold text-dark">Flux Financiers & Dépôts</h2>
           </div>
-
-          {pendingDeposits.length > 0 && (
-            <div className="space-y-4">
-              <h3 className="text-sm font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Demandes de Dépôts en Attente ({pendingDeposits.length})
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {pendingDeposits.map((tx) => (
-                  <Card key={tx.id} className="border-emerald-100 bg-emerald-50/30 overflow-hidden">
-                    <CardContent className="p-4 space-y-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Dépôt {tx.method}</p>
-                          <p className="font-bold text-dark truncate">
-                            {affiliates.find(a => a.id === tx.affiliateId)?.name || 'Affilié...'}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xl font-black text-emerald-700">{tx.amount} $</p>
-                          <p className="text-[10px] font-bold text-gray-400">
-                             ≈ {((tx.amount || 0) * (settings?.exchangeRate || 146)).toLocaleString()} HTG
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button 
-                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-9 rounded-xl text-[10px] font-black uppercase"
-                          onClick={() => updateWalletTransactionStatus(tx.id!, 'approved')}
-                        >
-                          Approuver
-                        </Button>
-                        <Button 
-                          variant="destructive"
-                          className="flex-1 h-9 rounded-xl text-[10px] font-black uppercase"
-                          onClick={() => updateWalletTransactionStatus(tx.id!, 'rejected')}
-                        >
-                          Rejeter
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
 
           <Card className="shadow-sm border-gray-200">
             <CardHeader className="border-b bg-gray-50/50 py-4">

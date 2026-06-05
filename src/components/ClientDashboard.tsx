@@ -523,18 +523,19 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
   const handleMoncashDeposit = async () => {
     const htg = parseFloat(htgAmount);
     if (isNaN(htg) || htg <= 0) { toast.error('Montant invalide.'); return; }
+    if (htg < minDeposit * rate) { toast.error(`Montant minimum: ${Math.round(minDeposit * rate).toLocaleString()} HTG`); return; }
     if (!client) { toast.error('Erreur client.'); return; }
     setMoncashLoading(true);
     try {
-      const res = await fetch('/api/payments/moncash/initiate', {
+      const res = await fetch('/api/deposit/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          clientId:      client.id,
-          clientName:    client.name,
+          clientId:       client.id,
+          clientName:     client.name,
           clientWalletId: client.walletId,
-          htgAmount:     htg,
-          exchangeRate:  rate,
+          amount:         htg,
+          exchangeRate:   rate,
         }),
       });
       const data = await res.json();
