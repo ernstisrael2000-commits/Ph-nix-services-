@@ -527,14 +527,14 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
     if (!client) { toast.error('Erreur client.'); return; }
     setMoncashLoading(true);
     try {
-      const res = await fetch('/api/payments/moncash/initiate', {
+      const res = await fetch('/api/deposit/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clientId:       client.id,
           clientName:     client.name,
           clientWalletId: client.walletId,
-          htgAmount:      htg,
+          amount:         htg,
           exchangeRate:   rate,
         }),
       });
