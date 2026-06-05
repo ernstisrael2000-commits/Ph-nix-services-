@@ -861,100 +861,201 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange 
         </DialogContent>
       </Dialog>
 
-      {/* ── Product Detail ── */}
-      <Dialog open={isProductDetailOpen} onOpenChange={setIsProductDetailOpen}>
-        <DialogContent className="sm:max-w-lg border-0 shadow-2xl relative" showCloseButton={false}>
-          <DialogClose className="absolute top-4 left-4 z-20 rounded-full bg-black/30 backdrop-blur-xl p-2.5 hover:bg-black/50 transition-all text-white border border-white/10">
-            <X className="h-5 w-5" />
-          </DialogClose>
-          {selectedProduct && (
-            <div className="flex flex-col">
-              <div className="relative aspect-video">
-                <img src={selectedProduct.image} alt={selectedProduct.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                <div className="absolute bottom-4 left-4">
-                  <span className="text-2xl font-black text-white">{selectedPlan ? selectedPlan.price : selectedProduct.price}</span>
-                </div>
+      {/* ── Product Detail — plein-écran slide-up ── */}
+      <AnimatePresence>
+        {isProductDetailOpen && selectedProduct && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              key="product-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.22 }}
+              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+              onClick={() => setIsProductDetailOpen(false)}
+            />
+            {/* Panel */}
+            <motion.div
+              key="product-panel"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+              className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-[2rem] shadow-2xl max-h-[92dvh] flex flex-col overflow-hidden"
+            >
+              {/* Handle bar */}
+              <div className="flex justify-center pt-3 pb-1 shrink-0">
+                <div className="h-1 w-10 rounded-full bg-gray-200" />
               </div>
-              <div className="p-6 space-y-5">
-                <div>
-                  <h2 className="text-2xl font-black text-dark leading-tight">{selectedProduct.name}</h2>
-                  <p className="text-gray-400 text-sm">Service Premium · Rena Digital</p>
-                </div>
-                <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10">
-                  <p className="text-sm text-dark font-medium leading-relaxed">
-                    {selectedProduct.description || "Profitez de ce service exceptionnel avec Rena. Qualité garantie et livraison ultra-rapide."}
+
+              {/* Hero image */}
+              <div className="relative w-full aspect-[16/7] shrink-0">
+                <img
+                  src={selectedProduct.image}
+                  alt={selectedProduct.name}
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                {/* Close button */}
+                <button
+                  onClick={() => setIsProductDetailOpen(false)}
+                  className="absolute top-4 right-4 z-10 h-9 w-9 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/20 hover:bg-black/60 transition-all"
+                >
+                  <X className="h-4 w-4 text-white" />
+                </button>
+                {/* Badge catégorie */}
+                <span className="absolute top-4 left-4 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide bg-primary/90 backdrop-blur-sm text-white">
+                  Service Premium
+                </span>
+                {/* Prix en bas à gauche */}
+                <div className="absolute bottom-4 left-4">
+                  <p className="text-3xl font-black text-white drop-shadow-lg">
+                    {selectedPlan ? selectedPlan.price : selectedProduct.price}
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="p-3 rounded-xl bg-gray-50 flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-emerald-500" />
-                    <span className="text-[10px] font-bold text-gray-500 uppercase">Livraison 24/7</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-gray-50 flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-primary" />
-                    <span className="text-[10px] font-bold text-gray-500 uppercase">Paiement Sécurisé</span>
-                  </div>
-                </div>
-                {selectedProduct.plans?.length > 0 && (
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Choisissez votre plan</Label>
-                    {selectedProduct.plans.map((plan: any) => (
-                      <button
-                        key={plan.id}
-                        onClick={() => setSelectedPlan(plan)}
-                        className={`w-full flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all ${selectedPlan?.id === plan.id ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200'}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${selectedPlan?.id === plan.id ? 'border-primary' : 'border-gray-300'}`}>
-                            {selectedPlan?.id === plan.id && <div className="h-2 w-2 rounded-full bg-primary" />}
-                          </div>
-                          <span className={`font-bold ${selectedPlan?.id === plan.id ? 'text-primary' : 'text-dark'}`}>{plan.name}</span>
-                        </div>
-                        <span className={`font-black ${selectedPlan?.id === plan.id ? 'text-primary' : 'text-gray-400'}`}>{plan.price}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {selectedProduct.allowCustomAmount && (
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Montant personnalisé</Label>
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-gray-400 text-lg">$</span>
-                      <Input type="number" value={customAmountUSD} onChange={e => setCustomAmountUSD(e.target.value)} placeholder="0.00" className="h-12 rounded-2xl text-lg font-black pl-10 border-2 focus:border-primary" min="0.01" step="0.01" />
+              </div>
+
+              {/* Scrollable content */}
+              <div className="flex-1 overflow-y-auto overscroll-contain">
+                <div className="p-5 space-y-5 pb-8">
+
+                  {/* Titre + sous-titre */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-2xl font-black text-gray-900 leading-tight">{selectedProduct.name}</h2>
+                      <p className="text-gray-400 text-sm mt-0.5">Rena Digital · Livraison instantanée</p>
                     </div>
-                    {customAmountUSD && !isNaN(parseFloat(customAmountUSD)) && parseFloat(customAmountUSD) > 0 && (
-                      <div className="flex items-center gap-2 p-3 rounded-xl bg-primary/5 border border-primary/10">
-                        <DollarSign className="h-4 w-4 text-primary shrink-0" />
-                        <p className="text-sm font-black text-primary">= {Math.round(parseFloat(customAmountUSD) * (selectedProduct.customExchangeRate || exchangeRate)).toLocaleString()} HTG</p>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1 shrink-0 bg-amber-50 border border-amber-200 rounded-xl px-2.5 py-1.5">
+                      <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
+                      <span className="text-xs font-black text-amber-700">4.9</span>
+                    </div>
                   </div>
-                )}
-                {(() => {
-                  const rate2 = selectedProduct.customExchangeRate || exchangeRate;
-                  const customHTG = selectedProduct.allowCustomAmount && customAmountUSD && !isNaN(parseFloat(customAmountUSD)) ? Math.round(parseFloat(customAmountUSD) * rate2) : null;
-                  const displayPrice = customHTG !== null ? `${customHTG} HTG` : (selectedPlan ? selectedPlan.price : selectedProduct.price);
-                  const displayName = selectedPlan ? `${selectedProduct.name} (${selectedPlan.name})` : selectedProduct.name;
-                  const customLabel = customHTG !== null ? `$${customAmountUSD} USD = ${customHTG.toLocaleString()} HTG` : null;
-                  return (
-                    <div className="space-y-3">
-                      <Button onClick={() => handleBuyRequested({ name: customLabel ? `${displayName} — ${customLabel}` : displayName, price: displayPrice, type: 'product' })}
-                        className="w-full h-12 rounded-2xl bg-primary hover:bg-blue-700 text-white font-black shadow-lg shadow-primary/20 flex items-center justify-center gap-2 active:scale-95 transition-all">
-                        <ArrowRight className="h-5 w-5" />
-                        Continuer via WhatsApp
-                      </Button>
-                      {loggedClient && (
-                        <WalletPayButton client={effectiveClient || loggedClient} price={displayPrice} productName={customLabel ? `${displayName} — ${customLabel}` : displayName} hasPendingPurchase={hasPendingPurchase} purchaseLoading={purchaseLoading} setPurchaseLoading={setPurchaseLoading} onSuccess={() => setIsProductDetailOpen(false)} exchangeRate={exchangeRate} />
+
+                  {/* Description */}
+                  {selectedProduct.description && (
+                    <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                      <p className="text-sm text-gray-700 leading-relaxed">
+                        {selectedProduct.description}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Badges garanties */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-emerald-50 border border-emerald-100">
+                      <Clock className="h-5 w-5 text-emerald-500" />
+                      <span className="text-[9px] font-black text-emerald-700 uppercase tracking-wide text-center">Livraison 24/7</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-blue-50 border border-blue-100">
+                      <ShieldCheck className="h-5 w-5 text-primary" />
+                      <span className="text-[9px] font-black text-primary uppercase tracking-wide text-center">100% Sécurisé</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-purple-50 border border-purple-100">
+                      <Zap className="h-5 w-5 text-purple-500" />
+                      <span className="text-[9px] font-black text-purple-700 uppercase tracking-wide text-center">Instantané</span>
+                    </div>
+                  </div>
+
+                  {/* Plans */}
+                  {selectedProduct.plans?.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Choisissez votre plan</p>
+                      {selectedProduct.plans.map((plan: any) => (
+                        <button
+                          key={plan.id}
+                          onClick={() => setSelectedPlan(plan)}
+                          className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl border-2 transition-all ${
+                            selectedPlan?.id === plan.id
+                              ? 'border-primary bg-primary/5 shadow-sm shadow-primary/10'
+                              : 'border-gray-100 bg-white hover:border-gray-200'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`h-4 w-4 rounded-full border-2 flex items-center justify-center transition-colors ${selectedPlan?.id === plan.id ? 'border-primary' : 'border-gray-300'}`}>
+                              {selectedPlan?.id === plan.id && <div className="h-2 w-2 rounded-full bg-primary" />}
+                            </div>
+                            <span className={`font-bold text-sm ${selectedPlan?.id === plan.id ? 'text-primary' : 'text-gray-800'}`}>{plan.name}</span>
+                          </div>
+                          <span className={`font-black text-base ${selectedPlan?.id === plan.id ? 'text-primary' : 'text-gray-500'}`}>{plan.price}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Montant personnalisé */}
+                  {selectedProduct.allowCustomAmount && (
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Montant personnalisé</p>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-gray-400 text-lg">$</span>
+                        <Input
+                          type="number"
+                          value={customAmountUSD}
+                          onChange={e => setCustomAmountUSD(e.target.value)}
+                          placeholder="0.00"
+                          className="h-13 rounded-2xl text-lg font-black pl-10 border-2 focus:border-primary"
+                          min="0.01"
+                          step="0.01"
+                        />
+                      </div>
+                      {customAmountUSD && !isNaN(parseFloat(customAmountUSD)) && parseFloat(customAmountUSD) > 0 && (
+                        <div className="flex items-center gap-2 p-3 rounded-xl bg-primary/5 border border-primary/10">
+                          <DollarSign className="h-4 w-4 text-primary shrink-0" />
+                          <p className="text-sm font-black text-primary">
+                            = {Math.round(parseFloat(customAmountUSD) * (selectedProduct.customExchangeRate || exchangeRate)).toLocaleString()} HTG
+                          </p>
+                        </div>
                       )}
                     </div>
-                  );
-                })()}
+                  )}
+
+                  {/* Boutons d'action */}
+                  {(() => {
+                    const rate2 = selectedProduct.customExchangeRate || exchangeRate;
+                    const customHTG = selectedProduct.allowCustomAmount && customAmountUSD && !isNaN(parseFloat(customAmountUSD))
+                      ? Math.round(parseFloat(customAmountUSD) * rate2) : null;
+                    const displayPrice = customHTG !== null
+                      ? `${customHTG} HTG`
+                      : (selectedPlan ? selectedPlan.price : selectedProduct.price);
+                    const displayName = selectedPlan
+                      ? `${selectedProduct.name} (${selectedPlan.name})`
+                      : selectedProduct.name;
+                    const customLabel = customHTG !== null
+                      ? `$${customAmountUSD} USD = ${customHTG.toLocaleString()} HTG`
+                      : null;
+                    return (
+                      <div className="space-y-3 pt-1">
+                        {loggedClient && (
+                          <WalletPayButton
+                            client={effectiveClient || loggedClient}
+                            price={displayPrice}
+                            productName={customLabel ? `${displayName} — ${customLabel}` : displayName}
+                            hasPendingPurchase={hasPendingPurchase}
+                            purchaseLoading={purchaseLoading}
+                            setPurchaseLoading={setPurchaseLoading}
+                            onSuccess={() => setIsProductDetailOpen(false)}
+                            exchangeRate={exchangeRate}
+                          />
+                        )}
+                        <Button
+                          onClick={() => handleBuyRequested({ name: customLabel ? `${displayName} — ${customLabel}` : displayName, price: displayPrice, type: 'product' })}
+                          variant="outline"
+                          className="w-full h-12 rounded-2xl border-2 border-gray-200 text-gray-700 font-black flex items-center justify-center gap-2 hover:bg-gray-50 active:scale-95 transition-all"
+                        >
+                          <MessageCircle className="h-4 w-4 text-emerald-500" />
+                          Commander via WhatsApp
+                        </Button>
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* ── Payment Modal (WhatsApp) ── */}
       <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>

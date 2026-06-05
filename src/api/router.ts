@@ -5094,9 +5094,14 @@ router.post('/api/deposit/create', requireDb, async (req, res) => {
     if (!mcRes.ok || !mcData.paymentUrl)
       return res.status(502).json({ error: mcData.message || mcData.error || "Impossible d'initier le paiement MonCash." });
 
+    const feePct   = Number(sData.depositFeePercent || 0);
+    const feeAmt   = feePct > 0 ? parseFloat((usdAmount * feePct / 100).toFixed(4)) : 0;
+    const netUsd   = feePct > 0 ? parseFloat((usdAmount - feeAmt).toFixed(4)) : usdAmount;
+
     await adminDb.collection('moncash_deposits').doc(referenceId).set({
       clientId, clientName, clientWalletId: clientWalletId || '',
       referenceId, htgAmount: htg, usdAmount, exchangeRate: rate,
+      depositFeePercent: feePct, feeAmount: feeAmt, netUsdAmount: netUsd,
       status: 'pending', provider: 'moncashconnect', webhookReceived: false,
       paymentUrl: mcData.paymentUrl, source: 'moncashconnect_v2',
       createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
