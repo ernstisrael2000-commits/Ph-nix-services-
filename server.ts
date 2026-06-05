@@ -9,10 +9,7 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ─── Shared API router (all routes, Firebase Admin, helpers) ──────────────────
 import apiRouter from './src/api/router.ts';
-
-// ─── Server ───────────────────────────────────────────────────────────────────
 
 async function startServer() {
   const app = express();
@@ -32,7 +29,6 @@ async function startServer() {
 
   app.use(express.json());
 
-  // ── CORS ──────────────────────────────────────────────────────────────────
   app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
     res.header('Access-Control-Allow-Credentials', 'true');
@@ -42,23 +38,18 @@ async function startServer() {
     next();
   });
 
-  // ── Request logger (API only) ─────────────────────────────────────────────
   app.use('/api', (req, _res, next) => {
     console.log(`[API] ${req.method} ${req.path}`);
     next();
   });
 
-  // ── Mount shared API router ────────────────────────────────────────────────
   app.use(apiRouter);
 
   const httpServer = createHttpServer(app);
 
-  // ── Vite / Static ─────────────────────────────────────────────────────────
   if (process.env.NODE_ENV !== "production") {
-    // In dev mode, proxy frontend requests to the Vite dev server
     const VITE_PORT = parseInt(process.env.VITE_PORT || '5173', 10);
 
-    // Start Vite as a child process
     const { spawn } = await import('child_process');
     const viteProcess = spawn('npx', ['vite', '--port', String(VITE_PORT), '--host', '0.0.0.0'], {
       stdio: 'inherit',
@@ -74,8 +65,19 @@ async function startServer() {
     process.on('SIGTERM', () => { viteProcess.kill(); process.exit(0); });
     process.on('SIGINT', () => { viteProcess.kill(); process.exit(0); });
 
-    // Wait a moment for Vite to start, then proxy non-API requests
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Wait until Vite is actually ready instead of a fixed delay
+    const waitForVite = async (port: number, maxWaitMs = 15000) => {
+      const deadline = Date.now() + maxWaitMs;
+      while (Date.now() < deadline) {
+        try {
+          const r = await fetch(`http://localhost:${port}/`);
+          if (r.status < 500) return;
+        } catch {}
+        await new Promise(res => setTimeout(res, 100));
+      }
+      console.warn('[Vite] Did not respond within timeout, proxying anyway');
+    };
+    await waitForVite(VITE_PORT);
 
     const { createProxyMiddleware } = await import('http-proxy-middleware') as any;
     app.use('/', createProxyMiddleware({
@@ -98,13 +100,11 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
 
-    // Cache immutable hashed assets for 1 year
     app.use('/assets', express.static(path.join(distPath, 'assets'), {
       maxAge: '1y',
       immutable: true,
     }));
 
-    // Cache PWA/static files for 1 day; no-cache for HTML
     app.use(express.static(distPath, {
       setHeaders(res, filePath) {
         if (filePath.endsWith('.html')) {
