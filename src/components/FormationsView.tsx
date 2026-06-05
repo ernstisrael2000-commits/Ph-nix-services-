@@ -356,7 +356,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
 
   // ── Render: Catalog ─────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#f8f9ff]">
+    <div className="min-h-screen bg-[#f0f2ff]">
 
       {/* ── Login prompt dialog ─────────────────────────────────────────────── */}
       <Dialog open={showLoginPrompt} onOpenChange={open => { setShowLoginPrompt(open); if (!open) setPendingFormation(null); }}>
@@ -513,8 +513,8 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                         )}
                       </AnimatePresence>
 
-                      {/* Category icon boxes - horizontal scroll */}
-                      <div className="flex gap-4 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">
+                      {/* Category pill chips - horizontal scroll */}
+                      <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">
                         {['all', ...categories.filter(c => c !== 'all')].map(cat => {
                           const Icon = getCategoryIcon(cat);
                           const active = filterCategory === cat;
@@ -522,18 +522,15 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                             <button
                               key={cat}
                               onClick={() => setFilterCategory(cat)}
-                              className="flex flex-col items-center gap-1.5 shrink-0 transition-all active:scale-95"
-                            >
-                              <div className={`w-[58px] h-[58px] rounded-[18px] flex items-center justify-center transition-all relative overflow-hidden ${
+                              className={`flex items-center gap-1.5 shrink-0 px-3.5 py-2 rounded-full border transition-all active:scale-95 ${
                                 active
-                                  ? 'bg-violet-600 shadow-lg shadow-violet-300/50'
-                                  : 'bg-white shadow-sm hover:shadow-md hover:bg-violet-50'
-                              }`}>
-                                {active && <div className="absolute inset-0 bg-white/10 rounded-[18px]" />}
-                                <Icon className={`h-6 w-6 relative z-10 ${active ? 'text-white' : 'text-violet-600'}`} />
-                              </div>
-                              <span className={`text-[10px] font-bold whitespace-nowrap leading-none ${active ? 'text-violet-700' : 'text-gray-400'}`}>
-                                {cat === 'all' ? 'Tous' : cat.length > 9 ? cat.slice(0, 8) + '…' : cat}
+                                  ? 'bg-violet-600 border-violet-600 text-white shadow-md shadow-violet-300/40'
+                                  : 'bg-white border-gray-200 text-gray-600 hover:border-violet-300 hover:text-violet-600 shadow-sm'
+                              }`}
+                            >
+                              <Icon className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-white' : 'text-violet-500'}`} />
+                              <span className="text-[11px] font-bold whitespace-nowrap">
+                                {cat === 'all' ? 'Tous' : cat.length > 12 ? cat.slice(0, 11) + '…' : cat}
                               </span>
                             </button>
                           );
@@ -1829,97 +1826,74 @@ function FeaturedCourseCard({ formation, owned, fav, disc, onOpen, onFav }: {
     <motion.div
       whileTap={{ scale: 0.985 }}
       onClick={onOpen}
-      className="bg-white rounded-3xl overflow-hidden shadow-[0px_10px_32px_rgba(0,0,0,0.06)] border border-gray-50 group cursor-pointer"
+      className="relative rounded-[24px] overflow-hidden cursor-pointer shadow-xl shadow-violet-500/20 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700"
     >
-      {/* Cover image */}
-      <div className="relative h-48 w-full overflow-hidden">
-        {formation.coverImage ? (
-          <img src={formation.coverImage} alt={formation.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-        ) : (
-          <div className={`w-full h-full bg-gradient-to-br ${levelGradients[formation.level] || 'from-violet-600 to-indigo-800'} flex items-center justify-center`}>
-            <GraduationCap className="h-20 w-20 text-white/15" />
-          </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
-        {formation.category && (
-          <span className="absolute top-4 left-4 bg-violet-600/90 backdrop-blur-sm text-white text-[10px] font-black px-3 py-1 rounded-full">
-            {formation.category}
-          </span>
-        )}
-        {formation.price === 0 && (
-          <span className="absolute top-4 right-4 bg-emerald-500 text-white text-[10px] font-black px-3 py-1 rounded-full">Gratuit</span>
-        )}
-        {disc > 0 && (
-          <span className="absolute top-4 right-4 bg-rose-500 text-white text-[10px] font-black px-3 py-1 rounded-full">-{disc}%</span>
-        )}
-        <button onClick={onFav} className={`absolute bottom-4 right-4 h-8 w-8 rounded-full flex items-center justify-center transition-all shadow-md ${fav ? 'bg-rose-500 text-white' : 'bg-black/30 backdrop-blur-sm text-white hover:bg-rose-500'}`}>
-          <Heart className={`h-3.5 w-3.5 ${fav ? 'fill-white' : ''}`} />
-        </button>
-        {owned && (
-          <div className="absolute bottom-4 left-4 bg-emerald-500 text-white text-[10px] font-black px-3 py-1 rounded-full flex items-center gap-1">
-            <CheckCircle2 className="h-3 w-3 fill-white" /> Accès activé
-          </div>
-        )}
-      </div>
+      {/* Decorative background circles */}
+      <div className="absolute -top-8 -right-8 w-44 h-44 rounded-full bg-white/8 pointer-events-none" />
+      <div className="absolute top-0 right-12 w-20 h-20 rounded-full bg-white/6 pointer-events-none" />
 
-      {/* Body */}
-      <div className="p-5">
-        {formation.rating ? (
-          <div className="flex items-center gap-1.5 mb-2">
-            <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
-            <span className="text-xs font-black text-gray-800">{formation.rating.toFixed(1)}</span>
-            {formation.studentsCount ? (
-              <span className="text-[11px] text-gray-400">({formation.studentsCount.toLocaleString()} étudiants)</span>
-            ) : null}
-          </div>
-        ) : null}
-
-        <h5 className="text-base font-black text-gray-900 mb-1 leading-snug line-clamp-2">{formation.title}</h5>
-        {formation.instructor && (
-          <p className="text-xs font-semibold text-gray-400 mb-4 flex items-center gap-1">
-            <span className="h-4 w-4 rounded-full bg-gray-100 inline-flex items-center justify-center shrink-0">
-              <User className="h-2.5 w-2.5 text-gray-400" />
-            </span>
-            {formation.instructor}
-          </p>
-        )}
-
-        <div className="flex items-center gap-4 mb-5">
-          {formation.totalDuration && (
-            <div className="flex items-center gap-1">
-              <Clock className="h-3.5 w-3.5 text-gray-300" />
-              <span className="text-[11px] text-gray-500 font-semibold">{formation.totalDuration}</span>
+      <div className="relative flex items-center gap-4 p-5 min-h-[148px]">
+        {/* Left: cover thumbnail */}
+        <div className="w-[92px] h-[92px] rounded-2xl overflow-hidden shrink-0 shadow-lg shadow-black/25 border-2 border-white/25">
+          {formation.coverImage ? (
+            <img src={formation.coverImage} alt={formation.title} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-white/20 flex items-center justify-center">
+              <GraduationCap className="h-10 w-10 text-white/60" />
             </div>
           )}
-          {formation.level && (
-            <div className="flex items-center gap-1">
-              <BarChart3 className="h-3.5 w-3.5 text-gray-300" />
-              <span className="text-[11px] text-gray-500 font-semibold">{levelLabels[formation.level] || formation.level}</span>
-            </div>
-          )}
-          <div className="flex items-center gap-1">
-            <BookOpen className="h-3.5 w-3.5 text-gray-300" />
-            <span className="text-[11px] text-gray-500 font-semibold">{(formation.modules || []).length} modules</span>
-          </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-xl font-black text-violet-700">
-              {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
-            </span>
-            {formation.originalPrice && formation.originalPrice > formation.price && (
-              <span className="text-xs text-gray-400 line-through">{formation.originalPrice.toLocaleString()}</span>
+        {/* Right: text */}
+        <div className="flex-1 min-w-0 pr-7">
+          {formation.category && (
+            <span className="text-[9px] font-black uppercase tracking-widest text-white/55 mb-1 block">{formation.category}</span>
+          )}
+          <h3 className="font-black text-white text-[15px] leading-snug mb-1.5 line-clamp-2">{formation.title}</h3>
+          {formation.shortDescription && (
+            <p className="text-white/65 text-[11px] mb-3 line-clamp-2 leading-relaxed">{formation.shortDescription}</p>
+          )}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="bg-white text-violet-700 font-black text-[11px] px-4 py-1.5 rounded-full shadow-md active:scale-95 transition-transform">
+              {owned ? '▶ Continuer' : 'Commencer →'}
+            </div>
+            {formation.rating > 0 && (
+              <div className="flex items-center gap-1">
+                <Star className="h-3 w-3 text-amber-300 fill-amber-300" />
+                <span className="text-white/80 text-[10px] font-bold">{formation.rating.toFixed(1)}</span>
+                {formation.studentsCount ? (
+                  <span className="text-white/50 text-[9px]">· {formation.studentsCount.toLocaleString()}</span>
+                ) : null}
+              </div>
             )}
           </div>
-          <button
-            onClick={e => { e.stopPropagation(); onOpen(); }}
-            className="flex-1 max-w-[160px] bg-violet-600 text-white font-black text-xs py-2.5 rounded-xl hover:bg-violet-700 active:scale-95 transition-all shadow-sm shadow-violet-400/30 flex items-center justify-center gap-1.5"
-          >
-            {owned ? '▶ Continuer' : '👉 Voir le cours'}
-          </button>
         </div>
       </div>
+
+      {/* Price badge - bottom right */}
+      <div className="absolute bottom-4 right-4">
+        {disc > 0 ? (
+          <span className="bg-rose-500 text-white text-[9px] font-black px-2.5 py-1 rounded-full">-{disc}%</span>
+        ) : (
+          <span className="bg-white/20 backdrop-blur-sm text-white text-[10px] font-black px-2.5 py-1 rounded-full">
+            {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
+          </span>
+        )}
+      </div>
+
+      {/* Fav button */}
+      <button
+        onClick={e => { e.stopPropagation(); onFav(e); }}
+        className={`absolute top-3.5 right-3.5 h-7 w-7 rounded-full flex items-center justify-center shadow-sm transition-all ${fav ? 'bg-rose-500 text-white' : 'bg-white/20 text-white hover:bg-rose-500'}`}
+      >
+        <Heart className={`h-3.5 w-3.5 ${fav ? 'fill-white' : ''}`} />
+      </button>
+
+      {owned && (
+        <div className="absolute top-3.5 left-3.5 bg-emerald-400/90 backdrop-blur-sm text-white text-[9px] font-black px-2.5 py-1 rounded-full flex items-center gap-1">
+          <CheckCircle2 className="h-2.5 w-2.5 fill-white" /> Accès activé
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -1928,13 +1902,14 @@ function CompactCourseCard({ formation, owned, fav, disc, onOpen, onFav }: {
   formation: Formation; owned: boolean; fav: boolean; disc: number;
   onOpen: () => void; onFav: (e: React.MouseEvent) => void;
 }) {
+  const instructorInitial = formation.instructor?.charAt(0)?.toUpperCase() || 'P';
   return (
     <motion.div
       whileTap={{ scale: 0.97 }}
       onClick={onOpen}
-      className="min-w-[200px] max-w-[200px] bg-white rounded-2xl overflow-hidden shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all cursor-pointer group shrink-0 border border-gray-50"
+      className="min-w-[172px] max-w-[172px] bg-white rounded-[18px] overflow-hidden shadow-sm hover:shadow-md transition-all cursor-pointer group shrink-0 border border-gray-100/80"
     >
-      <div className="relative h-[108px] overflow-hidden">
+      <div className="relative h-[104px] overflow-hidden">
         {formation.coverImage ? (
           <img src={formation.coverImage} alt={formation.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
         ) : (
@@ -1942,35 +1917,51 @@ function CompactCourseCard({ formation, owned, fav, disc, onOpen, onFav }: {
             <GraduationCap className="h-8 w-8 text-white/20" />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-        {formation.price === 0 && (
-          <span className="absolute top-2 left-2 bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">Gratuit</span>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
+
+        {/* Instructor avatar — bottom left */}
+        {formation.instructor && (
+          <div className="absolute bottom-2 left-2 h-6 w-6 rounded-full bg-violet-500 border-2 border-white flex items-center justify-center text-white text-[9px] font-black shadow-sm overflow-hidden shrink-0">
+            {formation.instructorAvatar
+              ? <img src={formation.instructorAvatar} alt="" className="w-full h-full object-cover" />
+              : instructorInitial
+            }
+          </div>
         )}
-        {disc > 0 && (
-          <span className="absolute top-2 left-2 bg-rose-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">-{disc}%</span>
-        )}
-        {owned && (
-          <span className="absolute bottom-2 left-2 bg-emerald-500/90 backdrop-blur-sm text-white text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-0.5">
-            <CheckCircle2 className="h-2.5 w-2.5 fill-white" /> Accès
-          </span>
-        )}
-        <button onClick={onFav} className={`absolute top-2 right-2 h-6 w-6 rounded-full flex items-center justify-center transition-all ${fav ? 'bg-rose-500 text-white' : 'bg-black/25 backdrop-blur-sm text-white/80'}`}>
-          <Heart className={`h-3 w-3 ${fav ? 'fill-white' : ''}`} />
+
+        {/* Price badge — top right */}
+        <div className="absolute top-2 right-2">
+          {owned ? (
+            <span className="bg-emerald-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+              <CheckCircle2 className="h-2.5 w-2.5 fill-white shrink-0" />
+            </span>
+          ) : disc > 0 ? (
+            <span className="bg-rose-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">-{disc}%</span>
+          ) : (
+            <span className="bg-violet-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-sm">
+              {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
+            </span>
+          )}
+        </div>
+
+        <button
+          onClick={e => { e.stopPropagation(); onFav(e); }}
+          className={`absolute top-2 left-2 h-[22px] w-[22px] rounded-full flex items-center justify-center transition-all ${fav ? 'bg-rose-500 text-white' : 'bg-black/25 text-white/80 hover:bg-rose-500'}`}
+        >
+          <Heart className={`h-2.5 w-2.5 ${fav ? 'fill-white' : ''}`} />
         </button>
       </div>
-      <div className="p-3">
-        <h6 className="text-[11px] font-black text-gray-900 line-clamp-2 leading-snug mb-2">{formation.title}</h6>
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-black text-violet-700">
-            {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
-          </span>
-          {formation.rating ? (
-            <div className="flex items-center gap-0.5">
-              <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
-              <span className="text-[10px] font-black text-gray-700">{formation.rating.toFixed(1)}</span>
-            </div>
-          ) : null}
-        </div>
+      <div className="p-2.5">
+        <h6 className="text-[11px] font-black text-gray-900 line-clamp-2 leading-snug mb-1.5">{formation.title}</h6>
+        {formation.rating > 0 ? (
+          <div className="flex items-center gap-0.5">
+            <Star className="h-2.5 w-2.5 text-amber-400 fill-amber-400" />
+            <span className="text-[10px] font-bold text-gray-600">{formation.rating.toFixed(1)}</span>
+            {formation.studentsCount ? (
+              <span className="text-[9px] text-gray-400 ml-0.5">({formation.studentsCount.toLocaleString()})</span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </motion.div>
   );
@@ -1979,36 +1970,85 @@ function CompactCourseCard({ formation, owned, fav, disc, onOpen, onFav }: {
 function NewCourseGridCard({ formation, i, owned, onOpen }: {
   formation: Formation; i: number; owned: boolean; onOpen: () => void;
 }) {
+  const instructorInitial = formation.instructor?.charAt(0)?.toUpperCase() || 'P';
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.94 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay: i * 0.07, ease: [0.22, 1, 0.36, 1] }}
       onClick={onOpen}
-      className="flex flex-col gap-2 group cursor-pointer active:scale-[0.97] transition-transform"
+      className="bg-white rounded-[18px] overflow-hidden shadow-sm hover:shadow-lg transition-all cursor-pointer active:scale-[0.97] group border border-gray-100/80"
     >
-      <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-gray-100 shadow-sm">
+      {/* Image area */}
+      <div className="relative w-full aspect-[4/3] overflow-hidden">
         {formation.coverImage ? (
           <img src={formation.coverImage} alt={formation.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
         ) : (
           <div className={`w-full h-full bg-gradient-to-br ${levelGradients[formation.level] || 'from-violet-500 to-indigo-700'} flex items-center justify-center`}>
-            <GraduationCap className="h-8 w-8 text-white/20" />
+            <GraduationCap className="h-10 w-10 text-white/20" />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-        <div className="absolute top-2 right-2 bg-amber-400 text-amber-900 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide">
-          Nouveau
+        <div className="absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
+
+        {/* Instructor badge — bottom left */}
+        {formation.instructor && (
+          <div className="absolute bottom-2 left-2 flex items-center gap-1">
+            <div className="h-6 w-6 rounded-full bg-violet-500 border-2 border-white flex items-center justify-center text-white text-[9px] font-black shadow-md shrink-0 overflow-hidden">
+              {formation.instructorAvatar
+                ? <img src={formation.instructorAvatar} alt="" className="w-full h-full object-cover" />
+                : instructorInitial
+              }
+            </div>
+            <span className="text-white text-[9px] font-bold bg-black/40 backdrop-blur-sm px-1.5 py-0.5 rounded-full leading-none whitespace-nowrap max-w-[60px] truncate">
+              {formation.instructor.split(' ')[0]}
+            </span>
+          </div>
+        )}
+
+        {/* Price / status badge — top right */}
+        <div className="absolute top-2 right-2">
+          {owned ? (
+            <span className="bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-0.5 shadow-sm">
+              <CheckCircle2 className="h-2.5 w-2.5 fill-white shrink-0" /> Accès
+            </span>
+          ) : (
+            <span className="bg-violet-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-sm">
+              {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()}`}
+            </span>
+          )}
         </div>
-        {owned && (
-          <div className="absolute top-2 left-2 bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">
-            Accès
-          </div>
-        )}
+
+        {/* "Nouveau" label — top left */}
+        <div className="absolute top-2 left-2">
+          {!owned && (
+            <span className="bg-amber-400 text-amber-900 text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide">
+              Nouveau
+            </span>
+          )}
+        </div>
       </div>
-      <h6 className="text-[11px] font-black text-gray-900 leading-tight line-clamp-2">{formation.title}</h6>
-      <span className="text-sm font-black text-violet-700">
-        {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
-      </span>
+
+      {/* Card body */}
+      <div className="p-3">
+        <h6 className="text-[12px] font-black text-gray-900 line-clamp-2 leading-snug mb-1.5">{formation.title}</h6>
+        <div className="flex items-center gap-2">
+          {formation.rating > 0 ? (
+            <div className="flex items-center gap-0.5">
+              <Star className="h-2.5 w-2.5 text-amber-400 fill-amber-400" />
+              <span className="text-[10px] font-black text-gray-700">{formation.rating.toFixed(1)}</span>
+              {formation.studentsCount ? (
+                <span className="text-[9px] text-gray-400 ml-0.5">({formation.studentsCount.toLocaleString()})</span>
+              ) : null}
+            </div>
+          ) : null}
+          {formation.totalDuration && (
+            <div className="ml-auto flex items-center gap-0.5">
+              <Clock className="h-2.5 w-2.5 text-gray-300" />
+              <span className="text-[9px] text-gray-400">{formation.totalDuration}</span>
+            </div>
+          )}
+        </div>
+      </div>
     </motion.div>
   );
 }
