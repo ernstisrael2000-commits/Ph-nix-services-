@@ -102,7 +102,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
 
   return (
     <>
-      <nav className="border-b bg-white/90 backdrop-blur-md fixed top-0 left-0 right-0 z-50 shadow-sm">
+      <nav className="border-b bg-white fixed top-0 left-0 right-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex justify-between h-14 items-center gap-2">
 

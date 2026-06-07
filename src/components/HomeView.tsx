@@ -221,10 +221,9 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="relative w-full overflow-visible group px-1 md:px-0"
+            className="w-full"
           >
-            <div className="absolute -inset-4 bg-primary/20 rounded-[50px] blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-            <div className="relative h-[220px] md:h-[340px] w-full rounded-[36px] overflow-hidden bg-black shadow-[0_40px_60px_-15px_rgba(0,0,0,0.35)] border border-white/5">
+            <div className="relative h-[220px] md:h-[340px] w-full rounded-[28px] overflow-hidden bg-gray-900 shadow-lg">
               <div className="absolute inset-0 w-full h-full z-0">
                 <AnimatePresence mode="wait">
                   <motion.div
