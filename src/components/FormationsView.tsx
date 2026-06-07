@@ -575,7 +575,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                         onFav={e => toggleFavorite(popularCourses[0], e)}
                       />
                       {popularCourses.length > 1 && (
-                        <div className="flex gap-3 overflow-x-auto no-scrollbar mt-3 -mx-4 px-4 pb-1">
+                        <div className="flex flex-col gap-3 mt-3">
                           {popularCourses.slice(1).map(f => (
                             <CompactCourseCard
                               key={f.id}
@@ -601,7 +601,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                         </span>
                         <h3 className="text-[15px] font-black text-gray-900">Cours gratuits</h3>
                       </div>
-                      <div className="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">
+                      <div className="flex flex-col gap-3">
                         {freeCourses.filter(f => !popularCourses.find(p => p.id === f.id)).slice(0, 8).map(f => (
                           <CompactCourseCard
                             key={f.id}
@@ -1907,9 +1907,9 @@ function CompactCourseCard({ formation, owned, fav, disc, onOpen, onFav }: {
     <motion.div
       whileTap={{ scale: 0.97 }}
       onClick={onOpen}
-      className="min-w-[172px] max-w-[172px] bg-white rounded-[18px] overflow-hidden shadow-sm hover:shadow-md transition-all cursor-pointer group shrink-0 border border-gray-100/80"
+      className="w-full bg-white rounded-[18px] overflow-hidden shadow-sm hover:shadow-md transition-all cursor-pointer group border border-gray-100/80 flex gap-3"
     >
-      <div className="relative h-[104px] overflow-hidden">
+      <div className="relative h-[100px] w-[140px] shrink-0 overflow-hidden rounded-l-[18px]">
         {formation.coverImage ? (
           <img src={formation.coverImage} alt={formation.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
         ) : (
@@ -1951,10 +1951,13 @@ function CompactCourseCard({ formation, owned, fav, disc, onOpen, onFav }: {
           <Heart className={`h-2.5 w-2.5 ${fav ? 'fill-white' : ''}`} />
         </button>
       </div>
-      <div className="p-2.5">
-        <h6 className="text-[11px] font-black text-gray-900 line-clamp-2 leading-snug mb-1.5">{formation.title}</h6>
+      <div className="flex-1 min-w-0 py-3 pr-3 flex flex-col justify-center">
+        <h6 className="text-[12px] font-black text-gray-900 line-clamp-2 leading-snug mb-1.5">{formation.title}</h6>
+        {formation.instructor && (
+          <p className="text-[10px] text-gray-400 truncate mb-1">{formation.instructor}</p>
+        )}
         {formation.rating > 0 ? (
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-0.5 mb-1.5">
             <Star className="h-2.5 w-2.5 text-amber-400 fill-amber-400" />
             <span className="text-[10px] font-bold text-gray-600">{formation.rating.toFixed(1)}</span>
             {formation.studentsCount ? (
@@ -1962,6 +1965,9 @@ function CompactCourseCard({ formation, owned, fav, disc, onOpen, onFav }: {
             ) : null}
           </div>
         ) : null}
+        <span className="text-[11px] font-black text-violet-600">
+          {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
+        </span>
       </div>
     </motion.div>
   );
