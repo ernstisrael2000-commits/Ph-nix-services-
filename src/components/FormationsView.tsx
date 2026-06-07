@@ -562,33 +562,23 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                     </div>
                   )}
 
-                  {/* ── 3. Popular — featured card + horizontal scroll */}
+                  {/* ── 3. Popular — 2-col grid */}
                   {popularCourses.length > 0 && (
                     <div>
                       <h3 className="text-[15px] font-black text-gray-900 mb-3">Formations Populaires</h3>
-                      <FeaturedCourseCard
-                        formation={popularCourses[0]}
-                        owned={isOwned(popularCourses[0])}
-                        fav={isFav(popularCourses[0])}
-                        disc={discount(popularCourses[0])}
-                        onOpen={() => openDetail(popularCourses[0])}
-                        onFav={e => toggleFavorite(popularCourses[0], e)}
-                      />
-                      {popularCourses.length > 1 && (
-                        <div className="flex flex-col gap-3 mt-3">
-                          {popularCourses.slice(1).map(f => (
-                            <CompactCourseCard
-                              key={f.id}
-                              formation={f}
-                              owned={isOwned(f)}
-                              fav={isFav(f)}
-                              disc={discount(f)}
-                              onOpen={() => openDetail(f)}
-                              onFav={e => toggleFavorite(f, e)}
-                            />
-                          ))}
-                        </div>
-                      )}
+                      <div className="grid grid-cols-2 gap-3">
+                        {popularCourses.map(f => (
+                          <CompactCourseCard
+                            key={f.id}
+                            formation={f}
+                            owned={isOwned(f)}
+                            fav={isFav(f)}
+                            disc={discount(f)}
+                            onOpen={() => openDetail(f)}
+                            onFav={e => toggleFavorite(f, e)}
+                          />
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -601,7 +591,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                         </span>
                         <h3 className="text-[15px] font-black text-gray-900">Cours gratuits</h3>
                       </div>
-                      <div className="flex flex-col gap-3">
+                      <div className="grid grid-cols-2 gap-3">
                         {freeCourses.filter(f => !popularCourses.find(p => p.id === f.id)).slice(0, 8).map(f => (
                           <CompactCourseCard
                             key={f.id}
@@ -1907,67 +1897,77 @@ function CompactCourseCard({ formation, owned, fav, disc, onOpen, onFav }: {
     <motion.div
       whileTap={{ scale: 0.97 }}
       onClick={onOpen}
-      className="w-full bg-white rounded-[18px] overflow-hidden shadow-sm hover:shadow-md transition-all cursor-pointer group border border-gray-100/80 flex gap-3"
+      className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer group border border-gray-100 flex flex-col"
     >
-      <div className="relative h-[100px] w-[140px] shrink-0 overflow-hidden rounded-l-[18px]">
+      {/* ── Image ── */}
+      <div className="relative w-full aspect-[16/9] overflow-hidden">
         {formation.coverImage ? (
-          <img src={formation.coverImage} alt={formation.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+          <img
+            src={formation.coverImage}
+            alt={formation.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          />
         ) : (
           <div className={`w-full h-full bg-gradient-to-br ${levelGradients[formation.level] || 'from-violet-500 to-indigo-700'} flex items-center justify-center`}>
-            <GraduationCap className="h-8 w-8 text-white/20" />
+            <GraduationCap className="h-8 w-8 text-white/30" />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
 
-        {/* Instructor avatar — bottom left */}
-        {formation.instructor && (
-          <div className="absolute bottom-2 left-2 h-6 w-6 rounded-full bg-violet-500 border-2 border-white flex items-center justify-center text-white text-[9px] font-black shadow-sm overflow-hidden shrink-0">
-            {formation.instructorAvatar
-              ? <img src={formation.instructorAvatar} alt="" className="w-full h-full object-cover" />
-              : instructorInitial
-            }
-          </div>
-        )}
+        {/* Favori */}
+        <button
+          onClick={e => { e.stopPropagation(); onFav(e); }}
+          className={`absolute top-2 right-2 h-7 w-7 rounded-full flex items-center justify-center shadow-md transition-all active:scale-90 ${fav ? 'bg-rose-500 text-white' : 'bg-black/30 backdrop-blur-sm text-white hover:bg-rose-500'}`}
+        >
+          <Heart className={`h-3.5 w-3.5 ${fav ? 'fill-white' : ''}`} />
+        </button>
 
-        {/* Price badge — top right */}
-        <div className="absolute top-2 right-2">
+        {/* Badge statut — bas gauche */}
+        <div className="absolute bottom-2 left-2">
           {owned ? (
-            <span className="bg-emerald-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
-              <CheckCircle2 className="h-2.5 w-2.5 fill-white shrink-0" />
+            <span className="bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-0.5 shadow-sm">
+              <CheckCircle2 className="h-2.5 w-2.5 fill-white shrink-0" /> Acquis
             </span>
           ) : disc > 0 ? (
-            <span className="bg-rose-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full">-{disc}%</span>
-          ) : (
-            <span className="bg-violet-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-sm">
-              {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
+            <span className="bg-rose-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-sm">-{disc}%</span>
+          ) : null}
+        </div>
+      </div>
+
+      {/* ── Contenu ── */}
+      <div className="p-2.5 flex flex-col flex-1">
+        <h6 className="text-[11.5px] font-black text-gray-900 line-clamp-2 leading-snug mb-1.5">{formation.title}</h6>
+
+        {formation.instructor && (
+          <div className="flex items-center gap-1 mb-1.5">
+            <div className="h-4 w-4 rounded-full bg-violet-500 border border-white flex items-center justify-center text-white text-[7px] font-black overflow-hidden shrink-0">
+              {formation.instructorAvatar
+                ? <img src={formation.instructorAvatar} alt="" className="w-full h-full object-cover" />
+                : instructorInitial}
+            </div>
+            <span className="text-[9.5px] text-gray-400 truncate">{formation.instructor}</span>
+          </div>
+        )}
+
+        {formation.rating > 0 && (
+          <div className="flex items-center gap-0.5 mb-1.5">
+            {[1,2,3,4,5].map(s => (
+              <Star key={s} className={`h-2.5 w-2.5 ${s <= Math.round(formation.rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200 fill-gray-200'}`} />
+            ))}
+            <span className="text-[9px] text-gray-500 ml-0.5 font-bold">{formation.rating.toFixed(1)}</span>
+          </div>
+        )}
+
+        <div className="mt-auto pt-1.5 border-t border-gray-50">
+          <span className={`text-[12px] font-black ${formation.price === 0 ? 'text-emerald-600' : 'text-violet-700'}`}>
+            {formation.price === 0 ? '🎁 Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
+          </span>
+          {disc > 0 && formation.originalPrice && (
+            <span className="text-[9px] text-gray-400 line-through ml-1.5">
+              {(formation.originalPrice).toLocaleString()} HTG
             </span>
           )}
         </div>
-
-        <button
-          onClick={e => { e.stopPropagation(); onFav(e); }}
-          className={`absolute top-2 left-2 h-[22px] w-[22px] rounded-full flex items-center justify-center transition-all ${fav ? 'bg-rose-500 text-white' : 'bg-black/25 text-white/80 hover:bg-rose-500'}`}
-        >
-          <Heart className={`h-2.5 w-2.5 ${fav ? 'fill-white' : ''}`} />
-        </button>
-      </div>
-      <div className="flex-1 min-w-0 py-3 pr-3 flex flex-col justify-center">
-        <h6 className="text-[12px] font-black text-gray-900 line-clamp-2 leading-snug mb-1.5">{formation.title}</h6>
-        {formation.instructor && (
-          <p className="text-[10px] text-gray-400 truncate mb-1">{formation.instructor}</p>
-        )}
-        {formation.rating > 0 ? (
-          <div className="flex items-center gap-0.5 mb-1.5">
-            <Star className="h-2.5 w-2.5 text-amber-400 fill-amber-400" />
-            <span className="text-[10px] font-bold text-gray-600">{formation.rating.toFixed(1)}</span>
-            {formation.studentsCount ? (
-              <span className="text-[9px] text-gray-400 ml-0.5">({formation.studentsCount.toLocaleString()})</span>
-            ) : null}
-          </div>
-        ) : null}
-        <span className="text-[11px] font-black text-violet-600">
-          {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
-        </span>
       </div>
     </motion.div>
   );
