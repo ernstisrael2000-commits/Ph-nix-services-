@@ -27,8 +27,8 @@ import { toast } from 'sonner';
 type ViewType = 'tracking' | 'services' | 'admin';
 
 export default function App() {
-  const [view, setView] = useState<ViewType>('tracking');
-  const [history, setHistory] = useState<ViewType[]>(['tracking']);
+  const [view, setView] = useState<ViewType>('services');
+  const [history, setHistory] = useState<ViewType[]>(['services']);
   const { loading } = useAuth();
   const { settings } = useSettings();
   const [showAnnouncement, setShowAnnouncement] = useState(true);

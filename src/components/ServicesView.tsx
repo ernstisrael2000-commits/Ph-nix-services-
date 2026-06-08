@@ -1,12 +1,16 @@
-import React from 'react';
-import { motion } from 'motion/react';
-import * as LucideIcons from 'lucide-react';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
-  Globe, Package, ArrowRight, ExternalLink,
-  Zap, ShieldCheck, Clock, Phone, MessageCircle, CreditCard,
+  Globe, CreditCard, Zap, ShieldCheck, Clock, Phone, MessageCircle,
+  X, Wallet, Loader2, ChevronRight, Plus, RefreshCw, Check,
 } from 'lucide-react';
-import { useOnlineServices, useSettings } from '../services/parcelService';
+import { useCardTopups, useSettings } from '../services/parcelService';
+import { submitClientPurchase, useClientData, useClientPendingPurchase } from '../services/clientService';
 import { Client } from '../types';
+import { toast } from 'sonner';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
 
 interface ServicesViewProps {
   loggedClient: Client | null;
@@ -14,33 +18,14 @@ interface ServicesViewProps {
   onRequestAuth: () => void;
 }
 
-const DEFAULT_SERVICES = [
-  {
-    id: '_card_create',
-    label: 'Création de Carte',
-    description: 'Obtenez votre carte virtuelle ou physique rapidement et en toute sécurité.',
-    icon: 'CreditCard',
-    target: 'url' as const,
-    active: true,
-    order: 1,
-    color: 'from-blue-500 to-blue-700',
-    badge: 'Nouveau',
-  },
-  {
-    id: '_card_recharge',
-    label: 'Recharge de Carte',
-    description: 'Rechargez votre carte facilement depuis votre wallet ou via mobile money.',
-    icon: 'Zap',
-    target: 'url' as const,
-    active: true,
-    order: 2,
-    color: 'from-emerald-500 to-teal-700',
-    badge: 'Rapide',
-  },
+const PAYMENT_METHODS = [
+  { id: 'moncash', label: 'MonCash',  icon: '📱' },
+  { id: 'natcash', label: 'NatCash',  icon: '💳' },
+  { id: 'admi',    label: 'Admi',     icon: '🏦' },
 ];
 
-const SERVICE_COLORS = [
-  'from-blue-500 to-blue-700',
+const SERVICE_GRADIENTS = [
+  'from-blue-500 to-indigo-600',
   'from-emerald-500 to-teal-600',
   'from-purple-500 to-indigo-600',
   'from-rose-500 to-pink-600',
@@ -48,144 +33,207 @@ const SERVICE_COLORS = [
   'from-cyan-500 to-blue-600',
 ];
 
+type ModalStep = 'choice' | 'create_pay' | 'recharge_form' | 'recharge_pay' | 'success';
+
 export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth }: ServicesViewProps) {
-  const { services: rawServices } = useOnlineServices();
+  const { cards: services, loading } = useCardTopups();
   const { settings } = useSettings();
+  const exchangeRate = settings?.exchangeRate || 146;
+  const whatsapp = settings?.whatsappAdminNumber || '+50944813185';
 
-  // Filter out built-in tracking/shipping redirects — those are now top-level nav items
-  const activeServices = rawServices.filter(s => s.active && s.target !== 'tracking' && s.target !== 'shipping');
-  const displayServices = activeServices.length > 0 ? activeServices : DEFAULT_SERVICES;
+  const { client: liveClient } = useClientData(loggedClient?.id || null);
+  const effectiveClient = liveClient || loggedClient;
+  const hasPendingPurchase = useClientPendingPurchase(loggedClient?.id || null);
 
-  const handleServiceClick = (svc: any) => {
-    if (svc.target === 'url' && svc.url) {
-      window.open(svc.url, '_blank');
-    } else if (svc.target === 'wallet') {
-      if (loggedClient) onOpenWallet();
-      else onRequestAuth();
+  // Modal state
+  const [selected, setSelected] = useState<any>(null);
+  const [step, setStep] = useState<ModalStep>('choice');
+
+  // Recharge form
+  const [rechargeAmount, setRechargeAmount] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [holderName, setHolderName] = useState('');
+  const [payMethod, setPayMethod] = useState<string>('moncash');
+  const [txInfo, setTxInfo] = useState('');
+
+  // Creation pay
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
+
+  const openService = (svc: any) => {
+    setSelected(svc);
+    setStep('choice');
+    setRechargeAmount(svc.presets?.[0]?.toString() || '');
+    setCardNumber('');
+    setHolderName('');
+    setTxInfo('');
+    setPayMethod('moncash');
+  };
+
+  const closeModal = () => setSelected(null);
+
+  const openWhatsApp = (msg: string) => {
+    window.open(`https://wa.me/${whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
+  // ── Créer: wallet payment ──────────────────────────────────────────────────
+  const handleWalletCreate = async () => {
+    if (!effectiveClient || !selected) return;
+    const numericPrice = parseFloat(String(selected.price ?? '0').replace(/[^\d.]/g, ''));
+    const balanceHTG = Math.round((effectiveClient.balance ?? 0) * exchangeRate);
+    if (balanceHTG < numericPrice) {
+      toast.error(`Solde insuffisant — vous avez ${balanceHTG.toLocaleString()} HTG`);
+      return;
+    }
+    setPurchaseLoading(true);
+    try {
+      const priceUSD = numericPrice / exchangeRate;
+      await submitClientPurchase(effectiveClient, selected.name, String(selected.price), priceUSD);
+      const now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      openWhatsApp(`🎴 *CRÉATION SERVICE — Rena*\n\n👤 Client: *${effectiveClient.name}*\n🔑 Wallet ID: *#${effectiveClient.walletId || '—'}*\n📱 Téléphone: *${effectiveClient.phone || '—'}*\n🛒 Service: *${selected.name}*\n💰 Montant payé: *${numericPrice.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n📅 Date: *${now}*\n\n✅ Paiement traité. Veuillez activer le service.`);
+      setStep('success');
+    } catch (err: any) {
+      toast.error(err.message || "Erreur lors du paiement.");
+    } finally {
+      setPurchaseLoading(false);
     }
   };
 
-  const openWhatsApp = () => {
-    const num = settings?.whatsappAdminNumber || '+50944813185';
-    window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent('Bonjour, je souhaite avoir plus de renseignements sur vos services.')}`, '_blank');
+  // ── Créer: payment method (WhatsApp) ──────────────────────────────────────
+  const handleMethodCreate = () => {
+    if (!selected) return;
+    const method = PAYMENT_METHODS.find(m => m.id === payMethod);
+    openWhatsApp(`🎴 *CRÉATION SERVICE — Rena*\n\n🛒 Service: *${selected.name}*\n💰 Prix: *${selected.price}*\n\n💳 Méthode de paiement: *${method?.label}*\n📝 Référence transaction: *${txInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`);
+    setStep('success');
   };
 
+  // ── Recharge: submit ───────────────────────────────────────────────────────
+  const handleRechargeSubmit = () => {
+    if (!rechargeAmount) { toast.error('Veuillez entrer un montant'); return; }
+    setStep('recharge_pay');
+  };
+
+  const handleFinalRecharge = () => {
+    if (!selected || !rechargeAmount) return;
+    const method = PAYMENT_METHODS.find(m => m.id === payMethod);
+    const usd = parseFloat(rechargeAmount);
+    const htg = Math.round(usd * exchangeRate);
+    openWhatsApp(`💳 *RECHARGE CARTE — Rena*\n\n🎴 Carte: *${selected.name}*\n👤 Titulaire: *${holderName || 'Non spécifié'}*\n🔢 Numéro/Info carte: *${cardNumber || 'Non spécifié'}*\n💵 Montant USD: *$${usd}*\n🇭🇹 Équivalent: *${htg.toLocaleString()} HTG*\n\n💳 Méthode: *${method?.label}*\n📝 Référence: *${txInfo || 'Non fournie'}*\n\nMerci de traiter ma recharge.`);
+    setStep('success');
+  };
+
+  const balanceHTG = effectiveClient ? Math.round((effectiveClient.balance ?? 0) * exchangeRate) : 0;
+  const creationPriceNum = selected ? parseFloat(String(selected.price ?? '0').replace(/[^\d.]/g, '')) : 0;
+  const hasEnoughBalance = balanceHTG >= creationPriceNum && creationPriceNum > 0;
+
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="min-h-screen bg-[#F4F6FB] pb-28">
       {/* Header */}
-      <div className="bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 px-4 pt-6 pb-12">
+      <div className="bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 px-4 pt-6 pb-14">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-              <Globe className="h-5 w-5 text-white" />
+              <CreditCard className="h-5 w-5 text-white" />
             </div>
             <div>
               <h1 className="text-xl font-black text-white leading-none">Nos Services</h1>
-              <p className="text-white/60 text-xs font-medium mt-0.5">Solutions rapides et sécurisées</p>
+              <p className="text-white/60 text-xs font-medium mt-0.5">Créez et rechargez vos cartes facilement</p>
             </div>
           </div>
 
-          {/* Stats row */}
-          <div className="grid grid-cols-3 gap-3 mt-6">
+          <div className="grid grid-cols-3 gap-3 mt-5">
             {[
               { label: 'Sécurisé', value: '100%', icon: ShieldCheck },
               { label: 'Disponibilité', value: '24/7', icon: Clock },
               { label: 'Satisfaction', value: '99%', icon: Globe },
-            ].map(stat => (
-              <div key={stat.label} className="bg-white/15 backdrop-blur-sm rounded-2xl p-3 text-center border border-white/10">
-                <stat.icon className="h-4 w-4 text-white/70 mx-auto mb-1" />
-                <p className="text-lg font-black text-white leading-none">{stat.value}</p>
-                <p className="text-[9px] text-white/60 font-bold uppercase tracking-wide mt-0.5">{stat.label}</p>
+            ].map(s => (
+              <div key={s.label} className="bg-white/15 backdrop-blur-sm rounded-2xl p-3 text-center border border-white/10">
+                <s.icon className="h-4 w-4 text-white/70 mx-auto mb-1" />
+                <p className="text-lg font-black text-white leading-none">{s.value}</p>
+                <p className="text-[9px] text-white/60 font-bold uppercase tracking-wide mt-0.5">{s.label}</p>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Service cards — floated over header */}
-      <div className="max-w-3xl mx-auto px-4 -mt-4 space-y-4">
-        {displayServices.map((svc: any, i: number) => {
-          const IconComp = (LucideIcons as any)[svc.icon] || CreditCard;
-          const colorClass = svc.color || SERVICE_COLORS[i % SERVICE_COLORS.length];
-          const isExternal = svc.target === 'url';
-
-          return (
-            <motion.div
-              key={svc.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.08, duration: 0.35 }}
-            >
-              <button
-                onClick={() => handleServiceClick(svc)}
-                className="w-full text-left group bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 overflow-hidden"
+      {/* Cards grid */}
+      <div className="max-w-3xl mx-auto px-4 -mt-6">
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+          </div>
+        ) : services.length === 0 ? (
+          <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200 shadow-sm">
+            <CreditCard className="h-12 w-12 text-gray-200 mx-auto mb-3" />
+            <p className="text-gray-400 text-sm font-semibold">Aucun service disponible pour le moment.</p>
+            <p className="text-gray-300 text-xs mt-1">L'administrateur peut en ajouter depuis le tableau de bord.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {services.map((svc, i) => (
+              <motion.div
+                key={svc.id}
+                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ delay: i * 0.06, duration: 0.3 }}
               >
-                <div className={`h-1.5 w-full bg-gradient-to-r ${colorClass}`} />
-
-                <div className="p-5">
-                  <div className="flex items-start gap-4">
-                    <div className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${colorClass} flex items-center justify-center shadow-lg shrink-0 group-hover:scale-105 transition-transform duration-300`}>
-                      <IconComp className="h-7 w-7 text-white" />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-black text-dark text-base leading-tight">{svc.label}</h3>
-                        {svc.badge && (
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-black bg-gradient-to-r ${colorClass} text-white`}>
-                            {svc.badge}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-500 leading-relaxed line-clamp-2">
-                        {svc.description || 'Accédez à ce service rapidement et en toute sécurité.'}
-                      </p>
+                <button
+                  onClick={() => openService(svc)}
+                  className="w-full group bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 text-left"
+                >
+                  {/* Image */}
+                  <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
+                    <img
+                      src={svc.image}
+                      alt={svc.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      onError={e => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${svc.id}/400/300`; }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                    <div className="absolute bottom-2 left-2">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r ${SERVICE_GRADIENTS[i % SERVICE_GRADIENTS.length]} text-white shadow-md`}>
+                        {svc.price}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1.5 text-[11px] text-gray-400 font-semibold">
-                        <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-                        Sécurisé
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[11px] text-gray-400 font-semibold">
-                        <Zap className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
-                        Rapide
-                      </div>
-                    </div>
-                    <div className={`flex items-center gap-1.5 text-sm font-black bg-gradient-to-r ${colorClass} bg-clip-text text-transparent group-hover:translate-x-0.5 transition-transform`}>
-                      Accéder
-                      {isExternal
-                        ? <ExternalLink className="h-4 w-4 text-gray-400" />
-                        : <ArrowRight className="h-4 w-4 text-gray-400" />
-                      }
+                  {/* Content */}
+                  <div className="p-3">
+                    <p className="font-black text-gray-900 text-sm leading-tight line-clamp-1">{svc.name}</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{svc.description || 'Service disponible'}</p>
+                    <div className="mt-2.5 flex items-center gap-1.5">
+                      <span className="flex items-center gap-1 text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                        <Plus className="h-2.5 w-2.5" /> Créer
+                      </span>
+                      <span className="flex items-center gap-1 text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                        <RefreshCw className="h-2.5 w-2.5" /> Recharge
+                      </span>
                     </div>
                   </div>
-                </div>
-              </button>
-            </motion.div>
-          );
-        })}
+                </button>
+              </motion.div>
+            ))}
+          </div>
+        )}
 
-        {/* Contact card */}
+        {/* Contact */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: displayServices.length * 0.08 + 0.1 }}
-          className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl p-5 border border-gray-700"
+          transition={{ delay: 0.3 }}
+          className="mt-5 bg-gradient-to-br from-gray-800 to-gray-900 rounded-3xl p-5 border border-gray-700"
         >
           <div className="flex items-center gap-4">
             <div className="h-12 w-12 rounded-2xl bg-white/10 flex items-center justify-center shrink-0">
               <Phone className="h-6 w-6 text-white" />
             </div>
-            <div className="flex-1 min-w-0">
+            <div className="flex-1">
               <h3 className="font-black text-white text-base">Besoin d'aide ?</h3>
-              <p className="text-gray-400 text-xs mt-0.5">Notre équipe est disponible 24h/24 pour vous assister.</p>
+              <p className="text-gray-400 text-xs mt-0.5">Notre équipe est disponible 24h/24.</p>
             </div>
           </div>
           <button
-            onClick={openWhatsApp}
+            onClick={() => openWhatsApp('Bonjour, je souhaite avoir plus de renseignements sur vos services.')}
             className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 transition-colors text-white font-black text-sm"
           >
             <MessageCircle className="h-4 w-4" />
@@ -193,6 +241,272 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
           </button>
         </motion.div>
       </div>
+
+      {/* ── Modal ──────────────────────────────────────────────────────────────── */}
+      <AnimatePresence>
+        {selected && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[400] flex items-end sm:items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={closeModal}
+            />
+
+            <motion.div
+              initial={{ opacity: 0, y: 40, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 40, scale: 0.97 }}
+              transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }}
+              className="relative z-10 w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden"
+            >
+              {/* Header */}
+              <div className="relative">
+                <div className="h-32 relative overflow-hidden">
+                  <img src={selected.image} alt={selected.name} className="w-full h-full object-cover"
+                    onError={e => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${selected.id}/800/300`; }} />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/30 to-black/70" />
+                  <div className="absolute inset-0 p-4 flex items-end">
+                    <div>
+                      <p className="text-white font-black text-lg leading-tight">{selected.name}</p>
+                      {selected.description && <p className="text-white/70 text-xs mt-0.5">{selected.description}</p>}
+                    </div>
+                  </div>
+                </div>
+                <button onClick={closeModal}
+                  className="absolute top-3 right-3 h-8 w-8 bg-black/30 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-black/50 transition-colors">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* ── STEP: choice ── */}
+              {step === 'choice' && (
+                <div className="p-5 space-y-3">
+                  <p className="text-sm font-black text-gray-500 uppercase tracking-widest text-center mb-4">Que voulez-vous faire ?</p>
+
+                  <button
+                    onClick={() => setStep('create_pay')}
+                    className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-indigo-100 bg-indigo-50 hover:border-indigo-300 hover:bg-indigo-100 transition-all group"
+                  >
+                    <div className="h-12 w-12 rounded-2xl bg-indigo-500 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <Plus className="h-6 w-6 text-white" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="font-black text-gray-900">Créer</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Obtenir ce service — <span className="font-black text-indigo-600">{selected.price}</span></p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-indigo-400" />
+                  </button>
+
+                  <button
+                    onClick={() => setStep('recharge_form')}
+                    className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-emerald-100 bg-emerald-50 hover:border-emerald-300 hover:bg-emerald-100 transition-all group"
+                  >
+                    <div className="h-12 w-12 rounded-2xl bg-emerald-500 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <RefreshCw className="h-6 w-6 text-white" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="font-black text-gray-900">Recharger</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Ajouter du crédit à votre carte</p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-emerald-400" />
+                  </button>
+                </div>
+              )}
+
+              {/* ── STEP: create_pay ── */}
+              {step === 'create_pay' && (
+                <div className="p-5 space-y-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <button onClick={() => setStep('choice')} className="text-xs text-gray-400 hover:text-gray-600 font-bold flex items-center gap-1">
+                      ← Retour
+                    </button>
+                  </div>
+                  <div className="bg-indigo-50 rounded-2xl p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-gray-500 font-semibold">Total à payer</p>
+                      <p className="text-2xl font-black text-indigo-600">{selected.price}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-400">Votre solde</p>
+                      <p className={`text-sm font-black ${hasEnoughBalance ? 'text-emerald-600' : 'text-red-400'}`}>{balanceHTG.toLocaleString()} HTG</p>
+                    </div>
+                  </div>
+
+                  {/* Wallet pay */}
+                  {effectiveClient ? (
+                    <button
+                      disabled={purchaseLoading || !hasEnoughBalance || hasPendingPurchase}
+                      onClick={handleWalletCreate}
+                      className={`w-full h-13 py-3.5 rounded-2xl border-2 font-black text-sm flex items-center justify-center gap-2 transition-all ${hasEnoughBalance && !hasPendingPurchase ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50 active:scale-95' : 'border-red-200 text-red-400 opacity-60 cursor-not-allowed'}`}
+                    >
+                      {purchaseLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Wallet className="h-4 w-4" /> Payer avec mon solde</>}
+                    </button>
+                  ) : (
+                    <button onClick={onRequestAuth}
+                      className="w-full py-3.5 rounded-2xl bg-primary text-white font-black text-sm flex items-center justify-center gap-2 hover:bg-primary/90 transition-all">
+                      <Wallet className="h-4 w-4" /> Connexion pour payer avec solde
+                    </button>
+                  )}
+
+                  <div className="flex items-center gap-2 my-1">
+                    <div className="h-px flex-1 bg-gray-100" />
+                    <span className="text-xs text-gray-400 font-semibold">OU</span>
+                    <div className="h-px flex-1 bg-gray-100" />
+                  </div>
+
+                  {/* Payment method */}
+                  <div className="space-y-2">
+                    <Label className="text-xs font-black text-gray-600">Méthode de paiement</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {PAYMENT_METHODS.map(m => (
+                        <button key={m.id} onClick={() => setPayMethod(m.id)}
+                          className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 text-xs font-black transition-all ${payMethod === m.id ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-500 hover:border-gray-200'}`}>
+                          <span className="text-lg">{m.icon}</span>
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div>
+                      <Label className="text-xs font-black text-gray-600">Référence / Transaction ID</Label>
+                      <Input value={txInfo} onChange={e => setTxInfo(e.target.value)}
+                        placeholder="Ex: REF123456" className="mt-1 rounded-xl border-gray-200" />
+                    </div>
+                  </div>
+
+                  <Button onClick={handleMethodCreate}
+                    className="w-full h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm">
+                    Envoyer la demande via WhatsApp
+                  </Button>
+                </div>
+              )}
+
+              {/* ── STEP: recharge_form ── */}
+              {step === 'recharge_form' && (
+                <div className="p-5 space-y-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <button onClick={() => setStep('choice')} className="text-xs text-gray-400 hover:text-gray-600 font-bold">
+                      ← Retour
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-xs font-black text-gray-600">Nom du titulaire</Label>
+                      <Input value={holderName} onChange={e => setHolderName(e.target.value)}
+                        placeholder="Ex: Jean Dupont" className="mt-1 rounded-xl border-gray-200" />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-black text-gray-600">Numéro / Identifiant de la carte</Label>
+                      <Input value={cardNumber} onChange={e => setCardNumber(e.target.value)}
+                        placeholder="Ex: 4111 1111 1111 1111" className="mt-1 rounded-xl border-gray-200" />
+                    </div>
+
+                    {/* Presets */}
+                    {selected.presets?.length > 0 && (
+                      <div>
+                        <Label className="text-xs font-black text-gray-600">Montant (USD)</Label>
+                        <div className="flex flex-wrap gap-2 mt-1.5">
+                          {selected.presets.map((p: number) => (
+                            <button key={p} onClick={() => setRechargeAmount(String(p))}
+                              className={`px-3 py-1.5 rounded-xl text-sm font-black border-2 transition-all ${rechargeAmount === String(p) ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-gray-100 text-gray-500 hover:border-gray-200'}`}>
+                              ${p}
+                            </button>
+                          ))}
+                        </div>
+                        <Input value={rechargeAmount} onChange={e => setRechargeAmount(e.target.value)}
+                          placeholder="Ou entrer un montant personnalisé" type="number" min="1"
+                          className="mt-2 rounded-xl border-gray-200" />
+                      </div>
+                    )}
+                    {!selected.presets?.length && (
+                      <div>
+                        <Label className="text-xs font-black text-gray-600">Montant à recharger (USD)</Label>
+                        <Input value={rechargeAmount} onChange={e => setRechargeAmount(e.target.value)}
+                          placeholder="Ex: 25" type="number" min="1" className="mt-1 rounded-xl border-gray-200" />
+                      </div>
+                    )}
+
+                    {rechargeAmount && (
+                      <div className="bg-emerald-50 rounded-xl p-3 flex items-center justify-between">
+                        <p className="text-xs text-gray-500 font-semibold">Équivalent HTG</p>
+                        <p className="font-black text-emerald-600">{Math.round(parseFloat(rechargeAmount || '0') * exchangeRate).toLocaleString()} HTG</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <Button onClick={handleRechargeSubmit}
+                    disabled={!rechargeAmount}
+                    className="w-full h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm disabled:opacity-50">
+                    Continuer → Choisir le paiement
+                  </Button>
+                </div>
+              )}
+
+              {/* ── STEP: recharge_pay ── */}
+              {step === 'recharge_pay' && (
+                <div className="p-5 space-y-4">
+                  <button onClick={() => setStep('recharge_form')} className="text-xs text-gray-400 hover:text-gray-600 font-bold">
+                    ← Retour
+                  </button>
+
+                  <div className="bg-emerald-50 rounded-2xl p-4">
+                    <p className="text-xs text-gray-500 font-semibold">Récapitulatif</p>
+                    <p className="font-black text-gray-900 mt-1">{selected.name}</p>
+                    <p className="text-sm text-emerald-700 font-black">${rechargeAmount} USD = {Math.round(parseFloat(rechargeAmount || '0') * exchangeRate).toLocaleString()} HTG</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-black text-gray-600">Méthode de paiement</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {PAYMENT_METHODS.map(m => (
+                        <button key={m.id} onClick={() => setPayMethod(m.id)}
+                          className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 text-xs font-black transition-all ${payMethod === m.id ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-gray-100 text-gray-500 hover:border-gray-200'}`}>
+                          <span className="text-lg">{m.icon}</span>
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div>
+                      <Label className="text-xs font-black text-gray-600">Référence / Transaction ID</Label>
+                      <Input value={txInfo} onChange={e => setTxInfo(e.target.value)}
+                        placeholder="Ex: REF123456" className="mt-1 rounded-xl border-gray-200" />
+                    </div>
+                  </div>
+
+                  <Button onClick={handleFinalRecharge}
+                    className="w-full h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm">
+                    Confirmer via WhatsApp
+                  </Button>
+                </div>
+              )}
+
+              {/* ── STEP: success ── */}
+              {step === 'success' && (
+                <div className="p-8 text-center space-y-4">
+                  <div className="h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
+                    <Check className="h-8 w-8 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-black text-gray-900">Demande envoyée !</p>
+                    <p className="text-sm text-gray-500 mt-1">Notre équipe va traiter votre demande rapidement via WhatsApp.</p>
+                  </div>
+                  <Button onClick={closeModal}
+                    className="w-full h-12 rounded-2xl bg-primary hover:bg-primary/90 text-white font-black">
+                    Fermer
+                  </Button>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

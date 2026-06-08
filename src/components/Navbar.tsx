@@ -23,8 +23,8 @@ interface NavbarProps {
 }
 
 const NAV_ITEMS = [
-  { key: 'tracking', icon: ColisIcon, label: 'Colis' },
   { key: 'services', icon: Globe,     label: 'Services' },
+  { key: 'tracking', icon: ColisIcon, label: 'Colis'    },
 ];
 
 export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet, onAdminLogin }: NavbarProps) {

@@ -1,225 +1,322 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Loader2, Package, MapPin, Calendar, CreditCard, Image as ImageIcon, CheckCircle2, Clock } from 'lucide-react';
-import { Input } from './ui/input';
-import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { Badge } from './ui/badge';
+import {
+  Search, Loader2, MapPin, CheckCircle2, Package, Home,
+  Truck, Clock, ChevronRight, ArrowRight, CircleDot,
+} from 'lucide-react';
 import { searchParcel } from '../services/parcelService';
 import { Parcel } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { fr } from 'date-fns/locale';
+
+const RECENT_KEY = 'rena_recent_tracking';
+const MAX_RECENT = 5;
+
+function getRecent(): string[] {
+  try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch { return []; }
+}
+function pushRecent(num: string) {
+  const list = [num, ...getRecent().filter(n => n !== num)].slice(0, MAX_RECENT);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+}
+
+type Step = { key: string; label: string; icon: React.ReactNode };
+
+const STEPS: Step[] = [
+  { key: 'En route',   label: 'En route',   icon: <CheckCircle2 className="h-4 w-4" /> },
+  { key: 'En transit', label: 'En transit', icon: <Package className="h-4 w-4" /> },
+  { key: 'Arrivé',     label: 'Arrivé',     icon: <Truck className="h-4 w-4" /> },
+  { key: 'Livré',      label: 'Livré',      icon: <Home className="h-4 w-4" /> },
+];
+
+function getStepIndex(status: string): number {
+  return STEPS.findIndex(s => s.key === status);
+}
+
+function buildTimeline(parcel: Parcel) {
+  const lines: { label: string; sub: string; time: string; active: boolean }[] = [];
+  const now = new Date();
+
+  const fmtDate = (d: any) => {
+    if (!d) return '';
+    const date = d?.toDate ? d.toDate() : new Date(d);
+    return isValid(date) ? format(date, 'dd MMM, HH:mm', { locale: fr }) : '';
+  };
+
+  const si = getStepIndex(parcel.status);
+
+  if (si >= 3) lines.push({ label: 'Colis livré', sub: parcel.currentLocation || '', time: fmtDate(parcel.updatedAt), active: true });
+  if (si >= 2) lines.push({ label: 'Arrivé à destination', sub: parcel.currentLocation || '', time: fmtDate(parcel.updatedAt), active: si === 2 });
+  if (si >= 1) lines.push({ label: 'En transit', sub: parcel.currentLocation || 'En cours de transport', time: fmtDate(parcel.createdAt), active: si === 1 });
+  lines.push({ label: 'Colis pris en charge', sub: 'Rena Logistics', time: fmtDate(parcel.createdAt), active: si === 0 });
+
+  return lines;
+}
 
 export default function TrackingView() {
   const [trackingNumber, setTrackingNumber] = useState('');
   const [parcel, setParcel] = useState<Parcel | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [recent, setRecent] = useState<string[]>(getRecent());
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!trackingNumber.trim()) return;
-
+  const handleSearch = async (num?: string) => {
+    const query = (num ?? trackingNumber).trim();
+    if (!query) return;
+    setTrackingNumber(query);
     setLoading(true);
     setError('');
     setParcel(null);
-
     try {
-      const result = await searchParcel(trackingNumber.trim());
+      const result = await searchParcel(query);
       if (result) {
         setParcel(result);
+        pushRecent(query);
+        setRecent(getRecent());
       } else {
         setError('Aucun colis trouvé avec ce numéro de suivi.');
       }
-    } catch (err) {
+    } catch {
       setError('Une erreur est survenue lors de la recherche.');
-      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Livré': return 'bg-green-100 text-green-700 border-green-200';
-      case 'Arrivé': return 'bg-accent-light text-primary border-accent-light/50';
-      case 'En transit': return 'bg-amber-100 text-amber-700 border-amber-200';
-      default: return 'bg-muted text-subtext border-muted-foreground/20';
-    }
+  const stepIndex = parcel ? getStepIndex(parcel.status) : -1;
+  const timeline = parcel ? buildTimeline(parcel) : [];
+
+  const fmtArrival = (d: any) => {
+    if (!d) return 'Non spécifiée';
+    const date = new Date(d);
+    return isValid(date) ? format(date, 'EEEE, d MMM', { locale: fr }) : 'Non spécifiée';
+  };
+
+  const statusColor = (status: string) => {
+    if (status === 'Livré') return 'text-emerald-600 bg-emerald-50';
+    if (status === 'Arrivé') return 'text-blue-600 bg-blue-50';
+    if (status === 'En transit') return 'text-amber-600 bg-amber-50';
+    return 'text-gray-600 bg-gray-100';
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Hero Search Section with Background Image */}
-      <div className="relative py-20 px-4 overflow-hidden">
-        {/* Background Image Layer with Animation */}
-        <motion.div 
-          initial={{ scale: 1.1 }}
-          animate={{ scale: 1 }}
-          transition={{ duration: 20, repeat: Infinity, repeatType: "reverse", ease: "linear" }}
-          className="absolute inset-0 z-0"
-          style={{
-            backgroundImage: 'url("https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=2070&auto=format&fit=crop")',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-        >
-          {/* Blur and Dark Overlay */}
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-[3px]" />
-        </motion.div>
-
-        <div className="relative z-10 max-w-4xl mx-auto">
-          <div className="text-center mb-10">
-            <motion.h1 
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-3xl sm:text-5xl font-extrabold text-white mb-4 leading-tight drop-shadow-lg"
+    <div className="min-h-screen bg-[#EEF2FF] pb-28">
+      {/* ── Header ── */}
+      <div className="bg-white px-4 pt-5 pb-5 shadow-sm">
+        <div className="max-w-xl mx-auto">
+          {/* Search bar */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                value={trackingNumber}
+                onChange={e => setTrackingNumber(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                placeholder="N° de suivi (ex: RNA-001234)"
+                className="w-full pl-10 pr-4 py-3 rounded-2xl border border-gray-200 bg-gray-50 text-sm font-semibold text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+              />
+            </div>
+            <button
+              onClick={() => handleSearch()}
+              disabled={loading || !trackingNumber.trim()}
+              className="px-5 py-3 rounded-2xl bg-primary text-white font-black text-sm shadow-md shadow-primary/25 hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-50 shrink-0"
             >
-              Suivez votre colis en temps réel
-            </motion.h1>
-            <motion.p 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="text-base sm:text-xl text-accent-light font-medium drop-shadow-md"
-            >
-              Entrez votre numéro de suivi Rena pour voir l'état actuel de votre livraison.
-            </motion.p>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Suivre'}
+            </button>
           </div>
 
-          <Card className="shadow-2xl border-0 bg-white/90 backdrop-blur-md mb-0 rounded-2xl overflow-hidden">
-            <CardContent className="pt-8 pb-8 px-6 sm:px-10">
-              <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-4">
-                <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-subtext" />
-                  <Input
-                    placeholder="Enter your tracking number"
-                    value={trackingNumber}
-                    onChange={(e) => setTrackingNumber(e.target.value)}
-                    className="pl-12 h-14 text-lg border-muted focus:ring-primary focus:border-primary rounded-2xl bg-white shadow-xl transition-all focus:shadow-2xl"
-                  />
-                </div>
-                <Button 
-                  type="submit" 
-                  disabled={loading}
-                  className="h-14 px-10 bg-primary hover:bg-[#1D4ED8] text-white font-bold text-lg rounded-2xl transition-all hover:shadow-xl hover:shadow-primary/20 active:scale-95 shadow-lg shadow-primary/30 border-0"
+          {/* Recent searches */}
+          {recent.length > 0 && !parcel && (
+            <div className="flex gap-2 mt-3 flex-wrap">
+              {recent.map(r => (
+                <button
+                  key={r}
+                  onClick={() => handleSearch(r)}
+                  className="px-3 py-1 rounded-full bg-primary/8 text-primary text-[11px] font-black hover:bg-primary/15 transition-colors"
                 >
-                  {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : 'Rechercher'}
-                </Button>
-              </form>
-              {error && (
-                <motion.p 
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-4 text-red-600 text-sm font-bold flex items-center gap-2"
-                >
-                  <Clock className="h-4 w-4" />
-                  {error}
-                </motion.p>
-              )}
-            </CardContent>
-          </Card>
+                  {r}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Error */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-3 flex items-center gap-2 text-red-600 text-xs font-bold bg-red-50 px-3 py-2 rounded-xl"
+            >
+              <Clock className="h-3.5 w-3.5 shrink-0" />
+              {error}
+            </motion.div>
+          )}
         </div>
       </div>
 
-      {/* Results Section */}
-      <div className="max-w-4xl mx-auto px-4 py-12">
-        <AnimatePresence>
+      <div className="max-w-xl mx-auto px-4 py-5 space-y-5">
+        <AnimatePresence mode="wait">
+          {/* ── Empty state ── */}
+          {!parcel && !loading && (
+            <motion.div
+              key="empty"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center justify-center py-16 text-center"
+            >
+              <div className="h-20 w-20 rounded-3xl bg-white shadow-md flex items-center justify-center mb-5">
+                <Package className="h-10 w-10 text-primary/40" />
+              </div>
+              <p className="text-gray-700 font-black text-lg">Suivez votre colis</p>
+              <p className="text-gray-400 text-sm mt-1 max-w-[240px]">Entrez votre numéro de suivi Rena pour connaître le statut de votre livraison.</p>
+            </motion.div>
+          )}
+
+          {/* ── Active Shipment ── */}
           {parcel && (
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              key="parcel"
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="space-y-6"
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-4"
             >
-              <Card className="overflow-hidden border-0 shadow-xl rounded-2xl bg-white">
-                <CardHeader className="bg-muted/30 border-b px-6 py-6">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              {/* Section label */}
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-black text-gray-900">Expédition active</h2>
+                <span className="text-[10px] font-black text-primary bg-primary/10 px-2.5 py-1 rounded-full uppercase tracking-wide">
+                  {parcel.paymentStatus === 'Payé' ? '✓ Payé' : 'Paiement requis'}
+                </span>
+              </div>
+
+              {/* Main card */}
+              <div className="bg-white rounded-3xl shadow-md overflow-hidden border border-white/50">
+                {/* Delivery info */}
+                <div className="p-5">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      <CardTitle className="text-2xl font-bold text-dark">Détails de l'expédition</CardTitle>
-                      <CardDescription className="font-mono text-primary font-bold mt-1 text-lg">#{parcel.trackingNumber}</CardDescription>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Livraison estimée</p>
+                      <p className="text-xl font-black text-gray-900 mt-1 capitalize">{fmtArrival(parcel.estimatedArrival)}</p>
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <span className={`h-2 w-2 rounded-full ${stepIndex === 3 ? 'bg-emerald-500' : 'bg-primary'} animate-pulse`} />
+                        <span className={`text-xs font-black ${stepIndex === 3 ? 'text-emerald-600' : 'text-primary'}`}>{parcel.status}</span>
+                      </div>
                     </div>
-                    <Badge className={`px-4 py-1.5 text-sm font-bold rounded-full border shadow-sm ${getStatusColor(parcel.status)}`}>
-                      {parcel.status}
-                    </Badge>
+                    <div className="h-12 w-12 rounded-2xl bg-primary/8 flex items-center justify-center shrink-0">
+                      <Truck className="h-6 w-6 text-primary" />
+                    </div>
                   </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x border-b">
-                    <div className="p-8 space-y-8">
-                      <div className="flex items-start gap-5">
-                        <div className="bg-accent-light p-3 rounded-2xl shadow-sm">
-                          <MapPin className="h-6 w-6 text-primary" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-subtext uppercase tracking-widest mb-1">Localisation actuelle</p>
-                          <p className="text-xl font-bold text-dark">{parcel.currentLocation}</p>
-                        </div>
-                      </div>
 
-                      <div className="flex items-start gap-5">
-                        <div className="bg-purple-100 p-3 rounded-2xl shadow-sm">
-                          <Calendar className="h-6 w-6 text-purple-600" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-subtext uppercase tracking-widest mb-1">Date estimée d'arrivée</p>
-                          <p className="text-xl font-bold text-dark">
-                            {parcel.estimatedArrival ? format(new Date(parcel.estimatedArrival), 'PPP', { locale: fr }) : 'Non spécifiée'}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-5">
-                        <div className="bg-emerald-100 p-3 rounded-2xl shadow-sm">
-                          <CreditCard className="h-6 w-6 text-emerald-600" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-subtext uppercase tracking-widest mb-1">Statut du paiement</p>
-                          <Badge variant={parcel.paymentStatus === 'Payé' ? 'default' : 'destructive'} className="mt-1 font-bold px-3 py-1">
-                            {parcel.paymentStatus}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-8 bg-muted/20">
-                      <p className="text-xs font-bold text-subtext uppercase tracking-widest mb-6 flex items-center gap-2">
-                        <ImageIcon className="h-4 w-4" />
-                        Preuve de livraison
-                      </p>
-                      {parcel.status === 'Livré' && parcel.proofOfDelivery ? (
-                        <div className="rounded-2xl overflow-hidden border-2 border-white shadow-2xl group relative bg-white aspect-video flex items-center justify-center">
-                          <img 
-                            src={parcel.proofOfDelivery} 
-                            alt="Preuve de livraison" 
-                            className="max-w-full max-h-full object-contain transition-transform duration-500 group-hover:scale-110"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                            <Button variant="secondary" className="font-bold shadow-lg" onClick={() => window.open(parcel.proofOfDelivery, '_blank')}>
-                              Agrandir l'image
-                            </Button>
+                  {/* Progress steps */}
+                  <div className="mt-5 flex items-center gap-1">
+                    {STEPS.map((step, i) => {
+                      const done = i < stepIndex;
+                      const active = i === stepIndex;
+                      const upcoming = i > stepIndex;
+                      return (
+                        <React.Fragment key={step.key}>
+                          <div className="flex flex-col items-center gap-1.5 flex-1">
+                            <div className={`h-9 w-9 rounded-2xl flex items-center justify-center transition-all ${
+                              done ? 'bg-primary text-white' :
+                              active ? 'bg-primary text-white ring-4 ring-primary/20' :
+                              'bg-gray-100 text-gray-300'
+                            }`}>
+                              {step.icon}
+                            </div>
+                            <span className={`text-[9px] font-bold text-center leading-none ${
+                              done || active ? 'text-primary' : 'text-gray-300'
+                            }`}>{step.label}</span>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="aspect-video rounded-2xl border-2 border-dashed border-muted flex flex-col items-center justify-center text-subtext/40 bg-white shadow-inner">
-                          {parcel.status === 'Livré' ? (
-                            <>
-                              <Loader2 className="h-10 w-10 mb-3 animate-spin text-primary/40 opacity-50" />
-                              <p className="text-sm font-medium">Image en cours de traitement...</p>
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle2 className="h-12 w-12 mb-3 opacity-10" />
-                              <p className="text-sm font-medium">Disponible après livraison</p>
-                            </>
+                          {i < STEPS.length - 1 && (
+                            <div className={`h-0.5 flex-1 mb-4 rounded-full transition-all ${done ? 'bg-primary' : 'bg-gray-100'}`} />
                           )}
-                        </div>
-                      )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Map / Location strip */}
+                <div className="relative h-28 overflow-hidden bg-gradient-to-br from-blue-100 via-indigo-50 to-blue-200">
+                  <div className="absolute inset-0 opacity-20"
+                    style={{
+                      backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 20px, rgba(99,102,241,0.3) 20px, rgba(99,102,241,0.3) 21px), repeating-linear-gradient(90deg, transparent, transparent 20px, rgba(99,102,241,0.3) 20px, rgba(99,102,241,0.3) 21px)',
+                    }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <MapPin className="h-8 w-8 text-primary drop-shadow-lg" fill="white" />
+                      <div className="bg-white/90 backdrop-blur-sm rounded-xl px-3 py-1 shadow-md">
+                        <p className="text-xs font-black text-gray-700 flex items-center gap-1">
+                          <MapPin className="h-3 w-3 text-primary" />
+                          {parcel.currentLocation || 'Localisation en cours…'}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+
+                {/* Timeline */}
+                <div className="p-5">
+                  <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4">Chronologie</p>
+                  <div className="space-y-4">
+                    {timeline.map((item, i) => (
+                      <div key={i} className="flex gap-3 items-start">
+                        <div className="flex flex-col items-center">
+                          <div className={`h-2.5 w-2.5 rounded-full mt-0.5 ${item.active ? 'bg-primary' : 'bg-gray-200'}`} />
+                          {i < timeline.length - 1 && <div className="w-px flex-1 bg-gray-100 mt-1 min-h-[20px]" />}
+                        </div>
+                        <div className="flex-1 pb-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className={`text-xs font-black ${item.active ? 'text-gray-900' : 'text-gray-400'}`}>{item.label}</p>
+                            {item.time && <p className="text-[10px] text-gray-400 font-semibold shrink-0">{item.time}</p>}
+                          </div>
+                          {item.sub && <p className="text-[11px] text-gray-400 mt-0.5">{item.sub}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tracking number + action */}
+                <div className="px-5 pb-5">
+                  <div className="bg-gray-50 rounded-2xl p-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] text-gray-400 font-semibold">Numéro de suivi</p>
+                      <p className="text-sm font-black text-gray-800 font-mono">#{parcel.trackingNumber}</p>
+                    </div>
+                    <span className={`text-xs font-black px-2.5 py-1 rounded-xl ${statusColor(parcel.status)}`}>
+                      {parcel.status}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Other shipments — recent searches */}
+              {recent.filter(r => r !== parcel.trackingNumber).length > 0 && (
+                <div>
+                  <h3 className="text-base font-black text-gray-900 mb-3">Autres colis</h3>
+                  <div className="space-y-2">
+                    {recent.filter(r => r !== parcel.trackingNumber).map(r => (
+                      <button
+                        key={r}
+                        onClick={() => handleSearch(r)}
+                        className="w-full bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3.5 flex items-center gap-4 hover:border-primary/30 hover:shadow-md transition-all group"
+                      >
+                        <div className="h-10 w-10 rounded-xl bg-gray-50 flex items-center justify-center shrink-0">
+                          <Package className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <p className="text-sm font-black text-gray-800 font-mono">#{r}</p>
+                          <p className="text-[11px] text-gray-400 mt-0.5">Cliquer pour suivre</p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-primary transition-colors" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

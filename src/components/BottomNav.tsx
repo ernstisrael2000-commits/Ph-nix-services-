@@ -13,8 +13,8 @@ interface BottomNavProps {
 }
 
 const NAV_ITEMS = [
-  { key: 'tracking', icon: Package, label: 'Colis'    },
   { key: 'services', icon: Globe,   label: 'Services' },
+  { key: 'tracking', icon: Package, label: 'Colis'    },
 ];
 
 export default function BottomNav({ currentView, onViewChange, loggedClient, onOpenWallet, onRequestAuth }: BottomNavProps) {
