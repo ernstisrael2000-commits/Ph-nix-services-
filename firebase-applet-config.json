@@ -1,10 +1,9 @@
 {
-  "projectId": "gen-lang-client-0739219145",
-  "appId": "1:47402822818:web:de31d0864916143d0a3bfb",
-  "apiKey": "AIzaSyC-Cnw4wf15uKVQ6Vt8diX-WNrYeX7b_LQ",
-  "authDomain": "gen-lang-client-0739219145.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-283d6370-7e1a-484a-aed2-4d5b3071d1e2",
-  "storageBucket": "gen-lang-client-0739219145.firebasestorage.app",
-  "messagingSenderId": "47402822818",
-  "measurementId": ""
+  "apiKey": "AIzaSyBwS26XgSjz7B_jciqnnySE15hUib4Y-x8",
+  "authDomain": "neopay-446f3.firebaseapp.com",
+  "projectId": "neopay-446f3",
+  "storageBucket": "neopay-446f3.firebasestorage.app",
+  "messagingSenderId": "867285773092",
+  "appId": "1:867285773092:web:83a40368df8c24c83fe1b1",
+  "firestoreDatabaseId": "default"
 }
