@@ -2,38 +2,40 @@ import React from 'react';
 import { motion } from 'motion/react';
 import * as LucideIcons from 'lucide-react';
 import {
-  Globe, Package, Truck, ArrowRight, ExternalLink,
-  Zap, ShieldCheck, Clock, Phone, MessageCircle,
+  Globe, Package, ArrowRight, ExternalLink,
+  Zap, ShieldCheck, Clock, Phone, MessageCircle, CreditCard,
 } from 'lucide-react';
 import { useOnlineServices, useSettings } from '../services/parcelService';
+import { Client } from '../types';
 
 interface ServicesViewProps {
-  onTrackingClick: () => void;
-  onViewChange: (view: any) => void;
+  loggedClient: Client | null;
+  onOpenWallet: () => void;
+  onRequestAuth: () => void;
 }
 
 const DEFAULT_SERVICES = [
   {
-    id: '_tracking',
-    label: 'Suivi de Colis',
-    description: 'Suivez vos colis en temps réel depuis n\'importe où dans le monde.',
-    icon: 'Package',
-    target: 'tracking' as const,
+    id: '_card_create',
+    label: 'Création de Carte',
+    description: 'Obtenez votre carte virtuelle ou physique rapidement et en toute sécurité.',
+    icon: 'CreditCard',
+    target: 'url' as const,
     active: true,
     order: 1,
     color: 'from-blue-500 to-blue-700',
-    badge: 'En direct',
+    badge: 'Nouveau',
   },
   {
-    id: '_shipping',
-    label: 'Expédition',
-    description: 'Envoi et réception de colis — international, rapide et sécurisé.',
-    icon: 'Truck',
-    target: 'shipping' as const,
+    id: '_card_recharge',
+    label: 'Recharge de Carte',
+    description: 'Rechargez votre carte facilement depuis votre wallet ou via mobile money.',
+    icon: 'Zap',
+    target: 'url' as const,
     active: true,
     order: 2,
     color: 'from-emerald-500 to-teal-700',
-    badge: 'International',
+    badge: 'Rapide',
   },
 ];
 
@@ -46,28 +48,32 @@ const SERVICE_COLORS = [
   'from-cyan-500 to-blue-600',
 ];
 
-export default function ServicesView({ onTrackingClick, onViewChange }: ServicesViewProps) {
+export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth }: ServicesViewProps) {
   const { services: rawServices } = useOnlineServices();
   const { settings } = useSettings();
 
-  const activeServices = rawServices.filter(s => s.active);
+  // Filter out built-in tracking/shipping redirects — those are now top-level nav items
+  const activeServices = rawServices.filter(s => s.active && s.target !== 'tracking' && s.target !== 'shipping');
   const displayServices = activeServices.length > 0 ? activeServices : DEFAULT_SERVICES;
 
   const handleServiceClick = (svc: any) => {
-    if (svc.target === 'tracking') { onTrackingClick(); }
-    else if (svc.target === 'shipping') { onViewChange('shipping'); }
-    else if (svc.target === 'url' && svc.url) { window.open(svc.url, '_blank'); }
+    if (svc.target === 'url' && svc.url) {
+      window.open(svc.url, '_blank');
+    } else if (svc.target === 'wallet') {
+      if (loggedClient) onOpenWallet();
+      else onRequestAuth();
+    }
   };
 
   const openWhatsApp = () => {
     const num = settings?.whatsappAdminNumber || '+50944813185';
-    window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent('Bonjour Rena, je souhaite avoir plus de renseignements sur vos services.')}`, '_blank');
+    window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent('Bonjour, je souhaite avoir plus de renseignements sur vos services.')}`, '_blank');
   };
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header */}
-      <div className="bg-gradient-to-br from-teal-600 via-emerald-600 to-cyan-500 px-4 pt-6 pb-12">
+      <div className="bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 px-4 pt-6 pb-12">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
@@ -82,9 +88,9 @@ export default function ServicesView({ onTrackingClick, onViewChange }: Services
           {/* Stats row */}
           <div className="grid grid-cols-3 gap-3 mt-6">
             {[
-              { label: 'Pays desservis', value: '15+', icon: Globe },
+              { label: 'Sécurisé', value: '100%', icon: ShieldCheck },
               { label: 'Disponibilité', value: '24/7', icon: Clock },
-              { label: 'Livraisons', value: '99%', icon: ShieldCheck },
+              { label: 'Satisfaction', value: '99%', icon: Globe },
             ].map(stat => (
               <div key={stat.label} className="bg-white/15 backdrop-blur-sm rounded-2xl p-3 text-center border border-white/10">
                 <stat.icon className="h-4 w-4 text-white/70 mx-auto mb-1" />
@@ -96,10 +102,10 @@ export default function ServicesView({ onTrackingClick, onViewChange }: Services
         </div>
       </div>
 
-      {/* Services cards — floated over header */}
+      {/* Service cards — floated over header */}
       <div className="max-w-3xl mx-auto px-4 -mt-4 space-y-4">
         {displayServices.map((svc: any, i: number) => {
-          const IconComp = (LucideIcons as any)[svc.icon] || Package;
+          const IconComp = (LucideIcons as any)[svc.icon] || CreditCard;
           const colorClass = svc.color || SERVICE_COLORS[i % SERVICE_COLORS.length];
           const isExternal = svc.target === 'url';
 
@@ -114,23 +120,20 @@ export default function ServicesView({ onTrackingClick, onViewChange }: Services
                 onClick={() => handleServiceClick(svc)}
                 className="w-full text-left group bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 overflow-hidden"
               >
-                {/* Top gradient strip */}
                 <div className={`h-1.5 w-full bg-gradient-to-r ${colorClass}`} />
 
                 <div className="p-5">
                   <div className="flex items-start gap-4">
-                    {/* Icon */}
                     <div className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${colorClass} flex items-center justify-center shadow-lg shrink-0 group-hover:scale-105 transition-transform duration-300`}>
                       <IconComp className="h-7 w-7 text-white" />
                     </div>
 
-                    {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-black text-dark text-base leading-tight">{svc.label}</h3>
-                        {(svc.badge || i < DEFAULT_SERVICES.length) && (
+                        {svc.badge && (
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-black bg-gradient-to-r ${colorClass} text-white`}>
-                            {svc.badge || (i === 0 ? 'En direct' : i === 1 ? 'International' : 'Nouveau')}
+                            {svc.badge}
                           </span>
                         )}
                       </div>
@@ -140,7 +143,6 @@ export default function ServicesView({ onTrackingClick, onViewChange }: Services
                     </div>
                   </div>
 
-                  {/* Footer row */}
                   <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50">
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-1.5 text-[11px] text-gray-400 font-semibold">
