@@ -33,7 +33,7 @@ let _initAttempted = false;
 
 function parseServiceAccount(raw: string): any {
   let json = raw.trim();
-  // Support base64-encoded JSON (common Vercel workaround)
+  // Support base64-encoded JSON (common workaround)
   if (!json.startsWith('{')) {
     try {
       const decoded = Buffer.from(json, 'base64').toString('utf8').trim();
@@ -46,6 +46,17 @@ function parseServiceAccount(raw: string): any {
   if (sa.private_key) {
     // Handle both single-escaped (\n) and double-escaped (\\n) newlines
     sa.private_key = sa.private_key.replace(/\\n/g, '\n');
+    // Normalize non-standard PEM headers (e.g. French "DEBUT PRIVÉ CLÉ") to standard English
+    sa.private_key = sa.private_key
+      .replace(/-----[^-]*BEGIN[^-]*-----/gi, '-----BEGIN PRIVATE KEY-----')
+      .replace(/-----[^-]*END[^-]*-----/gi, '-----END PRIVATE KEY-----');
+    // Ensure proper PEM format: header, base64 body (64-char lines), footer
+    const lines = sa.private_key.split('\n').map((l: string) => l.trim()).filter(Boolean);
+    const header = lines.find((l: string) => l.startsWith('-----BEGIN')) ?? '-----BEGIN PRIVATE KEY-----';
+    const footer = lines.find((l: string) => l.startsWith('-----END')) ?? '-----END PRIVATE KEY-----';
+    const body = lines.filter((l: string) => !l.startsWith('-----')).join('');
+    const chunked = body.match(/.{1,64}/g)?.join('\n') ?? body;
+    sa.private_key = `${header}\n${chunked}\n${footer}\n`;
   }
   return sa;
 }
