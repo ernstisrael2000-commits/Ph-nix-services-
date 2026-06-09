@@ -19,10 +19,40 @@ interface ServicesViewProps {
 }
 
 const PAYMENT_METHODS = [
-  { id: 'moncash', label: 'MonCash',  icon: '📱' },
-  { id: 'natcash', label: 'NatCash',  icon: '💳' },
-  { id: 'admi',    label: 'Admi',     icon: '🏦' },
+  { id: 'moncash', label: 'MonCash', color: 'border-red-300 bg-red-50 text-red-700', activeColor: 'border-red-500 bg-red-100 text-red-800' },
+  { id: 'natcash', label: 'NatCash', color: 'border-amber-300 bg-amber-50 text-amber-700', activeColor: 'border-amber-500 bg-amber-100 text-amber-800' },
+  { id: 'paypal',  label: 'PayPal',  color: 'border-blue-300 bg-blue-50 text-blue-700',  activeColor: 'border-blue-500 bg-blue-100 text-blue-800'  },
 ];
+
+function MoncashLogo({ size = 28 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
+      <rect width="40" height="40" rx="8" fill="#E31D1C"/>
+      <text x="50%" y="56%" dominantBaseline="middle" textAnchor="middle" fill="white" fontSize="10" fontWeight="900" fontFamily="Arial,sans-serif">M</text>
+    </svg>
+  );
+}
+function NatcashLogo({ size = 28 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
+      <rect width="40" height="40" rx="8" fill="#F59E0B"/>
+      <text x="50%" y="56%" dominantBaseline="middle" textAnchor="middle" fill="white" fontSize="10" fontWeight="900" fontFamily="Arial,sans-serif">N</text>
+    </svg>
+  );
+}
+function PaypalLogo({ size = 28 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
+      <rect width="40" height="40" rx="8" fill="#003087"/>
+      <text x="50%" y="54%" dominantBaseline="middle" textAnchor="middle" fill="white" fontSize="8" fontWeight="900" fontFamily="Arial,sans-serif">PP</text>
+    </svg>
+  );
+}
+const METHOD_LOGOS: Record<string, React.FC<{size?: number}>> = {
+  moncash: MoncashLogo,
+  natcash: NatcashLogo,
+  paypal:  PaypalLogo,
+};
 
 const SERVICE_GRADIENTS = [
   'from-blue-500 to-indigo-600',
@@ -365,13 +395,17 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
                   <div className="space-y-2">
                     <Label className="text-xs font-black text-gray-600">Méthode de paiement</Label>
                     <div className="grid grid-cols-3 gap-2">
-                      {PAYMENT_METHODS.map(m => (
-                        <button key={m.id} onClick={() => setPayMethod(m.id)}
-                          className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 text-xs font-black transition-all ${payMethod === m.id ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-gray-100 text-gray-500 hover:border-gray-200'}`}>
-                          <span className="text-lg">{m.icon}</span>
-                          {m.label}
-                        </button>
-                      ))}
+                      {PAYMENT_METHODS.map(m => {
+                        const Logo = METHOD_LOGOS[m.id];
+                        const active = payMethod === m.id;
+                        return (
+                          <button key={m.id} onClick={() => setPayMethod(m.id)}
+                            className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-xs font-black transition-all ${active ? m.activeColor : 'border-gray-100 text-gray-500 hover:border-gray-200 bg-white'}`}>
+                            <Logo size={26} />
+                            {m.label}
+                          </button>
+                        );
+                      })}
                     </div>
                     <div>
                       <Label className="text-xs font-black text-gray-600">Référence / Transaction ID</Label>
@@ -465,13 +499,17 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
                   <div className="space-y-2">
                     <Label className="text-xs font-black text-gray-600">Méthode de paiement</Label>
                     <div className="grid grid-cols-3 gap-2">
-                      {PAYMENT_METHODS.map(m => (
-                        <button key={m.id} onClick={() => setPayMethod(m.id)}
-                          className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 text-xs font-black transition-all ${payMethod === m.id ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-gray-100 text-gray-500 hover:border-gray-200'}`}>
-                          <span className="text-lg">{m.icon}</span>
-                          {m.label}
-                        </button>
-                      ))}
+                      {PAYMENT_METHODS.map(m => {
+                        const Logo = METHOD_LOGOS[m.id];
+                        const active = payMethod === m.id;
+                        return (
+                          <button key={m.id} onClick={() => setPayMethod(m.id)}
+                            className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-xs font-black transition-all ${active ? m.activeColor : 'border-gray-100 text-gray-500 hover:border-gray-200 bg-white'}`}>
+                            <Logo size={26} />
+                            {m.label}
+                          </button>
+                        );
+                      })}
                     </div>
                     <div>
                       <Label className="text-xs font-black text-gray-600">Référence / Transaction ID</Label>

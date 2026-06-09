@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Globe, Wallet, Lock } from 'lucide-react';
+import { Package, Globe, Wallet, Lock, GraduationCap, Home } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Client } from '../types';
 import { useSettings } from '../services/parcelService';
@@ -13,8 +13,9 @@ interface BottomNavProps {
 }
 
 const NAV_ITEMS = [
-  { key: 'services', icon: Globe,   label: 'Services' },
-  { key: 'tracking', icon: Package, label: 'Colis'    },
+  { key: 'services',    icon: Globe,           label: 'Services'    },
+  { key: 'formations',  icon: GraduationCap,   label: 'Formations'  },
+  { key: 'tracking',    icon: Package,         label: 'Colis'       },
 ];
 
 export default function BottomNav({ currentView, onViewChange, loggedClient, onOpenWallet, onRequestAuth }: BottomNavProps) {

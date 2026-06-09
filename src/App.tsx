@@ -5,6 +5,7 @@ import TrackingView from './components/TrackingView';
 import AdminDashboard from './components/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
 import ServicesView from './components/ServicesView';
+import FormationsView from './components/FormationsView';
 import ClientDashboard from './components/ClientDashboard';
 import PaymentSuccessView from './components/PaymentSuccessView';
 import PaymentSuccessPage from './components/PaymentSuccessPage';
@@ -24,11 +25,12 @@ import { doc, getDocFromServer, onSnapshot } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { toast } from 'sonner';
 
-type ViewType = 'tracking' | 'services' | 'admin';
+type ViewType = 'tracking' | 'services' | 'formations' | 'admin';
 
 export default function App() {
   const [view, setView] = useState<ViewType>('services');
   const [history, setHistory] = useState<ViewType[]>(['services']);
+  const [formationsTab, setFormationsTab] = useState<'all' | 'my'>('all');
   const { loading } = useAuth();
   const { settings } = useSettings();
   const [showAnnouncement, setShowAnnouncement] = useState(true);
@@ -245,6 +247,16 @@ export default function App() {
               loggedClient={loggedClient}
               onOpenWallet={() => setShowClientDashboard(true)}
               onRequestAuth={() => setShowAuthModal(true)}
+            />
+          )}
+
+          {view === 'formations' && (
+            <FormationsView
+              loggedClient={loggedClient}
+              onOpenWallet={() => setShowClientDashboard(true)}
+              onClientLogin={handleClientLogin}
+              activeTab={formationsTab}
+              onTabChange={setFormationsTab}
             />
           )}
 
