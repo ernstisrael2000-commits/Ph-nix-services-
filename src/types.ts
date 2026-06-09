@@ -64,6 +64,7 @@ export interface CardTopup {
   goldRate?: number;
   presets?: number[];
   rechargeFields?: RechargeField[];
+  rechargeFeePercent?: number;
   createdAt: any;
   updatedAt?: any;
 }

@@ -22,6 +22,7 @@ const ServicesView       = lazy(() => import('./components/ServicesView'));
 const AdminDashboard     = lazy(() => import('./components/AdminDashboard'));
 const AdminLogin         = lazy(() => import('./components/AdminLogin'));
 const ClientDashboard    = lazy(() => import('./components/ClientDashboard'));
+const WalletPage         = lazy(() => import('./components/WalletPage'));
 const PaymentSuccessView = lazy(() => import('./components/PaymentSuccessView'));
 const PaymentSuccessPage = lazy(() => import('./components/PaymentSuccessPage'));
 const UserAuthModal      = lazy(() => import('./components/UserAuthModal'));
@@ -34,7 +35,7 @@ function PageSpinner() {
   );
 }
 
-type ViewType = 'tracking' | 'services' | 'admin';
+type ViewType = 'tracking' | 'services' | 'admin' | 'wallet';
 
 export default function App() {
   const [view, setView] = useState<ViewType>('services');
@@ -213,30 +214,56 @@ export default function App() {
         {view !== 'admin' && (
           <BottomNav
             currentView={view}
-            onViewChange={handleViewChange}
+            onViewChange={(v) => {
+              if (v === 'wallet' && !loggedClient) { setShowAuthModal(true); return; }
+              handleViewChange(v as ViewType);
+            }}
             loggedClient={loggedClient}
-            onOpenWallet={() => { setWalletInitialAction(undefined); setShowClientDashboard(true); }}
-            onOpenWalletDeposit={() => { setWalletInitialAction('deposit'); setShowClientDashboard(true); }}
-            onOpenWalletWithdrawal={() => { setWalletInitialAction('withdrawal'); setShowClientDashboard(true); }}
+            onOpenWallet={() => {
+              if (!loggedClient) { setShowAuthModal(true); return; }
+              handleViewChange('wallet');
+            }}
+            onOpenWalletDeposit={() => {
+              if (!loggedClient) { setShowAuthModal(true); return; }
+              handleViewChange('wallet');
+            }}
+            onOpenWalletWithdrawal={() => {
+              if (!loggedClient) { setShowAuthModal(true); return; }
+              handleViewChange('wallet');
+            }}
             onRequestAuth={() => setShowAuthModal(true)}
           />
         )}
 
-        <main className={`animate-in fade-in duration-300 pt-14 flex-grow relative ${view !== 'admin' ? 'pb-[74px]' : ''}`}>
+        <main className={`animate-in fade-in duration-300 ${view !== 'wallet' ? 'pt-14' : ''} flex-grow relative ${view !== 'admin' && view !== 'wallet' ? 'pb-[74px]' : ''}`}>
           <Suspense fallback={<PageSpinner />}>
             {view === 'tracking' && (
               <TrackingView
                 loggedClient={loggedClient}
                 onRequestAuth={() => setShowAuthModal(true)}
-                onOpenWalletDeposit={() => { setWalletInitialAction('deposit'); setShowClientDashboard(true); }}
+                onOpenWalletDeposit={() => {
+                  if (!loggedClient) { setShowAuthModal(true); return; }
+                  handleViewChange('wallet');
+                }}
               />
             )}
 
             {view === 'services' && (
               <ServicesView
                 loggedClient={loggedClient}
-                onOpenWallet={() => setShowClientDashboard(true)}
+                onOpenWallet={() => {
+                  if (!loggedClient) { setShowAuthModal(true); return; }
+                  handleViewChange('wallet');
+                }}
                 onRequestAuth={() => setShowAuthModal(true)}
+              />
+            )}
+
+            {view === 'wallet' && loggedClient && (
+              <WalletPage
+                clientId={loggedClient.id!}
+                onLogout={handleClientLogout}
+                onBack={() => handleViewChange('services')}
               />
             )}
 

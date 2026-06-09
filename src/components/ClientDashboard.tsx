@@ -178,7 +178,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, ini
 
   const paymentMethods: PaymentMethod[] = useMemo(() => {
     if (settings?.paymentMethods && settings.paymentMethods.length > 0) return settings.paymentMethods;
-    return DEFAULT_PAYMENT_METHODS;
+    return [];
   }, [settings?.paymentMethods]);
 
   const depositMethods    = paymentMethods.filter(m => m.enabled && m.forDeposit);
@@ -391,7 +391,9 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, ini
         {/* Card */}
         <div className="px-3 pb-2 shrink-0">
           {loading ? (
-            <div className="w-full rounded-[1.75rem] bg-violet-100 animate-pulse" style={{ aspectRatio: '2 / 1' }} />
+            <div className="w-full rounded-[1.75rem] bg-violet-200/50 flex items-center justify-center" style={{ aspectRatio: '2 / 1' }}>
+                <div className="w-8 h-8 rounded-full border-4 border-violet-300 border-t-violet-600 animate-spin" />
+              </div>
           ) : client ? (
             <VirtualCard
               client={client} balance={balance} rate={rate}

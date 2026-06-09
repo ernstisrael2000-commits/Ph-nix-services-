@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Globe, CreditCard, ShieldCheck, Clock, Phone, MessageCircle,
-  X, Wallet, Loader2, ChevronRight, Plus, RefreshCw, Check,
+  X, Wallet, Loader2, ChevronRight, Plus, RefreshCw, Check, Upload,
 } from 'lucide-react';
 import { useCardTopups, useSettings } from '../services/parcelService';
 import { submitClientPurchase, useClientData, useClientPendingPurchase } from '../services/clientService';
@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { storage } from '../lib/firebase';
 
 interface ServicesViewProps {
   loggedClient: Client | null;
@@ -90,6 +92,37 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
   // Creation pay
   const [purchaseLoading, setPurchaseLoading] = useState(false);
 
+  // Proof of payment upload
+  const [proofFile, setProofFile]       = useState<File | null>(null);
+  const [proofPreview, setProofPreview] = useState<string | null>(null);
+  const [proofUploading, setProofUploading] = useState(false);
+  const proofInputRef = useRef<HTMLInputElement>(null);
+
+  const handleProofSelect = (file: File | null) => {
+    if (!file) return;
+    setProofFile(file);
+    const reader = new FileReader();
+    reader.onload = e => setProofPreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const uploadProof = async (): Promise<string | null> => {
+    if (!proofFile) return null;
+    setProofUploading(true);
+    try {
+      const path = `proofs/services/${Date.now()}_${proofFile.name}`;
+      const sRef = storageRef(storage, path);
+      const task = uploadBytesResumable(sRef, proofFile);
+      await new Promise<void>((res, rej) => task.on('state_changed', null, rej, res));
+      return await getDownloadURL(sRef);
+    } catch {
+      toast.error('Impossible de télécharger le justificatif.');
+      return null;
+    } finally {
+      setProofUploading(false);
+    }
+  };
+
   const openService = (svc: any) => {
     setSelected(svc);
     setStep('choice');
@@ -99,6 +132,8 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
     setTxInfo('');
     setPayMethod('moncash');
     setDynamicFieldValues({});
+    setProofFile(null);
+    setProofPreview(null);
   };
 
   const closeModal = () => setSelected(null);
@@ -153,10 +188,11 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
   };
 
   // ── Créer: payment method (WhatsApp) ──────────────────────────────────────
-  const handleMethodCreate = () => {
+  const handleMethodCreate = async () => {
     if (!selected) return;
     const method = PAYMENT_METHODS.find(m => m.id === payMethod);
-    openWhatsApp(`🎴 *CRÉATION SERVICE — Phénix Services*\n\n🛒 Service: *${selected.name}*\n💰 Prix: *${selected.price}*\n\n💳 Méthode de paiement: *${method?.label}*\n📝 Référence transaction: *${txInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`);
+    const proofUrl = await uploadProof();
+    openWhatsApp(`🎴 *CRÉATION SERVICE — Phénix Services*\n\n🛒 Service: *${selected.name}*\n💰 Prix: *${selected.price}*\n\n💳 Méthode de paiement: *${method?.label}*\n📝 Référence transaction: *${txInfo || 'Non fournie'}*${proofUrl ? `\n🖼️ Justificatif: ${proofUrl}` : ''}\n\nMerci de valider ma commande.`);
     sendOrderNotification({
       orderType: 'create',
       serviceName: selected.name,
@@ -179,11 +215,14 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
     setStep('recharge_pay');
   };
 
-  const handleFinalRecharge = () => {
+  const handleFinalRecharge = async () => {
     if (!selected || !rechargeAmount) return;
     const method = PAYMENT_METHODS.find(m => m.id === payMethod);
     const usd = parseFloat(rechargeAmount);
-    const htg = Math.round(usd * exchangeRate);
+    const feePercent = selected.rechargeFeePercent ?? 0;
+    const feeUsd = feePercent > 0 ? Math.round(usd * feePercent) / 100 : 0;
+    const totalUsd = usd + feeUsd;
+    const htg = Math.round(totalUsd * exchangeRate);
     const hasCustomFields = selected.rechargeFields?.length > 0;
     let dynamicLines = '';
     const cardDetails: Record<string, string> = {};
@@ -198,7 +237,8 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
       if (holderName) cardDetails['Titulaire'] = holderName;
       if (cardNumber) cardDetails['Numéro carte'] = cardNumber;
     }
-    openWhatsApp(`💳 *RECHARGE CARTE — Phénix Services*\n\n🎴 Carte: *${selected.name}*\n${dynamicLines}\n💵 Montant USD: *$${usd}*\n🇭🇹 Équivalent: *${htg.toLocaleString()} HTG*\n\n💳 Méthode: *${method?.label}*\n📝 Référence: *${txInfo || 'Non fournie'}*\n\nMerci de traiter ma recharge.`);
+    const proofUrl = await uploadProof();
+    openWhatsApp(`💳 *RECHARGE CARTE — Phénix Services*\n\n🎴 Carte: *${selected.name}*\n${dynamicLines}\n💵 Montant USD: *$${usd}*${feePercent > 0 ? `\n💸 Frais (${feePercent}%): *$${feeUsd.toFixed(2)}*\n💵 Total: *$${totalUsd.toFixed(2)}*` : ''}\n🇭🇹 Équivalent: *${htg.toLocaleString()} HTG*\n\n💳 Méthode: *${method?.label}*\n📝 Référence: *${txInfo || 'Non fournie'}*${proofUrl ? `\n🖼️ Justificatif: ${proofUrl}` : ''}\n\nMerci de traiter ma recharge.`);
     sendOrderNotification({
       orderType: 'recharge',
       serviceName: selected.name,
@@ -208,7 +248,7 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
       clientId: effectiveClient?.id || '',
       clientName: effectiveClient?.name || 'Anonyme',
       clientWalletId: effectiveClient?.walletId || '',
-      amount: usd,
+      amount: totalUsd,
       amountHTG: htg,
       cardDetails,
     });
@@ -485,9 +525,30 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
                     </div>
                   </div>
 
-                  <Button onClick={handleMethodCreate}
-                    className="w-full h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm">
-                    Envoyer la demande via WhatsApp
+                  {/* Proof of payment */}
+                  <div>
+                    <Label className="text-xs font-black text-gray-600">Justificatif de paiement (optionnel)</Label>
+                    <input ref={proofInputRef} type="file" accept="image/*" className="hidden"
+                      onChange={e => handleProofSelect(e.target.files?.[0] || null)} />
+                    {proofPreview ? (
+                      <div className="mt-1 relative rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+                        <img src={proofPreview} alt="Justificatif" className="w-full max-h-32 object-cover" />
+                        <button onClick={() => { setProofFile(null); setProofPreview(null); }}
+                          className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/50 text-white flex items-center justify-center text-[10px] hover:bg-black/70">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => proofInputRef.current?.click()}
+                        className="mt-1 w-full h-12 border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center gap-2 text-xs text-gray-400 font-semibold hover:border-indigo-300 hover:text-indigo-400 transition-colors">
+                        <Upload className="h-4 w-4" /> Ajouter une capture d'écran
+                      </button>
+                    )}
+                  </div>
+
+                  <Button onClick={handleMethodCreate} disabled={proofUploading}
+                    className="w-full h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm disabled:opacity-60">
+                    {proofUploading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Envoi...</> : 'Envoyer la demande via WhatsApp'}
                   </Button>
                 </div>
               )}
@@ -557,12 +618,29 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
                       </div>
                     )}
 
-                    {rechargeAmount && (
-                      <div className="bg-emerald-50 rounded-xl p-3 flex items-center justify-between">
-                        <p className="text-xs text-gray-500 font-semibold">Équivalent HTG</p>
-                        <p className="font-black text-emerald-600">{Math.round(parseFloat(rechargeAmount || '0') * exchangeRate).toLocaleString()} HTG</p>
-                      </div>
-                    )}
+                    {rechargeAmount && (() => {
+                      const usd = parseFloat(rechargeAmount || '0');
+                      const feePercent = selected?.rechargeFeePercent ?? 0;
+                      const feeUsd = feePercent > 0 ? Math.round(usd * feePercent) / 100 : 0;
+                      const totalUsd = usd + feeUsd;
+                      const totalHtg = Math.round(totalUsd * exchangeRate);
+                      return (
+                        <div className="space-y-1.5">
+                          {feePercent > 0 && (
+                            <div className="bg-amber-50 rounded-xl p-3 flex items-center justify-between border border-amber-100">
+                              <p className="text-xs text-amber-700 font-semibold">Frais de service ({feePercent}%)</p>
+                              <p className="font-black text-amber-700">${feeUsd.toFixed(2)}</p>
+                            </div>
+                          )}
+                          <div className="bg-emerald-50 rounded-xl p-3 flex items-center justify-between">
+                            <p className="text-xs text-gray-500 font-semibold">{feePercent > 0 ? 'Total à payer' : 'Équivalent HTG'}</p>
+                            <p className="font-black text-emerald-600">
+                              {feePercent > 0 ? `$${totalUsd.toFixed(2)} = ` : ''}{totalHtg.toLocaleString()} HTG
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <Button onClick={handleRechargeSubmit}
@@ -608,9 +686,30 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
                     </div>
                   </div>
 
-                  <Button onClick={handleFinalRecharge}
-                    className="w-full h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm">
-                    Confirmer via WhatsApp
+                  {/* Proof of payment */}
+                  <div>
+                    <Label className="text-xs font-black text-gray-600">Justificatif de paiement (optionnel)</Label>
+                    <input ref={proofInputRef} type="file" accept="image/*" className="hidden"
+                      onChange={e => handleProofSelect(e.target.files?.[0] || null)} />
+                    {proofPreview ? (
+                      <div className="mt-1 relative rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+                        <img src={proofPreview} alt="Justificatif" className="w-full max-h-32 object-cover" />
+                        <button onClick={() => { setProofFile(null); setProofPreview(null); }}
+                          className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => proofInputRef.current?.click()}
+                        className="mt-1 w-full h-12 border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center gap-2 text-xs text-gray-400 font-semibold hover:border-emerald-300 hover:text-emerald-400 transition-colors">
+                        <Upload className="h-4 w-4" /> Ajouter une capture d'écran
+                      </button>
+                    )}
+                  </div>
+
+                  <Button onClick={handleFinalRecharge} disabled={proofUploading}
+                    className="w-full h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm disabled:opacity-60">
+                    {proofUploading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Envoi...</> : 'Confirmer via WhatsApp'}
                   </Button>
                 </div>
               )}

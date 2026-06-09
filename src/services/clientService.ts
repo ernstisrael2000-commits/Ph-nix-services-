@@ -188,7 +188,8 @@ export const submitClientDeposit = async (
   captchaToken?: string,
   message?: string,
   htgAmount?: number,
-  exchangeRate?: number
+  exchangeRate?: number,
+  proofImageUrl?: string
 ) => {
   if (usdAmount <= 0) throw new Error("Montant invalide.");
   await apiPost('/api/client/deposit', {
@@ -202,6 +203,7 @@ export const submitClientDeposit = async (
     method,
     ...(txId && { txId }),
     ...(message && { message }),
+    ...(proofImageUrl && { proofImageUrl }),
     ...(captchaToken && captchaToken !== 'bypass' && { captchaToken })
   });
 };
@@ -216,7 +218,8 @@ export const submitClientWithdrawal = async (
   captchaToken?: string,
   message?: string,
   accountName?: string,
-  exchangeRate?: number
+  exchangeRate?: number,
+  proofImageUrl?: string
 ) => {
   if (usdAmount <= 0) throw new Error("Montant invalide.");
   if (usdAmount > client.balance) throw new Error("Solde insuffisant.");
@@ -235,6 +238,7 @@ export const submitClientWithdrawal = async (
     accountNumber,
     ...(accountName && { accountName }),
     ...(message && { message }),
+    ...(proofImageUrl && { proofImageUrl }),
     ...(captchaToken && captchaToken !== 'bypass' && { captchaToken })
   });
 };

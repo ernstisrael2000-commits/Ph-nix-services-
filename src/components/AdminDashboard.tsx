@@ -241,13 +241,14 @@ interface ServiceFormData {
   whatsappMessage: string;
   goldRate: string;
   presets: string;
+  rechargeFeePercent: string;
   customFields: { key: string; value: string }[];
   rechargeFields: RechargeFieldForm[];
 }
 
 const EMPTY_SERVICE: ServiceFormData = {
   name: '', image: '', description: '', price: '', stock: '',
-  whatsappMessage: '', goldRate: '', presets: '',
+  whatsappMessage: '', goldRate: '', presets: '', rechargeFeePercent: '',
   customFields: [],
   rechargeFields: [],
 };
@@ -278,7 +279,7 @@ function ServicesTab() {
   const openEdit = (card: CardTopup) => {
     setEditing(card);
     const customFields: { key: string; value: string }[] = [];
-    const knownKeys = new Set(['id','name','image','description','price','stock','whatsappMessage','goldRate','presets','rechargeFields','createdAt','updatedAt']);
+    const knownKeys = new Set(['id','name','image','description','price','stock','whatsappMessage','goldRate','presets','rechargeFields','rechargeFeePercent','createdAt','updatedAt']);
     for (const [k, v] of Object.entries(card as any)) {
       if (!knownKeys.has(k)) customFields.push({ key: k, value: String(v ?? '') });
     }
@@ -297,10 +298,11 @@ function ServicesTab() {
       whatsappMessage: card.whatsappMessage || '',
       goldRate: String(card.goldRate ?? ''),
       presets: (card.presets || []).join(', '),
+      rechargeFeePercent: String(card.rechargeFeePercent ?? ''),
       customFields,
       rechargeFields,
     });
-    setShowAdvanced(customFields.length > 0 || rechargeFields.length > 0 || !!card.whatsappMessage || !!card.goldRate || !!(card.presets?.length));
+    setShowAdvanced(customFields.length > 0 || rechargeFields.length > 0 || !!card.whatsappMessage || !!card.goldRate || !!(card.presets?.length) || card.rechargeFeePercent !== undefined);
     setDialogOpen(true);
   };
 
@@ -317,6 +319,7 @@ function ServicesTab() {
         ...(form.stock !== '' && { stock: Number(form.stock) }),
         ...(form.whatsappMessage.trim() && { whatsappMessage: form.whatsappMessage.trim() }),
         ...(form.goldRate !== '' && { goldRate: Number(form.goldRate) }),
+        ...(form.rechargeFeePercent !== '' && { rechargeFeePercent: Number(form.rechargeFeePercent) }),
         ...(form.presets.trim() && {
           presets: form.presets.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n) && n > 0)
         }),
@@ -510,6 +513,11 @@ function ServicesTab() {
 
                   <FormField label="Taux d'échange spécifique (HTG/USD)" icon={DollarSign}>
                     <Input type="number" value={form.goldRate} onChange={e => setForm(f => ({ ...f, goldRate: e.target.value }))} placeholder="Ex: 146" className="rounded-xl" />
+                  </FormField>
+
+                  <FormField label="Frais de recharge (%)" icon={DollarSign}>
+                    <Input type="number" value={form.rechargeFeePercent} onChange={e => setForm(f => ({ ...f, rechargeFeePercent: e.target.value }))} placeholder="Ex: 5" min="0" max="100" step="0.1" className="rounded-xl" />
+                    <p className="text-xs text-gray-400 mt-1">Frais appliqués sur le montant de recharge. Ex: 5 = 5%.</p>
                   </FormField>
 
                   {/* Champs de saisie du formulaire de recharge */}

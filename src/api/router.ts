@@ -548,7 +548,7 @@ router.delete('/api/client/notifications/clear-all/:clientId', requireDb, async 
 // ── Deposit ───────────────────────────────────────────────────────────────────
 router.post('/api/client/deposit', requireDb, async (req, res) => {
   try {
-    const { clientId, clientName, clientWalletId, amount, usdAmount, htgAmount, exchangeRate, method, txId, message, captchaToken } = req.body;
+    const { clientId, clientName, clientWalletId, amount, usdAmount, htgAmount, exchangeRate, method, txId, message, captchaToken, proofImageUrl } = req.body;
     if (!clientId || !clientName || !amount || !method)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     if (amount <= 0) return res.status(400).json({ error: 'Montant invalide.' });
@@ -575,6 +575,7 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
       ...(exchangeRate !== undefined && { exchangeRate }),
       ...(txId && { txId }),
       ...(message && { message }),
+      ...(proofImageUrl && { proofImageUrl }),
       description: `Dépôt via ${method}${htgAmount ? ` — ${htgAmount.toLocaleString()} HTG` : ''}${message ? ` — ${message}` : ''}`,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -589,6 +590,7 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
       ...(exchangeRate !== undefined && { exchangeRate }),
       ...(txId && { txId }),
       ...(message && { message }),
+      ...(proofImageUrl && { proofImageUrl }),
       read: false,
       createdAt: FieldValue.serverTimestamp(),
     });
@@ -636,7 +638,7 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
 // ── Withdrawal ────────────────────────────────────────────────────────────────
 router.post('/api/client/withdrawal', requireDb, async (req, res) => {
   try {
-    const { clientId, clientName, clientPhone, clientWalletId, amount, usdAmount, htgEquivalent, exchangeRate, method, accountNumber, accountName, message, captchaToken } = req.body;
+    const { clientId, clientName, clientPhone, clientWalletId, amount, usdAmount, htgEquivalent, exchangeRate, method, accountNumber, accountName, message, captchaToken, proofImageUrl } = req.body;
     if (!clientId || !clientName || !amount || !method || !accountNumber)
       return res.status(400).json({ error: 'Paramètres manquants.' });
     if (amount <= 0) return res.status(400).json({ error: 'Montant invalide.' });
@@ -686,6 +688,7 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
       ...(exchangeRate !== undefined && { exchangeRate }),
       ...(accountName && { accountName }),
       ...(message && { message }),
+      ...(proofImageUrl && { proofImageUrl }),
       description: `Retrait via ${method}${htgEquivalent ? ` — ≈ ${htgEquivalent.toLocaleString()} HTG` : ''}${message ? ` — ${message}` : ''}`,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -700,6 +703,7 @@ router.post('/api/client/withdrawal', requireDb, async (req, res) => {
       ...(exchangeRate !== undefined && { exchangeRate }),
       ...(accountName && { accountName }),
       ...(message && { message }),
+      ...(proofImageUrl && { proofImageUrl }),
       read: false,
       createdAt: FieldValue.serverTimestamp(),
     });
@@ -4424,6 +4428,7 @@ router.post('/api/admin/bootstrap', requireDb, async (req, res) => {
   try {
     const ts = FieldValue.serverTimestamp();
     const GOOGLE_ADMIN_EMAIL = 'neopayservices509@gmail.com';
+    const SECONDARY_ADMIN_EMAIL = 'Phenixservices15@gmail.com';
 
     // Ensure the Google super-admin always exists
     const googleSnap = await adminDb.collection('admin_accounts')
@@ -4442,6 +4447,25 @@ router.post('/api/admin/bootstrap', requireDb, async (req, res) => {
     } else {
       await googleSnap.docs[0].ref.update({ isSuperAdmin: true, permissions: ['all'], updatedAt: ts });
       console.log('[Bootstrap] Super Admin Google existant mis à jour');
+    }
+
+    // Ensure secondary admin exists
+    const secondarySnap = await adminDb.collection('admin_accounts')
+      .where('email', '==', SECONDARY_ADMIN_EMAIL.toLowerCase()).limit(1).get();
+    if (secondarySnap.empty) {
+      const ref2 = await adminDb.collection('admin_accounts').add({
+        fullName: 'Phénix Services',
+        email: SECONDARY_ADMIN_EMAIL.toLowerCase(),
+        isSuperAdmin: false,
+        permissions: ['all'],
+        failedAttempts: 0,
+        createdAt: ts,
+        updatedAt: ts,
+      });
+      console.log('[Bootstrap] Admin secondaire créé:', ref2.id);
+    } else {
+      await secondarySnap.docs[0].ref.update({ permissions: ['all'], updatedAt: ts });
+      console.log('[Bootstrap] Admin secondaire existant mis à jour');
     }
 
     // Seed default service cards if none exist
