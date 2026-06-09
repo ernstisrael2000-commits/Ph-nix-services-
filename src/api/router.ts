@@ -4256,20 +4256,29 @@ router.post('/api/admin/settings', requireDb, requireAdminSecret, async (req, re
 // ── Admin: Bootstrap Super Admin (idempotent, no auth required) ───────────────
 router.post('/api/admin/bootstrap', requireDb, async (req, res) => {
   try {
-    const snap = await adminDb.collection('admin_accounts').limit(1).get();
-    if (!snap.empty) return res.json({ success: true, bootstrapped: false });
     const ts = FieldValue.serverTimestamp();
-    const ref = await adminDb.collection('admin_accounts').add({
-      fullName: 'Ernst israel',
-      password: '$Ernst509@$',
-      loginCode: 'ER-2026',
-      isSuperAdmin: true,
-      permissions: ['all'],
-      failedAttempts: 0,
-      createdAt: ts,
-      updatedAt: ts,
-    });
-    console.log('[Bootstrap] Super Admin créé:', ref.id);
+    const GOOGLE_ADMIN_EMAIL = 'neopayservices509@gmail.com';
+
+    // Ensure the Google super-admin always exists
+    const googleSnap = await adminDb.collection('admin_accounts')
+      .where('email', '==', GOOGLE_ADMIN_EMAIL).limit(1).get();
+    if (googleSnap.empty) {
+      const ref = await adminDb.collection('admin_accounts').add({
+        fullName: 'Ernst Israel',
+        email: GOOGLE_ADMIN_EMAIL,
+        isSuperAdmin: true,
+        permissions: ['all'],
+        failedAttempts: 0,
+        createdAt: ts,
+        updatedAt: ts,
+      });
+      console.log('[Bootstrap] Super Admin Google créé:', ref.id);
+    } else {
+      // Ensure existing account is flagged as super admin
+      await googleSnap.docs[0].ref.update({ isSuperAdmin: true, permissions: ['all'], updatedAt: ts });
+      console.log('[Bootstrap] Super Admin Google existant mis à jour');
+    }
+
     res.json({ success: true, bootstrapped: true });
   } catch (e: any) {
     console.error('[Bootstrap] Erreur:', e);
