@@ -1,11 +1,10 @@
 import { motion } from 'motion/react';
-import RenaLogo from './RenaLogo';
 
 interface LoadingScreenProps {
   message?: string;
 }
 
-export default function LoadingScreen({ message = 'Initialisation de Rena...' }: LoadingScreenProps) {
+export default function LoadingScreen({ message = 'Initialisation de Phénix...' }: LoadingScreenProps) {
   return (
     <motion.div
       className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 via-white to-indigo-50"
@@ -25,7 +24,13 @@ export default function LoadingScreen({ message = 'Initialisation de Rena...' }:
             animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
             transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
           />
-          <RenaLogo size={96} />
+          <motion.img
+            src="/phenix-logo.png"
+            alt="Phénix Services"
+            style={{ width: 96, height: 96, objectFit: 'contain' }}
+            animate={{ scale: [1, 1.03, 1] }}
+            transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1.2 }}
+          />
         </div>
 
         {/* Brand name */}
@@ -37,7 +42,7 @@ export default function LoadingScreen({ message = 'Initialisation de Rena...' }:
         >
           <h1 className="text-3xl font-black tracking-tight text-gray-900">
             <span className="bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">
-              RENA
+              PHÉNIX
             </span>
           </h1>
           <p className="text-sm text-gray-400 font-medium mt-1">{message}</p>
