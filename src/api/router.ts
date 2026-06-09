@@ -4275,6 +4275,64 @@ router.post('/api/admin/settings', requireDb, requireAdminSecret, async (req, re
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Admin: GET routes (lecture via Admin SDK — bypass règles Firestore client) ──
+
+router.get('/api/admin/card-topups', requireDb, requireAdminSecret, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('card_topups').orderBy('createdAt', 'desc').get();
+    res.json({ cards: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/api/admin/products', requireDb, requireAdminSecret, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('products').orderBy('createdAt', 'desc').get();
+    res.json({ products: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/api/admin/games', requireDb, requireAdminSecret, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('games').orderBy('createdAt', 'desc').get();
+    res.json({ games: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/api/admin/parcels', requireDb, requireAdminSecret, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('parcels').orderBy('createdAt', 'desc').get();
+    res.json({ parcels: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/api/admin/slider-images-list', requireDb, requireAdminSecret, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('slider_images').orderBy('createdAt', 'asc').get();
+    res.json({ images: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/api/admin/nav-buttons-list', requireDb, requireAdminSecret, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('nav_buttons').orderBy('order', 'asc').get();
+    res.json({ buttons: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/api/admin/settings-data', requireDb, requireAdminSecret, async (_req, res) => {
+  try {
+    const d = await adminDb.collection('settings').doc('global').get();
+    res.json({ settings: d.exists ? d.data() : null });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/api/admin/shipping-configs-list', requireDb, requireAdminSecret, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('shipping_configs').get();
+    res.json({ configs: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Admin: Bootstrap Super Admin (idempotent, no auth required) ───────────────
 router.post('/api/admin/bootstrap', requireDb, async (req, res) => {
   try {

@@ -13,20 +13,31 @@ import { db, storage, auth } from '../lib/firebase';
 import { handleFirestoreError } from '../lib/firebase-errors';
 import { Parcel, Product, AppSettings, Game, ShippingConfig, CardTopup, NavButton, OnlineSubService, Formation } from '../types';
 
+const ADMIN_SECRET = 'rena-admin-2024';
+
 // ── Admin API helper (toutes les écritures passent par le serveur) ────────────
 async function adminApi(method: string, path: string, body?: object): Promise<any> {
   const opts: RequestInit = {
     method,
     headers: {
       'Content-Type': 'application/json',
-      'x-admin-secret': 'rena-admin-2024',
+      'x-admin-secret': ADMIN_SECRET,
     },
   };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(path, opts);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Erreur serveur (${res.status})`);
+  // Notifier les hooks admin de se rafraîchir après chaque mutation
+  try { window.dispatchEvent(new Event('admin-data-changed')); } catch {}
   return data;
+}
+
+// ── Fetch admin data via API (Admin SDK — bypass règles Firestore) ─────────────
+async function adminGet(path: string): Promise<any> {
+  const res = await fetch(path, { headers: { 'x-admin-secret': ADMIN_SECRET } });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
 }
 
 // ── Helper for resumable uploads with progress ────────────────────────────────
@@ -54,22 +65,36 @@ const uploadWithProgress = (
   });
 };
 
-// Navigation Buttons Services
+// ── Navigation Buttons Services ───────────────────────────────────────────────
 export const useNavButtons = () => {
   const [buttons, setButtons] = useState<NavButton[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    const handler = () => setRefreshKey(k => k + 1);
+    window.addEventListener('admin-data-changed', handler);
+    return () => window.removeEventListener('admin-data-changed', handler);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     const q = query(collection(db, 'nav_buttons'), orderBy('order', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setButtons(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as NavButton[]);
+      if (cancelled) return;
+      setButtons(snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as NavButton[]);
       setLoading(false);
-    }, (error) => {
-      console.error("Error fetching nav buttons:", error);
-      setLoading(false);
+    }, async (_err) => {
+      if (cancelled) return;
+      try {
+        const data = await adminGet('/api/admin/nav-buttons-list');
+        if (!cancelled) setButtons(data.buttons || []);
+      } catch {}
+      if (!cancelled) setLoading(false);
     });
-    return () => unsubscribe();
-  }, []);
+    return () => { cancelled = true; unsubscribe(); };
+  }, [refreshKey]);
 
   return { buttons, loading };
 };
@@ -82,7 +107,7 @@ export const deleteNavButton = async (id: string) => {
   await adminApi('DELETE', `/api/admin/nav-button/${id}`);
 };
 
-// Card Topup Services
+// ── Card Topup Services ───────────────────────────────────────────────────────
 const DEFAULT_CARDS: CardTopup[] = [
   {
     id: 'default-visa-prepaid',
@@ -141,21 +166,32 @@ const DEFAULT_CARDS: CardTopup[] = [
 ];
 
 export const useCardTopups = () => {
-  // Start with default cards immediately — replaced by Firestore data if available
   const [cards, setCards] = useState<CardTopup[]>(DEFAULT_CARDS);
   const [loading, setLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    const handler = () => setRefreshKey(k => k + 1);
+    window.addEventListener('admin-data-changed', handler);
+    return () => window.removeEventListener('admin-data-changed', handler);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
     const q = query(collection(db, 'card_topups'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CardTopup[];
+      if (cancelled) return;
+      const fetched = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as CardTopup[];
       if (fetched.length > 0) setCards(fetched);
-    }, (error) => {
-      console.error("Error fetching card topups:", error);
-      // Keep showing default cards on error
+    }, async (_err) => {
+      if (cancelled) return;
+      try {
+        const data = await adminGet('/api/admin/card-topups');
+        if (!cancelled && data.cards) setCards(data.cards.length > 0 ? data.cards : DEFAULT_CARDS);
+      } catch {}
     });
-    return () => unsubscribe();
-  }, []);
+    return () => { cancelled = true; unsubscribe(); };
+  }, [refreshKey]);
 
   return { cards, loading };
 };
@@ -168,30 +204,58 @@ export const deleteCardTopup = async (id: string) => {
   await adminApi('DELETE', `/api/admin/card-topup/${id}`);
 };
 
+// ── Parcel Services ───────────────────────────────────────────────────────────
 export const useParcels = () => {
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    const handler = () => setRefreshKey(k => k + 1);
+    window.addEventListener('admin-data-changed', handler);
+    return () => window.removeEventListener('admin-data-changed', handler);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     const q = query(collection(db, 'parcels'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setParcels(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Parcel[]);
+      if (cancelled) return;
+      setParcels(snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as Parcel[]);
       setLoading(false);
-    }, (error) => {
-      console.error("Error fetching parcels:", error);
-      setLoading(false);
+    }, async (_err) => {
+      if (cancelled) return;
+      try {
+        const data = await adminGet('/api/admin/parcels');
+        if (!cancelled) setParcels(data.parcels || []);
+      } catch {}
+      if (!cancelled) setLoading(false);
     });
-    return () => unsubscribe();
-  }, []);
+    return () => { cancelled = true; unsubscribe(); };
+  }, [refreshKey]);
 
   return { parcels, loading };
 };
 
 export const searchParcel = async (trackingNumber: string): Promise<Parcel | null> => {
-  const snap = await getDocs(query(collection(db, 'parcels'), where('trackingNumber', '==', trackingNumber)));
-  if (snap.empty) return null;
-  const docData = snap.docs[0];
-  return { id: docData.id, ...docData.data() } as Parcel;
+  // Try API first (works regardless of Firestore client rules)
+  try {
+    const res = await fetch(`/api/track/${encodeURIComponent(trackingNumber)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.parcel) return data.parcel as Parcel;
+    }
+  } catch {}
+  // Fallback to client SDK
+  try {
+    const snap = await getDocs(query(collection(db, 'parcels'), where('trackingNumber', '==', trackingNumber)));
+    if (snap.empty) return null;
+    const docData = snap.docs[0];
+    return { id: docData.id, ...docData.data() } as Parcel;
+  } catch {
+    return null;
+  }
 };
 
 export const saveParcel = async (parcelData: Partial<Parcel>, id?: string) => {
@@ -216,22 +280,36 @@ export const uploadProof = async (
   }
 };
 
-// Product Services
+// ── Product Services ──────────────────────────────────────────────────────────
 export const useProducts = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    const handler = () => setRefreshKey(k => k + 1);
+    window.addEventListener('admin-data-changed', handler);
+    return () => window.removeEventListener('admin-data-changed', handler);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     const q = query(collection(db, 'products'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[]);
+      if (cancelled) return;
+      setProducts(snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as Product[]);
       setLoading(false);
-    }, (error) => {
-      console.error("Error fetching products:", error);
-      setLoading(false);
+    }, async (_err) => {
+      if (cancelled) return;
+      try {
+        const data = await adminGet('/api/admin/products');
+        if (!cancelled) setProducts(data.products || []);
+      } catch {}
+      if (!cancelled) setLoading(false);
     });
-    return () => unsubscribe();
-  }, []);
+    return () => { cancelled = true; unsubscribe(); };
+  }, [refreshKey]);
 
   return { products, loading };
 };
@@ -244,22 +322,36 @@ export const deleteProduct = async (id: string) => {
   await adminApi('DELETE', `/api/admin/product/${id}`);
 };
 
-// Game Services
+// ── Game Services ─────────────────────────────────────────────────────────────
 export const useGames = () => {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    const handler = () => setRefreshKey(k => k + 1);
+    window.addEventListener('admin-data-changed', handler);
+    return () => window.removeEventListener('admin-data-changed', handler);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     const q = query(collection(db, 'games'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setGames(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Game[]);
+      if (cancelled) return;
+      setGames(snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as Game[]);
       setLoading(false);
-    }, (error) => {
-      console.error("Error fetching games:", error);
-      setLoading(false);
+    }, async (_err) => {
+      if (cancelled) return;
+      try {
+        const data = await adminGet('/api/admin/games');
+        if (!cancelled) setGames(data.games || []);
+      } catch {}
+      if (!cancelled) setLoading(false);
     });
-    return () => unsubscribe();
-  }, []);
+    return () => { cancelled = true; unsubscribe(); };
+  }, [refreshKey]);
 
   return { games, loading };
 };
@@ -272,22 +364,38 @@ export const deleteGame = async (id: string) => {
   await adminApi('DELETE', `/api/admin/game/${id}`);
 };
 
-// Settings Services
+// ── Settings Services ─────────────────────────────────────────────────────────
 export const useSettings = () => {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    const handler = () => setRefreshKey(k => k + 1);
+    window.addEventListener('admin-data-changed', handler);
+    return () => window.removeEventListener('admin-data-changed', handler);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     const docRef = doc(db, 'settings', 'global');
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (cancelled) return;
       if (docSnap.exists()) setSettings(docSnap.data() as AppSettings);
       setLoading(false);
-    }, (error) => {
-      setLoading(false);
-      try { handleFirestoreError(error, 'get', 'settings/global', auth); } catch (e) {}
+    }, async (_err) => {
+      if (cancelled) return;
+      try {
+        const data = await adminGet('/api/admin/settings-data');
+        if (!cancelled && data.settings) setSettings(data.settings as AppSettings);
+      } catch {
+        try { handleFirestoreError(_err as any, 'get', 'settings/global', auth); } catch {}
+      }
+      if (!cancelled) setLoading(false);
     });
-    return () => unsubscribe();
-  }, []);
+    return () => { cancelled = true; unsubscribe(); };
+  }, [refreshKey]);
 
   return { settings, loading };
 };
@@ -309,22 +417,36 @@ export const uploadLogo = async (
   }
 };
 
-// Slider Images Services
+// ── Slider Images Services ────────────────────────────────────────────────────
 export const useSliderImages = () => {
   const [sliderImages, setSliderImages] = useState<{ id: string, url: string, title?: string, description?: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    const handler = () => setRefreshKey(k => k + 1);
+    window.addEventListener('admin-data-changed', handler);
+    return () => window.removeEventListener('admin-data-changed', handler);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     const q = query(collection(db, 'slider_images'), orderBy('createdAt', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setSliderImages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as { id: string, url: string, title?: string, description?: string }[]);
+      if (cancelled) return;
+      setSliderImages(snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as { id: string, url: string, title?: string, description?: string }[]);
       setLoading(false);
-    }, (error) => {
-      console.error("Error fetching slider images:", error);
-      setLoading(false);
+    }, async (_err) => {
+      if (cancelled) return;
+      try {
+        const data = await adminGet('/api/admin/slider-images-list');
+        if (!cancelled) setSliderImages(data.images || []);
+      } catch {}
+      if (!cancelled) setLoading(false);
     });
-    return () => unsubscribe();
-  }, []);
+    return () => { cancelled = true; unsubscribe(); };
+  }, [refreshKey]);
 
   return { sliderImages, loading };
 };
@@ -341,22 +463,36 @@ export const deleteSliderImage = async (id: string) => {
   await adminApi('DELETE', `/api/admin/slider-image/${id}`);
 };
 
-// Shipping Services
+// ── Shipping Services ─────────────────────────────────────────────────────────
 export const useShippingConfigs = () => {
   const [configs, setConfigs] = useState<ShippingConfig[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    const handler = () => setRefreshKey(k => k + 1);
+    window.addEventListener('admin-data-changed', handler);
+    return () => window.removeEventListener('admin-data-changed', handler);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     const q = collection(db, 'shipping_configs');
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setConfigs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ShippingConfig[]);
+      if (cancelled) return;
+      setConfigs(snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as ShippingConfig[]);
       setLoading(false);
-    }, (error) => {
-      console.error("Error fetching shipping configs:", error);
-      setLoading(false);
+    }, async (_err) => {
+      if (cancelled) return;
+      try {
+        const data = await adminGet('/api/admin/shipping-configs-list');
+        if (!cancelled) setConfigs(data.configs || []);
+      } catch {}
+      if (!cancelled) setLoading(false);
     });
-    return () => unsubscribe();
-  }, []);
+    return () => { cancelled = true; unsubscribe(); };
+  }, [refreshKey]);
 
   return { configs, loading };
 };
@@ -373,7 +509,13 @@ export const deleteShippingConfig = async (id: string) => {
 export const useOnlineServices = () => {
   const [services, setServices] = useState<OnlineSubService[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refresh, setRefresh] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const handler = () => setRefreshKey(k => k + 1);
+    window.addEventListener('admin-data-changed', handler);
+    return () => window.removeEventListener('admin-data-changed', handler);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -383,9 +525,9 @@ export const useOnlineServices = () => {
       .then(data => { if (!cancelled) { setServices(data.services || []); setLoading(false); } })
       .catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [refresh]);
+  }, [refreshKey]);
 
-  const forceRefresh = () => setRefresh(r => r + 1);
+  const forceRefresh = () => setRefreshKey(r => r + 1);
   return { services, loading, refresh: forceRefresh };
 };
 
@@ -393,42 +535,45 @@ export const saveOnlineSubService = async (data: Partial<OnlineSubService>, id?:
   const payload = id ? { ...data, id } : data;
   const res = await fetch('/api/admin/online-sub-services', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
+    headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
     body: JSON.stringify(payload),
   });
   if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Erreur sauvegarde service'); }
+  try { window.dispatchEvent(new Event('admin-data-changed')); } catch {}
 };
 
 export const deleteOnlineSubService = async (id: string) => {
   const res = await fetch(`/api/admin/online-sub-services/${id}`, {
     method: 'DELETE',
-    headers: { 'x-admin-secret': 'rena-admin-2024' },
+    headers: { 'x-admin-secret': ADMIN_SECRET },
   });
   if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Erreur suppression service'); }
+  try { window.dispatchEvent(new Event('admin-data-changed')); } catch {}
 };
 
-// ─── Formations (Admin CRUD via API) ─────────────────────────────────────────
+// ── Formations (Admin CRUD via API) ───────────────────────────────────────────
 export const useAdminFormations = () => {
   const [formations, setFormations] = useState<Formation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    fetch('/api/admin/formations', { headers: { 'x-admin-secret': 'rena-admin-2024' } })
-      .then(r => r.json())
-      .then(data => setFormations(data.formations || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const handler = () => setRefreshKey(k => k + 1);
+    window.addEventListener('admin-data-changed', handler);
+    return () => window.removeEventListener('admin-data-changed', handler);
   }, []);
 
-  const refresh = () => {
+  useEffect(() => {
+    let cancelled = false;
     setLoading(true);
-    fetch('/api/admin/formations', { headers: { 'x-admin-secret': 'rena-admin-2024' } })
+    fetch('/api/admin/formations', { headers: { 'x-admin-secret': ADMIN_SECRET } })
       .then(r => r.json())
-      .then(data => setFormations(data.formations || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  };
+      .then(data => { if (!cancelled) { setFormations(data.formations || []); setLoading(false); } })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [refreshKey]);
 
+  const refresh = () => setRefreshKey(k => k + 1);
   return { formations, loading, refresh };
 };
 
@@ -437,19 +582,21 @@ export const saveAdminFormation = async (data: Partial<Formation>, id?: string):
   const method = id ? 'PUT' : 'POST';
   const res = await fetch(url, {
     method,
-    headers: { 'Content-Type': 'application/json', 'x-admin-secret': 'rena-admin-2024' },
+    headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
     body: JSON.stringify(data)
   });
   if (!res.ok) {
     const json = await res.json().catch(() => ({}));
     throw new Error(json.error || 'Erreur lors de la sauvegarde.');
   }
+  try { window.dispatchEvent(new Event('admin-data-changed')); } catch {}
 };
 
 export const deleteAdminFormation = async (id: string): Promise<void> => {
   const res = await fetch(`/api/admin/formations/${id}`, {
     method: 'DELETE',
-    headers: { 'x-admin-secret': 'rena-admin-2024' }
+    headers: { 'x-admin-secret': ADMIN_SECRET }
   });
   if (!res.ok) throw new Error('Erreur lors de la suppression.');
+  try { window.dispatchEvent(new Event('admin-data-changed')); } catch {}
 };

@@ -2140,7 +2140,6 @@ function EmailLogsPanel() {
         { value: 'parcels', label: 'Colis & Tracking', icon: Package, permission: 'parcels' },
         { value: 'shipping', label: 'Expéditions', icon: Truck, permission: 'shipping' },
         { value: 'cards', label: 'Recharges', icon: CreditCard, permission: 'cards' },
-        { value: 'games', label: 'Gaming', icon: Gamepad2, permission: 'games' },
       ]
     },
     {
