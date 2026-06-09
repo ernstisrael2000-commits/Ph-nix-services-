@@ -12,21 +12,26 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Safety timeout — if Firebase Auth never fires (e.g. network issue),
+    // unblock the loading screen after 4 seconds
+    const timeout = setTimeout(() => setLoading(false), 4000);
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      clearTimeout(timeout);
       setUser(firebaseUser);
       if (firebaseUser) {
-        const docRef = doc(db, 'users', firebaseUser.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setProfile(docSnap.data() as UserProfile);
-        } else {
-          // Check if it's the hardcoded admin
+        try {
+          const docRef = doc(db, 'users', firebaseUser.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setProfile(docSnap.data() as UserProfile);
+          } else if (ADMIN_EMAILS.includes(firebaseUser.email || '')) {
+            setProfile({ uid: firebaseUser.uid, email: firebaseUser.email || '', role: 'admin' });
+          }
+        } catch {
+          // Firestore unavailable — still unblock the app
           if (ADMIN_EMAILS.includes(firebaseUser.email || '')) {
-            setProfile({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              role: 'admin'
-            });
+            setProfile({ uid: firebaseUser.uid, email: firebaseUser.email || '', role: 'admin' });
           }
         }
       } else {
@@ -35,16 +40,10 @@ export const useAuth = () => {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => { clearTimeout(timeout); unsubscribe(); };
   }, []);
 
   const isAdmin = profile?.role === 'admin' || ADMIN_EMAILS.includes(user?.email || '');
-
-  useEffect(() => {
-    if (user) {
-      console.log("Current user:", user.email, "isAdmin:", isAdmin);
-    }
-  }, [user, isAdmin]);
 
   return { user, profile, loading, isAdmin };
 };
