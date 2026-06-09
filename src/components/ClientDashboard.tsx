@@ -251,6 +251,19 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, ini
     if (initialAction === 'withdrawal') { const t = setTimeout(() => setIsWithdrawOpen(true), 200); return () => clearTimeout(t); }
   }, [open, initialAction]);
 
+  // Auto-select first available method when dialogs open
+  useEffect(() => {
+    if (isDepositOpen && !depositMethod && depositMethods.length > 0) {
+      setDepositMethod(depositMethods[0]);
+    }
+  }, [isDepositOpen, depositMethods]);
+
+  useEffect(() => {
+    if (isWithdrawOpen && !withdrawMethod && withdrawalMethods.length > 0) {
+      setWithdrawMethod(withdrawalMethods[0]);
+    }
+  }, [isWithdrawOpen, withdrawalMethods]);
+
   const openWhatsApp = (message: string) => {
     const num = settings?.whatsappAdminNumber || WHATSAPP_NUMBER;
     window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
