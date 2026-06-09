@@ -7,7 +7,7 @@ import {
   CheckCheck, Trash, LayoutGrid, Hash, Image as ImageIcon,
   FileText, DollarSign, Tag, List, MessageSquare, Zap,
   Clock, CheckCircle, XCircle, AlertTriangle, Info,
-  ArrowUpDown, Copy, ShieldCheck, Menu, CreditCard
+  ArrowUpDown, Copy, ShieldCheck, Menu, CreditCard, Settings, Link
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -25,7 +25,7 @@ import {
   useParcels, saveParcel, deleteParcel,
 } from '../services/parcelService';
 import { toast } from 'sonner';
-import { AdminAccount, CardTopup, Parcel, ParcelStatus } from '../types';
+import { AdminAccount, CardTopup, Parcel, ParcelStatus, PaymentMethod, DEFAULT_PAYMENT_METHODS } from '../types';
 
 const ADMIN_SECRET = 'rena-admin-2024';
 
@@ -80,7 +80,7 @@ const NOTIF_ICONS: Record<string, { icon: React.ElementType; color: string }> = 
   default:      { icon: Bell,          color: 'bg-gray-100 text-gray-600' },
 };
 
-type Tab = 'services' | 'colis' | 'notifications';
+type Tab = 'services' | 'colis' | 'notifications' | 'settings';
 
 interface AdminDashboardProps {
   admin: AdminAccount;
@@ -95,6 +95,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     { id: 'services' as Tab,       label: 'Services',       icon: ShoppingBag },
     { id: 'colis' as Tab,          label: 'Colis',          icon: Package },
     { id: 'notifications' as Tab,  label: 'Notifications',  icon: Bell },
+    { id: 'settings' as Tab,       label: 'Paramètres',     icon: Settings },
   ];
 
   return (
@@ -152,6 +153,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
               {tab === 'services'      && <ServicesTab />}
               {tab === 'colis'         && <ColisTab />}
               {tab === 'notifications' && <NotificationsTab />}
+              {tab === 'settings'      && <SettingsTab />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -1080,6 +1082,32 @@ function NotificationsTab() {
   const [clearing, setClearing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [actioning, setActioning] = useState<Set<string>>(new Set());
+
+  const handleTxAction = async (notif: AdminNotification, action: 'approve' | 'reject') => {
+    const txId = notif.transactionId;
+    if (!txId) return;
+    const isDeposit = notif.type === 'client_deposit';
+    const endpoint = isDeposit
+      ? `/api/admin/client-deposit/${txId}/${action}`
+      : `/api/admin/client-withdrawal/${txId}/${action}`;
+    setActioning(s => new Set(s).add(notif.id));
+    try {
+      await adminFetch(endpoint, { method: 'POST', body: JSON.stringify({}) });
+      toast.success(action === 'approve'
+        ? (isDeposit ? 'Dépôt approuvé ✅' : 'Retrait approuvé ✅')
+        : (isDeposit ? 'Dépôt rejeté ❌' : 'Retrait rejeté ❌')
+      );
+      setNotifications(n => n.map(notif2 =>
+        notif2.id === notif.id ? { ...notif2, actioned: action, read: true } : notif2
+      ));
+      markOneRead(notif.id);
+    } catch (e: any) {
+      toast.error(e.message || 'Erreur.');
+    } finally {
+      setActioning(s => { const ns = new Set(s); ns.delete(notif.id); return ns; });
+    }
+  };
 
   const loadNotifications = useCallback(async () => {
     setLoading(true);
@@ -1253,7 +1281,7 @@ function NotificationsTab() {
                     </div>
                     {/* Extra fields */}
                     {Object.entries(notif)
-                      .filter(([k]) => !['id','type','title','message','amount','clientId','clientName','read','createdAt','updatedAt'].includes(k))
+                      .filter(([k]) => !['id','type','title','message','amount','clientId','clientName','read','createdAt','updatedAt','transactionId','actioned'].includes(k))
                       .slice(0, 4)
                       .map(([k, v]) => v != null && (
                         <div key={k} className="mt-1 text-xs text-gray-400">
@@ -1261,8 +1289,38 @@ function NotificationsTab() {
                         </div>
                       ))
                     }
+                    {/* Approve / Reject for deposit & withdrawal notifications */}
+                    {(notif.type === 'client_deposit' || notif.type === 'client_withdrawal') && notif.transactionId && !notif.actioned && (
+                      <div className="mt-3 flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleTxAction(notif, 'approve')}
+                          disabled={actioning.has(notif.id)}
+                          className="flex-1 h-8 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-bold gap-1.5"
+                        >
+                          {actioning.has(notif.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                          Approuver
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleTxAction(notif, 'reject')}
+                          disabled={actioning.has(notif.id)}
+                          className="flex-1 h-8 rounded-xl border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold gap-1.5"
+                        >
+                          {actioning.has(notif.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+                          Rejeter
+                        </Button>
+                      </div>
+                    )}
+                    {(notif.type === 'client_deposit' || notif.type === 'client_withdrawal') && notif.actioned && (
+                      <div className={`mt-2 inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${notif.actioned === 'approve' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {notif.actioned === 'approve' ? <CheckCircle className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+                        {notif.actioned === 'approve' ? 'Approuvé' : 'Rejeté'}
+                      </div>
+                    )}
                   </div>
-                  {!notif.read && (
+                  {!notif.read && !actioning.has(notif.id) && (
                     <button
                       onClick={() => markOneRead(notif.id)}
                       className="shrink-0 p-2 rounded-xl hover:bg-green-50 hover:text-green-600 text-gray-400 transition-all"
@@ -1277,6 +1335,173 @@ function NotificationsTab() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── SETTINGS TAB ─────────────────────────────────────────────────────────────
+
+function SettingsTab() {
+  const [methods, setMethods] = useState<PaymentMethod[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Partial<PaymentMethod>>({});
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await adminFetch('/api/admin/settings-data');
+        const saved: PaymentMethod[] = data.settings?.paymentMethods;
+        if (saved && saved.length > 0) {
+          setMethods(saved);
+        } else {
+          setMethods(DEFAULT_PAYMENT_METHODS.map(m => ({ ...m })));
+        }
+      } catch {
+        setMethods(DEFAULT_PAYMENT_METHODS.map(m => ({ ...m })));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const startEdit = (m: PaymentMethod) => {
+    setEditingId(m.id);
+    setEditForm({ ...m });
+  };
+
+  const cancelEdit = () => { setEditingId(null); setEditForm({}); };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    const updated = methods.map(m => m.id === editingId ? { ...m, ...editForm } : m);
+    setSaving(true);
+    try {
+      await adminFetch('/api/admin/settings', {
+        method: 'POST',
+        body: JSON.stringify({ paymentMethods: updated }),
+      });
+      setMethods(updated);
+      setEditingId(null);
+      setEditForm({});
+      toast.success('Méthode mise à jour.');
+    } catch (e: any) {
+      toast.error(e.message || 'Erreur.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
+            <Settings className="h-6 w-6 text-blue-600" /> Paramètres
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">Méthodes de paiement — logos et configuration</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+          <h2 className="font-black text-gray-800 flex items-center gap-2">
+            <CreditCard className="h-5 w-5 text-blue-500" />
+            Méthodes de paiement
+          </h2>
+          <p className="text-xs text-gray-500 mt-0.5">Configurez le logo de chaque méthode affiché aux clients</p>
+        </div>
+        <div className="divide-y divide-gray-50">
+          {methods.map(m => (
+            <div key={m.id} className="p-4">
+              {editingId === m.id ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-xl">{m.icon}</span>
+                    <span className="font-black text-gray-800">{m.name}</span>
+                  </div>
+                  <div>
+                    <Label className="text-xs font-black text-gray-500 uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
+                      <Link className="h-3.5 w-3.5" /> URL du logo
+                    </Label>
+                    <Input
+                      value={editForm.logoUrl || ''}
+                      onChange={e => setEditForm(f => ({ ...f, logoUrl: e.target.value }))}
+                      placeholder="https://exemple.com/logo.png"
+                      className="rounded-xl h-10 text-sm"
+                    />
+                    {editForm.logoUrl && (
+                      <div className="mt-2 flex items-center gap-3 p-2 bg-gray-50 rounded-xl border border-gray-100">
+                        <img
+                          src={editForm.logoUrl}
+                          alt="preview"
+                          className="h-10 w-16 object-contain rounded-lg bg-white border border-gray-200"
+                          onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = '0.3'; }}
+                        />
+                        <span className="text-xs text-gray-500 truncate">{editForm.logoUrl}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <Button onClick={saveEdit} disabled={saving} className="flex-1 h-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold gap-1.5">
+                      {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      Enregistrer
+                    </Button>
+                    <Button variant="outline" onClick={cancelEdit} className="flex-1 h-9 rounded-xl text-sm font-bold">
+                      Annuler
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {m.logoUrl ? (
+                      <img
+                        src={m.logoUrl}
+                        alt={m.name}
+                        className="h-10 w-14 object-contain rounded-xl bg-gray-50 border border-gray-100 shrink-0"
+                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    ) : (
+                      <div className="h-10 w-14 rounded-xl bg-gray-100 flex items-center justify-center shrink-0 text-xl">
+                        {m.icon}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-bold text-gray-800 text-sm">{m.name}</p>
+                      <p className="text-xs text-gray-400 truncate">
+                        {m.logoUrl ? (
+                          <span className="flex items-center gap-1 text-blue-500">
+                            <Link className="h-3 w-3" />{m.logoUrl.substring(0, 40)}{m.logoUrl.length > 40 ? '…' : ''}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 italic">Aucun logo configuré</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => startEdit(m)}
+                    className="shrink-0 p-2 rounded-xl hover:bg-blue-50 hover:text-blue-600 text-gray-400 transition-all"
+                    title="Modifier"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

@@ -182,6 +182,7 @@ export interface PaymentMethod {
   enabled: boolean;
   forDeposit: boolean;
   forWithdrawal: boolean;
+  logoUrl?: string;
   number?: string;
   accountName?: string;
   qrUrl?: string;

@@ -436,6 +436,152 @@ router.delete('/api/admin/notifications/clear-all', requireDb, async (_req, res)
   }
 });
 
+// ── Admin: approve client deposit ─────────────────────────────────────────────
+router.post('/api/admin/client-deposit/:txId/approve', requireDb, async (req, res) => {
+  try {
+    const { txId } = req.params;
+    const txRef = adminDb.collection('client_transactions').doc(txId);
+    const txSnap = await txRef.get();
+    if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const txData = txSnap.data()!;
+    if (txData.status !== 'pending') return res.status(400).json({ error: 'Transaction déjà traitée.' });
+    if (txData.type !== 'deposit') return res.status(400).json({ error: 'Type invalide.' });
+
+    const amount = Number(txData.usdAmount || txData.amount || 0);
+    const clientRef = adminDb.collection('clients').doc(txData.clientId);
+
+    await adminDb.runTransaction(async (txn) => {
+      const clientSnap = await txn.get(clientRef);
+      if (!clientSnap.exists) throw new Error('Client introuvable.');
+      txn.update(clientRef, { balance: FieldValue.increment(amount), updatedAt: FieldValue.serverTimestamp() });
+      txn.update(txRef, { status: 'approved', approvedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    });
+
+    pushClientEvent(txData.clientId, 'tx_approved', {
+      type: 'deposit', txId,
+      htg: txData.htgAmount || Math.round(amount * 135),
+      usd: amount,
+    });
+    sendFcmToClient(
+      txData.clientId,
+      '✅ Dépôt approuvé',
+      `Votre dépôt de $${amount.toFixed(2)} USD a été crédité sur votre compte.`,
+      { type: 'deposit_approved', txId }
+    );
+
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[admin/client-deposit/approve]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Admin: reject client deposit ──────────────────────────────────────────────
+router.post('/api/admin/client-deposit/:txId/reject', requireDb, async (req, res) => {
+  try {
+    const { txId } = req.params;
+    const { reason } = req.body;
+    const txRef = adminDb.collection('client_transactions').doc(txId);
+    const txSnap = await txRef.get();
+    if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const txData = txSnap.data()!;
+    if (txData.status !== 'pending') return res.status(400).json({ error: 'Transaction déjà traitée.' });
+
+    await txRef.update({
+      status: 'rejected',
+      ...(reason && { rejectionReason: reason }),
+      rejectedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    sendFcmToClient(
+      txData.clientId,
+      '❌ Dépôt refusé',
+      `Votre demande de dépôt de $${Number(txData.usdAmount || txData.amount || 0).toFixed(2)} USD a été refusée.${reason ? ` Raison: ${reason}` : ''}`,
+      { type: 'deposit_rejected', txId }
+    );
+
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[admin/client-deposit/reject]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Admin: approve client withdrawal ──────────────────────────────────────────
+router.post('/api/admin/client-withdrawal/:txId/approve', requireDb, async (req, res) => {
+  try {
+    const { txId } = req.params;
+    const txRef = adminDb.collection('client_transactions').doc(txId);
+    const txSnap = await txRef.get();
+    if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const txData = txSnap.data()!;
+    if (txData.status !== 'pending') return res.status(400).json({ error: 'Transaction déjà traitée.' });
+    if (txData.type !== 'withdrawal') return res.status(400).json({ error: 'Type invalide.' });
+
+    const amount = Number(txData.usdAmount || txData.amount || 0);
+    const clientRef = adminDb.collection('clients').doc(txData.clientId);
+
+    await adminDb.runTransaction(async (txn) => {
+      const clientSnap = await txn.get(clientRef);
+      if (!clientSnap.exists) throw new Error('Client introuvable.');
+      const bal = clientSnap.data()!.balance || 0;
+      if (bal < amount) throw new Error('Solde client insuffisant.');
+      txn.update(clientRef, { balance: FieldValue.increment(-amount), updatedAt: FieldValue.serverTimestamp() });
+      txn.update(txRef, { status: 'approved', approvedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
+    });
+
+    pushClientEvent(txData.clientId, 'tx_approved', {
+      type: 'withdrawal', txId,
+      htg: txData.htgEquivalent || Math.round(amount * 135),
+      usd: amount,
+    });
+    sendFcmToClient(
+      txData.clientId,
+      '✅ Retrait approuvé',
+      `Votre retrait de $${amount.toFixed(2)} USD a été approuvé.`,
+      { type: 'withdrawal_approved', txId }
+    );
+
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[admin/client-withdrawal/approve]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Admin: reject client withdrawal ───────────────────────────────────────────
+router.post('/api/admin/client-withdrawal/:txId/reject', requireDb, async (req, res) => {
+  try {
+    const { txId } = req.params;
+    const { reason } = req.body;
+    const txRef = adminDb.collection('client_transactions').doc(txId);
+    const txSnap = await txRef.get();
+    if (!txSnap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const txData = txSnap.data()!;
+    if (txData.status !== 'pending') return res.status(400).json({ error: 'Transaction déjà traitée.' });
+
+    await txRef.update({
+      status: 'rejected',
+      ...(reason && { rejectionReason: reason }),
+      rejectedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    sendFcmToClient(
+      txData.clientId,
+      '❌ Retrait refusé',
+      `Votre demande de retrait de $${Number(txData.usdAmount || txData.amount || 0).toFixed(2)} USD a été refusée.${reason ? ` Raison: ${reason}` : ''}`,
+      { type: 'withdrawal_rejected', txId }
+    );
+
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('[admin/client-withdrawal/reject]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
 // ── Card / service order notification (from ServicesView) ──────────────────────
 router.post('/api/admin/order-notification', requireDb, async (req, res) => {
   try {

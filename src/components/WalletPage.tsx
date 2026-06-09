@@ -252,8 +252,6 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
   const [withdrawAccount,      setWithdrawAccount]      = useState('');
   const [withdrawAccountName,  setWithdrawAccountName]  = useState('');
   const [withdrawMessage,      setWithdrawMessage]      = useState('');
-  const [withdrawProofFile,    setWithdrawProofFile]    = useState<File | null>(null);
-  const [withdrawProofPreview, setWithdrawProofPreview] = useState<string | null>(null);
   const [withdrawCaptchaToken, setWithdrawCaptchaToken] = useState<string | null>(null);
   const withdrawCaptchaRef = useRef<ReCAPTCHA>(null);
 
@@ -321,13 +319,14 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
 
   const resetWithdraw = () => {
     setWithdrawHTG(''); setWithdrawAccount(''); setWithdrawAccountName('');
-    setWithdrawMessage(''); setWithdrawProofFile(null); setWithdrawProofPreview(null);
+    setWithdrawMessage('');
     setWithdrawCaptchaToken(null); withdrawCaptchaRef.current?.reset();
     setWithdrawMethod(WALLET_METHODS[0]);
   };
 
   const handleDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!client) { toast.error('Chargement en cours, veuillez patienter.'); return; }
     const htg = parseFloat(htgAmount);
     if (isNaN(htg) || htg <= 0)   { toast.error('Montant invalide.'); return; }
     const usd = htg / rate;
@@ -368,6 +367,7 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
 
   const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!client) { toast.error('Chargement en cours, veuillez patienter.'); return; }
     const htg = parseFloat(withdrawHTG);
     if (isNaN(htg) || htg <= 0)   { toast.error('Montant invalide.'); return; }
     const usd = htg / rate;
@@ -379,16 +379,10 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
     if (RECAPTCHA_SITE_KEY && !withdrawCaptchaToken) { toast.error('Validez le captcha.'); return; }
     setActionLoading(true);
     try {
-      let proofImageUrl: string | undefined;
-      if (withdrawProofFile) {
-        toast.loading('Téléchargement de la preuve...', { id: 'proof-upload' });
-        proofImageUrl = await uploadProofImage(withdrawProofFile);
-        toast.dismiss('proof-upload');
-      }
       await submitClientWithdrawal(
         client!, usd, withdrawMethod.name, withdrawAccount,
         withdrawCaptchaToken || undefined, withdrawMessage || undefined,
-        withdrawAccountName || undefined, rate, proofImageUrl,
+        withdrawAccountName || undefined, rate,
       );
       const msg = `Bonjour Phénix 👋,\n\nDemande de *RETRAIT* :\n`
         + `👤 *${client!.name}* · Wallet: *${client!.walletId}*\n`
@@ -396,13 +390,11 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
         + `💳 Via: *${withdrawMethod.name}* · Compte: *${withdrawAccount}*`
         + (withdrawAccountName ? `\n👤 Bénéf: *${withdrawAccountName}*` : '')
         + (withdrawMessage     ? `\n💬 ${withdrawMessage}`               : '')
-        + (proofImageUrl       ? `\n🖼️ Preuve: ${proofImageUrl}`         : '')
         + `\n\nMerci de traiter ma demande. 🙏`;
       openWhatsApp(msg);
       toast.success('Demande soumise !');
       setIsWithdrawOpen(false); resetWithdraw();
     } catch (err: any) {
-      toast.dismiss('proof-upload');
       toast.error(err.message);
       withdrawCaptchaRef.current?.reset(); setWithdrawCaptchaToken(null);
     } finally { setActionLoading(false); }
@@ -810,13 +802,6 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
                 </div>
               )}
             </div>
-
-            {/* Proof upload */}
-            <ProofUpload
-              file={withdrawProofFile} preview={withdrawProofPreview}
-              onChange={(f, p) => { setWithdrawProofFile(f); setWithdrawProofPreview(p); }}
-              accent="red"
-            />
 
             {/* Receiving account */}
             <div className="space-y-1.5">

@@ -166,8 +166,8 @@ const DEFAULT_CARDS: CardTopup[] = [
 ];
 
 export const useCardTopups = () => {
-  const [cards, setCards] = useState<CardTopup[]>(DEFAULT_CARDS);
-  const [loading, setLoading] = useState(false);
+  const [cards, setCards] = useState<CardTopup[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -178,17 +178,20 @@ export const useCardTopups = () => {
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     const q = query(collection(db, 'card_topups'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       if (cancelled) return;
       const fetched = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as CardTopup[];
-      if (fetched.length > 0) setCards(fetched);
+      setCards(fetched);
+      setLoading(false);
     }, async (_err) => {
       if (cancelled) return;
       try {
         const data = await adminGet('/api/admin/card-topups');
-        if (!cancelled && data.cards) setCards(data.cards.length > 0 ? data.cards : DEFAULT_CARDS);
+        if (!cancelled && data.cards) setCards(data.cards);
       } catch {}
+      if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; unsubscribe(); };
   }, [refreshKey]);
