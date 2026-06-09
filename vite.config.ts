@@ -21,6 +21,12 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
+      include: [
+        'react', 'react-dom', 'react/jsx-runtime',
+        'firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage',
+        'motion/react', 'sonner', 'clsx', 'tailwind-merge',
+        'class-variance-authority',
+      ],
       esbuildOptions: {
         sourcemap: false,
       },

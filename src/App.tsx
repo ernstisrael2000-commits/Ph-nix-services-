@@ -12,7 +12,7 @@ import { Bell, X, WifiOff } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { AdminAccount, Client } from './types';
 import { motion, AnimatePresence } from 'motion/react';
-import { doc, getDocFromServer, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { toast } from 'sonner';
 
@@ -65,23 +65,22 @@ export default function App() {
     setView('tracking');
   };
 
-  // Connection Test
+  // Offline detection via browser network events (no Firestore round-trip)
   useEffect(() => {
-    const testConnection = async () => {
-      try {
-        await getDocFromServer(doc(db, '_connection_test_', 'ping'));
-      } catch (error: any) {
-        if (error?.message?.includes('offline') || error?.code === 'unavailable') {
-          toast.error("Connexion perdue. Rena fonctionne en mode hors-ligne.", {
-            description: "Certaines fonctionnalités peuvent être limitées.",
-            duration: Infinity,
-            icon: <WifiOff className="h-4 w-4" />,
-            id: 'offline-toast'
-          });
-        }
-      }
+    const showOffline = () => toast.error("Connexion perdue. Rena fonctionne en mode hors-ligne.", {
+      description: "Certaines fonctionnalités peuvent être limitées.",
+      duration: Infinity,
+      icon: <WifiOff className="h-4 w-4" />,
+      id: 'offline-toast',
+    });
+    const hideOffline = () => toast.dismiss('offline-toast');
+    if (!navigator.onLine) showOffline();
+    window.addEventListener('offline', showOffline);
+    window.addEventListener('online', hideOffline);
+    return () => {
+      window.removeEventListener('offline', showOffline);
+      window.removeEventListener('online', hideOffline);
     };
-    testConnection();
   }, []);
 
   // Detect MonCash return redirect

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import * as LucideIcons from 'lucide-react';
 import {
   ShoppingBag, CreditCard, Gamepad2, MessageCircle, ArrowRight,
   Info, Wallet, Smartphone, Landmark, Zap, ShieldCheck,
-  DollarSign, Clock, Package, Star, QrCode, Loader2, X
+  DollarSign, Clock, Package, Star, QrCode, Loader2, X,
+  Hash, User,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
@@ -479,7 +479,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                     Votre ID
                   </label>
                   <div className="relative">
-                    <LucideIcons.Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400" />
+                    <Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400" />
                     <input
                       type="text"
                       value={gamePlayerId}
@@ -705,7 +705,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
             <div className="space-y-2">
               <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Identifiant ou Nom complet</Label>
               <div className="relative">
-                <LucideIcons.User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
                 <Input
                   placeholder="Votre nom ou ID Wallet"
                   value={customerName}

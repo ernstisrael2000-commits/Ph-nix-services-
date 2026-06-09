@@ -5,8 +5,18 @@ import {
   ShoppingBag, Globe, GraduationCap, Wallet,
   MessageCircle, ArrowUp, ChevronRight, Search, X, Zap, TrendingUp, Loader2,
   Star, BookOpen, Award, Clock,
+  Lock, ShieldCheck, Smartphone, CreditCard, DollarSign, Bitcoin,
+  Building2, Gift, Gamepad2, Music, Video, Hash, User, Home, Settings,
+  Bell, Info, Check, Shield, Circle, Truck as TruckIcon,
 } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
+
+const ICON_MAP: Record<string, React.FC<any>> = {
+  Package, Truck, TruckIcon, Users, ArrowRight, ShoppingBag, Globe,
+  GraduationCap, Wallet, MessageCircle, ArrowUp, ChevronRight, Search,
+  Zap, TrendingUp, Star, BookOpen, Award, Clock, Lock, ShieldCheck,
+  Smartphone, CreditCard, DollarSign, Bitcoin, Building2, Gift, Gamepad2,
+  Music, Video, Hash, User, Home, Settings, Bell, Info, Check, Shield,
+};
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { useState, useEffect } from 'react';
@@ -24,9 +34,8 @@ const SLIDER_IMAGES = [
   'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2070&auto=format&fit=crop',
 ];
 
-const HelpCircle = LucideIcons.Circle;
 const LucideIcon = ({ name, className, color }: { name: string; className?: string; color?: string }) => {
-  const Icon = (LucideIcons as any)[name] || HelpCircle;
+  const Icon = ICON_MAP[name] || Circle;
   return <Icon className={className} style={{ color }} />;
 };
 
@@ -343,7 +352,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                       {!loggedClient && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/25">
                           <div className="h-8 w-8 rounded-full bg-white/90 flex items-center justify-center shadow-md">
-                            <LucideIcons.Lock className="h-4 w-4 text-gray-700" />
+                            <Lock className="h-4 w-4 text-gray-700" />
                           </div>
                         </div>
                       )}
@@ -380,10 +389,10 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
         <h2 className="text-base font-black text-dark mb-4">Pourquoi choisir Rena ?</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { icon: LucideIcons.Zap, label: 'Rapide', desc: 'Traitement en quelques minutes', color: 'text-amber-500 bg-amber-50' },
-            { icon: LucideIcons.ShieldCheck, label: 'Sécurisé', desc: 'Transactions protégées', color: 'text-emerald-500 bg-emerald-50' },
-            { icon: LucideIcons.Clock, label: '24/7', desc: 'Support disponible en tout temps', color: 'text-blue-500 bg-blue-50' },
-            { icon: LucideIcons.Star, label: 'Fiable', desc: 'Des milliers de clients satisfaits', color: 'text-purple-500 bg-purple-50' },
+            { icon: Zap, label: 'Rapide', desc: 'Traitement en quelques minutes', color: 'text-amber-500 bg-amber-50' },
+            { icon: ShieldCheck, label: 'Sécurisé', desc: 'Transactions protégées', color: 'text-emerald-500 bg-emerald-50' },
+            { icon: Clock, label: '24/7', desc: 'Support disponible en tout temps', color: 'text-blue-500 bg-blue-50' },
+            { icon: Star, label: 'Fiable', desc: 'Des milliers de clients satisfaits', color: 'text-purple-500 bg-purple-50' },
           ].map(item => (
             <div key={item.label} className="flex flex-col items-center text-center gap-2 p-3 rounded-2xl bg-gray-50">
               <div className={`h-9 w-9 rounded-xl ${item.color} flex items-center justify-center`}>

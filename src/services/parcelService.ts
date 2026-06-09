@@ -367,40 +367,55 @@ export const deleteGame = async (id: string) => {
   await adminApi('DELETE', `/api/admin/game/${id}`);
 };
 
-// ── Settings Services ─────────────────────────────────────────────────────────
+// ── Settings Singleton (one Firestore listener shared across all components) ───
+let _settingsValue: AppSettings | null = null;
+let _settingsLoading = true;
+let _settingsSubscribers = new Set<() => void>();
+let _settingsUnsubscribe: (() => void) | null = null;
+
+function _notifySettings() {
+  _settingsSubscribers.forEach(fn => fn());
+}
+
+function _startSettingsListener() {
+  if (_settingsUnsubscribe) return;
+  const docRef = doc(db, 'settings', 'global');
+  _settingsUnsubscribe = onSnapshot(docRef, (snap) => {
+    if (snap.exists()) _settingsValue = snap.data() as AppSettings;
+    _settingsLoading = false;
+    _notifySettings();
+  }, async (err) => {
+    try {
+      const data = await adminGet('/api/admin/settings-data');
+      if (data.settings) _settingsValue = data.settings as AppSettings;
+    } catch {
+      try { handleFirestoreError(err as any, 'get', 'settings/global', auth); } catch {}
+    }
+    _settingsLoading = false;
+    _notifySettings();
+  });
+}
+
+function _resetSettingsListener() {
+  if (_settingsUnsubscribe) { _settingsUnsubscribe(); _settingsUnsubscribe = null; }
+  _settingsLoading = true;
+  _startSettingsListener();
+}
+
 export const useSettings = () => {
-  const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
-
+  const [, rerender] = useState(0);
   useEffect(() => {
-    const handler = () => setRefreshKey(k => k + 1);
-    window.addEventListener('admin-data-changed', handler);
-    return () => window.removeEventListener('admin-data-changed', handler);
+    const update = () => rerender(n => n + 1);
+    _settingsSubscribers.add(update);
+    _startSettingsListener();
+    const onAdminChange = () => { _resetSettingsListener(); update(); };
+    window.addEventListener('admin-data-changed', onAdminChange);
+    return () => {
+      _settingsSubscribers.delete(update);
+      window.removeEventListener('admin-data-changed', onAdminChange);
+    };
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    const docRef = doc(db, 'settings', 'global');
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (cancelled) return;
-      if (docSnap.exists()) setSettings(docSnap.data() as AppSettings);
-      setLoading(false);
-    }, async (_err) => {
-      if (cancelled) return;
-      try {
-        const data = await adminGet('/api/admin/settings-data');
-        if (!cancelled && data.settings) setSettings(data.settings as AppSettings);
-      } catch {
-        try { handleFirestoreError(_err as any, 'get', 'settings/global', auth); } catch {}
-      }
-      if (!cancelled) setLoading(false);
-    });
-    return () => { cancelled = true; unsubscribe(); };
-  }, [refreshKey]);
-
-  return { settings, loading };
+  return { settings: _settingsValue, loading: _settingsLoading };
 };
 
 export const updateSettings = async (settingsData: Partial<AppSettings>) => {
