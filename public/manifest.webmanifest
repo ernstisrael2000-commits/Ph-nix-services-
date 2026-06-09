@@ -1,6 +1,6 @@
 {
-  "name": "Rena",
-  "short_name": "Rena",
+  "name": "Phénix Services",
+  "short_name": "Phénix",
   "description": "Votre plateforme de logistique et paiements en ligne",
   "start_url": "/",
   "display": "standalone",
@@ -11,10 +11,10 @@
   "lang": "fr",
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "/phenix-logo.png",
       "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/icon-192.png",
@@ -36,14 +36,14 @@
       "short_name": "Wallet",
       "description": "Accéder à mon portefeuille",
       "url": "/?action=wallet",
-      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+      "icons": [{ "src": "/phenix-logo.png", "sizes": "any" }]
     },
     {
       "name": "Suivi de colis",
       "short_name": "Suivi",
       "description": "Suivre un colis",
       "url": "/?view=tracking",
-      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+      "icons": [{ "src": "/phenix-logo.png", "sizes": "any" }]
     }
   ]
 }

@@ -178,7 +178,7 @@ export default function App() {
                           Annonce Spéciale
                         </h3>
                         <p className="text-[10px] uppercase font-black text-primary/60 tracking-widest mt-1">
-                          Rena
+                          Phénix Services
                         </p>
                       </div>
                     </div>
@@ -260,13 +260,11 @@ export default function App() {
           <footer className="py-12 border-t mt-auto bg-white pb-24">
             <div className="max-w-7xl mx-auto px-4 text-center">
               <div className="flex items-center justify-center gap-2 mb-4">
-                <div className="bg-muted p-1.5 rounded-md">
-                  <Package className="h-5 w-5 text-subtext" />
-                </div>
-                <span className="text-xl font-bold text-dark">Rena</span>
+                <img src="/phenix-logo.png" alt="Phénix Services" className="h-10 w-10 object-contain" />
+                <span className="text-xl font-bold text-dark">Phénix Services</span>
               </div>
               <p className="text-subtext text-sm">
-                © {new Date().getFullYear()} Rena. Tous droits réservés.
+                © {new Date().getFullYear()} Phénix Services. Tous droits réservés.
               </p>
               <div className="flex justify-center gap-6 mt-6 text-sm text-subtext/60">
                 <a href="#" className="hover:text-subtext transition-colors">Confidentialité</a>

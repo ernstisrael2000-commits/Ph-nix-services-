@@ -96,12 +96,12 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
               onClick={() => handleNav('tracking')}
             >
               {settings?.logoUrl ? (
-                <img src={settings.logoUrl} alt="Rena Logo" className="h-7 w-auto object-contain"
+                <img src={settings.logoUrl} alt="Phénix Services Logo" className="h-7 w-auto object-contain"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
               ) : (
-                <RenaLogo size={32} />
+                <img src="/phenix-logo.png" alt="Phénix Services" className="h-8 w-auto object-contain" />
               )}
-              <span className="text-lg font-black tracking-tight text-gray-800 hidden sm:block">Rena</span>
+              <span className="text-lg font-black tracking-tight text-gray-800 hidden sm:block">Phénix Services</span>
             </div>
 
             {/* Desktop nav */}
