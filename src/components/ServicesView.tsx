@@ -85,6 +85,7 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
   const [holderName, setHolderName] = useState('');
   const [payMethod, setPayMethod] = useState<string>('moncash');
   const [txInfo, setTxInfo] = useState('');
+  const [dynamicFieldValues, setDynamicFieldValues] = useState<Record<string, string>>({});
 
   // Creation pay
   const [purchaseLoading, setPurchaseLoading] = useState(false);
@@ -97,6 +98,7 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
     setHolderName('');
     setTxInfo('');
     setPayMethod('moncash');
+    setDynamicFieldValues({});
   };
 
   const closeModal = () => setSelected(null);
@@ -147,7 +149,16 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
     const method = PAYMENT_METHODS.find(m => m.id === payMethod);
     const usd = parseFloat(rechargeAmount);
     const htg = Math.round(usd * exchangeRate);
-    openWhatsApp(`💳 *RECHARGE CARTE — Phénix Services*\n\n🎴 Carte: *${selected.name}*\n👤 Titulaire: *${holderName || 'Non spécifié'}*\n🔢 Numéro/Info carte: *${cardNumber || 'Non spécifié'}*\n💵 Montant USD: *$${usd}*\n🇭🇹 Équivalent: *${htg.toLocaleString()} HTG*\n\n💳 Méthode: *${method?.label}*\n📝 Référence: *${txInfo || 'Non fournie'}*\n\nMerci de traiter ma recharge.`);
+    const hasCustomFields = selected.rechargeFields?.length > 0;
+    let dynamicLines = '';
+    if (hasCustomFields) {
+      dynamicLines = (selected.rechargeFields as { id: string; label: string }[]).map(f =>
+        `${f.label}: *${dynamicFieldValues[f.id] || 'Non spécifié'}*`
+      ).join('\n');
+    } else {
+      dynamicLines = `👤 Titulaire: *${holderName || 'Non spécifié'}*\n🔢 Numéro/Info carte: *${cardNumber || 'Non spécifié'}*`;
+    }
+    openWhatsApp(`💳 *RECHARGE CARTE — Phénix Services*\n\n🎴 Carte: *${selected.name}*\n${dynamicLines}\n💵 Montant USD: *$${usd}*\n🇭🇹 Équivalent: *${htg.toLocaleString()} HTG*\n\n💳 Méthode: *${method?.label}*\n📝 Référence: *${txInfo || 'Non fournie'}*\n\nMerci de traiter ma recharge.`);
     setStep('success');
   };
 
@@ -438,16 +449,35 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
                   </div>
 
                   <div className="space-y-3">
-                    <div>
-                      <Label className="text-xs font-black text-gray-600">Nom du titulaire</Label>
-                      <Input value={holderName} onChange={e => setHolderName(e.target.value)}
-                        placeholder="Ex: Jean Dupont" className="mt-1 rounded-xl border-gray-200" />
-                    </div>
-                    <div>
-                      <Label className="text-xs font-black text-gray-600">Numéro / Identifiant de la carte</Label>
-                      <Input value={cardNumber} onChange={e => setCardNumber(e.target.value)}
-                        placeholder="Ex: 4111 1111 1111 1111" className="mt-1 rounded-xl border-gray-200" />
-                    </div>
+                    {/* Dynamic fields from admin config, or default fields */}
+                    {selected.rechargeFields?.length > 0 ? (
+                      selected.rechargeFields.map((f: { id: string; label: string; placeholder: string; required?: boolean }) => (
+                        <div key={f.id}>
+                          <Label className="text-xs font-black text-gray-600">
+                            {f.label}{f.required && <span className="text-red-500 ml-0.5">*</span>}
+                          </Label>
+                          <Input
+                            value={dynamicFieldValues[f.id] || ''}
+                            onChange={e => setDynamicFieldValues(v => ({ ...v, [f.id]: e.target.value }))}
+                            placeholder={f.placeholder || f.label}
+                            className="mt-1 rounded-xl border-gray-200"
+                          />
+                        </div>
+                      ))
+                    ) : (
+                      <>
+                        <div>
+                          <Label className="text-xs font-black text-gray-600">Nom du titulaire</Label>
+                          <Input value={holderName} onChange={e => setHolderName(e.target.value)}
+                            placeholder="Ex: Jean Dupont" className="mt-1 rounded-xl border-gray-200" />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-black text-gray-600">Numéro / Identifiant de la carte</Label>
+                          <Input value={cardNumber} onChange={e => setCardNumber(e.target.value)}
+                            placeholder="Ex: 4111 1111 1111 1111" className="mt-1 rounded-xl border-gray-200" />
+                        </div>
+                      </>
+                    )}
 
                     {/* Presets */}
                     {selected.presets?.length > 0 && (

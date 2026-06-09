@@ -46,6 +46,13 @@ export interface Product {
   createdAt: any;
 }
 
+export interface RechargeField {
+  id: string;
+  label: string;
+  placeholder: string;
+  required?: boolean;
+}
+
 export interface CardTopup {
   id?: string;
   name: string;
@@ -56,6 +63,7 @@ export interface CardTopup {
   whatsappMessage?: string;
   goldRate?: number;
   presets?: number[];
+  rechargeFields?: RechargeField[];
   createdAt: any;
   updatedAt?: any;
 }

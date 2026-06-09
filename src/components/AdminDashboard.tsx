@@ -224,6 +224,13 @@ function SidebarContent({ admin, tabs, tab, setTab, onLogout }: {
 
 // ─── SERVICES TAB ─────────────────────────────────────────────────────────────
 
+interface RechargeFieldForm {
+  id: string;
+  label: string;
+  placeholder: string;
+  required: boolean;
+}
+
 interface ServiceFormData {
   name: string;
   image: string;
@@ -234,12 +241,14 @@ interface ServiceFormData {
   goldRate: string;
   presets: string;
   customFields: { key: string; value: string }[];
+  rechargeFields: RechargeFieldForm[];
 }
 
 const EMPTY_SERVICE: ServiceFormData = {
   name: '', image: '', description: '', price: '', stock: '',
   whatsappMessage: '', goldRate: '', presets: '',
   customFields: [],
+  rechargeFields: [],
 };
 
 function ServicesTab() {
@@ -268,10 +277,16 @@ function ServicesTab() {
   const openEdit = (card: CardTopup) => {
     setEditing(card);
     const customFields: { key: string; value: string }[] = [];
-    const knownKeys = new Set(['id','name','image','description','price','stock','whatsappMessage','goldRate','presets','createdAt','updatedAt']);
+    const knownKeys = new Set(['id','name','image','description','price','stock','whatsappMessage','goldRate','presets','rechargeFields','createdAt','updatedAt']);
     for (const [k, v] of Object.entries(card as any)) {
       if (!knownKeys.has(k)) customFields.push({ key: k, value: String(v ?? '') });
     }
+    const rechargeFields: RechargeFieldForm[] = (card.rechargeFields || []).map(f => ({
+      id: f.id || String(Math.random()),
+      label: f.label || '',
+      placeholder: f.placeholder || '',
+      required: f.required ?? false,
+    }));
     setForm({
       name: card.name || '',
       image: card.image || '',
@@ -282,8 +297,9 @@ function ServicesTab() {
       goldRate: String(card.goldRate ?? ''),
       presets: (card.presets || []).join(', '),
       customFields,
+      rechargeFields,
     });
-    setShowAdvanced(customFields.length > 0 || !!card.whatsappMessage || !!card.goldRate || !!(card.presets?.length));
+    setShowAdvanced(customFields.length > 0 || rechargeFields.length > 0 || !!card.whatsappMessage || !!card.goldRate || !!(card.presets?.length));
     setDialogOpen(true);
   };
 
@@ -302,6 +318,11 @@ function ServicesTab() {
         ...(form.goldRate !== '' && { goldRate: Number(form.goldRate) }),
         ...(form.presets.trim() && {
           presets: form.presets.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n) && n > 0)
+        }),
+        ...(form.rechargeFields.length > 0 && {
+          rechargeFields: form.rechargeFields
+            .filter(f => f.label.trim())
+            .map(f => ({ id: f.id, label: f.label.trim(), placeholder: f.placeholder.trim(), required: f.required }))
         }),
       };
       for (const cf of form.customFields) {
@@ -490,10 +511,78 @@ function ServicesTab() {
                     <Input type="number" value={form.goldRate} onChange={e => setForm(f => ({ ...f, goldRate: e.target.value }))} placeholder="Ex: 146" className="rounded-xl" />
                   </FormField>
 
+                  {/* Champs de saisie du formulaire de recharge */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <Label className="text-xs font-black text-gray-500 uppercase tracking-wide">Champs du formulaire de recharge</Label>
+                        <p className="text-[10px] text-gray-400 mt-0.5">Ces champs s'affichent quand le client remplit sa demande de recharge.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({
+                          ...f,
+                          rechargeFields: [...f.rechargeFields, { id: String(Date.now()), label: '', placeholder: '', required: false }]
+                        }))}
+                        className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 shrink-0"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Ajouter
+                      </button>
+                    </div>
+                    {form.rechargeFields.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic bg-gray-50 rounded-xl px-3 py-2">Aucun champ configuré — les champs par défaut (Titulaire, Numéro de carte) seront utilisés.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {form.rechargeFields.map((rf, i) => (
+                          <div key={rf.id} className="rounded-xl border border-gray-200 p-3 space-y-2 bg-gray-50/50">
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={rf.label}
+                                onChange={e => setForm(f => {
+                                  const arr = [...f.rechargeFields];
+                                  arr[i] = { ...arr[i], label: e.target.value };
+                                  return { ...f, rechargeFields: arr };
+                                })}
+                                placeholder="Label du champ (ex: Numéro de compte)"
+                                className="rounded-xl flex-1 text-sm"
+                              />
+                              <button type="button" onClick={() => setForm(f => ({ ...f, rechargeFields: f.rechargeFields.filter((_, idx) => idx !== i) }))} className="p-2 rounded-xl hover:bg-red-50 text-red-400 shrink-0">
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                            <Input
+                              value={rf.placeholder}
+                              onChange={e => setForm(f => {
+                                const arr = [...f.rechargeFields];
+                                arr[i] = { ...arr[i], placeholder: e.target.value };
+                                return { ...f, rechargeFields: arr };
+                              })}
+                              placeholder="Placeholder (ex: Ex: 4111 1111 1111 1111)"
+                              className="rounded-xl text-sm"
+                            />
+                            <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={rf.required}
+                                onChange={e => setForm(f => {
+                                  const arr = [...f.rechargeFields];
+                                  arr[i] = { ...arr[i], required: e.target.checked };
+                                  return { ...f, rechargeFields: arr };
+                                })}
+                                className="rounded"
+                              />
+                              Champ obligatoire
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Champs personnalisés */}
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <Label className="text-xs font-black text-gray-500 uppercase tracking-wide">Champs personnalisés</Label>
+                      <Label className="text-xs font-black text-gray-500 uppercase tracking-wide">Champs personnalisés (métadonnées)</Label>
                       <button type="button" onClick={addCustomField} className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1">
                         <Plus className="h-3.5 w-3.5" /> Ajouter un champ
                       </button>
@@ -559,6 +648,7 @@ interface ColisFormData {
   weight: string;
   origin: string;
   destination: string;
+  proofImage: string;
 }
 
 const EMPTY_COLIS: ColisFormData = {
@@ -573,6 +663,7 @@ const EMPTY_COLIS: ColisFormData = {
   weight: '',
   origin: '',
   destination: '',
+  proofImage: '',
 };
 
 function ColisTab() {
@@ -628,8 +719,9 @@ function ColisTab() {
       weight: pa.weight ? String(pa.weight) : '',
       origin: pa.origin || '',
       destination: pa.destination || '',
+      proofImage: pa.proofOfDelivery || '',
     });
-    setShowMore(!!(pa.recipientPhone || pa.description || pa.weight || pa.origin || pa.destination));
+    setShowMore(!!(pa.recipientPhone || pa.description || pa.weight || pa.origin || pa.destination || pa.proofOfDelivery));
     setDialogOpen(true);
   };
 
@@ -650,6 +742,7 @@ function ColisTab() {
         ...(form.weight && { weight: form.weight }),
         ...(form.origin.trim() && { origin: form.origin.trim() }),
         ...(form.destination.trim() && { destination: form.destination.trim() }),
+        ...(form.proofImage.trim() && { proofOfDelivery: form.proofImage.trim() }),
       };
       await saveParcel(data, editing?.id);
       toast.success(editing ? 'Colis mis à jour.' : 'Colis créé.');
@@ -914,6 +1007,12 @@ function ColisTab() {
                   </FormField>
                   <FormField label="Description du contenu" icon={FileText}>
                     <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Vêtements, électronique..." className="rounded-xl resize-none" rows={2} />
+                  </FormField>
+                  <FormField label="Preuve de livraison (URL image)" icon={ImageIcon}>
+                    <Input value={form.proofImage} onChange={e => setForm(f => ({ ...f, proofImage: e.target.value }))} placeholder="https://..." className="rounded-xl" />
+                    {form.proofImage && (
+                      <img src={form.proofImage} alt="Preuve" className="mt-2 h-28 w-full object-cover rounded-xl border border-gray-200" onError={e => { (e.target as any).style.display='none'; }} />
+                    )}
                   </FormField>
                 </motion.div>
               )}

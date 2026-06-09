@@ -31,6 +31,7 @@ interface ClientDashboardProps {
   onLogout: () => void;
   open: boolean;
   onClose: () => void;
+  initialAction?: 'deposit' | 'withdrawal';
 }
 
 const WHATSAPP_NUMBER = '+50944813185';
@@ -169,7 +170,7 @@ function VirtualCard({
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
-export default function ClientDashboard({ clientId, onLogout, open, onClose }: ClientDashboardProps) {
+export default function ClientDashboard({ clientId, onLogout, open, onClose, initialAction }: ClientDashboardProps) {
   const { client, loading } = useClientData(clientId);
   const { transactions, loading: txLoading } = useClientTransactions(clientId);
   const { settings } = useSettings();
@@ -296,6 +297,12 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose }: C
       toast.success('ID Wallet copié !');
     }
   };
+
+  useEffect(() => {
+    if (!open) return;
+    if (initialAction === 'deposit') { const t = setTimeout(() => setIsDepositOpen(true), 200); return () => clearTimeout(t); }
+    if (initialAction === 'withdrawal') { const t = setTimeout(() => setIsWithdrawOpen(true), 200); return () => clearTimeout(t); }
+  }, [open, initialAction]);
 
   const openWhatsApp = (message: string) => {
     const num = settings?.whatsappAdminNumber || WHATSAPP_NUMBER;

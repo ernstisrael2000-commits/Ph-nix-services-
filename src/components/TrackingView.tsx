@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
   Search, Loader2, MapPin, CheckCircle2, Package, Home,
-  Truck, Clock, ChevronRight, ArrowRight, CircleDot,
+  Truck, Clock, ChevronRight, CreditCard, MessageCircle,
+  X, Image as ImageIcon,
 } from 'lucide-react';
 import { searchParcel } from '../services/parcelService';
-import { Parcel } from '../types';
+import { Client, Parcel } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, isValid } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { useSettings } from '../services/parcelService';
 
 const RECENT_KEY = 'rena_recent_tracking';
 const MAX_RECENT = 5;
@@ -35,7 +37,6 @@ function getStepIndex(status: string): number {
 
 function buildTimeline(parcel: Parcel) {
   const lines: { label: string; sub: string; time: string; active: boolean }[] = [];
-  const now = new Date();
 
   const fmtDate = (d: any) => {
     if (!d) return '';
@@ -53,12 +54,22 @@ function buildTimeline(parcel: Parcel) {
   return lines;
 }
 
-export default function TrackingView() {
+interface TrackingViewProps {
+  loggedClient?: Client | null;
+  onRequestAuth?: () => void;
+  onOpenWalletDeposit?: () => void;
+}
+
+export default function TrackingView({ loggedClient, onRequestAuth, onOpenWalletDeposit }: TrackingViewProps) {
   const [trackingNumber, setTrackingNumber] = useState('');
   const [parcel, setParcel] = useState<Parcel | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [recent, setRecent] = useState<string[]>(getRecent());
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [proofOpen, setProofOpen] = useState(false);
+  const { settings } = useSettings();
+  const whatsapp = settings?.whatsappAdminNumber || '+50944813185';
 
   const handleSearch = async (num?: string) => {
     const query = (num ?? trackingNumber).trim();
@@ -98,6 +109,15 @@ export default function TrackingView() {
     if (status === 'En transit') return 'text-amber-600 bg-amber-50';
     return 'text-gray-600 bg-gray-100';
   };
+
+  const handleWhatsAppPay = () => {
+    if (!parcel) return;
+    const msg = `💳 *PAIEMENT COLIS — Phénix Services*\n\n📦 N° de suivi: *${parcel.trackingNumber}*\n📍 Localisation: *${parcel.currentLocation || 'N/A'}*\n\nJe souhaite régler le paiement de mon colis.\nMerci de me contacter.`;
+    window.open(`https://wa.me/${whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+    setShowPayModal(false);
+  };
+
+  const pa = parcel as any;
 
   return (
     <div className="min-h-screen bg-[#EEF2FF] pb-28">
@@ -185,10 +205,34 @@ export default function TrackingView() {
               {/* Section label */}
               <div className="flex items-center justify-between">
                 <h2 className="text-base font-black text-gray-900">Expédition active</h2>
-                <span className="text-[10px] font-black text-primary bg-primary/10 px-2.5 py-1 rounded-full uppercase tracking-wide">
-                  {parcel.paymentStatus === 'Payé' ? '✓ Payé' : 'Paiement requis'}
+                <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wide ${
+                  parcel.paymentStatus === 'Payé'
+                    ? 'text-emerald-700 bg-emerald-100'
+                    : 'text-amber-700 bg-amber-100'
+                }`}>
+                  {parcel.paymentStatus === 'Payé' ? '✓ Payé' : '⚠ Paiement requis'}
                 </span>
               </div>
+
+              {/* Payment banner — shown when unpaid */}
+              {parcel.paymentStatus !== 'Payé' && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-md shadow-amber-500/20"
+                >
+                  <div>
+                    <p className="text-white font-black text-sm leading-tight">Paiement en attente</p>
+                    <p className="text-white/80 text-[11px] mt-0.5">Réglez le solde de votre colis pour le libérer.</p>
+                  </div>
+                  <button
+                    onClick={() => setShowPayModal(true)}
+                    className="shrink-0 bg-white text-amber-600 font-black text-xs px-3 py-2 rounded-xl hover:bg-amber-50 transition-colors shadow-sm"
+                  >
+                    Payer
+                  </button>
+                </motion.div>
+              )}
 
               {/* Main card */}
               <div className="bg-white rounded-3xl shadow-md overflow-hidden border border-white/50">
@@ -197,7 +241,7 @@ export default function TrackingView() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Livraison estimée</p>
-                      <p className="text-xl font-black text-gray-900 mt-1 capitalize">{fmtArrival(parcel.estimatedArrival)}</p>
+                      <p className="text-xl font-black text-gray-900 mt-1 capitalize">{fmtArrival(pa.estimatedArrival)}</p>
                       <div className="flex items-center gap-1.5 mt-2">
                         <span className={`h-2 w-2 rounded-full ${stepIndex === 3 ? 'bg-emerald-500' : 'bg-primary'} animate-pulse`} />
                         <span className={`text-xs font-black ${stepIndex === 3 ? 'text-emerald-600' : 'text-primary'}`}>{parcel.status}</span>
@@ -213,7 +257,6 @@ export default function TrackingView() {
                     {STEPS.map((step, i) => {
                       const done = i < stepIndex;
                       const active = i === stepIndex;
-                      const upcoming = i > stepIndex;
                       return (
                         <React.Fragment key={step.key}>
                           <div className="flex flex-col items-center gap-1.5 flex-1">
@@ -279,7 +322,30 @@ export default function TrackingView() {
                   </div>
                 </div>
 
-                {/* Tracking number + action */}
+                {/* Proof of delivery image */}
+                {pa.proofOfDelivery && (
+                  <div className="px-5 pb-5">
+                    <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">Preuve de livraison</p>
+                    <button
+                      onClick={() => setProofOpen(true)}
+                      className="relative w-full h-36 rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md transition-shadow group"
+                    >
+                      <img
+                        src={pa.proofOfDelivery}
+                        alt="Preuve de livraison"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={e => { (e.target as any).parentElement.style.display = 'none'; }}
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                        <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 rounded-xl px-3 py-1.5 text-xs font-black text-gray-700 flex items-center gap-1.5">
+                          <ImageIcon className="h-3.5 w-3.5" /> Agrandir
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+                )}
+
+                {/* Tracking number */}
                 <div className="px-5 pb-5">
                   <div className="bg-gray-50 rounded-2xl p-3 flex items-center justify-between">
                     <div>
@@ -321,6 +387,125 @@ export default function TrackingView() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* ── Payment modal ── */}
+      <AnimatePresence>
+        {showPayModal && parcel && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[500]"
+              onClick={() => setShowPayModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 60, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 40, scale: 0.95 }}
+              transition={{ type: 'spring', bounce: 0.25, duration: 0.35 }}
+              className="fixed bottom-0 left-0 right-0 z-[501] bg-white rounded-t-[2rem] p-6 pb-10 max-w-lg mx-auto shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h3 className="text-lg font-black text-gray-900">Payer mon colis</h3>
+                  <p className="text-xs text-gray-400 font-semibold mt-0.5 font-mono">{parcel.trackingNumber}</p>
+                </div>
+                <button
+                  onClick={() => setShowPayModal(false)}
+                  className="h-9 w-9 rounded-xl bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {/* WhatsApp option */}
+                <button
+                  onClick={handleWhatsAppPay}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 transition-colors group"
+                >
+                  <div className="h-11 w-11 rounded-xl bg-emerald-500 flex items-center justify-center shrink-0 shadow-md shadow-emerald-500/30">
+                    <MessageCircle className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="font-black text-gray-900 text-sm">Payer via WhatsApp</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Contactez l'agent pour effectuer le règlement</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+
+                {/* Wallet option */}
+                {loggedClient ? (
+                  <button
+                    onClick={() => { setShowPayModal(false); onOpenWalletDeposit?.(); }}
+                    className="w-full flex items-center gap-4 p-4 rounded-2xl bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-colors group"
+                  >
+                    <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary to-indigo-600 flex items-center justify-center shrink-0 shadow-md shadow-primary/30">
+                      <CreditCard className="h-5 w-5 text-white" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="font-black text-gray-900 text-sm">Payer via Wallet</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Solde disponible : ${(loggedClient.balance ?? 0).toFixed(2)} USD</p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-indigo-400 group-hover:translate-x-0.5 transition-transform" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setShowPayModal(false); onRequestAuth?.(); }}
+                    className="w-full flex items-center gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-colors group"
+                  >
+                    <div className="h-11 w-11 rounded-xl bg-gray-200 flex items-center justify-center shrink-0">
+                      <CreditCard className="h-5 w-5 text-gray-500" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="font-black text-gray-700 text-sm">Payer via Wallet</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Connectez-vous pour accéder à votre wallet</p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-gray-400 group-hover:translate-x-0.5 transition-transform" />
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── Proof image lightbox ── */}
+      <AnimatePresence>
+        {proofOpen && pa?.proofOfDelivery && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[500] flex items-center justify-center p-4"
+              onClick={() => setProofOpen(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="relative max-w-lg w-full"
+                onClick={e => e.stopPropagation()}
+              >
+                <button
+                  onClick={() => setProofOpen(false)}
+                  className="absolute -top-3 -right-3 h-9 w-9 rounded-full bg-white shadow-lg flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors z-10"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                <img
+                  src={pa.proofOfDelivery}
+                  alt="Preuve de livraison"
+                  className="w-full rounded-2xl shadow-2xl"
+                />
+                <p className="text-white/60 text-xs text-center mt-3 font-semibold">Preuve de livraison</p>
+              </motion.div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

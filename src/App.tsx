@@ -42,6 +42,7 @@ export default function App() {
   const { settings } = useSettings();
   const [showAnnouncement, setShowAnnouncement] = useState(true);
   const [showClientDashboard, setShowClientDashboard] = useState(false);
+  const [walletInitialAction, setWalletInitialAction] = useState<'deposit' | 'withdrawal' | undefined>(undefined);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [moncashReturnRef, setMoncashReturnRef] = useState<string | null>(null);
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(() =>
@@ -214,14 +215,22 @@ export default function App() {
             currentView={view}
             onViewChange={handleViewChange}
             loggedClient={loggedClient}
-            onOpenWallet={() => setShowClientDashboard(true)}
+            onOpenWallet={() => { setWalletInitialAction(undefined); setShowClientDashboard(true); }}
+            onOpenWalletDeposit={() => { setWalletInitialAction('deposit'); setShowClientDashboard(true); }}
+            onOpenWalletWithdrawal={() => { setWalletInitialAction('withdrawal'); setShowClientDashboard(true); }}
             onRequestAuth={() => setShowAuthModal(true)}
           />
         )}
 
         <main className={`animate-in fade-in duration-300 pt-14 flex-grow relative ${view !== 'admin' ? 'pb-[74px]' : ''}`}>
           <Suspense fallback={<PageSpinner />}>
-            {view === 'tracking' && <TrackingView />}
+            {view === 'tracking' && (
+              <TrackingView
+                loggedClient={loggedClient}
+                onRequestAuth={() => setShowAuthModal(true)}
+                onOpenWalletDeposit={() => { setWalletInitialAction('deposit'); setShowClientDashboard(true); }}
+              />
+            )}
 
             {view === 'services' && (
               <ServicesView
@@ -265,7 +274,8 @@ export default function App() {
                 clientId={loggedClient.id!}
                 onLogout={handleClientLogout}
                 open={showClientDashboard}
-                onClose={() => setShowClientDashboard(false)}
+                onClose={() => { setShowClientDashboard(false); setWalletInitialAction(undefined); }}
+                initialAction={walletInitialAction}
               />
             )}
           </AnimatePresence>
