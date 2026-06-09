@@ -3605,6 +3605,17 @@ router.post('/api/client/login', requireDb, async (req, res) => {
   }
 });
 
+router.get('/api/client/data/:clientId', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('clients').doc(req.params.clientId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Client introuvable.' });
+    res.json({ client: serializeDoc(snap) });
+  } catch (e: any) {
+    console.error('[GET client data]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post('/api/client/google-lookup', requireDb, async (req, res) => {
   try {
     const { email } = req.body;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   collection,
   query,
@@ -146,16 +146,26 @@ export const useClientData = (clientId: string | null) => {
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!clientId) { setLoading(false); return; }
-    const unsubscribe = onSnapshot(doc(db, 'clients', clientId), (snap) => {
-      if (snap.exists()) setClient({ id: snap.id, ...snap.data() } as Client);
-      setLoading(false);
-    }, () => setLoading(false));
-    return () => unsubscribe();
+  const fetchClient = useCallback(async () => {
+    if (!clientId) return;
+    try {
+      const res = await fetch(`/api/client/data/${encodeURIComponent(clientId)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.client) setClient(fromApi<Client>(data.client));
+    } catch {}
   }, [clientId]);
 
-  return { client, loading };
+  useEffect(() => {
+    if (!clientId) { setLoading(false); return; }
+    let alive = true;
+    setLoading(true);
+    fetchClient().finally(() => { if (alive) setLoading(false); });
+    const interval = setInterval(() => { if (alive) fetchClient(); }, 30000);
+    return () => { alive = false; clearInterval(interval); };
+  }, [clientId, fetchClient]);
+
+  return { client, loading, refresh: fetchClient };
 };
 
 // ─── API helper ──────────────────────────────────────────────────────────────
@@ -322,22 +332,26 @@ export const useClientTransactions = (clientId: string | null) => {
   const [transactions, setTransactions] = useState<ClientTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!clientId) { setLoading(false); return; }
-    const q = query(
-      collection(db, 'client_transactions'),
-      where('clientId', '==', clientId),
-      orderBy('createdAt', 'desc'),
-      limit(100)
-    );
-    const unsubscribe = onSnapshot(q, (snap) => {
-      setTransactions(snap.docs.map(d => ({ id: d.id, ...d.data() } as ClientTransaction)));
-      setLoading(false);
-    }, () => setLoading(false));
-    return () => unsubscribe();
+  const fetchTransactions = useCallback(async () => {
+    if (!clientId) return;
+    try {
+      const res = await fetch(`/api/client/transactions/${encodeURIComponent(clientId)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.transactions) setTransactions(data.transactions.map((t: any) => fromApi<ClientTransaction>(t)));
+    } catch {}
   }, [clientId]);
 
-  return { transactions, loading };
+  useEffect(() => {
+    if (!clientId) { setLoading(false); return; }
+    let alive = true;
+    setLoading(true);
+    fetchTransactions().finally(() => { if (alive) setLoading(false); });
+    const interval = setInterval(() => { if (alive) fetchTransactions(); }, 30000);
+    return () => { alive = false; clearInterval(interval); };
+  }, [clientId, fetchTransactions]);
+
+  return { transactions, loading, refresh: fetchTransactions };
 };
 
 export const useAllClientTransactions = () => {

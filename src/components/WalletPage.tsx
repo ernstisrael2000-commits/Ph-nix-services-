@@ -235,9 +235,9 @@ interface WalletPageProps {
 }
 
 export default function WalletPage({ clientId, initialClient, onLogout, onBack }: WalletPageProps) {
-  const { client: liveClient, loading } = useClientData(clientId);
+  const { client: liveClient, loading, refresh: refreshClient } = useClientData(clientId);
   const client = liveClient ?? initialClient ?? null;
-  const { transactions, loading: txLoading } = useClientTransactions(clientId);
+  const { transactions, loading: txLoading, refresh: refreshTx } = useClientTransactions(clientId);
   const { settings } = useSettings();
 
   const rate    = settings?.exchangeRate || 135;
@@ -312,10 +312,14 @@ export default function WalletPage({ clientId, initialClient, onLogout, onBack }
     if (!clientId) return;
     const es = new EventSource(`/api/client/events/${encodeURIComponent(clientId)}`);
     es.addEventListener('tx_approved', (e: Event) => {
-      try { setTxSuccessModal(JSON.parse((e as MessageEvent).data)); } catch {}
+      try {
+        setTxSuccessModal(JSON.parse((e as MessageEvent).data));
+        refreshClient();
+        refreshTx();
+      } catch {}
     });
     return () => es.close();
-  }, [clientId]);
+  }, [clientId, refreshClient, refreshTx]);
 
   const getMethodInfo = (methodId: string) => {
     const pm = settings?.paymentMethods?.find(m => m.id === methodId);

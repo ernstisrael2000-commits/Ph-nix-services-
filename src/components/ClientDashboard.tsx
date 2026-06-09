@@ -169,8 +169,8 @@ function VirtualCard({
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export default function ClientDashboard({ clientId, onLogout, open, onClose, initialAction }: ClientDashboardProps) {
-  const { client, loading } = useClientData(clientId);
-  const { transactions, loading: txLoading } = useClientTransactions(clientId);
+  const { client, loading, refresh: refreshClient } = useClientData(clientId);
+  const { transactions, loading: txLoading, refresh: refreshTx } = useClientTransactions(clientId);
   const { settings } = useSettings();
 
   const rate    = settings?.exchangeRate || 135;
@@ -287,10 +287,12 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, ini
       try {
         const data = JSON.parse((e as MessageEvent).data);
         setTxSuccessModal(data);
+        refreshClient();
+        refreshTx();
       } catch { /* ignore */ }
     });
     return () => { es.close(); };
-  }, [clientId]);
+  }, [clientId, refreshClient, refreshTx]);
 
   const handleDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
