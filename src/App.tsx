@@ -260,6 +260,7 @@ export default function App() {
             {view === 'wallet' && loggedClient && (
               <WalletPage
                 clientId={loggedClient.id!}
+                initialClient={loggedClient}
                 onLogout={handleClientLogout}
                 onBack={() => handleViewChange('services')}
               />

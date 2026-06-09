@@ -229,12 +229,14 @@ function ProofUpload({ file, preview, onChange, accent = 'emerald' }: {
 
 interface WalletPageProps {
   clientId: string;
+  initialClient?: Client | null;
   onLogout: () => void;
   onBack: () => void;
 }
 
-export default function WalletPage({ clientId, onLogout, onBack }: WalletPageProps) {
-  const { client, loading } = useClientData(clientId);
+export default function WalletPage({ clientId, initialClient, onLogout, onBack }: WalletPageProps) {
+  const { client: liveClient, loading } = useClientData(clientId);
+  const client = liveClient ?? initialClient ?? null;
   const { transactions, loading: txLoading } = useClientTransactions(clientId);
   const { settings } = useSettings();
 
@@ -749,7 +751,7 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
             )}
 
             <Button type="submit"
-              disabled={actionLoading || loading || !client || !depositMethod || (!!RECAPTCHA_SITE_KEY && !depositCaptchaToken)}
+              disabled={actionLoading || !client || !depositMethod || (!!RECAPTCHA_SITE_KEY && !depositCaptchaToken)}
               className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black">
               {actionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Confirmer et envoyer →'}
             </Button>
@@ -849,7 +851,7 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
             )}
 
             <Button type="submit"
-              disabled={actionLoading || loading || !client || !withdrawMethod || (!!RECAPTCHA_SITE_KEY && !withdrawCaptchaToken)}
+              disabled={actionLoading || !client || !withdrawMethod || (!!RECAPTCHA_SITE_KEY && !withdrawCaptchaToken)}
               className="w-full h-12 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black">
               {actionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Soumettre la demande'}
             </Button>
