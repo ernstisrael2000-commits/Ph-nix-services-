@@ -1,29 +1,40 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import Navbar from './components/Navbar';
 import BottomNav from './components/BottomNav';
-import TrackingView from './components/TrackingView';
-import AdminDashboard from './components/AdminDashboard';
-import AdminLogin from './components/AdminLogin';
-import ServicesView from './components/ServicesView';
-import FormationsView from './components/FormationsView';
-import ClientDashboard from './components/ClientDashboard';
-import PaymentSuccessView from './components/PaymentSuccessView';
-import PaymentSuccessPage from './components/PaymentSuccessPage';
-import PWAInstallPrompt from './components/PWAInstallPrompt';
 import LoadingScreen from './components/LoadingScreen';
 import { Toaster } from './components/ui/sonner';
-import UserAuthModal from './components/UserAuthModal';
+import PWAInstallPrompt from './components/PWAInstallPrompt';
 import { useAuth } from './hooks/useAuth';
 import { useSettings } from './services/parcelService';
 import { useFCM } from './hooks/useFCM';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Package, Bell, X, WifiOff } from 'lucide-react';
+import { Bell, X, WifiOff } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { AdminAccount, Client } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, getDocFromServer, onSnapshot } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { toast } from 'sonner';
+
+// ── Lazy-loaded heavy views (only downloaded when actually needed) ─────────────
+const TrackingView       = lazy(() => import('./components/TrackingView'));
+const ServicesView       = lazy(() => import('./components/ServicesView'));
+const FormationsView     = lazy(() => import('./components/FormationsView'));
+const AdminDashboard     = lazy(() => import('./components/AdminDashboard'));
+const AdminLogin         = lazy(() => import('./components/AdminLogin'));
+const ClientDashboard    = lazy(() => import('./components/ClientDashboard'));
+const PaymentSuccessView = lazy(() => import('./components/PaymentSuccessView'));
+const PaymentSuccessPage = lazy(() => import('./components/PaymentSuccessPage'));
+const UserAuthModal      = lazy(() => import('./components/UserAuthModal'));
+
+// Minimal inline spinner for Suspense fallback (no extra imports)
+function PageSpinner() {
+  return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="w-10 h-10 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+    </div>
+  );
+}
 
 type ViewType = 'tracking' | 'services' | 'formations' | 'admin';
 
@@ -43,8 +54,7 @@ export default function App() {
   );
 
   const [loggedAdmin, setLoggedAdmin] = useState<AdminAccount | null>(() => {
-    const saved = localStorage.getItem('rena_admin');
-    return saved ? JSON.parse(saved) : null;
+    try { const s = localStorage.getItem('rena_admin'); return s ? JSON.parse(s) : null; } catch { return null; }
   });
 
   const handleAdminLogin = (admin: AdminAccount) => {
@@ -93,7 +103,7 @@ export default function App() {
     }
   }, []);
 
-  // Bootstrap Super Admin
+  // Bootstrap Super Admin (fire-and-forget, non-blocking)
   useEffect(() => {
     fetch('/api/admin/bootstrap', { method: 'POST' })
       .then(r => r.json())
@@ -108,8 +118,7 @@ export default function App() {
   };
 
   const [loggedClient, setLoggedClient] = useState<Client | null>(() => {
-    const saved = localStorage.getItem('rena_client');
-    return saved ? JSON.parse(saved) : null;
+    try { const s = localStorage.getItem('rena_client'); return s ? JSON.parse(s) : null; } catch { return null; }
   });
 
   useFCM(loggedClient?.id || null);
@@ -237,36 +246,36 @@ export default function App() {
           />
         )}
 
-        <main className={`animate-in fade-in duration-500 pt-14 flex-grow relative ${view !== 'admin' ? 'pb-[74px]' : ''}`}>
-          {view === 'tracking' && (
-            <TrackingView />
-          )}
+        <main className={`animate-in fade-in duration-300 pt-14 flex-grow relative ${view !== 'admin' ? 'pb-[74px]' : ''}`}>
+          <Suspense fallback={<PageSpinner />}>
+            {view === 'tracking' && <TrackingView />}
 
-          {view === 'services' && (
-            <ServicesView
-              loggedClient={loggedClient}
-              onOpenWallet={() => setShowClientDashboard(true)}
-              onRequestAuth={() => setShowAuthModal(true)}
-            />
-          )}
+            {view === 'services' && (
+              <ServicesView
+                loggedClient={loggedClient}
+                onOpenWallet={() => setShowClientDashboard(true)}
+                onRequestAuth={() => setShowAuthModal(true)}
+              />
+            )}
 
-          {view === 'formations' && (
-            <FormationsView
-              loggedClient={loggedClient}
-              onOpenWallet={() => setShowClientDashboard(true)}
-              onClientLogin={handleClientLogin}
-              activeTab={formationsTab}
-              onTabChange={setFormationsTab}
-            />
-          )}
+            {view === 'formations' && (
+              <FormationsView
+                loggedClient={loggedClient}
+                onOpenWallet={() => setShowClientDashboard(true)}
+                onClientLogin={handleClientLogin}
+                activeTab={formationsTab}
+                onTabChange={setFormationsTab}
+              />
+            )}
 
-          {view === 'admin' && (
-            loggedAdmin ? (
-              <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
-            ) : (
-              <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => handleViewChange('tracking')} />
-            )
-          )}
+            {view === 'admin' && (
+              loggedAdmin ? (
+                <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
+              ) : (
+                <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => handleViewChange('tracking')} />
+              )
+            )}
+          </Suspense>
         </main>
 
         {view !== 'admin' && (
@@ -290,42 +299,44 @@ export default function App() {
 
         <Toaster position="top-right" />
 
-        <AnimatePresence>
-          {showClientDashboard && loggedClient && (
-            <ClientDashboard
-              clientId={loggedClient.id!}
-              onLogout={handleClientLogout}
-              open={showClientDashboard}
-              onClose={() => setShowClientDashboard(false)}
-            />
-          )}
-        </AnimatePresence>
+        <Suspense fallback={null}>
+          <AnimatePresence>
+            {showClientDashboard && loggedClient && (
+              <ClientDashboard
+                clientId={loggedClient.id!}
+                onLogout={handleClientLogout}
+                open={showClientDashboard}
+                onClose={() => setShowClientDashboard(false)}
+              />
+            )}
+          </AnimatePresence>
 
-        <AnimatePresence>
-          {moncashReturnRef && (
-            <PaymentSuccessView
-              referenceId={moncashReturnRef}
-              onClose={() => { setMoncashReturnRef(null); setShowClientDashboard(true); }}
-            />
-          )}
-        </AnimatePresence>
+          <AnimatePresence>
+            {moncashReturnRef && (
+              <PaymentSuccessView
+                referenceId={moncashReturnRef}
+                onClose={() => { setMoncashReturnRef(null); setShowClientDashboard(true); }}
+              />
+            )}
+          </AnimatePresence>
 
-        <AnimatePresence>
-          {showPaymentSuccess && (
-            <PaymentSuccessPage
-              onClose={() => { setShowPaymentSuccess(false); setShowClientDashboard(true); }}
-            />
-          )}
-        </AnimatePresence>
+          <AnimatePresence>
+            {showPaymentSuccess && (
+              <PaymentSuccessPage
+                onClose={() => { setShowPaymentSuccess(false); setShowClientDashboard(true); }}
+              />
+            )}
+          </AnimatePresence>
 
-        <UserAuthModal
-          open={showAuthModal}
-          onOpenChange={setShowAuthModal}
-          onClientLogin={(client) => { handleClientLogin(client); setShowAuthModal(false); }}
-          onAdminLogin={(admin) => { handleAdminLogin(admin); handleViewChange('admin'); setShowAuthModal(false); }}
-          onAffiliateAccess={() => {}}
-          onAdminPasswordLogin={() => { handleViewChange('admin'); setShowAuthModal(false); }}
-        />
+          <UserAuthModal
+            open={showAuthModal}
+            onOpenChange={setShowAuthModal}
+            onClientLogin={(client) => { handleClientLogin(client); setShowAuthModal(false); }}
+            onAdminLogin={(admin) => { handleAdminLogin(admin); handleViewChange('admin'); setShowAuthModal(false); }}
+            onAffiliateAccess={() => {}}
+            onAdminPasswordLogin={() => { handleViewChange('admin'); setShowAuthModal(false); }}
+          />
+        </Suspense>
 
         <PWAInstallPrompt />
       </div>

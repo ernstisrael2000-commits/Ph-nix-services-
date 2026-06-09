@@ -13,8 +13,8 @@ export const useAuth = () => {
 
   useEffect(() => {
     // Safety timeout — if Firebase Auth never fires (e.g. network issue),
-    // unblock the loading screen after 4 seconds
-    const timeout = setTimeout(() => setLoading(false), 4000);
+    // unblock the loading screen after 1.2 seconds
+    const timeout = setTimeout(() => setLoading(false), 1200);
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       clearTimeout(timeout);

@@ -30,11 +30,31 @@ export default defineConfig(({ mode }) => {
       sourcemap: false,
       rollupOptions: {
         output: {
-          manualChunks: {
-            'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage', 'firebase/messaging'],
-            'vendor-ui': ['lucide-react', 'sonner', 'motion'],
-            'vendor-charts': ['recharts'],
-            'vendor-pdf': ['jspdf', 'jspdf-autotable'],
+          manualChunks(id) {
+            // Firebase — split each sub-package so only what's used loads
+            if (id.includes('node_modules/firebase/app') || id.includes('node_modules/@firebase/app')) {
+              return 'vendor-firebase-app';
+            }
+            if (id.includes('node_modules/firebase/auth') || id.includes('node_modules/@firebase/auth')) {
+              return 'vendor-firebase-auth';
+            }
+            if (id.includes('node_modules/firebase/firestore') || id.includes('node_modules/@firebase/firestore')) {
+              return 'vendor-firebase-firestore';
+            }
+            if (id.includes('node_modules/firebase/storage') || id.includes('node_modules/@firebase/storage')) {
+              return 'vendor-firebase-storage';
+            }
+            if (id.includes('node_modules/firebase/messaging') || id.includes('node_modules/@firebase/messaging')) {
+              return 'vendor-firebase-messaging';
+            }
+            // Heavy UI deps
+            if (id.includes('node_modules/lucide-react')) return 'vendor-icons';
+            if (id.includes('node_modules/motion') || id.includes('node_modules/framer-motion')) return 'vendor-motion';
+            if (id.includes('node_modules/recharts')) return 'vendor-charts';
+            if (id.includes('node_modules/jspdf') || id.includes('node_modules/jspdf-autotable')) return 'vendor-pdf';
+            if (id.includes('node_modules/sonner')) return 'vendor-sonner';
+            // React core — always small, keep together
+            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) return 'vendor-react';
           },
         },
       },
