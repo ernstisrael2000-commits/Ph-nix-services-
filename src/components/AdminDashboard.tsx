@@ -7,7 +7,7 @@ import {
   CheckCheck, Trash, LayoutGrid, Hash, Image as ImageIcon,
   FileText, DollarSign, Tag, List, MessageSquare, Zap,
   Clock, CheckCircle, XCircle, AlertTriangle, Info,
-  ArrowUpDown, Copy, ShieldCheck, Menu
+  ArrowUpDown, Copy, ShieldCheck, Menu, CreditCard
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -74,6 +74,7 @@ const NOTIF_ICONS: Record<string, { icon: React.ElementType; color: string }> = 
   withdrawal:   { icon: ArrowUpDown,   color: 'bg-red-100 text-red-600' },
   purchase:     { icon: ShoppingBag,   color: 'bg-blue-100 text-blue-600' },
   transfer:     { icon: ArrowUpDown,   color: 'bg-indigo-100 text-indigo-600' },
+  card_order:   { icon: CreditCard,    color: 'bg-violet-100 text-violet-600' },
   alert:        { icon: AlertTriangle, color: 'bg-amber-100 text-amber-600' },
   info:         { icon: Info,          color: 'bg-gray-100 text-gray-600' },
   default:      { icon: Bell,          color: 'bg-gray-100 text-gray-600' },

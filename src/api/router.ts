@@ -436,6 +436,61 @@ router.delete('/api/admin/notifications/clear-all', requireDb, async (_req, res)
   }
 });
 
+// ── Card / service order notification (from ServicesView) ──────────────────────
+router.post('/api/admin/order-notification', requireDb, async (req, res) => {
+  try {
+    const {
+      orderType, serviceName, servicePrice, paymentMethod, txRef,
+      clientId, clientName, clientWalletId,
+      amount, amountHTG, cardDetails,
+    } = req.body;
+
+    const title = orderType === 'create'
+      ? `Création de service : ${serviceName || '—'}`
+      : `Recharge carte : ${serviceName || '—'}`;
+
+    const details: string[] = [];
+    if (clientName)      details.push(`Client: ${clientName}`);
+    if (clientWalletId)  details.push(`Wallet: #${clientWalletId}`);
+    if (orderType === 'create') {
+      if (servicePrice) details.push(`Prix: ${servicePrice}`);
+    } else {
+      if (amount)  details.push(`Montant: $${Number(amount).toFixed(2)} USD`);
+      if (amountHTG) details.push(`≈ ${Math.round(amountHTG).toLocaleString()} HTG`);
+    }
+    if (paymentMethod)  details.push(`Méthode: ${paymentMethod}`);
+    if (txRef)          details.push(`Réf: ${txRef}`);
+    if (cardDetails && typeof cardDetails === 'object') {
+      for (const [k, v] of Object.entries(cardDetails)) {
+        if (v) details.push(`${k}: ${v}`);
+      }
+    }
+
+    await adminDb.collection('admin_notifications').add({
+      type: 'card_order',
+      title,
+      orderType: orderType || 'create',
+      serviceName: serviceName || '',
+      servicePrice: servicePrice || '',
+      paymentMethod: paymentMethod || '',
+      txRef: txRef || '',
+      clientId: clientId || '',
+      clientName: clientName || 'Anonyme',
+      clientWalletId: clientWalletId || '',
+      amount: Number(amount) || 0,
+      amountHTG: Number(amountHTG) || 0,
+      cardDetails: cardDetails || {},
+      message: details.join(' · '),
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Client notifications ───────────────────────────────────────────────────────
 router.get('/api/client/notifications/:clientId', requireDb, async (req, res) => {
   try {

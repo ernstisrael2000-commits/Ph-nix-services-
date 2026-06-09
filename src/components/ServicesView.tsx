@@ -107,6 +107,15 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
     window.open(`https://wa.me/${whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
+  // ── Fire-and-forget admin notification ─────────────────────────────────────
+  const sendOrderNotification = (payload: Record<string, any>) => {
+    fetch('/api/admin/order-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
+  };
+
   // ── Créer: wallet payment ──────────────────────────────────────────────────
   const handleWalletCreate = async () => {
     if (!effectiveClient || !selected) return;
@@ -122,6 +131,19 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
       await submitClientPurchase(effectiveClient, selected.name, String(selected.price), priceUSD);
       const now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       openWhatsApp(`🎴 *CRÉATION SERVICE — Phénix Services*\n\n👤 Client: *${effectiveClient.name}*\n🔑 Wallet ID: *#${effectiveClient.walletId || '—'}*\n📱 Téléphone: *${effectiveClient.phone || '—'}*\n🛒 Service: *${selected.name}*\n💰 Montant payé: *${numericPrice.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n📅 Date: *${now}*\n\n✅ Paiement traité. Veuillez activer le service.`);
+      sendOrderNotification({
+        orderType: 'create',
+        serviceName: selected.name,
+        servicePrice: String(selected.price),
+        paymentMethod: 'Solde Wallet',
+        txRef: '',
+        clientId: effectiveClient.id,
+        clientName: effectiveClient.name,
+        clientWalletId: effectiveClient.walletId || '',
+        amount: priceUSD,
+        amountHTG: numericPrice,
+        cardDetails: { Téléphone: effectiveClient.phone || '' },
+      });
       setStep('success');
     } catch (err: any) {
       toast.error(err.message || "Erreur lors du paiement.");
@@ -135,6 +157,19 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
     if (!selected) return;
     const method = PAYMENT_METHODS.find(m => m.id === payMethod);
     openWhatsApp(`🎴 *CRÉATION SERVICE — Phénix Services*\n\n🛒 Service: *${selected.name}*\n💰 Prix: *${selected.price}*\n\n💳 Méthode de paiement: *${method?.label}*\n📝 Référence transaction: *${txInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`);
+    sendOrderNotification({
+      orderType: 'create',
+      serviceName: selected.name,
+      servicePrice: String(selected.price),
+      paymentMethod: method?.label || payMethod,
+      txRef: txInfo || '',
+      clientId: effectiveClient?.id || '',
+      clientName: effectiveClient?.name || 'Anonyme',
+      clientWalletId: effectiveClient?.walletId || '',
+      amount: 0,
+      amountHTG: parseFloat(String(selected.price ?? '0').replace(/[^\d.]/g, '')),
+      cardDetails: {},
+    });
     setStep('success');
   };
 
@@ -151,14 +186,32 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
     const htg = Math.round(usd * exchangeRate);
     const hasCustomFields = selected.rechargeFields?.length > 0;
     let dynamicLines = '';
+    const cardDetails: Record<string, string> = {};
     if (hasCustomFields) {
-      dynamicLines = (selected.rechargeFields as { id: string; label: string }[]).map(f =>
-        `${f.label}: *${dynamicFieldValues[f.id] || 'Non spécifié'}*`
-      ).join('\n');
+      dynamicLines = (selected.rechargeFields as { id: string; label: string }[]).map(f => {
+        const val = dynamicFieldValues[f.id] || 'Non spécifié';
+        cardDetails[f.label] = val;
+        return `${f.label}: *${val}*`;
+      }).join('\n');
     } else {
       dynamicLines = `👤 Titulaire: *${holderName || 'Non spécifié'}*\n🔢 Numéro/Info carte: *${cardNumber || 'Non spécifié'}*`;
+      if (holderName) cardDetails['Titulaire'] = holderName;
+      if (cardNumber) cardDetails['Numéro carte'] = cardNumber;
     }
     openWhatsApp(`💳 *RECHARGE CARTE — Phénix Services*\n\n🎴 Carte: *${selected.name}*\n${dynamicLines}\n💵 Montant USD: *$${usd}*\n🇭🇹 Équivalent: *${htg.toLocaleString()} HTG*\n\n💳 Méthode: *${method?.label}*\n📝 Référence: *${txInfo || 'Non fournie'}*\n\nMerci de traiter ma recharge.`);
+    sendOrderNotification({
+      orderType: 'recharge',
+      serviceName: selected.name,
+      servicePrice: '',
+      paymentMethod: method?.label || payMethod,
+      txRef: txInfo || '',
+      clientId: effectiveClient?.id || '',
+      clientName: effectiveClient?.name || 'Anonyme',
+      clientWalletId: effectiveClient?.walletId || '',
+      amount: usd,
+      amountHTG: htg,
+      cardDetails,
+    });
     setStep('success');
   };
 
