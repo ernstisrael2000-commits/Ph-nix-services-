@@ -56,6 +56,18 @@ const METHOD_LOGOS: Record<string, React.FC<{size?: number}>> = {
   paypal:  PaypalLogo,
 };
 
+function ServiceMethodLogo({ methodId, logoUrl, size = 26 }: { methodId: string; logoUrl?: string; size?: number }) {
+  if (logoUrl) {
+    return (
+      <img src={logoUrl} alt="" className="rounded-lg object-contain"
+        style={{ width: size, height: size }}
+        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+    );
+  }
+  const Logo = METHOD_LOGOS[methodId];
+  return Logo ? <Logo size={size} /> : null;
+}
+
 const SERVICE_GRADIENTS = [
   'from-blue-500 to-indigo-600',
   'from-emerald-500 to-teal-600',
@@ -507,12 +519,12 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
                     <Label className="text-xs font-black text-gray-600">Méthode de paiement</Label>
                     <div className="grid grid-cols-3 gap-2">
                       {PAYMENT_METHODS.map(m => {
-                        const Logo = METHOD_LOGOS[m.id];
                         const active = payMethod === m.id;
+                        const logoUrl = settings?.paymentMethods?.find(pm => pm.id === m.id)?.logoUrl;
                         return (
                           <button key={m.id} onClick={() => setPayMethod(m.id)}
                             className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-xs font-black transition-all ${active ? m.activeColor : 'border-gray-100 text-gray-500 hover:border-gray-200 bg-white'}`}>
-                            <Logo size={26} />
+                            <ServiceMethodLogo methodId={m.id} logoUrl={logoUrl} size={26} />
                             {m.label}
                           </button>
                         );
@@ -668,12 +680,12 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
                     <Label className="text-xs font-black text-gray-600">Méthode de paiement</Label>
                     <div className="grid grid-cols-3 gap-2">
                       {PAYMENT_METHODS.map(m => {
-                        const Logo = METHOD_LOGOS[m.id];
                         const active = payMethod === m.id;
+                        const logoUrl = settings?.paymentMethods?.find(pm => pm.id === m.id)?.logoUrl;
                         return (
                           <button key={m.id} onClick={() => setPayMethod(m.id)}
                             className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-xs font-black transition-all ${active ? m.activeColor : 'border-gray-100 text-gray-500 hover:border-gray-200 bg-white'}`}>
-                            <Logo size={26} />
+                            <ServiceMethodLogo methodId={m.id} logoUrl={logoUrl} size={26} />
                             {m.label}
                           </button>
                         );

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   ArrowDownToLine, ArrowUpFromLine, History, LogOut, Loader2,
   X, Copy, CheckCircle2, Clock, XCircle, Shield,
@@ -56,6 +56,19 @@ function PayPalIcon({ size = 52 }: { size?: number }) {
       <text x="26" y="38" textAnchor="middle" fill="white" fontSize="13" fontWeight="900" fontFamily="'Arial Black',Arial,sans-serif">Pal</text>
     </svg>
   );
+}
+
+function MethodLogo({ logoUrl, FallbackIcon, size = 40 }: {
+  logoUrl?: string; FallbackIcon: React.FC<{ size?: number }>; size?: number;
+}) {
+  if (logoUrl) {
+    return (
+      <img src={logoUrl} alt="" className="rounded-xl object-contain"
+        style={{ width: size, height: size }}
+        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+    );
+  }
+  return <FallbackIcon size={size} />;
 }
 
 const WALLET_METHODS = [
@@ -228,6 +241,11 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
   const rate    = settings?.exchangeRate || 135;
   const balance = client?.balance || 0;
 
+  const getLogoUrl = useMemo(() =>
+    (id: string) => settings?.paymentMethods?.find(pm => pm.id === id)?.logoUrl,
+    [settings?.paymentMethods]
+  );
+
   const [copied,            setCopied]           = useState(false);
   const [balanceHidden,     setBalanceHidden]     = useState(false);
   const [historyOpen,       setHistoryOpen]       = useState(false);
@@ -326,7 +344,7 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
 
   const handleDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!client) { toast.error('Chargement en cours, veuillez patienter.'); return; }
+    if (!client) return;
     const htg = parseFloat(htgAmount);
     if (isNaN(htg) || htg <= 0)   { toast.error('Montant invalide.'); return; }
     const usd = htg / rate;
@@ -367,7 +385,7 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
 
   const handleWithdraw = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!client) { toast.error('Chargement en cours, veuillez patienter.'); return; }
+    if (!client) return;
     const htg = parseFloat(withdrawHTG);
     if (isNaN(htg) || htg <= 0)   { toast.error('Montant invalide.'); return; }
     const usd = htg / rate;
@@ -414,7 +432,7 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
   const pendingCount = transactions.filter(t => t.status === 'pending').length;
 
   return (
-    <div className="min-h-screen bg-[#F2F4F8]">
+    <div className="min-h-screen bg-slate-100">
 
       {/* ── Header gradient ────────────────────────────────────────────── */}
       <div className="bg-gradient-to-br from-violet-700 via-violet-600 to-indigo-700 px-4 pt-5 pb-24 relative overflow-hidden">
@@ -510,7 +528,7 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
           <div className="p-4 flex items-center justify-around">
             {WALLET_METHODS.map(m => (
               <div key={m.id} className="flex flex-col items-center gap-1.5">
-                <m.Icon size={48} />
+                <MethodLogo logoUrl={getLogoUrl(m.id)} FallbackIcon={m.Icon} size={48} />
                 <span className="text-[10px] font-bold text-gray-500">{m.name}</span>
               </div>
             ))}
@@ -620,7 +638,7 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
               </div>
             </div>
           </div>
-          <form onSubmit={handleDeposit} className="p-5 space-y-4 bg-white overflow-y-auto flex-1">
+          <form onSubmit={handleDeposit} className="p-5 space-y-4 bg-gray-50 overflow-y-auto flex-1">
 
             {/* Method selector */}
             <div className="space-y-2">
@@ -629,7 +647,7 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
                 {WALLET_METHODS.map(m => (
                   <button key={m.id} type="button" onClick={() => setDepositMethod(m)}
                     className={`flex flex-col items-center gap-1.5 p-2 rounded-2xl border-2 transition-all ${depositMethod.id === m.id ? m.activeDeposit : 'border-gray-100 bg-white hover:border-gray-200'}`}>
-                    <m.Icon size={40} />
+                    <MethodLogo logoUrl={getLogoUrl(m.id)} FallbackIcon={m.Icon} size={40} />
                     <span className="text-[10px] font-black text-gray-700">{m.name}</span>
                   </button>
                 ))}
@@ -731,7 +749,7 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
             )}
 
             <Button type="submit"
-              disabled={actionLoading || !depositMethod || (!!RECAPTCHA_SITE_KEY && !depositCaptchaToken)}
+              disabled={actionLoading || loading || !client || !depositMethod || (!!RECAPTCHA_SITE_KEY && !depositCaptchaToken)}
               className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black">
               {actionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Confirmer et envoyer →'}
             </Button>
@@ -755,7 +773,7 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
               </div>
             </div>
           </div>
-          <form onSubmit={handleWithdraw} className="p-5 space-y-4 bg-white overflow-y-auto flex-1">
+          <form onSubmit={handleWithdraw} className="p-5 space-y-4 bg-gray-50 overflow-y-auto flex-1">
 
             {/* Method selector */}
             <div className="space-y-2">
@@ -764,7 +782,7 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
                 {WALLET_METHODS.map(m => (
                   <button key={m.id} type="button" onClick={() => setWithdrawMethod(m)}
                     className={`flex flex-col items-center gap-1.5 p-2 rounded-2xl border-2 transition-all ${withdrawMethod.id === m.id ? m.activeWithdraw : 'border-gray-100 bg-white hover:border-gray-200'}`}>
-                    <m.Icon size={40} />
+                    <MethodLogo logoUrl={getLogoUrl(m.id)} FallbackIcon={m.Icon} size={40} />
                     <span className="text-[10px] font-black text-gray-700">{m.name}</span>
                   </button>
                 ))}
@@ -831,7 +849,7 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
             )}
 
             <Button type="submit"
-              disabled={actionLoading || !withdrawMethod || (!!RECAPTCHA_SITE_KEY && !withdrawCaptchaToken)}
+              disabled={actionLoading || loading || !client || !withdrawMethod || (!!RECAPTCHA_SITE_KEY && !withdrawCaptchaToken)}
               className="w-full h-12 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black">
               {actionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Soumettre la demande'}
             </Button>
