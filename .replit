@@ -82,7 +82,7 @@ build = ["npm", "run", "build"]
 [userenv]
 
 [userenv.shared]
-VAPID_PUBLIC_KEY = "BBAh2pfSedBsnQJmTOpHqsAi4D1fUFJgVhp9yqz4Cuy5PQYPQpfnXzujpCy1foi3eqAksNirH4Ntk91kZ2WbhWI"
+VAPID_PUBLIC_KEY = "BNvRHe4-V6c6N9wf8PVKiRuGltko48Jv6Won_i1iYsMPaPzkvzXL6ReHYcw6gBt5E06jZfoEKtIitEIedXflvDg"
 FIREBASE_VAPID_KEY = "BMxSn0OiBM1q77aEQ7zP8WU8h12NXm4wkTXIEpgT_0wgEIhDuF0eB-WWl0kNZ5B7DkXo1SGKdxhCjSPju1bEyDM"
 FIREBASE_API_KEY = "AIzaSyBwS26XgSjz7B_jciqnnySE15hUib4Y-x8"
 FIREBASE_PROJECT_ID = "neopay-446f3"
