@@ -83,7 +83,7 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
   const { cards: services, loading } = useCardTopups();
   const { settings } = useSettings();
   const exchangeRate = settings?.exchangeRate || 146;
-  const whatsapp = settings?.whatsappAdminNumber || '+50944813185';
+  const whatsapp = settings?.whatsappAdminNumber || '+50939442830';
 
   const { client: liveClient } = useClientData(loggedClient?.id || null);
   const effectiveClient = liveClient || loggedClient;

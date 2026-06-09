@@ -32,7 +32,7 @@ interface ClientDashboardProps {
   initialAction?: 'deposit' | 'withdrawal';
 }
 
-const WHATSAPP_NUMBER = '+50944813185';
+const WHATSAPP_NUMBER = '+50939442830';
 const RECAPTCHA_SITE_KEY = process.env.RECAPTCHA_SITE_KEY || '';
 
 const statusConfig = {

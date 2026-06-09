@@ -292,7 +292,7 @@ export default function WalletPage({ clientId, onLogout, onBack }: WalletPagePro
   const maxDeposit  = settings?.maxDepositUSD    || 10000;
   const minWithdraw = settings?.minWithdrawalUSD || 0.01;
   const maxWithdraw = settings?.maxWithdrawalUSD || 10000;
-  const whatsapp    = settings?.whatsappAdminNumber || '+50944813185';
+  const whatsapp    = settings?.whatsappAdminNumber || '+50939442830';
 
   const copyWalletId = () => {
     if (client?.walletId) {

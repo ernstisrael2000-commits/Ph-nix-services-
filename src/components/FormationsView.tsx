@@ -279,7 +279,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
       if (!res.ok) throw new Error(json.error || 'Erreur lors de la soumission.');
       if (json.alreadyOwned) { setPurchasedIds(prev => [...prev, selected.id!]); toast.success('Vous avez déjà accès à cette formation !'); closeDetail(); return; }
       setPaymentStep('done');
-      const whatsappNum = settings?.whatsappAdminNumber?.replace(/\D/g, '') || '50944813185';
+      const whatsappNum = settings?.whatsappAdminNumber?.replace(/\D/g, '') || '50939442830';
       const methodLabel = selectedPayMethod === 'moncash' ? 'MonCash' : 'NatCash';
       const msg = encodeURIComponent(
         `Bonjour Rena 👋\n\nJe viens d'effectuer un paiement pour une formation :\n\n` +

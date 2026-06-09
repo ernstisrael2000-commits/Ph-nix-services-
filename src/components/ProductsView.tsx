@@ -20,7 +20,7 @@ import { submitClientPurchase, useClientData, useClientPendingPurchase } from '.
 import { Client } from '../types';
 import { toast } from 'sonner';
 
-const WHATSAPP_NUMBER = '+50944813185';
+const WHATSAPP_NUMBER = '+50939442830';
 
 // ── WalletPayButton ──────────────────────────────────────────────────────────
 interface WalletPayButtonProps {

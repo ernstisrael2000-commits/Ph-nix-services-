@@ -143,7 +143,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
   };
 
   const openWhatsApp = () => {
-    const num = settings?.whatsappAdminNumber || '+50944813185';
+    const num = settings?.whatsappAdminNumber || '+50939442830';
     window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent('Bonjour Rena, je souhaite avoir plus de renseignements.')}`, '_blank');
   };
 

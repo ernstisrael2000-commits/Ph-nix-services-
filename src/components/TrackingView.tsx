@@ -69,7 +69,7 @@ export default function TrackingView({ loggedClient, onRequestAuth, onOpenWallet
   const [showPayModal, setShowPayModal] = useState(false);
   const [proofOpen, setProofOpen] = useState(false);
   const { settings } = useSettings();
-  const whatsapp = settings?.whatsappAdminNumber || '+50944813185';
+  const whatsapp = settings?.whatsappAdminNumber || '+50939442830';
 
   const handleSearch = async (num?: string) => {
     const query = (num ?? trackingNumber).trim();

@@ -384,7 +384,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ agentCode: agent.agentCode, amount: usd, method: selfDepositMethod }),
       });
-      const adminPhone = settings?.whatsappAdminNumber || '+50944813185';
+      const adminPhone = settings?.whatsappAdminNumber || '+50939442830';
       const msg = `Bonjour Admin, je souhaite recharger mon solde agent.\n\n💰 Montant: $${usd.toFixed(2)}\n💳 Méthode: ${selfDepositMethod}\n🔑 Code Agent: ${agent.agentCode}\n👤 Nom: ${agent.name}`;
       window.open(`https://wa.me/${adminPhone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
       toast.success('Demande enregistrée ! Continuez sur WhatsApp.');

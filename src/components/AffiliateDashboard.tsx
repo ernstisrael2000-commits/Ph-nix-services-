@@ -521,7 +521,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Erreur serveur');
         toast.success('Demande de dépôt soumise !');
-        const adminPhone = settings?.whatsappAdminNumber || '+50944813185';
+        const adminPhone = settings?.whatsappAdminNumber || '+50939442830';
         const msg = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Rena.\n\nMontant: ${amount} $\nMéthode: ${depositMethod}\nWallet: ${walletLabel}\nID Wallet: ${affiliate!.walletId}\nNom: ${affiliate!.name}`;
         window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(msg)}`, '_blank');
       }

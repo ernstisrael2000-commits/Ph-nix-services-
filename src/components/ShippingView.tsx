@@ -16,7 +16,7 @@ export default function ShippingView() {
   };
 
   const openWhatsApp = (number?: string, message?: string) => {
-    const finalNumber = number || "+50944813185";
+    const finalNumber = number || "+50939442830";
     const finalMessage = message || (activeTab === 'online_purchase' ? "Bonjour, je suis intéressé par l'achat en ligne, pouvez-vous m'assister ?" : "Bonjour, je suis intéressé par le drop shipping.");
     
     // Remove all non-digit characters except possibly the + (though wa.me prefers just digits)

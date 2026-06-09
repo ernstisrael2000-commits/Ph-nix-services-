@@ -22,7 +22,7 @@ export default function AdminShippingManager() {
       addresses: [],
       websites: [],
       videos: [],
-      whatsappNumber: '+50944813185',
+      whatsappNumber: '+50939442830',
       whatsappMessage: type === 'online_purchase' ? 'Bonjour, je suis intéressé par l\'achat en ligne, pouvez-vous m\'assister ?' : 'Bonjour, je suis intéressé par le drop shipping.',
     };
   };
