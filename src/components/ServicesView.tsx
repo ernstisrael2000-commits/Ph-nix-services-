@@ -225,7 +225,7 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
                       <img
                         src={svc.image}
                         alt={svc.name}
-                        className="w-full h-full object-contain object-center group-hover:scale-105 transition-transform duration-500"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         onError={e => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${svc.id}/400/300`; }}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
@@ -316,7 +316,7 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
             >
               {/* Header */}
               <div className="relative">
-                <div className="h-32 relative overflow-hidden">
+                <div className="h-56 relative overflow-hidden">
                   <img src={selected.image} alt={selected.name} className="w-full h-full object-cover"
                     onError={e => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${selected.id}/800/300`; }} />
                   <div className="absolute inset-0 bg-gradient-to-b from-black/30 to-black/70" />

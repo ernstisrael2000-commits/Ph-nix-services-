@@ -90,10 +90,19 @@ export const loginClientWithGoogle = async (): Promise<GoogleClientLoginResult> 
 
     if (!email) return { client: null, error: "L'email Google est requis." };
 
-    const q = query(collection(db, 'clients'), where('email', '==', email));
-    const snap = await getDocs(q);
+    // Use server API (Admin SDK) to look up the client — avoids Firestore client-SDK permission issues
+    const lookupRes = await fetch('/api/client/google-lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const lookupData = await lookupRes.json().catch(() => ({}));
 
-    if (snap.empty) {
+    if (!lookupRes.ok) {
+      return { client: null, error: lookupData.error || 'Erreur lors de la recherche du compte.' };
+    }
+
+    if (lookupData.noAccount) {
       return {
         client: null,
         noAccount: true,
@@ -104,20 +113,15 @@ export const loginClientWithGoogle = async (): Promise<GoogleClientLoginResult> 
       };
     }
 
-    const clientDoc = snap.docs[0];
-    const clientData = clientDoc.data() as Client;
+    const clientData = lookupData.client as Client;
 
-    if (clientData.status === 'blocked') {
-      return { client: null, error: "Votre compte est bloqué. Contactez le support." };
-    }
-
-    // Update uid/photoUrl via server API (client SDK can't update clients without isAdmin())
+    // Update uid/photoUrl via server API
     try {
       await fetch('/api/client/update-google-uid', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          clientId: clientDoc.id,
+          clientId: clientData.id,
           uid: user.uid,
           ...(user.photoURL && { photoUrl: user.photoURL })
         })
@@ -126,7 +130,7 @@ export const loginClientWithGoogle = async (): Promise<GoogleClientLoginResult> 
       console.warn('Could not update Google uid on client doc:', updateErr);
     }
 
-    return { client: { id: clientDoc.id, ...clientData, uid: user.uid } };
+    return { client: { ...clientData, uid: user.uid } };
   } catch (error: any) {
     const mapped = mapGoogleAuthError(error);
     if (!mapped) return { client: null, error: '' };

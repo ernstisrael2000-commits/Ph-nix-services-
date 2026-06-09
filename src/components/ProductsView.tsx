@@ -895,7 +895,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
               </div>
 
               {/* Hero image */}
-              <div className="relative w-full aspect-[16/7] shrink-0">
+              <div className="relative w-full aspect-[4/3] shrink-0">
                 <img
                   src={selectedProduct.image}
                   alt={selectedProduct.name}

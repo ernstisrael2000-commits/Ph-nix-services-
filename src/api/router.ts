@@ -3400,6 +3400,22 @@ router.post('/api/client/login', requireDb, async (req, res) => {
   }
 });
 
+router.post('/api/client/google-lookup', requireDb, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email requis.' });
+    const snap = await adminDb.collection('clients').where('email', '==', email).get();
+    if (snap.empty) return res.json({ noAccount: true });
+    const doc = snap.docs[0];
+    const data = doc.data();
+    if (data.status === 'blocked') return res.status(403).json({ error: 'Votre compte est bloqué. Contactez le support.' });
+    return res.json({ client: { id: doc.id, ...data } });
+  } catch (e: any) {
+    console.error('[client/google-lookup]', e);
+    res.status(500).json({ error: e.message || 'Erreur recherche compte.' });
+  }
+});
+
 router.post('/api/client/register-google', requireDb, async (req, res) => {
   try {
     const { phone, sponsorCode, googleUser } = req.body;

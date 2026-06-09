@@ -160,11 +160,9 @@ export default function BottomNav({ currentView, onViewChange, loggedClient, onO
                 ? `bg-gradient-to-br from-primary to-indigo-600 shadow-lg shadow-primary/30 group-hover:shadow-xl group-hover:-translate-y-0.5 scale-105 ${menuOpen ? 'ring-2 ring-primary/30' : ''}`
                 : 'bg-gray-100 group-hover:bg-gray-200'
             }`}>
-              {loggedClient
-                ? menuOpen
-                  ? <X className="h-[18px] w-[18px] text-white" strokeWidth={2.5} />
-                  : <Wallet className="h-[18px] w-[18px] text-white" strokeWidth={2.2} />
-                : <Lock className="h-4 w-4 text-gray-400" strokeWidth={2} />
+              {menuOpen && loggedClient
+                ? <X className="h-[18px] w-[18px] text-white" strokeWidth={2.5} />
+                : <Wallet className={`h-[18px] w-[18px] ${loggedClient ? 'text-white' : 'text-gray-400'}`} strokeWidth={2.2} />
               }
             </div>
 
@@ -178,7 +176,7 @@ export default function BottomNav({ currentView, onViewChange, loggedClient, onO
             <span className={`text-[9.5px] font-bold leading-none tracking-tight transition-colors ${
               loggedClient ? 'text-primary' : 'text-gray-400 group-hover:text-gray-600'
             }`}>
-              {loggedClient ? 'Wallet' : 'Connexion'}
+              Wallet
             </span>
           </button>
         </div>
