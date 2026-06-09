@@ -4305,6 +4305,21 @@ router.get('/api/admin/parcels', requireDb, requireAdminSecret, async (_req, res
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Public: Track parcel by tracking number ───────────────────────────────────
+router.get('/api/track/:trackingNumber', requireDb, async (req, res) => {
+  try {
+    const { trackingNumber } = req.params;
+    if (!trackingNumber) return res.status(400).json({ error: 'Numéro de suivi requis.' });
+    const snap = await adminDb.collection('parcels')
+      .where('trackingNumber', '==', trackingNumber.trim())
+      .limit(1)
+      .get();
+    if (snap.empty) return res.status(404).json({ error: 'Colis introuvable.' });
+    const doc = snap.docs[0];
+    res.json({ parcel: { id: doc.id, ...doc.data() } });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 router.get('/api/admin/slider-images-list', requireDb, requireAdminSecret, async (_req, res) => {
   try {
     const snap = await adminDb.collection('slider_images').orderBy('createdAt', 'asc').get();

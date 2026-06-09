@@ -207,40 +207,47 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{ delay: i * 0.06, duration: 0.3 }}
               >
-                <button
-                  onClick={() => openService(svc)}
-                  className="w-full group bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 text-left"
-                >
-                  {/* Image */}
-                  <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
-                    <img
-                      src={svc.image}
-                      alt={svc.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      onError={e => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${svc.id}/400/300`; }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                    <div className="absolute bottom-2 left-2">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r ${SERVICE_GRADIENTS[i % SERVICE_GRADIENTS.length]} text-white shadow-md`}>
-                        {svc.price}
-                      </span>
+                <div className="w-full group bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 text-left">
+                  {/* Image — clickable, opens choice */}
+                  <button onClick={() => openService(svc)} className="w-full text-left">
+                    <div className="relative aspect-[4/3] overflow-hidden bg-gray-50 flex items-center justify-center">
+                      <img
+                        src={svc.image}
+                        alt={svc.name}
+                        className="w-full h-full object-contain object-center group-hover:scale-105 transition-transform duration-500"
+                        onError={e => { (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${svc.id}/400/300`; }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                      <div className="absolute bottom-2 left-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r ${SERVICE_GRADIENTS[i % SERVICE_GRADIENTS.length]} text-white shadow-md`}>
+                          {svc.price}
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Content */}
-                  <div className="p-3">
-                    <p className="font-black text-gray-900 text-sm leading-tight line-clamp-1">{svc.name}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{svc.description || 'Service disponible'}</p>
-                    <div className="mt-2.5 flex items-center gap-1.5">
-                      <span className="flex items-center gap-1 text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-                        <Plus className="h-2.5 w-2.5" /> Créer
-                      </span>
-                      <span className="flex items-center gap-1 text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                        <RefreshCw className="h-2.5 w-2.5" /> Recharge
-                      </span>
+                    {/* Name + description */}
+                    <div className="px-3 pt-3 pb-1">
+                      <p className="font-black text-gray-900 text-sm leading-tight line-clamp-1">{svc.name}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{svc.description || 'Service disponible'}</p>
                     </div>
+                  </button>
+
+                  {/* Action buttons — each goes directly to the right step */}
+                  <div className="px-3 pb-3 pt-1 flex items-center gap-1.5">
+                    <button
+                      onClick={() => { openService(svc); setStep('create_pay'); }}
+                      className="flex items-center gap-1 text-[10px] font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-full transition-colors"
+                    >
+                      <Plus className="h-2.5 w-2.5" /> Créer
+                    </button>
+                    <button
+                      onClick={() => { openService(svc); setStep('recharge_form'); }}
+                      className="flex items-center gap-1 text-[10px] font-black text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-full transition-colors"
+                    >
+                      <RefreshCw className="h-2.5 w-2.5" /> Recharge
+                    </button>
                   </div>
-                </button>
+                </div>
               </motion.div>
             ))}
           </div>
