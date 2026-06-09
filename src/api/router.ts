@@ -24,7 +24,7 @@ try {
 }
 
 // ─── Firebase Admin ────────────────────────────────────────────────────────────
-const FIRESTORE_DB_ID = process.env.FIREBASE_DATABASE_ID || 'default';
+const FIRESTORE_DB_ID = process.env.FIREBASE_DATABASE_ID || '(default)';
 
 let adminApp: App;
 let adminDb: ReturnType<typeof getFirestore>;
