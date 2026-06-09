@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Globe, Wallet, Lock, GraduationCap, Home } from 'lucide-react';
+import { Package, Globe, Wallet, Lock } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Client } from '../types';
 import { useSettings } from '../services/parcelService';
@@ -13,9 +13,8 @@ interface BottomNavProps {
 }
 
 const NAV_ITEMS = [
-  { key: 'services',    icon: Globe,           label: 'Services'    },
-  { key: 'formations',  icon: GraduationCap,   label: 'Formations'  },
-  { key: 'tracking',    icon: Package,         label: 'Colis'       },
+  { key: 'services', icon: Globe,   label: 'Services' },
+  { key: 'tracking', icon: Package, label: 'Colis'    },
 ];
 
 export default function BottomNav({ currentView, onViewChange, loggedClient, onOpenWallet, onRequestAuth }: BottomNavProps) {
@@ -37,6 +36,8 @@ export default function BottomNav({ currentView, onViewChange, loggedClient, onO
       }}
     >
       <div className="flex items-stretch justify-around max-w-2xl mx-auto">
+
+        {/* Services & Colis tabs */}
         {NAV_ITEMS.map(({ key, icon: Icon, label }) => {
           const active = currentView === key;
           return (
@@ -58,11 +59,9 @@ export default function BottomNav({ currentView, onViewChange, loggedClient, onO
                 }`}
                 strokeWidth={active ? 2.5 : 1.75}
               />
-              <span
-                className={`relative z-10 text-[9.5px] font-bold leading-none tracking-tight transition-colors ${
-                  active ? 'text-primary' : 'text-gray-400 group-hover:text-gray-600'
-                }`}
-              >
+              <span className={`relative z-10 text-[9.5px] font-bold leading-none tracking-tight transition-colors ${
+                active ? 'text-primary' : 'text-gray-400 group-hover:text-gray-600'
+              }`}>
                 {label}
               </span>
               {active && (
@@ -76,32 +75,37 @@ export default function BottomNav({ currentView, onViewChange, loggedClient, onO
           );
         })}
 
-        {/* Wallet tab */}
+        {/* Wallet tab — prominent centre button */}
         <button
           onClick={loggedClient ? onOpenWallet : onRequestAuth}
           className="relative flex-1 flex flex-col items-center justify-center py-2 gap-0.5 min-h-[58px] group"
         >
-          <div className={`relative h-9 w-9 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+          {/* Raised pill for logged-in users */}
+          <div className={`relative h-10 w-10 rounded-2xl flex items-center justify-center transition-all duration-200 ${
             loggedClient
-              ? 'bg-gradient-to-br from-primary to-indigo-600 shadow-md shadow-primary/30 group-hover:shadow-lg group-hover:-translate-y-0.5'
+              ? 'bg-gradient-to-br from-primary to-indigo-600 shadow-lg shadow-primary/30 group-hover:shadow-xl group-hover:-translate-y-0.5 scale-105'
               : 'bg-gray-100 group-hover:bg-gray-200'
           }`}>
             {loggedClient
-              ? <Wallet className="h-4 w-4 text-white" strokeWidth={2} />
-              : <Lock className="h-[15px] w-[15px] text-gray-400" strokeWidth={2} />
+              ? <Wallet className="h-[18px] w-[18px] text-white" strokeWidth={2.2} />
+              : <Lock className="h-4 w-4 text-gray-400" strokeWidth={2} />
             }
           </div>
+
+          {/* Balance badge */}
           {loggedClient && balanceHTG > 0 && (
-            <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[14px] px-1 bg-emerald-500 text-white text-[7.5px] font-black rounded-full flex items-center justify-center leading-none">
+            <span className="absolute top-1 right-2 min-w-[20px] h-[15px] px-1 bg-emerald-500 text-white text-[7.5px] font-black rounded-full flex items-center justify-center leading-none shadow-sm">
               {balanceLabel}
             </span>
           )}
+
           <span className={`text-[9.5px] font-bold leading-none tracking-tight transition-colors ${
             loggedClient ? 'text-primary' : 'text-gray-400 group-hover:text-gray-600'
           }`}>
             {loggedClient ? 'Wallet' : 'Connexion'}
           </span>
         </button>
+
       </div>
     </nav>
   );

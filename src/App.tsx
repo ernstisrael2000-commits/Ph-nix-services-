@@ -16,10 +16,9 @@ import { doc, getDocFromServer, onSnapshot } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { toast } from 'sonner';
 
-// ── Lazy-loaded heavy views (only downloaded when actually needed) ─────────────
+// ── Lazy-loaded heavy views ────────────────────────────────────────────────────
 const TrackingView       = lazy(() => import('./components/TrackingView'));
 const ServicesView       = lazy(() => import('./components/ServicesView'));
-const FormationsView     = lazy(() => import('./components/FormationsView'));
 const AdminDashboard     = lazy(() => import('./components/AdminDashboard'));
 const AdminLogin         = lazy(() => import('./components/AdminLogin'));
 const ClientDashboard    = lazy(() => import('./components/ClientDashboard'));
@@ -27,7 +26,6 @@ const PaymentSuccessView = lazy(() => import('./components/PaymentSuccessView'))
 const PaymentSuccessPage = lazy(() => import('./components/PaymentSuccessPage'));
 const UserAuthModal      = lazy(() => import('./components/UserAuthModal'));
 
-// Minimal inline spinner for Suspense fallback (no extra imports)
 function PageSpinner() {
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
@@ -36,16 +34,13 @@ function PageSpinner() {
   );
 }
 
-type ViewType = 'tracking' | 'services' | 'formations' | 'admin';
+type ViewType = 'tracking' | 'services' | 'admin';
 
 export default function App() {
   const [view, setView] = useState<ViewType>('services');
-  const [history, setHistory] = useState<ViewType[]>(['services']);
-  const [formationsTab, setFormationsTab] = useState<'all' | 'my'>('all');
   const { loading } = useAuth();
   const { settings } = useSettings();
   const [showAnnouncement, setShowAnnouncement] = useState(true);
-  const [isOffline, setIsOffline] = useState(false);
   const [showClientDashboard, setShowClientDashboard] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [moncashReturnRef, setMoncashReturnRef] = useState<string | null>(null);
@@ -73,10 +68,8 @@ export default function App() {
     const testConnection = async () => {
       try {
         await getDocFromServer(doc(db, '_connection_test_', 'ping'));
-        setIsOffline(false);
       } catch (error: any) {
         if (error?.message?.includes('offline') || error?.code === 'unavailable') {
-          setIsOffline(true);
           toast.error("Connexion perdue. Rena fonctionne en mode hors-ligne.", {
             description: "Certaines fonctionnalités peuvent être limitées.",
             duration: Infinity,
@@ -113,7 +106,6 @@ export default function App() {
 
   const handleViewChange = (newView: ViewType) => {
     if (newView === view) return;
-    setHistory(prev => [...prev, newView]);
     setView(newView);
   };
 
@@ -150,9 +142,7 @@ export default function App() {
     return () => { if (clientUnsub.current) clientUnsub.current(); };
   }, [loggedClient?.id]);
 
-  if (loading) {
-    return <LoadingScreen />;
-  }
+  if (loading) return <LoadingScreen />;
 
   return (
     <ErrorBoundary>
@@ -170,6 +160,7 @@ export default function App() {
           }}
         />
 
+        {/* Global announcement popup */}
         <AnimatePresence>
           {settings?.showGlobalAnnouncement && settings?.globalAnnouncement && showAnnouncement && (
             <div className="fixed inset-0 z-50 flex items-center justify-center px-4 p-6 pointer-events-none">
@@ -186,18 +177,12 @@ export default function App() {
                         <Bell className="h-5 w-5 text-white animate-ring" />
                       </div>
                       <div>
-                        <h3 className="text-base font-black text-dark tracking-tight leading-none">
-                          Annonce Spéciale
-                        </h3>
-                        <p className="text-[10px] uppercase font-black text-primary/60 tracking-widest mt-1">
-                          Phénix Services
-                        </p>
+                        <h3 className="text-base font-black text-dark tracking-tight leading-none">Annonce Spéciale</h3>
+                        <p className="text-[10px] uppercase font-black text-primary/60 tracking-widest mt-1">Phénix Services</p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => setShowAnnouncement(false)}
-                      className="h-9 w-9 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-all active:scale-95 text-gray-400 hover:text-dark border border-gray-100"
-                    >
+                    <button onClick={() => setShowAnnouncement(false)}
+                      className="h-9 w-9 flex items-center justify-center rounded-xl hover:bg-gray-100 transition-all active:scale-95 text-gray-400 hover:text-dark border border-gray-100">
                       <X className="h-5 w-5" />
                     </button>
                   </div>
@@ -207,31 +192,18 @@ export default function App() {
                     </p>
                   </div>
                   <div className="p-6 pt-0 flex justify-center">
-                    <Button
-                      onClick={() => setShowAnnouncement(false)}
-                      className="w-full h-12 rounded-2xl bg-primary hover:bg-[#1D4ED8] text-white font-black text-sm shadow-xl shadow-accent-light/60 border-0 transition-all hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-0 group"
-                    >
+                    <Button onClick={() => setShowAnnouncement(false)}
+                      className="w-full h-12 rounded-2xl bg-primary hover:bg-[#1D4ED8] text-white font-black text-sm shadow-xl shadow-accent-light/60 border-0 transition-all">
                       J'AI COMPRIS
-                      <motion.span
-                        animate={{ x: [0, 5, 0] }}
-                        transition={{ repeat: Infinity, duration: 1.5 }}
-                        className="ml-2"
-                      >
-                        →
-                      </motion.span>
+                      <motion.span animate={{ x: [0, 5, 0] }} transition={{ repeat: Infinity, duration: 1.5 }} className="ml-2">→</motion.span>
                     </Button>
                   </div>
                 </div>
                 <div className="h-2 w-full bg-gradient-to-r from-transparent via-primary to-transparent opacity-30" />
               </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                 className="fixed inset-0 bg-black/40 backdrop-blur-[2px] -z-10"
-                onClick={() => setShowAnnouncement(false)}
-              />
+                onClick={() => setShowAnnouncement(false)} />
             </div>
           )}
         </AnimatePresence>
@@ -258,22 +230,10 @@ export default function App() {
               />
             )}
 
-            {view === 'formations' && (
-              <FormationsView
-                loggedClient={loggedClient}
-                onOpenWallet={() => setShowClientDashboard(true)}
-                onClientLogin={handleClientLogin}
-                activeTab={formationsTab}
-                onTabChange={setFormationsTab}
-              />
-            )}
-
             {view === 'admin' && (
-              loggedAdmin ? (
-                <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
-              ) : (
-                <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => handleViewChange('tracking')} />
-              )
+              loggedAdmin
+                ? <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
+                : <AdminLogin onLoginSuccess={handleAdminLogin} onBack={() => handleViewChange('tracking')} />
             )}
           </Suspense>
         </main>
@@ -285,9 +245,7 @@ export default function App() {
                 <img src="/phenix-logo.png" alt="Phénix Services" className="h-10 w-10 object-contain" />
                 <span className="text-xl font-bold text-dark">Phénix Services</span>
               </div>
-              <p className="text-subtext text-sm">
-                © {new Date().getFullYear()} Phénix Services. Tous droits réservés.
-              </p>
+              <p className="text-subtext text-sm">© {new Date().getFullYear()} Phénix Services. Tous droits réservés.</p>
               <div className="flex justify-center gap-6 mt-6 text-sm text-subtext/60">
                 <a href="#" className="hover:text-subtext transition-colors">Confidentialité</a>
                 <a href="#" className="hover:text-subtext transition-colors">Conditions d'utilisation</a>
