@@ -4010,7 +4010,7 @@ router.post('/api/admin/verify-google', requireDb, async (req, res) => {
     }
     if (adminSnap.empty) {
       await adminDb.collection('admin_login_logs').add({ adminName: email, success: false, timestamp: FieldValue.serverTimestamp() });
-      return res.status(403).json({ error: `Accès refusé. L'adresse "${email}" n'est associée à aucun compte administrateur Rena.` });
+      return res.status(403).json({ error: `Accès refusé. L'adresse "${email}" n'est pas enregistrée comme administrateur. Contactez le super-administrateur.` });
     }
 
     const adminDoc = adminSnap.docs[0];
@@ -4033,7 +4033,11 @@ router.post('/api/admin/verify-google', requireDb, async (req, res) => {
     res.json({ success: true, admin: serializeDoc(adminDoc) });
   } catch (e: any) {
     console.error('[admin/verify-google]', e);
-    res.status(500).json({ error: 'Erreur vérification Google.' });
+    const isFirestoreDisabled = e?.details?.includes('has not been used') || e?.reason === 'SERVICE_DISABLED';
+    res.status(500).json({ error: isFirestoreDisabled
+      ? 'La base de données Firestore est désactivée. Activez-la dans la console Firebase pour continuer.'
+      : 'Erreur vérification Google.' });
+
   }
 });
 
@@ -4274,9 +4278,28 @@ router.post('/api/admin/bootstrap', requireDb, async (req, res) => {
       });
       console.log('[Bootstrap] Super Admin Google créé:', ref.id);
     } else {
-      // Ensure existing account is flagged as super admin
       await googleSnap.docs[0].ref.update({ isSuperAdmin: true, permissions: ['all'], updatedAt: ts });
       console.log('[Bootstrap] Super Admin Google existant mis à jour');
+    }
+
+    // Seed default service cards if none exist
+    const cardsSnap = await adminDb.collection('card_topups').limit(1).get();
+    if (cardsSnap.empty) {
+      const defaultCards = [
+        { name: 'Visa Prépayée', image: 'https://picsum.photos/seed/visa-prepaid/400/300', description: 'Carte Visa prépayée rechargeable, acceptée partout', price: '2 500 HTG', presets: [25, 50, 100] },
+        { name: 'Mastercard Prépayée', image: 'https://picsum.photos/seed/mastercard/400/300', description: 'Carte Mastercard prépayée internationale', price: '3 000 HTG', presets: [50, 100, 200] },
+        { name: 'Visa Virtuelle', image: 'https://picsum.photos/seed/visa-virtual/400/300', description: 'Carte Visa virtuelle pour achats en ligne', price: '1 500 HTG', presets: [10, 25, 50] },
+        { name: 'Amazon Gift Card', image: 'https://picsum.photos/seed/amazon-gift/400/300', description: 'Carte cadeau Amazon — shopping international', price: '1 800 HTG', presets: [10, 25, 50, 100] },
+        { name: 'Apple Gift Card', image: 'https://picsum.photos/seed/apple-gift/400/300', description: 'Carte cadeau Apple — App Store & iTunes', price: '2 000 HTG', presets: [15, 25, 50] },
+        { name: 'Google Play', image: 'https://picsum.photos/seed/google-play/400/300', description: 'Carte cadeau Google Play — apps & jeux Android', price: '1 600 HTG', presets: [10, 25, 50] },
+      ];
+      const batch = adminDb.batch();
+      for (const card of defaultCards) {
+        const ref = adminDb.collection('card_topups').doc();
+        batch.set(ref, { ...card, createdAt: ts, updatedAt: ts });
+      }
+      await batch.commit();
+      console.log('[Bootstrap] Cartes par défaut créées:', defaultCards.length);
     }
 
     res.json({ success: true, bootstrapped: true });

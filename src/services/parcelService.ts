@@ -83,18 +83,76 @@ export const deleteNavButton = async (id: string) => {
 };
 
 // Card Topup Services
+const DEFAULT_CARDS: CardTopup[] = [
+  {
+    id: 'default-visa-prepaid',
+    name: 'Visa Prépayée',
+    image: 'https://picsum.photos/seed/visa-prepaid/400/300',
+    description: 'Carte Visa prépayée rechargeable, acceptée partout',
+    price: '2 500 HTG',
+    presets: [25, 50, 100],
+    createdAt: null,
+  },
+  {
+    id: 'default-mastercard',
+    name: 'Mastercard Prépayée',
+    image: 'https://picsum.photos/seed/mastercard/400/300',
+    description: 'Carte Mastercard prépayée internationale',
+    price: '3 000 HTG',
+    presets: [50, 100, 200],
+    createdAt: null,
+  },
+  {
+    id: 'default-visa-virtual',
+    name: 'Visa Virtuelle',
+    image: 'https://picsum.photos/seed/visa-virtual/400/300',
+    description: 'Carte Visa virtuelle pour achats en ligne',
+    price: '1 500 HTG',
+    presets: [10, 25, 50],
+    createdAt: null,
+  },
+  {
+    id: 'default-amazon-gift',
+    name: 'Amazon Gift Card',
+    image: 'https://picsum.photos/seed/amazon-gift/400/300',
+    description: 'Carte cadeau Amazon — shopping international',
+    price: '1 800 HTG',
+    presets: [10, 25, 50, 100],
+    createdAt: null,
+  },
+  {
+    id: 'default-apple-gift',
+    name: 'Apple Gift Card',
+    image: 'https://picsum.photos/seed/apple-gift/400/300',
+    description: 'Carte cadeau Apple — App Store & iTunes',
+    price: '2 000 HTG',
+    presets: [15, 25, 50],
+    createdAt: null,
+  },
+  {
+    id: 'default-google-play',
+    name: 'Google Play',
+    image: 'https://picsum.photos/seed/google-play/400/300',
+    description: 'Carte cadeau Google Play — apps & jeux Android',
+    price: '1 600 HTG',
+    presets: [10, 25, 50],
+    createdAt: null,
+  },
+];
+
 export const useCardTopups = () => {
-  const [cards, setCards] = useState<CardTopup[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Start with default cards immediately — replaced by Firestore data if available
+  const [cards, setCards] = useState<CardTopup[]>(DEFAULT_CARDS);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, 'card_topups'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CardTopup[]);
-      setLoading(false);
+      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as CardTopup[];
+      if (fetched.length > 0) setCards(fetched);
     }, (error) => {
       console.error("Error fetching card topups:", error);
-      setLoading(false);
+      // Keep showing default cards on error
     });
     return () => unsubscribe();
   }, []);

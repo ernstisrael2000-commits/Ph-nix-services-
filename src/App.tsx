@@ -115,6 +115,7 @@ export default function App() {
   const handleClientLogin = (client: Client) => {
     setLoggedClient(client);
     localStorage.setItem('rena_client', JSON.stringify(client));
+    setShowClientDashboard(true);
   };
 
   const handleClientLogout = () => {
