@@ -154,6 +154,7 @@ export default function App() {
           onClientLogin={handleClientLogin}
           onClientLogout={handleClientLogout}
           onOpenWallet={() => setShowClientDashboard(true)}
+          loggedAdmin={loggedAdmin}
           onAdminLogin={(admin) => {
             handleAdminLogin(admin);
             handleViewChange('admin');

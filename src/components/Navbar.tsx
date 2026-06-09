@@ -20,6 +20,7 @@ interface NavbarProps {
   onClientLogout: () => void;
   onOpenWallet: () => void;
   onAdminLogin: (admin: AdminAccount) => void;
+  loggedAdmin: AdminAccount | null;
 }
 
 const NAV_ITEMS = [
@@ -27,8 +28,9 @@ const NAV_ITEMS = [
   { key: 'tracking', icon: ColisIcon, label: 'Colis'    },
 ];
 
-export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet, onAdminLogin }: NavbarProps) {
+export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet, onAdminLogin, loggedAdmin }: NavbarProps) {
   const { user, isAdmin } = useAuth();
+  const showAdminButton = isAdmin || !!loggedAdmin;
   const { settings } = useSettings();
   const pendingClientCount = usePendingClientCount();
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -107,7 +109,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
             {/* Desktop nav */}
             <div className="hidden md:flex items-center gap-1">
               {NAV_ITEMS.map(item => <NavButton key={item.key} item={item} />)}
-              {isAdmin && (
+              {showAdminButton && (
                 <button
                   onClick={() => handleNav('admin')}
                   className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-xl relative transition-all duration-200 group ${currentView === 'admin' ? 'bg-amber-50' : 'hover:bg-amber-50/60'}`}
@@ -341,7 +343,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                 );
               })}
 
-              {isAdmin && (
+              {showAdminButton && (
                 <button onClick={() => handleNav('admin')}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all relative ${currentView === 'admin' ? 'bg-amber-50 text-amber-600' : 'text-gray-600 hover:bg-amber-50/60'}`}>
                   <ShieldCheck className={`h-5 w-5 shrink-0 ${currentView === 'admin' ? 'text-amber-500' : 'text-gray-400'}`} />
@@ -380,7 +382,7 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
         onClientLogin={(client) => { onClientLogin(client); setShowAuthModal(false); }}
         onAdminLogin={(admin) => { onAdminLogin(admin); setShowAuthModal(false); }}
         onAffiliateAccess={() => {}}
-        onAdminPasswordLogin={() => setShowAuthModal(false)}
+        onAdminPasswordLogin={() => { setShowAuthModal(false); onViewChange('admin'); }}
       />
     </>
   );
