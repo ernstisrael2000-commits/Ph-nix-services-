@@ -4351,8 +4351,8 @@ router.delete('/api/admin/account/:id', requireDb, requireAdminSecret, async (re
 });
 
 // ── Push Notifications ────────────────────────────────────────────────────────
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
+const VAPID_PUBLIC_KEY = (process.env.VAPID_PUBLIC_KEY || '').replace(/=+$/, '');
+const VAPID_PRIVATE_KEY = (process.env.VAPID_PRIVATE_KEY || '').replace(/=+$/, '');
 
 let pushEnabled = false;
 if (webpush && VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
