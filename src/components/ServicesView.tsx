@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Globe, CreditCard, Zap, ShieldCheck, Clock, Phone, MessageCircle,
+  Globe, CreditCard, ShieldCheck, Clock, Phone, MessageCircle,
   X, Wallet, Loader2, ChevronRight, Plus, RefreshCw, Check,
 } from 'lucide-react';
 import { useCardTopups, useSettings } from '../services/parcelService';
@@ -89,7 +89,7 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
       const priceUSD = numericPrice / exchangeRate;
       await submitClientPurchase(effectiveClient, selected.name, String(selected.price), priceUSD);
       const now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-      openWhatsApp(`🎴 *CRÉATION SERVICE — Rena*\n\n👤 Client: *${effectiveClient.name}*\n🔑 Wallet ID: *#${effectiveClient.walletId || '—'}*\n📱 Téléphone: *${effectiveClient.phone || '—'}*\n🛒 Service: *${selected.name}*\n💰 Montant payé: *${numericPrice.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n📅 Date: *${now}*\n\n✅ Paiement traité. Veuillez activer le service.`);
+      openWhatsApp(`🎴 *CRÉATION SERVICE — Phénix Services*\n\n👤 Client: *${effectiveClient.name}*\n🔑 Wallet ID: *#${effectiveClient.walletId || '—'}*\n📱 Téléphone: *${effectiveClient.phone || '—'}*\n🛒 Service: *${selected.name}*\n💰 Montant payé: *${numericPrice.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n📅 Date: *${now}*\n\n✅ Paiement traité. Veuillez activer le service.`);
       setStep('success');
     } catch (err: any) {
       toast.error(err.message || "Erreur lors du paiement.");
@@ -102,7 +102,7 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
   const handleMethodCreate = () => {
     if (!selected) return;
     const method = PAYMENT_METHODS.find(m => m.id === payMethod);
-    openWhatsApp(`🎴 *CRÉATION SERVICE — Rena*\n\n🛒 Service: *${selected.name}*\n💰 Prix: *${selected.price}*\n\n💳 Méthode de paiement: *${method?.label}*\n📝 Référence transaction: *${txInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`);
+    openWhatsApp(`🎴 *CRÉATION SERVICE — Phénix Services*\n\n🛒 Service: *${selected.name}*\n💰 Prix: *${selected.price}*\n\n💳 Méthode de paiement: *${method?.label}*\n📝 Référence transaction: *${txInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`);
     setStep('success');
   };
 
@@ -117,7 +117,7 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
     const method = PAYMENT_METHODS.find(m => m.id === payMethod);
     const usd = parseFloat(rechargeAmount);
     const htg = Math.round(usd * exchangeRate);
-    openWhatsApp(`💳 *RECHARGE CARTE — Rena*\n\n🎴 Carte: *${selected.name}*\n👤 Titulaire: *${holderName || 'Non spécifié'}*\n🔢 Numéro/Info carte: *${cardNumber || 'Non spécifié'}*\n💵 Montant USD: *$${usd}*\n🇭🇹 Équivalent: *${htg.toLocaleString()} HTG*\n\n💳 Méthode: *${method?.label}*\n📝 Référence: *${txInfo || 'Non fournie'}*\n\nMerci de traiter ma recharge.`);
+    openWhatsApp(`💳 *RECHARGE CARTE — Phénix Services*\n\n🎴 Carte: *${selected.name}*\n👤 Titulaire: *${holderName || 'Non spécifié'}*\n🔢 Numéro/Info carte: *${cardNumber || 'Non spécifié'}*\n💵 Montant USD: *$${usd}*\n🇭🇹 Équivalent: *${htg.toLocaleString()} HTG*\n\n💳 Méthode: *${method?.label}*\n📝 Référence: *${txInfo || 'Non fournie'}*\n\nMerci de traiter ma recharge.`);
     setStep('success');
   };
 
@@ -128,7 +128,7 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
   return (
     <div className="min-h-screen bg-[#F4F6FB] pb-28">
       {/* Header */}
-      <div className="bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 px-4 pt-6 pb-14">
+      <div className="bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 px-4 pt-6 pb-20">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
@@ -157,7 +157,7 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
       </div>
 
       {/* Cards grid */}
-      <div className="max-w-3xl mx-auto px-4 -mt-6">
+      <div className="max-w-3xl mx-auto px-4 -mt-10">
         {loading ? (
           <div className="flex justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
@@ -249,7 +249,7 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[400] flex items-end sm:items-center justify-center p-4"
+            className="fixed inset-0 z-[400] flex items-center justify-center p-4"
           >
             <motion.div
               initial={{ opacity: 0 }}
@@ -264,7 +264,7 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 40, scale: 0.97 }}
               transition={{ type: 'spring', bounce: 0.18, duration: 0.45 }}
-              className="relative z-10 w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden"
+              className="relative z-10 w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto"
             >
               {/* Header */}
               <div className="relative">

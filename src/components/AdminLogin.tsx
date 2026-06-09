@@ -59,18 +59,29 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
             </div>
             <CardTitle className="text-2xl font-black text-dark">Accès Administrateur</CardTitle>
             <CardDescription className="text-gray-500 font-medium pt-1">
-              Connectez-vous pour gérer la plateforme Rena.
+              Connectez-vous pour gérer la plateforme Phénix Services.
             </CardDescription>
           </CardHeader>
 
           <CardContent className="px-8 pb-10">
+            {/* Accès rapide par défaut */}
+            <div className="mb-5 p-3 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-start gap-3">
+              <div className="h-8 w-8 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0 mt-0.5">
+                <ShieldCheck className="h-4 w-4 text-indigo-600" />
+              </div>
+              <div>
+                <p className="text-xs font-black text-indigo-700 uppercase tracking-wide">Accès par défaut</p>
+                <p className="text-xs text-indigo-500 mt-0.5">Nom : <span className="font-black text-indigo-700">Admin</span> · Mot de passe : <span className="font-black text-indigo-700">admin2024</span></p>
+              </div>
+            </div>
+
             <form onSubmit={handleLogin} className="space-y-5">
               <div className="space-y-2">
                 <Label className="text-xs font-black uppercase tracking-widest text-gray-400 ml-1">Nom complet</Label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                   <Input
-                    placeholder="Entrez votre nom"
+                    placeholder="Ex: Admin"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     className="pl-12 h-13 rounded-2xl border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-primary/20"

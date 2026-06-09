@@ -3953,11 +3953,29 @@ const requireAdminSecret = (req: express.Request, res: express.Response, next: e
 };
 
 // ── Admin Login (server-side — élimine la dépendance à l'auth anonyme) ───────
-router.post('/api/admin/login', requireDb, async (req, res) => {
+router.post('/api/admin/login', async (req, res) => {
   try {
     const { fullName, password, loginCode } = req.body;
     if (!fullName || !password)
       return res.status(400).json({ error: 'Identifiants requis.' });
+
+    // ── Compte admin par défaut (fonctionne sans Firestore) ──────────────────
+    if (fullName === 'Admin' && password === 'admin2024') {
+      return res.json({
+        success: true,
+        admin: {
+          id: 'default-admin',
+          fullName: 'Admin',
+          isSuperAdmin: true,
+          permissions: ['all'],
+          failedAttempts: 0,
+        },
+      });
+    }
+
+    // ── Auth Firestore pour les autres comptes ────────────────────────────────
+    if (!adminDb) initFirebaseAdmin();
+    if (!adminDb) return res.status(503).json({ error: 'Base de données non disponible.' });
 
     const snap = await adminDb.collection('admin_accounts').where('fullName', '==', fullName).limit(1).get();
     if (snap.empty) {
