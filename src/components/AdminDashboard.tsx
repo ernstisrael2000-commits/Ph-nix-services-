@@ -27,7 +27,7 @@ import {
   useParcels, saveParcel, deleteParcel,
 } from '../services/parcelService';
 import { toast } from 'sonner';
-import { AdminAccount, CardTopup, FeeTier, Parcel, ParcelStatus, PaymentMethod, DEFAULT_PAYMENT_METHODS, Formation, FormationPurchase } from '../types';
+import { AdminAccount, CardTopup, FeeTier, Parcel, ParcelStatus, PaymentMethod, DEFAULT_PAYMENT_METHODS, Formation, FormationPurchase, FormationModule } from '../types';
 import { usePendingClientCount } from '../services/clientService';
 
 const ADMIN_SECRET = 'rena-admin-2024';
@@ -2157,6 +2157,101 @@ function FormationsAdminTab() {
                 <input type="checkbox" checked={!!form.hasCertificate} onChange={e => setForm(f => ({ ...f, hasCertificate: e.target.checked }))} className="w-4 h-4 rounded accent-emerald-600" />
                 <span className="text-sm font-bold text-gray-700">Certificat</span>
               </label>
+            </div>
+
+            {/* ── Chapitres / Vidéos ── */}
+            <div className="border-t border-gray-100 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <Label className="text-xs font-black text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                  <BookOpen className="h-3.5 w-3.5 text-purple-500" /> Chapitres & Vidéos
+                </Label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newModule: FormationModule = {
+                      id: `ch-${Date.now()}`,
+                      title: '',
+                      videoUrl: '',
+                      duration: '',
+                      order: (form.modules?.length ?? 0) + 1,
+                      description: '',
+                    };
+                    setForm(f => ({ ...f, modules: [...(f.modules || []), newModule] }));
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-black transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Ajouter un chapitre
+                </button>
+              </div>
+
+              {(!form.modules || form.modules.length === 0) ? (
+                <div className="text-center py-6 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400">
+                  <BookOpen className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-xs font-bold">Aucun chapitre — cliquez sur « Ajouter un chapitre »</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {(form.modules || []).map((mod, idx) => (
+                    <div key={mod.id} className="bg-gray-50 rounded-2xl p-3 space-y-2 border border-gray-100">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest">Chapitre {idx + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => setForm(f => ({ ...f, modules: (f.modules || []).filter((_, i) => i !== idx) }))}
+                          className="p-1 rounded-lg hover:bg-red-100 text-gray-300 hover:text-red-500 transition-colors"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <Input
+                        value={mod.title}
+                        onChange={e => {
+                          const updated = [...(form.modules || [])];
+                          updated[idx] = { ...updated[idx], title: e.target.value };
+                          setForm(f => ({ ...f, modules: updated }));
+                        }}
+                        placeholder="Titre du chapitre"
+                        className="rounded-xl h-9 text-sm bg-white"
+                      />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="relative">
+                          <Input
+                            value={mod.videoUrl}
+                            onChange={e => {
+                              const updated = [...(form.modules || [])];
+                              updated[idx] = { ...updated[idx], videoUrl: e.target.value };
+                              setForm(f => ({ ...f, modules: updated }));
+                            }}
+                            placeholder="URL de la vidéo (YouTube, Vimeo…)"
+                            className="rounded-xl h-9 text-sm bg-white pl-8"
+                          />
+                          <ExternalLink className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-300" />
+                        </div>
+                        <Input
+                          value={mod.duration}
+                          onChange={e => {
+                            const updated = [...(form.modules || [])];
+                            updated[idx] = { ...updated[idx], duration: e.target.value };
+                            setForm(f => ({ ...f, modules: updated }));
+                          }}
+                          placeholder="Durée (ex: 12:30)"
+                          className="rounded-xl h-9 text-sm bg-white"
+                        />
+                      </div>
+                      <Input
+                        value={mod.description || ''}
+                        onChange={e => {
+                          const updated = [...(form.modules || [])];
+                          updated[idx] = { ...updated[idx], description: e.target.value };
+                          setForm(f => ({ ...f, modules: updated }));
+                        }}
+                        placeholder="Description (optionnel)"
+                        className="rounded-xl h-9 text-sm bg-white"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter className="gap-2 pt-2">

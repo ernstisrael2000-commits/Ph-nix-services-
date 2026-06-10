@@ -1599,98 +1599,6 @@ function PurchaseCard({
     );
   }
 
-  if (paymentStep === 'form' && selectedPayMethod) {
-    return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-lg p-6">
-        <button onClick={() => setPaymentStep('external-method')} className="flex items-center gap-1.5 text-gray-400 hover:text-gray-700 text-xs font-semibold mb-4 transition-colors">
-          <ChevronLeft className="h-4 w-4" /> Retour
-        </button>
-        <h3 className="font-black text-gray-900 text-base mb-1">Finaliser le paiement</h3>
-        <p className="text-xs text-gray-500 mb-5">via {selectedPayMethod === 'moncash' ? 'MonCash' : 'NatCash'}</p>
-
-        <div className="space-y-3 mb-5">
-          <input type="text" placeholder="Votre nom complet" value={payFormData.name}
-            onChange={e => setPayFormData((d: any) => ({ ...d, name: e.target.value }))}
-            className="w-full h-11 px-4 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 transition-all" />
-          <input type="email" placeholder="Votre email" value={payFormData.email}
-            onChange={e => setPayFormData((d: any) => ({ ...d, email: e.target.value }))}
-            className="w-full h-11 px-4 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 transition-all" />
-          <input type="text" placeholder="Code de transaction" value={payFormData.transactionCode}
-            onChange={e => setPayFormData((d: any) => ({ ...d, transactionCode: e.target.value }))}
-            className="w-full h-11 px-4 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-300 focus:border-violet-400 transition-all" />
-        </div>
-
-        <div className="bg-gray-50 rounded-xl p-3 mb-5 text-xs space-y-1">
-          <div className="flex justify-between"><span className="text-gray-500">Formation</span><span className="font-bold text-gray-800 truncate max-w-[140px]">{formation.title}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Montant</span><span className="font-black text-violet-700">{(formation.price || 0).toLocaleString()} HTG</span></div>
-        </div>
-
-        <button onClick={onExternalSubmit} disabled={submittingPayment}
-          className="w-full h-12 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
-          {submittingPayment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          Confirmer le paiement
-        </button>
-      </div>
-    );
-  }
-
-  if (paymentStep === 'external-method') {
-    return (
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-lg p-6">
-        <button onClick={() => setPaymentStep('detail')} className="flex items-center gap-1.5 text-gray-400 hover:text-gray-700 text-xs font-semibold mb-4 transition-colors">
-          <ChevronLeft className="h-4 w-4" /> Retour
-        </button>
-        <h3 className="font-black text-gray-900 text-base mb-4">Mode de paiement</h3>
-
-        <div className="space-y-3 mb-5">
-          {/* MonCash */}
-          <div onClick={() => setSelectedPayMethod('moncash')}
-            className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedPayMethod === 'moncash' ? 'border-rose-400 bg-rose-50' : 'border-gray-200 bg-white hover:border-rose-200'}`}>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="h-9 w-9 rounded-xl bg-rose-100 flex items-center justify-center shrink-0">
-                <Smartphone className="h-4 w-4 text-rose-600" />
-              </div>
-              <div className="flex-1">
-                <p className="font-black text-gray-900 text-sm">MonCash</p>
-                <p className="text-[10px] text-gray-400">Paiement mobile sécurisé par Digicel</p>
-              </div>
-              {selectedPayMethod === 'moncash' && <CheckCircle2 className="h-5 w-5 text-rose-500 shrink-0" />}
-            </div>
-            <div className="bg-white rounded-lg p-2.5 space-y-1">
-              <div className="flex justify-between text-xs"><span className="text-gray-400">Numéro</span><span className="font-black text-gray-800">{moncashNumber}</span></div>
-              <div className="flex justify-between text-xs"><span className="text-gray-400">Montant exact</span><span className="font-black text-violet-700">{(formation.price || 0).toLocaleString()} HTG</span></div>
-            </div>
-          </div>
-
-          {/* NatCash */}
-          <div onClick={() => setSelectedPayMethod('natcash')}
-            className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${selectedPayMethod === 'natcash' ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white hover:border-amber-200'}`}>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="h-9 w-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
-                <CreditCard className="h-4 w-4 text-amber-600" />
-              </div>
-              <div className="flex-1">
-                <p className="font-black text-gray-900 text-sm">NatCash</p>
-                <p className="text-[10px] text-gray-400">Sécurisé et rapide</p>
-              </div>
-              {selectedPayMethod === 'natcash' && <CheckCircle2 className="h-5 w-5 text-amber-500 shrink-0" />}
-            </div>
-            <div className="bg-white rounded-lg p-2.5 space-y-1">
-              <div className="flex justify-between text-xs"><span className="text-gray-400">Numéro</span><span className="font-black text-gray-800">{natcashNumber}</span></div>
-              <div className="flex justify-between text-xs"><span className="text-gray-400">Montant exact</span><span className="font-black text-violet-700">{(formation.price || 0).toLocaleString()} HTG</span></div>
-            </div>
-          </div>
-        </div>
-
-        <button onClick={() => { if (selectedPayMethod) setPaymentStep('form'); else toast.error('Choisissez un mode de paiement.'); }}
-          disabled={!selectedPayMethod}
-          className="w-full h-12 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors">
-          Continuer <ArrowRight className="h-4 w-4" />
-        </button>
-      </div>
-    );
-  }
-
   // Default: detail card
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-lg overflow-hidden">
@@ -1748,21 +1656,14 @@ function PurchaseCard({
               </button>
             ) : (
               <>
-                {hasWalletFunds && (
-                  <button onClick={onWalletPurchase} disabled={purchasing}
-                    className="w-full h-12 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors shadow-lg shadow-violet-500/20">
-                    {purchasing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
-                    Acheter avec mon Wallet
-                  </button>
-                )}
-                <button onClick={() => setPaymentStep('external-method')}
-                  className={`w-full h-12 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-colors border-2 ${hasWalletFunds ? 'border-violet-200 text-violet-700 hover:bg-violet-50' : 'bg-violet-600 hover:bg-violet-700 text-white border-violet-600 shadow-lg shadow-violet-500/20'}`}>
-                  <Smartphone className="h-4 w-4" />
-                  Payer par MonCash / NatCash
+                <button onClick={onWalletPurchase} disabled={purchasing || !hasWalletFunds}
+                  className="w-full h-12 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors shadow-lg shadow-violet-500/20">
+                  {purchasing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+                  Payer avec mon solde
                 </button>
                 {!hasWalletFunds && (
-                  <button onClick={onOpenWallet} className="w-full text-xs text-violet-600 font-semibold hover:underline flex items-center justify-center gap-1 py-1">
-                    <TrendingUp className="h-3 w-3" /> Recharger mon wallet
+                  <button onClick={onOpenWallet} className="w-full h-11 rounded-xl border-2 border-violet-200 text-violet-700 hover:bg-violet-50 font-bold text-sm flex items-center justify-center gap-2 transition-colors">
+                    <TrendingUp className="h-4 w-4" /> Recharger mon solde
                   </button>
                 )}
               </>

@@ -154,34 +154,19 @@ export default function App() {
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-background font-sans selection:bg-accent-light selection:text-dark flex flex-col">
-        {view === 'formations' ? (
-          <Suspense fallback={null}>
-            <FormationsNavbar
-              onGoHome={() => handleViewChange('services')}
-              loggedClient={loggedClient}
-              onOpenWallet={() => setShowClientDashboard(true)}
-              onRequestAuth={() => setShowFormationsAuth(true)}
-              activeTab={formationsTab}
-              onTabChange={setFormationsTab}
-              searchQuery={formationsSearch}
-              onSearch={setFormationsSearch}
-            />
-          </Suspense>
-        ) : (
-          <Navbar
-            currentView={view}
-            onViewChange={handleViewChange}
-            loggedClient={loggedClient}
-            onClientLogin={handleClientLogin}
-            onClientLogout={handleClientLogout}
-            onOpenWallet={() => setShowClientDashboard(true)}
-            loggedAdmin={loggedAdmin}
-            onAdminLogin={(admin) => {
-              handleAdminLogin(admin);
-              handleViewChange('admin');
-            }}
-          />
-        )}
+        <Navbar
+          currentView={view}
+          onViewChange={handleViewChange}
+          loggedClient={loggedClient}
+          onClientLogin={handleClientLogin}
+          onClientLogout={handleClientLogout}
+          onOpenWallet={() => setShowClientDashboard(true)}
+          loggedAdmin={loggedAdmin}
+          onAdminLogin={(admin) => {
+            handleAdminLogin(admin);
+            handleViewChange('admin');
+          }}
+        />
 
         {/* Global announcement popup */}
         <AnimatePresence>
@@ -231,7 +216,7 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {view !== 'admin' && view !== 'formations' && (
+        {view !== 'admin' && (
           <BottomNav
             currentView={view}
             onViewChange={(v) => {
@@ -255,7 +240,7 @@ export default function App() {
           />
         )}
 
-        <main className={`animate-in fade-in duration-300 ${view !== 'wallet' ? 'pt-14' : ''} flex-grow relative ${view !== 'admin' && view !== 'wallet' && view !== 'formations' ? 'pb-[74px]' : ''}`}>
+        <main className={`animate-in fade-in duration-300 ${view !== 'wallet' ? 'pt-14' : ''} flex-grow relative ${view !== 'admin' && view !== 'wallet' ? 'pb-[74px]' : ''}`}>
           <Suspense fallback={<PageSpinner />}>
             {view === 'tracking' && (
               <TrackingView
@@ -309,7 +294,7 @@ export default function App() {
           </Suspense>
         </main>
 
-        {view !== 'admin' && view !== 'formations' && (
+        {view !== 'admin' && view !== 'formations' && view !== 'tracking' && (
           <footer className="py-12 border-t mt-auto bg-white pb-24">
             <div className="max-w-7xl mx-auto px-4 text-center">
               <div className="flex items-center justify-center gap-2 mb-4">

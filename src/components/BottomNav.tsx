@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Globe, Wallet } from 'lucide-react';
+import { Package, Globe, Wallet, GraduationCap } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Client } from '../types';
 import { useSettings } from '../services/parcelService';
@@ -15,8 +15,9 @@ interface BottomNavProps {
 }
 
 const NAV_ITEMS = [
-  { key: 'services', icon: Globe,   label: 'Services' },
-  { key: 'tracking', icon: Package, label: 'Colis'    },
+  { key: 'services',   icon: Globe,          label: 'Services'   },
+  { key: 'tracking',   icon: Package,        label: 'Colis'      },
+  { key: 'formations', icon: GraduationCap,  label: 'Formations' },
 ];
 
 export default function BottomNav({ currentView, onViewChange, loggedClient, onOpenWallet, onRequestAuth }: BottomNavProps) {
@@ -46,7 +47,7 @@ export default function BottomNav({ currentView, onViewChange, loggedClient, onO
     >
       <div className="flex items-stretch justify-around max-w-2xl mx-auto">
 
-        {/* Services & Colis tabs */}
+        {/* Services, Colis, Formations tabs */}
         {NAV_ITEMS.map(({ key, icon: Icon, label }) => {
           const active = currentView === key;
           return (
