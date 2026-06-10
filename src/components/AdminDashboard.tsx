@@ -7,7 +7,9 @@ import {
   CheckCheck, Trash, LayoutGrid, Hash, Image as ImageIcon,
   FileText, DollarSign, Tag, List, MessageSquare, Zap,
   Clock, CheckCircle, XCircle, AlertTriangle, Info,
-  ArrowUpDown, Copy, ShieldCheck, Menu, CreditCard, Settings, Link
+  ArrowUpDown, Copy, ShieldCheck, Menu, CreditCard, Settings, Link,
+  GraduationCap, BookOpen, ToggleLeft, ToggleRight, ShoppingCart,
+  ExternalLink, Globe, Users, Star
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -25,7 +27,8 @@ import {
   useParcels, saveParcel, deleteParcel,
 } from '../services/parcelService';
 import { toast } from 'sonner';
-import { AdminAccount, CardTopup, FeeTier, Parcel, ParcelStatus, PaymentMethod, DEFAULT_PAYMENT_METHODS } from '../types';
+import { AdminAccount, CardTopup, FeeTier, Parcel, ParcelStatus, PaymentMethod, DEFAULT_PAYMENT_METHODS, Formation, FormationPurchase } from '../types';
+import { usePendingClientCount } from '../services/clientService';
 
 const ADMIN_SECRET = 'rena-admin-2024';
 
@@ -80,7 +83,7 @@ const NOTIF_ICONS: Record<string, { icon: React.ElementType; color: string }> = 
   default:      { icon: Bell,          color: 'bg-gray-100 text-gray-600' },
 };
 
-type Tab = 'services' | 'colis' | 'notifications' | 'settings';
+type Tab = 'services' | 'colis' | 'notifications' | 'formations' | 'settings';
 
 interface AdminDashboardProps {
   admin: AdminAccount;
@@ -90,12 +93,14 @@ interface AdminDashboardProps {
 export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps) {
   const [tab, setTab] = useState<Tab>('services');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const pendingClientCount = usePendingClientCount();
 
   const tabs = [
-    { id: 'services' as Tab,       label: 'Services',       icon: ShoppingBag },
-    { id: 'colis' as Tab,          label: 'Colis',          icon: Package },
-    { id: 'notifications' as Tab,  label: 'Notifications',  icon: Bell },
-    { id: 'settings' as Tab,       label: 'Paramètres',     icon: Settings },
+    { id: 'services' as Tab,       label: 'Services',       icon: ShoppingBag,   badge: 0 },
+    { id: 'colis' as Tab,          label: 'Colis',          icon: Package,       badge: 0 },
+    { id: 'notifications' as Tab,  label: 'Notifications',  icon: Bell,          badge: 0 },
+    { id: 'formations' as Tab,     label: 'Formations',     icon: GraduationCap, badge: 0 },
+    { id: 'settings' as Tab,       label: 'Paramètres',     icon: Settings,      badge: 0 },
   ];
 
   return (
@@ -119,14 +124,14 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-100 flex flex-col shadow-2xl md:hidden"
           >
-            <SidebarContent admin={admin} tabs={tabs} tab={tab} setTab={(t) => { setTab(t); setSidebarOpen(false); }} onLogout={onLogout} />
+            <SidebarContent admin={admin} tabs={tabs} tab={tab} setTab={(t) => { setTab(t); setSidebarOpen(false); }} onLogout={onLogout} pendingCount={pendingClientCount} />
           </motion.aside>
         )}
       </AnimatePresence>
 
       {/* Desktop sidebar (always visible) */}
       <aside className="hidden md:flex w-64 bg-white border-r border-gray-100 flex-col h-screen sticky top-0 shrink-0">
-        <SidebarContent admin={admin} tabs={tabs} tab={tab} setTab={setTab} onLogout={onLogout} />
+        <SidebarContent admin={admin} tabs={tabs} tab={tab} setTab={setTab} onLogout={onLogout} pendingCount={pendingClientCount} />
       </aside>
 
       {/* Main content */}
@@ -153,6 +158,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
               {tab === 'services'      && <ServicesTab />}
               {tab === 'colis'         && <ColisTab />}
               {tab === 'notifications' && <NotificationsTab />}
+              {tab === 'formations'    && <FormationsAdminTab />}
               {tab === 'settings'      && <SettingsTab />}
             </motion.div>
           </AnimatePresence>
@@ -162,12 +168,13 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
   );
 }
 
-function SidebarContent({ admin, tabs, tab, setTab, onLogout }: {
+function SidebarContent({ admin, tabs, tab, setTab, onLogout, pendingCount }: {
   admin: AdminAccount;
-  tabs: { id: Tab; label: string; icon: React.ElementType }[];
+  tabs: { id: Tab; label: string; icon: React.ElementType; badge: number }[];
   tab: Tab;
   setTab: (t: Tab) => void;
   onLogout: () => void;
+  pendingCount?: number;
 }) {
   return (
     <>
@@ -186,20 +193,28 @@ function SidebarContent({ admin, tabs, tab, setTab, onLogout }: {
 
       {/* Nav */}
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {tabs.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all ${
-              tab === id
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/30'
-                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            <Icon className="h-5 w-5 shrink-0" />
-            {label}
-          </button>
-        ))}
+        {tabs.map(({ id, label, icon: Icon }) => {
+          const showBadge = id === 'notifications' && (pendingCount ?? 0) > 0;
+          return (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all relative ${
+                tab === id
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/30'
+                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+              }`}
+            >
+              <Icon className="h-5 w-5 shrink-0" />
+              {label}
+              {showBadge && (
+                <span className="ml-auto bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                  {(pendingCount ?? 0) > 99 ? '99+' : pendingCount}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </nav>
 
       {/* Admin info + logout */}
@@ -210,7 +225,7 @@ function SidebarContent({ admin, tabs, tab, setTab, onLogout }: {
           </div>
           <div className="min-w-0">
             <p className="text-sm font-black text-gray-800 truncate">{admin.fullName}</p>
-            <p className="text-xs text-gray-400 truncate">{admin.role === 'superadmin' ? 'Super Admin' : 'Admin'}</p>
+            <p className="text-xs text-gray-400 truncate">{admin.isSuperAdmin ? 'Super Admin' : 'Admin'}</p>
           </div>
         </div>
         <button
@@ -1506,6 +1521,21 @@ function SettingsTab() {
     }
   };
 
+  const deleteMethod = async (id: string) => {
+    if (!window.confirm('Supprimer cette méthode de paiement ?')) return;
+    const updated = methods.filter(m => m.id !== id);
+    try {
+      await adminFetch('/api/admin/settings', {
+        method: 'POST',
+        body: JSON.stringify({ paymentMethods: updated }),
+      });
+      setMethods(updated);
+      toast.success('Méthode supprimée.');
+    } catch (e: any) {
+      toast.error(e.message || 'Erreur.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center py-20">
@@ -1550,7 +1580,7 @@ function SettingsTab() {
                   value={exchangeRate}
                   onChange={e => setExchangeRate(e.target.value)}
                   placeholder="135"
-                  className="pl-16 pr-14 h-11 rounded-xl text-sm font-bold"
+                  className="pl-[72px] pr-14 h-11 rounded-xl text-sm font-bold"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black text-indigo-500">HTG</span>
               </div>
@@ -1711,19 +1741,433 @@ function SettingsTab() {
                       </p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => startEdit(m)}
-                    className="shrink-0 p-2 rounded-xl hover:bg-blue-50 hover:text-blue-600 text-gray-400 transition-all"
-                    title="Modifier"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => startEdit(m)}
+                      className="shrink-0 p-2 rounded-xl hover:bg-blue-50 hover:text-blue-600 text-gray-400 transition-all"
+                      title="Modifier"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => deleteMethod(m.id)}
+                      className="shrink-0 p-2 rounded-xl hover:bg-red-50 hover:text-red-600 text-gray-300 transition-all"
+                      title="Supprimer"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── FORMATIONS ADMIN TAB ─────────────────────────────────────────────────────
+
+type FormationsSubTab = 'list' | 'purchases' | 'payment-requests';
+
+function FormationsAdminTab() {
+  const [subTab, setSubTab] = useState<FormationsSubTab>('list');
+  const [formations, setFormations] = useState<Formation[]>([]);
+  const [purchases, setPurchases] = useState<FormationPurchase[]>([]);
+  const [paymentRequests, setPaymentRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingFormation, setEditingFormation] = useState<Formation | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [searchQ, setSearchQ] = useState('');
+
+  const EMPTY_FORMATION: Omit<Formation, 'id' | 'createdAt' | 'updatedAt'> = {
+    title: '', description: '', shortDescription: '', coverImage: '',
+    price: 0, level: 'debutant', rating: 0, studentsCount: 0,
+    modules: [], published: false, comingSoon: false, hasCertificate: false,
+    instructor: '', category: '',
+  };
+  const [form, setForm] = useState<Partial<Formation>>({ ...EMPTY_FORMATION });
+
+  const loadFormations = useCallback(async () => {
+    try {
+      const data = await adminFetch('/api/admin/formations');
+      setFormations(data.formations || []);
+    } catch { /* silent */ }
+  }, []);
+
+  const loadPurchases = useCallback(async () => {
+    try {
+      const data = await adminFetch('/api/admin/formations/purchases');
+      setPurchases(data.purchases || []);
+    } catch { /* silent */ }
+  }, []);
+
+  const loadPaymentRequests = useCallback(async () => {
+    try {
+      const data = await adminFetch('/api/admin/formations/payment-requests');
+      setPaymentRequests(data.requests || []);
+    } catch { /* silent */ }
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([loadFormations(), loadPurchases(), loadPaymentRequests()]).finally(() => setLoading(false));
+  }, [loadFormations, loadPurchases, loadPaymentRequests]);
+
+  const openCreate = () => { setForm({ ...EMPTY_FORMATION }); setEditingFormation(null); setShowModal(true); };
+  const openEdit = (f: Formation) => { setForm({ ...f }); setEditingFormation(f); setShowModal(true); };
+
+  const saveFormation = async () => {
+    if (!form.title?.trim()) { toast.error('Le titre est requis.'); return; }
+    setSaving(true);
+    try {
+      if (editingFormation?.id) {
+        await adminFetch(`/api/admin/formations/${editingFormation.id}`, { method: 'PUT', body: JSON.stringify(form) });
+        toast.success('Formation mise à jour.');
+      } else {
+        await adminFetch('/api/admin/formations', { method: 'POST', body: JSON.stringify(form) });
+        toast.success('Formation créée.');
+      }
+      setShowModal(false);
+      await loadFormations();
+    } catch (e: any) { toast.error(e.message || 'Erreur.'); } finally { setSaving(false); }
+  };
+
+  const deleteFormation = async (id: string, title: string) => {
+    if (!window.confirm(`Supprimer « ${title} » ?`)) return;
+    try {
+      await adminFetch(`/api/admin/formations/${id}`, { method: 'DELETE' });
+      toast.success('Formation supprimée.');
+      await loadFormations();
+    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+  };
+
+  const togglePublish = async (f: Formation) => {
+    try {
+      await adminFetch(`/api/admin/formations/${f.id}`, { method: 'PUT', body: JSON.stringify({ ...f, published: !f.published }) });
+      toast.success(f.published ? 'Formation masquée.' : 'Formation publiée.');
+      await loadFormations();
+    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+  };
+
+  const handlePurchaseStatus = async (id: string, formationId: string, status: string) => {
+    try {
+      await adminFetch(`/api/admin/formations/purchases/${id}`, { method: 'PATCH', body: JSON.stringify({ status, formationId }) });
+      toast.success('Statut mis à jour.');
+      await loadPurchases();
+    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+  };
+
+  const handlePaymentRequest = async (id: string, action: 'approve' | 'reject') => {
+    try {
+      await adminFetch(`/api/admin/formations/payment-requests/${id}`, { method: 'PATCH', body: JSON.stringify({ action }) });
+      toast.success(action === 'approve' ? 'Demande approuvée.' : 'Demande rejetée.');
+      await Promise.all([loadPaymentRequests(), loadPurchases()]);
+    } catch (e: any) { toast.error(e.message || 'Erreur.'); }
+  };
+
+  const filteredFormations = formations.filter(f =>
+    !searchQ || f.title.toLowerCase().includes(searchQ.toLowerCase()) || (f.category || '').toLowerCase().includes(searchQ.toLowerCase())
+  );
+
+  const pendingPaymentRequests = paymentRequests.filter(r => r.status === 'pending').length;
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-blue-500" /></div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
+            <GraduationCap className="h-6 w-6 text-purple-600" /> Formations
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">{formations.length} formation{formations.length !== 1 ? 's' : ''} · {purchases.length} achat{purchases.length !== 1 ? 's' : ''}</p>
+        </div>
+        {subTab === 'list' && (
+          <Button onClick={openCreate} className="h-10 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold gap-2">
+            <Plus className="h-4 w-4" /> Nouvelle formation
+          </Button>
+        )}
+      </div>
+
+      {/* Sub-tabs */}
+      <div className="flex gap-2 bg-gray-100 p-1 rounded-2xl w-fit">
+        {([
+          { id: 'list' as FormationsSubTab, label: 'Formations', count: formations.length },
+          { id: 'purchases' as FormationsSubTab, label: 'Achats', count: purchases.length },
+          { id: 'payment-requests' as FormationsSubTab, label: 'Demandes paiement', count: pendingPaymentRequests },
+        ]).map(({ id, label, count }) => (
+          <button
+            key={id}
+            onClick={() => setSubTab(id)}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${
+              subTab === id ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            {label}
+            {count > 0 && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                id === 'payment-requests' && pendingPaymentRequests > 0
+                  ? 'bg-orange-100 text-orange-600'
+                  : 'bg-gray-200 text-gray-600'
+              }`}>{count}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Formations list ── */}
+      {subTab === 'list' && (
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-50 flex items-center gap-2">
+            <Search className="h-4 w-4 text-gray-400 shrink-0" />
+            <input
+              value={searchQ}
+              onChange={e => setSearchQ(e.target.value)}
+              placeholder="Rechercher une formation…"
+              className="flex-1 text-sm outline-none bg-transparent text-gray-700 placeholder:text-gray-300"
+            />
+          </div>
+          {filteredFormations.length === 0 ? (
+            <EmptyState icon={GraduationCap} title="Aucune formation" description="Cliquez sur « Nouvelle formation » pour en créer une." />
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {filteredFormations.map(f => (
+                <div key={f.id} className="p-4 flex items-center gap-4">
+                  {f.coverImage ? (
+                    <img src={f.coverImage} alt={f.title} className="h-14 w-20 object-cover rounded-xl shrink-0 bg-gray-100" />
+                  ) : (
+                    <div className="h-14 w-20 rounded-xl bg-purple-50 flex items-center justify-center shrink-0">
+                      <BookOpen className="h-6 w-6 text-purple-300" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-black text-gray-800 text-sm truncate">{f.title}</p>
+                      {f.published ? (
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-green-100 text-green-700">Publié</span>
+                      ) : (
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Brouillon</span>
+                      )}
+                      {f.comingSoon && <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-orange-100 text-orange-600">Bientôt</span>}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5 truncate">{f.shortDescription || f.description?.substring(0, 60)}</p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-xs font-bold text-purple-600">{f.price.toLocaleString()} HTG</span>
+                      <span className="text-xs text-gray-400">{f.level}</span>
+                      {f.studentsCount > 0 && (
+                        <span className="text-xs text-gray-400 flex items-center gap-1"><Users className="h-3 w-3" />{f.studentsCount}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => togglePublish(f)}
+                      className={`p-2 rounded-xl transition-all ${f.published ? 'hover:bg-green-50 text-green-500' : 'hover:bg-gray-100 text-gray-300'}`}
+                      title={f.published ? 'Masquer' : 'Publier'}
+                    >
+                      {f.published ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5" />}
+                    </button>
+                    <button
+                      onClick={() => openEdit(f)}
+                      className="p-2 rounded-xl hover:bg-blue-50 hover:text-blue-600 text-gray-400 transition-all"
+                      title="Modifier"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => deleteFormation(f.id!, f.title)}
+                      className="p-2 rounded-xl hover:bg-red-50 hover:text-red-600 text-gray-300 transition-all"
+                      title="Supprimer"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Purchases ── */}
+      {subTab === 'purchases' && (
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+          {purchases.length === 0 ? (
+            <EmptyState icon={ShoppingCart} title="Aucun achat" description="Les achats de formations apparaîtront ici." />
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {purchases.map((p: FormationPurchase & { id: string }) => (
+                <div key={p.id} className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-black text-gray-800 text-sm">{p.formationTitle}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{p.userEmail} · {p.userName}</p>
+                    <div className="flex items-center gap-3 mt-1 flex-wrap">
+                      <span className="text-xs font-bold text-purple-600">{p.amount?.toLocaleString()} HTG</span>
+                      <span className="text-xs text-gray-400">{p.method}</span>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                        p.status === 'active' ? 'bg-green-100 text-green-700' :
+                        p.status === 'pending' ? 'bg-orange-100 text-orange-600' :
+                        'bg-red-100 text-red-600'
+                      }`}>{p.status}</span>
+                    </div>
+                  </div>
+                  {p.status === 'pending' && (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handlePurchaseStatus(p.id, p.formationId, 'active')}
+                        className="h-8 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-bold gap-1"
+                      >
+                        <Check className="h-3 w-3" /> Activer
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handlePurchaseStatus(p.id, p.formationId, 'cancelled')}
+                        className="h-8 rounded-xl border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold gap-1"
+                      >
+                        <X className="h-3 w-3" /> Annuler
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Payment requests ── */}
+      {subTab === 'payment-requests' && (
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+          {paymentRequests.length === 0 ? (
+            <EmptyState icon={DollarSign} title="Aucune demande" description="Les demandes de paiement manuel apparaîtront ici." />
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {paymentRequests.map((r: any) => (
+                <div key={r.id} className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-black text-gray-800 text-sm">{r.formationTitle}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{r.userEmail} · {r.userName}</p>
+                    <div className="flex items-center gap-3 mt-1 flex-wrap">
+                      <span className="text-xs font-bold text-purple-600">{r.amount?.toLocaleString()} HTG</span>
+                      <span className="text-xs text-gray-400">{r.method}</span>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                        r.status === 'approved' ? 'bg-green-100 text-green-700' :
+                        r.status === 'pending' ? 'bg-orange-100 text-orange-600' :
+                        'bg-red-100 text-red-600'
+                      }`}>{r.status}</span>
+                    </div>
+                    {r.notes && <p className="text-xs text-gray-400 mt-1 italic">"{r.notes}"</p>}
+                  </div>
+                  {r.status === 'pending' && (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handlePaymentRequest(r.id, 'approve')}
+                        className="h-8 rounded-xl bg-green-600 hover:bg-green-700 text-white text-xs font-bold gap-1"
+                      >
+                        <Check className="h-3 w-3" /> Approuver
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handlePaymentRequest(r.id, 'reject')}
+                        className="h-8 rounded-xl border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold gap-1"
+                      >
+                        <X className="h-3 w-3" /> Rejeter
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Modal création/édition ── */}
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-black text-gray-900">
+              <GraduationCap className="h-5 w-5 text-purple-600" />
+              {editingFormation ? 'Modifier la formation' : 'Nouvelle formation'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <Label className="text-xs font-black text-gray-500 uppercase tracking-wide mb-1.5 block">Titre *</Label>
+                <Input value={form.title || ''} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Titre de la formation" className="rounded-xl h-10" />
+              </div>
+              <div className="sm:col-span-2">
+                <Label className="text-xs font-black text-gray-500 uppercase tracking-wide mb-1.5 block">Description courte</Label>
+                <Input value={form.shortDescription || ''} onChange={e => setForm(f => ({ ...f, shortDescription: e.target.value }))} placeholder="Résumé en une phrase" className="rounded-xl h-10" />
+              </div>
+              <div className="sm:col-span-2">
+                <Label className="text-xs font-black text-gray-500 uppercase tracking-wide mb-1.5 block">Description complète</Label>
+                <Textarea value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Description détaillée…" className="rounded-xl min-h-[80px]" />
+              </div>
+              <div className="sm:col-span-2">
+                <Label className="text-xs font-black text-gray-500 uppercase tracking-wide mb-1.5 block">Image de couverture (URL)</Label>
+                <Input value={form.coverImage || ''} onChange={e => setForm(f => ({ ...f, coverImage: e.target.value }))} placeholder="https://…" className="rounded-xl h-10" />
+                {form.coverImage && (
+                  <img src={form.coverImage} alt="preview" className="mt-2 h-24 w-full object-cover rounded-xl bg-gray-100" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                )}
+              </div>
+              <div>
+                <Label className="text-xs font-black text-gray-500 uppercase tracking-wide mb-1.5 block">Prix (HTG)</Label>
+                <Input type="number" value={form.price || 0} onChange={e => setForm(f => ({ ...f, price: Number(e.target.value) }))} className="rounded-xl h-10" min={0} />
+              </div>
+              <div>
+                <Label className="text-xs font-black text-gray-500 uppercase tracking-wide mb-1.5 block">Niveau</Label>
+                <Select value={form.level || 'débutant'} onValueChange={v => setForm(f => ({ ...f, level: v as any }))}>
+                  <SelectTrigger className="rounded-xl h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="débutant">Débutant</SelectItem>
+                    <SelectItem value="intermédiaire">Intermédiaire</SelectItem>
+                    <SelectItem value="avancé">Avancé</SelectItem>
+                    <SelectItem value="tous niveaux">Tous niveaux</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs font-black text-gray-500 uppercase tracking-wide mb-1.5 block">Instructeur</Label>
+                <Input value={form.instructor || ''} onChange={e => setForm(f => ({ ...f, instructor: e.target.value }))} placeholder="Nom de l'instructeur" className="rounded-xl h-10" />
+              </div>
+              <div>
+                <Label className="text-xs font-black text-gray-500 uppercase tracking-wide mb-1.5 block">Catégorie</Label>
+                <Input value={form.category || ''} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} placeholder="Ex: Entrepreneuriat" className="rounded-xl h-10" />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-4 pt-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={!!form.published} onChange={e => setForm(f => ({ ...f, published: e.target.checked }))} className="w-4 h-4 rounded accent-purple-600" />
+                <span className="text-sm font-bold text-gray-700">Publié</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={!!form.comingSoon} onChange={e => setForm(f => ({ ...f, comingSoon: e.target.checked }))} className="w-4 h-4 rounded accent-orange-500" />
+                <span className="text-sm font-bold text-gray-700">Bientôt disponible</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={!!form.hasCertificate} onChange={e => setForm(f => ({ ...f, hasCertificate: e.target.checked }))} className="w-4 h-4 rounded accent-emerald-600" />
+                <span className="text-sm font-bold text-gray-700">Certificat</span>
+              </label>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="outline" onClick={() => setShowModal(false)} className="rounded-xl font-bold">Annuler</Button>
+            <Button onClick={saveFormation} disabled={saving} className="rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold gap-2">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              {editingFormation ? 'Mettre à jour' : 'Créer'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

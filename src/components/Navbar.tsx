@@ -1,4 +1,4 @@
-import { Package, ShieldCheck, LogIn, LogOut, Menu, X, Wallet, Bell, CheckCheck, Info, TrendingUp, TrendingDown, Trash2, Download, Share2, Smartphone } from 'lucide-react';
+import { Package, ShieldCheck, LogIn, LogOut, Menu, X, Wallet, Bell, CheckCheck, Info, TrendingUp, TrendingDown, Trash2, Download, Share2, Smartphone, GraduationCap } from 'lucide-react';
 import RenaLogo from './RenaLogo';
 import { Button } from './ui/button';
 import { auth } from '@/lib/firebase';
@@ -24,8 +24,9 @@ interface NavbarProps {
 }
 
 const NAV_ITEMS = [
-  { key: 'services', icon: Globe,     label: 'Services' },
-  { key: 'tracking', icon: ColisIcon, label: 'Colis'    },
+  { key: 'services',   icon: Globe,          label: 'Services'   },
+  { key: 'tracking',   icon: ColisIcon,      label: 'Colis'      },
+  { key: 'formations', icon: GraduationCap,  label: 'Formations' },
 ];
 
 export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet, onAdminLogin, loggedAdmin }: NavbarProps) {
@@ -176,49 +177,26 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
               )}
             </div>
 
-            {/* Download button — desktop */}
+            {/* Download + Share buttons — desktop */}
             {!isInstalled && (
-              <div className="hidden md:block relative" ref={installMenuRef}>
+              <div className="hidden md:flex items-center gap-1">
                 <button
-                  onClick={() => setShowInstallMenu(v => !v)}
+                  onClick={handleInstall}
                   className="flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 group hover:bg-emerald-50"
                   aria-label="Télécharger l'application"
+                  title="Installer l'application"
                 >
                   <Download className="h-[18px] w-[18px] text-gray-400 group-hover:text-emerald-600 transition-colors" />
                   <span className="text-[9px] font-bold uppercase tracking-wide text-gray-400/70 group-hover:text-emerald-600 transition-colors">App</span>
                 </button>
-                {showInstallMenu && (
-                  <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
-                    <div className="px-4 py-3 border-b border-gray-50 bg-gradient-to-r from-emerald-50 to-teal-50">
-                      <p className="text-xs font-black text-gray-800">Phénix Services</p>
-                      <p className="text-[10px] text-gray-500 mt-0.5">Accès rapide depuis votre écran</p>
-                    </div>
-                    <button
-                      onClick={handleInstall}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors text-left"
-                    >
-                      <div className="h-8 w-8 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
-                        <Smartphone className="h-4 w-4 text-emerald-600" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-sm">Télécharger</p>
-                        <p className="text-[10px] text-gray-400">Installer sur l'appareil</p>
-                      </div>
-                    </button>
-                    <button
-                      onClick={handleShare}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors text-left border-t border-gray-50"
-                    >
-                      <div className="h-8 w-8 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
-                        <Share2 className="h-4 w-4 text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-sm">Partager</p>
-                        <p className="text-[10px] text-gray-400">Envoyer le lien</p>
-                      </div>
-                    </button>
-                  </div>
-                )}
+                <button
+                  onClick={handleShare}
+                  className="flex flex-col items-center justify-center gap-0.5 px-2 py-1.5 rounded-xl transition-all duration-200 group hover:bg-blue-50"
+                  aria-label="Partager l'application"
+                  title="Partager"
+                >
+                  <Share2 className="h-[15px] w-[15px] text-gray-300 group-hover:text-blue-500 transition-colors" />
+                </button>
               </div>
             )}
 
@@ -385,6 +363,11 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                 aria-label="Menu"
               >
                 {menuOpen ? <X className="h-5 w-5 text-gray-600" /> : <Menu className="h-5 w-5 text-gray-600" />}
+                {showAdminButton && pendingClientCount > 0 && !menuOpen && (
+                  <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[8px] font-black w-4 h-4 flex items-center justify-center rounded-full border-2 border-white">
+                    {pendingClientCount > 9 ? '9+' : pendingClientCount}
+                  </span>
+                )}
               </button>
             </div>
           </div>

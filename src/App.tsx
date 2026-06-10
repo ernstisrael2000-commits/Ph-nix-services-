@@ -26,6 +26,8 @@ const WalletPage         = lazy(() => import('./components/WalletPage'));
 const PaymentSuccessView = lazy(() => import('./components/PaymentSuccessView'));
 const PaymentSuccessPage = lazy(() => import('./components/PaymentSuccessPage'));
 const UserAuthModal      = lazy(() => import('./components/UserAuthModal'));
+const FormationsView     = lazy(() => import('./components/FormationsView'));
+const FormationsNavbar   = lazy(() => import('./components/FormationsNavbar'));
 
 function PageSpinner() {
   return (
@@ -35,7 +37,7 @@ function PageSpinner() {
   );
 }
 
-type ViewType = 'tracking' | 'services' | 'admin' | 'wallet';
+type ViewType = 'tracking' | 'services' | 'admin' | 'wallet' | 'formations';
 
 export default function App() {
   const [view, setView] = useState<ViewType>('services');
@@ -49,6 +51,11 @@ export default function App() {
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(() =>
     window.location.pathname === '/payment-success'
   );
+
+  const [formationsTab, setFormationsTab] = useState<'all' | 'my'>('all');
+  const [formationsSearch, setFormationsSearch] = useState('');
+  const [formationsPlayerActive, setFormationsPlayerActive] = useState(false);
+  const [showFormationsAuth, setShowFormationsAuth] = useState(false);
 
   const [loggedAdmin, setLoggedAdmin] = useState<AdminAccount | null>(() => {
     try { const s = localStorage.getItem('rena_admin'); return s ? JSON.parse(s) : null; } catch { return null; }
@@ -147,19 +154,34 @@ export default function App() {
   return (
     <ErrorBoundary>
       <div className="min-h-screen bg-background font-sans selection:bg-accent-light selection:text-dark flex flex-col">
-        <Navbar
-          currentView={view}
-          onViewChange={handleViewChange}
-          loggedClient={loggedClient}
-          onClientLogin={handleClientLogin}
-          onClientLogout={handleClientLogout}
-          onOpenWallet={() => setShowClientDashboard(true)}
-          loggedAdmin={loggedAdmin}
-          onAdminLogin={(admin) => {
-            handleAdminLogin(admin);
-            handleViewChange('admin');
-          }}
-        />
+        {view === 'formations' ? (
+          <Suspense fallback={null}>
+            <FormationsNavbar
+              onGoHome={() => handleViewChange('services')}
+              loggedClient={loggedClient}
+              onOpenWallet={() => setShowClientDashboard(true)}
+              onRequestAuth={() => setShowFormationsAuth(true)}
+              activeTab={formationsTab}
+              onTabChange={setFormationsTab}
+              searchQuery={formationsSearch}
+              onSearch={setFormationsSearch}
+            />
+          </Suspense>
+        ) : (
+          <Navbar
+            currentView={view}
+            onViewChange={handleViewChange}
+            loggedClient={loggedClient}
+            onClientLogin={handleClientLogin}
+            onClientLogout={handleClientLogout}
+            onOpenWallet={() => setShowClientDashboard(true)}
+            loggedAdmin={loggedAdmin}
+            onAdminLogin={(admin) => {
+              handleAdminLogin(admin);
+              handleViewChange('admin');
+            }}
+          />
+        )}
 
         {/* Global announcement popup */}
         <AnimatePresence>
@@ -209,7 +231,7 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {view !== 'admin' && (
+        {view !== 'admin' && view !== 'formations' && (
           <BottomNav
             currentView={view}
             onViewChange={(v) => {
@@ -233,7 +255,7 @@ export default function App() {
           />
         )}
 
-        <main className={`animate-in fade-in duration-300 ${view !== 'wallet' ? 'pt-14' : ''} flex-grow relative ${view !== 'admin' && view !== 'wallet' ? 'pb-[74px]' : ''}`}>
+        <main className={`animate-in fade-in duration-300 ${view !== 'wallet' ? 'pt-14' : ''} flex-grow relative ${view !== 'admin' && view !== 'wallet' && view !== 'formations' ? 'pb-[74px]' : ''}`}>
           <Suspense fallback={<PageSpinner />}>
             {view === 'tracking' && (
               <TrackingView
@@ -266,6 +288,19 @@ export default function App() {
               />
             )}
 
+            {view === 'formations' && (
+              <FormationsView
+                loggedClient={loggedClient}
+                onOpenWallet={() => setShowClientDashboard(true)}
+                onClientLogin={(client) => { handleClientLogin(client); setShowFormationsAuth(false); }}
+                activeTab={formationsTab}
+                onTabChange={setFormationsTab}
+                searchQuery={formationsSearch}
+                onSearchChange={setFormationsSearch}
+                onPlayerChange={setFormationsPlayerActive}
+              />
+            )}
+
             {view === 'admin' && (
               loggedAdmin
                 ? <AdminDashboard onLogout={handleAdminLogout} admin={loggedAdmin} />
@@ -274,7 +309,7 @@ export default function App() {
           </Suspense>
         </main>
 
-        {view !== 'admin' && (
+        {view !== 'admin' && view !== 'formations' && (
           <footer className="py-12 border-t mt-auto bg-white pb-24">
             <div className="max-w-7xl mx-auto px-4 text-center">
               <div className="flex items-center justify-center gap-2 mb-4">
