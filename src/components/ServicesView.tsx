@@ -4,7 +4,7 @@ import {
   Globe, CreditCard, ShieldCheck, Clock, Phone, MessageCircle,
   X, Wallet, Loader2, ChevronRight, Plus, RefreshCw, Check, Search,
 } from 'lucide-react';
-import { useCardTopups, useSettings } from '../services/parcelService';
+import { useCardTopups, useSettings, useSliderImages } from '../services/parcelService';
 import { submitClientPurchase, useClientData, useClientPendingPurchase } from '../services/clientService';
 import { Client, findFeeTier } from '../types';
 import { toast } from 'sonner';
@@ -40,19 +40,26 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
   const hasPendingPurchase = useClientPendingPurchase(loggedClient?.id || null);
 
   // Slideshow
+  const { sliderImages } = useSliderImages();
   const [slideIdx, setSlideIdx] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const SLIDES = [
+  const FALLBACK_SLIDES = [
     { gradient: 'from-indigo-600 via-blue-600 to-cyan-500', title: 'Cartes Virtuelles & Physiques', sub: 'Créez votre carte en quelques clics, rechargez à tout moment.' },
     { gradient: 'from-purple-600 via-violet-600 to-indigo-500', title: 'Recharge Instantanée', sub: 'Ajoutez des fonds à vos cartes facilement depuis votre portefeuille.' },
     { gradient: 'from-emerald-500 via-teal-500 to-cyan-600', title: 'Paiement 100% Sécurisé', sub: 'Vos transactions sont protégées et disponibles 24h/24, 7j/7.' },
   ];
+  const useImageSlides = sliderImages.length > 0;
+  const slideCount = useImageSlides ? sliderImages.length : FALLBACK_SLIDES.length;
 
   useEffect(() => {
-    const id = setInterval(() => setSlideIdx(i => (i + 1) % SLIDES.length), 4000);
+    setSlideIdx(0);
+  }, [useImageSlides]);
+
+  useEffect(() => {
+    const id = setInterval(() => setSlideIdx(i => (i + 1) % slideCount), 4000);
     return () => clearInterval(id);
-  }, []);
+  }, [slideCount]);
 
   // Modal state
   const [selected, setSelected] = useState<any>(null);
@@ -213,35 +220,60 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
   return (
     <div className="min-h-screen bg-[#F4F6FB] pb-28">
       {/* Slideshow banner */}
-      <div className="relative h-48 overflow-hidden">
+      <div className="relative h-52 overflow-hidden">
         <AnimatePresence mode="wait">
-          {SLIDES.map((slide, idx) => idx === slideIdx && (
-            <motion.div
-              key={idx}
-              initial={{ opacity: 0, x: 40 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -40 }}
-              transition={{ duration: 0.4 }}
-              className={`absolute inset-0 bg-gradient-to-br ${slide.gradient} flex flex-col justify-center px-6`}
-            >
-              <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2">
-                <CreditCard className="h-3.5 w-3.5" /> Services Phénix
-              </p>
-              <h2 className="text-2xl font-black text-white leading-tight mb-1">{slide.title}</h2>
-              <p className="text-white/70 text-sm leading-snug max-w-xs">{slide.sub}</p>
-              {/* Decorative circles */}
-              <div className="absolute -top-10 -right-10 w-44 h-44 rounded-full bg-white/8 pointer-events-none" />
-              <div className="absolute bottom-0 right-16 w-20 h-20 rounded-full bg-white/6 pointer-events-none" />
-            </motion.div>
-          ))}
+          {useImageSlides ? (
+            sliderImages.map((img, idx) => idx === slideIdx && (
+              <motion.div
+                key={img.id}
+                initial={{ opacity: 0, scale: 1.04 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.97 }}
+                transition={{ duration: 0.5 }}
+                className="absolute inset-0"
+              >
+                <img
+                  src={img.url}
+                  alt={img.title || `Slide ${idx + 1}`}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+                {(img.title || img.description) && (
+                  <div className="absolute bottom-0 left-0 right-0 px-5 pb-5">
+                    {img.title && <h2 className="text-xl font-black text-white leading-tight drop-shadow-md">{img.title}</h2>}
+                    {img.description && <p className="text-white/80 text-sm mt-0.5 drop-shadow-sm">{img.description}</p>}
+                  </div>
+                )}
+              </motion.div>
+            ))
+          ) : (
+            FALLBACK_SLIDES.map((slide, idx) => idx === slideIdx && (
+              <motion.div
+                key={idx}
+                initial={{ opacity: 0, x: 40 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -40 }}
+                transition={{ duration: 0.4 }}
+                className={`absolute inset-0 bg-gradient-to-br ${slide.gradient} flex flex-col justify-center px-6`}
+              >
+                <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2">
+                  <CreditCard className="h-3.5 w-3.5" /> Services Phénix
+                </p>
+                <h2 className="text-2xl font-black text-white leading-tight mb-1">{slide.title}</h2>
+                <p className="text-white/70 text-sm leading-snug max-w-xs">{slide.sub}</p>
+                <div className="absolute -top-10 -right-10 w-44 h-44 rounded-full bg-white/8 pointer-events-none" />
+                <div className="absolute bottom-0 right-16 w-20 h-20 rounded-full bg-white/6 pointer-events-none" />
+              </motion.div>
+            ))
+          )}
         </AnimatePresence>
         {/* Dot indicators */}
         <div className="absolute bottom-3 right-4 flex gap-1.5">
-          {SLIDES.map((_, i) => (
+          {Array.from({ length: slideCount }).map((_, i) => (
             <button
               key={i}
               onClick={() => setSlideIdx(i)}
-              className={`h-1.5 rounded-full transition-all ${i === slideIdx ? 'w-5 bg-white' : 'w-1.5 bg-white/40'}`}
+              className={`h-1.5 rounded-full transition-all ${i === slideIdx ? 'w-5 bg-white' : 'w-1.5 bg-white/50'}`}
             />
           ))}
         </div>

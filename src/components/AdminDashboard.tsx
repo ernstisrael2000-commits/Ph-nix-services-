@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import {
   useCardTopups, saveCardTopup, deleteCardTopup,
   useParcels, saveParcel, deleteParcel,
+  useSliderImages, saveSliderImage, deleteSliderImage,
 } from '../services/parcelService';
 import { toast } from 'sonner';
 import { AdminAccount, CardTopup, FeeTier, Parcel, ParcelStatus, PaymentMethod, DEFAULT_PAYMENT_METHODS, Formation, FormationPurchase, FormationModule, FormationChapter } from '../types';
@@ -1450,6 +1451,39 @@ function SettingsTab() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<PaymentMethod>>({});
 
+  // Slideshow images
+  const { sliderImages, loading: slidesLoading } = useSliderImages();
+  const [slideUrl, setSlideUrl] = useState('');
+  const [slideTitle, setSlideTitle] = useState('');
+  const [slideDesc, setSlideDesc] = useState('');
+  const [savingSlide, setSavingSlide] = useState(false);
+
+  const addSlide = async () => {
+    if (!slideUrl.trim()) { toast.error('L\'URL de l\'image est requise.'); return; }
+    setSavingSlide(true);
+    try {
+      await saveSliderImage(slideUrl.trim(), slideTitle.trim(), slideDesc.trim());
+      setSlideUrl('');
+      setSlideTitle('');
+      setSlideDesc('');
+      toast.success('Image ajoutée au diaporama.');
+    } catch (e: any) {
+      toast.error(e.message || 'Erreur.');
+    } finally {
+      setSavingSlide(false);
+    }
+  };
+
+  const removeSlide = async (id: string) => {
+    if (!window.confirm('Retirer cette image du diaporama ?')) return;
+    try {
+      await deleteSliderImage(id);
+      toast.success('Image retirée.');
+    } catch (e: any) {
+      toast.error(e.message || 'Erreur.');
+    }
+  };
+
   // Rates & fees state
   const [exchangeRate, setExchangeRate] = useState<string>('');
   const [depositFee, setDepositFee] = useState<string>('');
@@ -1665,6 +1699,116 @@ function SettingsTab() {
             {savingRates ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
             Enregistrer le taux et les frais
           </Button>
+        </div>
+      </div>
+
+      {/* ── Diaporama Services ───────────────────────────────────────── */}
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-violet-50">
+          <h2 className="font-black text-gray-800 flex items-center gap-2">
+            <ImageIcon className="h-5 w-5 text-indigo-600" />
+            Diaporama — Section Services
+          </h2>
+          <p className="text-xs text-gray-500 mt-0.5">Images affichées en rotation dans la bannière de la page Services</p>
+        </div>
+        <div className="p-6 space-y-5">
+          {/* Add form */}
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                <Link className="h-3.5 w-3.5" /> URL de l'image *
+              </Label>
+              <Input
+                value={slideUrl}
+                onChange={e => setSlideUrl(e.target.value)}
+                placeholder="https://exemple.com/image.jpg"
+                className="rounded-xl h-10 text-sm"
+              />
+              {slideUrl && (
+                <div className="mt-2 rounded-xl overflow-hidden border border-gray-100 aspect-[3/1] bg-gray-50 relative">
+                  <img
+                    src={slideUrl}
+                    alt="aperçu"
+                    className="w-full h-full object-cover"
+                    onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = '0.2'; }}
+                  />
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5 block">Titre (optionnel)</Label>
+                <Input
+                  value={slideTitle}
+                  onChange={e => setSlideTitle(e.target.value)}
+                  placeholder="Nos services financiers"
+                  className="rounded-xl h-9 text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-1.5 block">Sous-titre (optionnel)</Label>
+                <Input
+                  value={slideDesc}
+                  onChange={e => setSlideDesc(e.target.value)}
+                  placeholder="Description courte"
+                  className="rounded-xl h-9 text-sm"
+                />
+              </div>
+            </div>
+            <Button
+              onClick={addSlide}
+              disabled={savingSlide || !slideUrl.trim()}
+              className="h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-2"
+            >
+              {savingSlide ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Ajouter au diaporama
+            </Button>
+          </div>
+
+          {/* Existing slides */}
+          <div className="space-y-2">
+            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">
+              Images actuelles ({sliderImages.length})
+            </p>
+            {slidesLoading ? (
+              <div className="flex justify-center py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-indigo-400" />
+              </div>
+            ) : sliderImages.length === 0 ? (
+              <div className="text-center py-8 rounded-2xl border-2 border-dashed border-gray-100 text-gray-300">
+                <ImageIcon className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-xs font-bold">Aucune image — le diaporama utilise les slides par défaut</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {sliderImages.map((img, i) => (
+                  <div key={img.id} className="flex items-center gap-3 p-2.5 rounded-2xl border border-gray-100 bg-gray-50">
+                    <span className="text-[10px] font-black text-gray-300 w-5 shrink-0">{i + 1}</span>
+                    <div className="h-12 w-20 rounded-xl overflow-hidden bg-gray-200 shrink-0">
+                      <img
+                        src={img.url}
+                        alt={img.title || `Slide ${i + 1}`}
+                        className="w-full h-full object-cover"
+                        onError={e => { (e.currentTarget as HTMLImageElement).style.opacity = '0.3'; }}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-gray-800 truncate">{img.title || <span className="text-gray-300 italic font-normal">Sans titre</span>}</p>
+                      {img.description && <p className="text-xs text-gray-400 truncate">{img.description}</p>}
+                      <p className="text-[10px] text-gray-300 truncate mt-0.5">{img.url}</p>
+                    </div>
+                    <button
+                      onClick={() => removeSlide(img.id)}
+                      className="shrink-0 p-2 rounded-xl hover:bg-red-50 hover:text-red-500 text-gray-300 transition-colors"
+                      title="Supprimer"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
