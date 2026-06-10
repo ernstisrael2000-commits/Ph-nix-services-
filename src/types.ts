@@ -53,6 +53,46 @@ export interface RechargeField {
   required?: boolean;
 }
 
+// ─── Fee Tiers ────────────────────────────────────────────────────────────────
+
+export interface FeeTier {
+  minAmount: number;
+  maxAmount: number;
+  feeType: 'fixed' | 'percent';
+  feeValue: number;
+}
+
+/**
+ * Find the matching FeeTier for a given amount.
+ * Returns null when no tiers defined (fall back to globalFeePercent).
+ */
+export function findFeeTier(
+  amountUSD: number,
+  tiers: FeeTier[] | undefined,
+): FeeTier | null {
+  if (!tiers || tiers.length === 0) return null;
+  return tiers.find(
+    t => amountUSD >= t.minAmount && (t.maxAmount === 0 || amountUSD <= t.maxAmount),
+  ) ?? null;
+}
+
+/**
+ * Compute fee amount from a tier list. Returns 0 if no matching tier.
+ * Falls back to `globalFeePercent` when tiers array is empty/absent.
+ */
+export function computeFeeTier(
+  amountUSD: number,
+  tiers: FeeTier[] | undefined,
+  globalFeePercent = 0,
+): number {
+  if (tiers && tiers.length > 0) {
+    const tier = findFeeTier(amountUSD, tiers);
+    if (!tier) return 0;
+    return tier.feeType === 'fixed' ? tier.feeValue : (amountUSD * tier.feeValue) / 100;
+  }
+  return (amountUSD * globalFeePercent) / 100;
+}
+
 export interface CardTopup {
   id?: string;
   name: string;
@@ -65,6 +105,7 @@ export interface CardTopup {
   presets?: number[];
   rechargeFields?: RechargeField[];
   rechargeFeePercent?: number;
+  rechargeFeesTiers?: FeeTier[];
   createdAt: any;
   updatedAt?: any;
 }
@@ -190,6 +231,7 @@ export interface PaymentMethod {
   instructions?: string;
   minAmountUSD?: number;
   maxAmountUSD?: number;
+  feeTiers?: FeeTier[];
 }
 
 export const DEFAULT_PAYMENT_METHODS: PaymentMethod[] = [

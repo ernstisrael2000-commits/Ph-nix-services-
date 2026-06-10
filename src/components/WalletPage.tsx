@@ -19,7 +19,7 @@ import {
   submitClientDeposit, submitClientWithdrawal,
 } from '../services/clientService';
 import { useSettings } from '../services/parcelService';
-import { Client } from '../types';
+import { Client, findFeeTier } from '../types';
 import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../lib/firebase';
 
@@ -279,16 +279,34 @@ export default function WalletPage({ clientId, initialClient, onLogout, onBack }
     type: 'deposit' | 'withdrawal'; agentName?: string; htg: number; usd: number;
   } | null>(null);
 
-  const usdPreview           = htgAmount && !isNaN(parseFloat(htgAmount)) ? parseFloat(htgAmount) / rate : 0;
-  const depositFeePercent    = settings?.depositFeePercent || 0;
-  const depositFeeAmount     = usdPreview > 0 ? parseFloat((usdPreview * depositFeePercent / 100).toFixed(4)) : 0;
-  const depositNetAmount     = usdPreview > 0 ? parseFloat((usdPreview - depositFeeAmount).toFixed(4)) : 0;
-  const withdrawHTGNum       = parseFloat(withdrawHTG) || 0;
-  const withdrawUSDNum       = withdrawHTGNum > 0 ? withdrawHTGNum / rate : 0;
-  const withdrawalFeePercent = settings?.withdrawalFeePercent || 0;
-  const withdrawFeeHTG       = withdrawHTGNum > 0 ? Math.round(withdrawHTGNum * withdrawalFeePercent / 100) : 0;
-  const withdrawNetHTG       = Math.max(0, withdrawHTGNum - withdrawFeeHTG);
-  const withdrawNetAmount    = withdrawNetHTG / rate;
+  const usdPreview = htgAmount && !isNaN(parseFloat(htgAmount)) ? parseFloat(htgAmount) / rate : 0;
+
+  const depositMethodData = settings?.paymentMethods?.find(pm => pm.id === depositMethod?.id);
+  const depositGlobalFee  = settings?.depositFeePercent || 0;
+  const depositFeeTier    = usdPreview > 0 ? findFeeTier(usdPreview, depositMethodData?.feeTiers) : null;
+  const depositFeeAmount  = depositFeeTier
+    ? (depositFeeTier.feeType === 'fixed' ? depositFeeTier.feeValue : parseFloat((usdPreview * depositFeeTier.feeValue / 100).toFixed(4)))
+    : (usdPreview > 0 ? parseFloat((usdPreview * depositGlobalFee / 100).toFixed(4)) : 0);
+  const depositNetAmount  = usdPreview > 0 ? parseFloat((usdPreview - depositFeeAmount).toFixed(4)) : 0;
+  const depositFeeLabel   = depositFeeTier
+    ? (depositFeeTier.feeType === 'fixed' ? `Frais fixe $${depositFeeTier.feeValue}` : `Frais ${depositFeeTier.feeValue}%`)
+    : (depositGlobalFee > 0 ? `Frais ${depositGlobalFee}%` : '');
+
+  const withdrawHTGNum    = parseFloat(withdrawHTG) || 0;
+  const withdrawUSDNum    = withdrawHTGNum > 0 ? withdrawHTGNum / rate : 0;
+  const withdrawMethodData = settings?.paymentMethods?.find(pm => pm.id === withdrawMethod?.id);
+  const withdrawGlobalFee = settings?.withdrawalFeePercent || 0;
+  const withdrawFeeTier   = withdrawUSDNum > 0 ? findFeeTier(withdrawUSDNum, withdrawMethodData?.feeTiers) : null;
+  const withdrawFeeHTG    = withdrawFeeTier
+    ? (withdrawFeeTier.feeType === 'fixed'
+        ? Math.round(withdrawFeeTier.feeValue * rate)
+        : Math.round(withdrawHTGNum * withdrawFeeTier.feeValue / 100))
+    : (withdrawHTGNum > 0 ? Math.round(withdrawHTGNum * withdrawGlobalFee / 100) : 0);
+  const withdrawNetHTG    = Math.max(0, withdrawHTGNum - withdrawFeeHTG);
+  const withdrawNetAmount = withdrawNetHTG / rate;
+  const withdrawFeeLabel  = withdrawFeeTier
+    ? (withdrawFeeTier.feeType === 'fixed' ? `Frais fixe $${withdrawFeeTier.feeValue}` : `Frais ${withdrawFeeTier.feeValue}%`)
+    : (withdrawGlobalFee > 0 ? `Frais ${withdrawGlobalFee}%` : '');
 
   const minDeposit  = settings?.minDepositUSD    || 0.01;
   const maxDeposit  = settings?.maxDepositUSD    || 10000;
@@ -704,9 +722,9 @@ export default function WalletPage({ clientId, initialClient, onLogout, onBack }
                     <span className="text-gray-500">Montant déposé</span>
                     <span className="font-black">${usdPreview.toFixed(2)}</span>
                   </div>
-                  {depositFeePercent > 0 && (
+                  {depositFeeAmount > 0 && (
                     <div className="flex justify-between px-3 py-2 bg-white border-b border-emerald-50">
-                      <span className="text-red-500">Frais ({depositFeePercent}%)</span>
+                      <span className="text-red-500">{depositFeeLabel}</span>
                       <span className="font-black text-red-500">−${depositFeeAmount.toFixed(2)}</span>
                     </div>
                   )}
@@ -810,9 +828,9 @@ export default function WalletPage({ clientId, initialClient, onLogout, onBack }
                       <span className="text-[10px] font-medium text-gray-400 ml-1">≈ ${withdrawUSDNum.toFixed(2)}</span>
                     </span>
                   </div>
-                  {withdrawalFeePercent > 0 && (
+                  {withdrawFeeHTG > 0 && (
                     <div className="flex justify-between px-3 py-2 bg-white border-b border-red-50">
-                      <span className="text-red-500">Frais ({withdrawalFeePercent}%)</span>
+                      <span className="text-red-500">{withdrawFeeLabel || `Frais`}</span>
                       <span className="font-black text-red-500">−{withdrawFeeHTG.toLocaleString()} HTG</span>
                     </div>
                   )}

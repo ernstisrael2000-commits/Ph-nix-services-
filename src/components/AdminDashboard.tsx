@@ -25,7 +25,7 @@ import {
   useParcels, saveParcel, deleteParcel,
 } from '../services/parcelService';
 import { toast } from 'sonner';
-import { AdminAccount, CardTopup, Parcel, ParcelStatus, PaymentMethod, DEFAULT_PAYMENT_METHODS } from '../types';
+import { AdminAccount, CardTopup, FeeTier, Parcel, ParcelStatus, PaymentMethod, DEFAULT_PAYMENT_METHODS } from '../types';
 
 const ADMIN_SECRET = 'rena-admin-2024';
 
@@ -246,6 +246,7 @@ interface ServiceFormData {
   rechargeFeePercent: string;
   customFields: { key: string; value: string }[];
   rechargeFields: RechargeFieldForm[];
+  rechargeFeesTiers: FeeTier[];
 }
 
 const EMPTY_SERVICE: ServiceFormData = {
@@ -253,7 +254,73 @@ const EMPTY_SERVICE: ServiceFormData = {
   whatsappMessage: '', goldRate: '', presets: '', rechargeFeePercent: '',
   customFields: [],
   rechargeFields: [],
+  rechargeFeesTiers: [],
 };
+
+function FeeTierEditor({ tiers, onChange }: { tiers: FeeTier[]; onChange: (t: FeeTier[]) => void }) {
+  const add = () => onChange([...tiers, { minAmount: 0, maxAmount: 0, feeType: 'fixed', feeValue: 0 }]);
+  const remove = (i: number) => onChange(tiers.filter((_, idx) => idx !== i));
+  const update = (i: number, k: keyof FeeTier, v: any) => {
+    const arr = [...tiers]; arr[i] = { ...arr[i], [k]: v }; onChange(arr);
+  };
+  return (
+    <div className="space-y-2">
+      {tiers.length === 0 ? (
+        <p className="text-xs text-gray-400 italic bg-gray-50 rounded-xl px-3 py-2">
+          Aucun palier — le pourcentage global s'applique si défini.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {tiers.map((tier, i) => (
+            <div key={i} className="rounded-xl border border-gray-200 p-3 space-y-2 bg-gray-50/60">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[10px] font-black text-gray-500">Min USD</Label>
+                  <Input type="number" value={tier.minAmount} onChange={e => update(i, 'minAmount', parseFloat(e.target.value) || 0)}
+                    className="h-9 rounded-xl text-sm mt-0.5" min="0" step="0.01" />
+                </div>
+                <div>
+                  <Label className="text-[10px] font-black text-gray-500">Max USD (0=illimité)</Label>
+                  <Input type="number" value={tier.maxAmount} onChange={e => update(i, 'maxAmount', parseFloat(e.target.value) || 0)}
+                    className="h-9 rounded-xl text-sm mt-0.5" min="0" step="0.01" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[10px] font-black text-gray-500">Type</Label>
+                  <Select value={tier.feeType} onValueChange={v => update(i, 'feeType', v)}>
+                    <SelectTrigger className="h-9 rounded-xl mt-0.5"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fixed">Fixe ($)</SelectItem>
+                      <SelectItem value="percent">Pourcentage (%)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[10px] font-black text-gray-500">Valeur</Label>
+                  <div className="flex gap-1.5 mt-0.5">
+                    <Input type="number" value={tier.feeValue} onChange={e => update(i, 'feeValue', parseFloat(e.target.value) || 0)}
+                      className="h-9 rounded-xl text-sm flex-1" min="0" step="0.01" />
+                    <button type="button" onClick={() => remove(i)} className="h-9 w-9 flex items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <p className="text-[10px] text-emerald-600 font-semibold">
+                {tier.maxAmount === 0 ? `≥ $${tier.minAmount}` : `$${tier.minAmount} – $${tier.maxAmount}`}
+                {' → frais '}{tier.feeType === 'fixed' ? `$${tier.feeValue}` : `${tier.feeValue}%`}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+      <button type="button" onClick={add} className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:underline transition-colors">
+        <Plus className="h-3.5 w-3.5" /> Ajouter un palier
+      </button>
+    </div>
+  );
+}
 
 function ServicesTab() {
   const { cards, loading } = useCardTopups();
@@ -281,7 +348,7 @@ function ServicesTab() {
   const openEdit = (card: CardTopup) => {
     setEditing(card);
     const customFields: { key: string; value: string }[] = [];
-    const knownKeys = new Set(['id','name','image','description','price','stock','whatsappMessage','goldRate','presets','rechargeFields','rechargeFeePercent','createdAt','updatedAt']);
+    const knownKeys = new Set(['id','name','image','description','price','stock','whatsappMessage','goldRate','presets','rechargeFields','rechargeFeePercent','rechargeFeesTiers','createdAt','updatedAt']);
     for (const [k, v] of Object.entries(card as any)) {
       if (!knownKeys.has(k)) customFields.push({ key: k, value: String(v ?? '') });
     }
@@ -303,8 +370,9 @@ function ServicesTab() {
       rechargeFeePercent: String(card.rechargeFeePercent ?? ''),
       customFields,
       rechargeFields,
+      rechargeFeesTiers: (card.rechargeFeesTiers || []) as FeeTier[],
     });
-    setShowAdvanced(customFields.length > 0 || rechargeFields.length > 0 || !!card.whatsappMessage || !!card.goldRate || !!(card.presets?.length) || card.rechargeFeePercent !== undefined);
+    setShowAdvanced(customFields.length > 0 || rechargeFields.length > 0 || !!card.whatsappMessage || !!card.goldRate || !!(card.presets?.length) || card.rechargeFeePercent !== undefined || !!(card.rechargeFeesTiers?.length));
     setDialogOpen(true);
   };
 
@@ -322,6 +390,7 @@ function ServicesTab() {
         ...(form.whatsappMessage.trim() && { whatsappMessage: form.whatsappMessage.trim() }),
         ...(form.goldRate !== '' && { goldRate: Number(form.goldRate) }),
         ...(form.rechargeFeePercent !== '' && { rechargeFeePercent: Number(form.rechargeFeePercent) }),
+        ...(form.rechargeFeesTiers?.length > 0 && { rechargeFeesTiers: form.rechargeFeesTiers }),
         ...(form.presets.trim() && {
           presets: form.presets.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n) && n > 0)
         }),
@@ -517,10 +586,23 @@ function ServicesTab() {
                     <Input type="number" value={form.goldRate} onChange={e => setForm(f => ({ ...f, goldRate: e.target.value }))} placeholder="Ex: 146" className="rounded-xl" />
                   </FormField>
 
-                  <FormField label="Frais de recharge (%)" icon={DollarSign}>
+                  <FormField label="Frais de recharge (%) — fallback sans paliers" icon={DollarSign}>
                     <Input type="number" value={form.rechargeFeePercent} onChange={e => setForm(f => ({ ...f, rechargeFeePercent: e.target.value }))} placeholder="Ex: 5" min="0" max="100" step="0.1" className="rounded-xl" />
-                    <p className="text-xs text-gray-400 mt-1">Frais appliqués sur le montant de recharge. Ex: 5 = 5%.</p>
+                    <p className="text-xs text-gray-400 mt-1">Pourcentage global appliqué si aucun palier n'est défini ci-dessous.</p>
                   </FormField>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <Label className="text-xs font-black text-gray-500 uppercase tracking-wide">Paliers de frais par tranche</Label>
+                        <p className="text-[10px] text-gray-400 mt-0.5">Définissez des frais fixes ou % selon le montant rechargé (USD).</p>
+                      </div>
+                    </div>
+                    <FeeTierEditor
+                      tiers={form.rechargeFeesTiers}
+                      onChange={tiers => setForm(f => ({ ...f, rechargeFeesTiers: tiers }))}
+                    />
+                  </div>
 
                   {/* Champs de saisie du formulaire de recharge */}
                   <div>

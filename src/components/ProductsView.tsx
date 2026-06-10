@@ -572,12 +572,6 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                                       <Wallet className="h-3.5 w-3.5" /> Se connecter
                                     </button>
                                   )}
-                                  <button
-                                    onClick={() => { setPayingItemKey(null); setIsGameCatalogOpen(false); handleBuyRequested({ name: `${selectedGame.name} — ${item.name}`, price: item.price, type: 'game' }); }}
-                                    className="h-11 rounded-xl border border-purple-200 bg-purple-50 text-purple-700 text-xs font-black flex items-center justify-center gap-1.5 hover:bg-purple-100 transition-colors"
-                                  >
-                                    <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
-                                  </button>
                                 </div>
                               </motion.div>
                             )}
@@ -635,12 +629,6 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                             <Wallet className="h-4 w-4" /> Se connecter
                           </button>
                         )}
-                        <button
-                          onClick={() => { setIsGameCatalogOpen(false); setPayingItemKey(null); openWhatsApp(selectedGame.whatsappMessage || `Bonjour Rena, je souhaite faire un top-up pour le jeu : ${selectedGame.name}. ID Joueur: ${gamePlayerId.trim() || 'Non spécifié'}`); }}
-                          className="h-12 bg-purple-600 hover:bg-purple-700 text-white text-sm font-black rounded-2xl border-0 flex items-center justify-center gap-2 transition-colors"
-                        >
-                          <MessageCircle className="h-4 w-4" /> WhatsApp
-                        </button>
                       </div>
                     ) : (
                       <Button
@@ -812,28 +800,6 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
           </div>
 
           <div className="flex-1 overflow-y-auto p-5 space-y-3">
-            {[
-              { id: 'MonCash', icon: Smartphone, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100', desc: 'Paiement mobile instantané' },
-              { id: 'NatCash', icon: Smartphone, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', desc: 'Sécurisé et rapide' },
-              { id: 'Admi',    icon: Landmark,   color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', desc: 'Virement ou dépôt bancaire' },
-            ].map(method => (
-              <button
-                key={method.id}
-                onClick={() => handleFinalRechargePayment(method.id)}
-                className={`group w-full flex items-center justify-between p-5 rounded-2xl border-2 transition-all hover:scale-[1.01] active:scale-[0.99] ${method.bg} ${method.border} hover:shadow-md`}
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`h-12 w-12 rounded-2xl bg-white shadow-sm flex items-center justify-center ${method.color}`}>
-                    <method.icon className="h-6 w-6" />
-                  </div>
-                  <div className="text-left">
-                    <span className="block text-lg font-black text-dark uppercase">{method.id}</span>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">{method.desc}</span>
-                  </div>
-                </div>
-                <ArrowRight className={`h-5 w-5 ${method.color} group-hover:translate-x-0.5 transition-transform`} />
-              </button>
-            ))}
             {effectiveClient && (() => {
               const usd = parseFloat(rechargeAmountUSD || '0');
               const bal = effectiveClient.balance ?? 0;
@@ -1044,14 +1010,6 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                             exchangeRate={exchangeRate}
                           />
                         )}
-                        <Button
-                          onClick={() => handleBuyRequested({ name: customLabel ? `${displayName} — ${customLabel}` : displayName, price: displayPrice, type: 'product' })}
-                          variant="outline"
-                          className="w-full h-12 rounded-2xl border-2 border-gray-200 text-gray-700 font-black flex items-center justify-center gap-2 hover:bg-gray-50 active:scale-95 transition-all"
-                        >
-                          <MessageCircle className="h-4 w-4 text-emerald-500" />
-                          Commander via WhatsApp
-                        </Button>
                       </div>
                     );
                   })()}

@@ -1,71 +1,21 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Globe, CreditCard, ShieldCheck, Clock, Phone, MessageCircle,
-  X, Wallet, Loader2, ChevronRight, Plus, RefreshCw, Check, Upload,
+  X, Wallet, Loader2, ChevronRight, Plus, RefreshCw, Check,
 } from 'lucide-react';
 import { useCardTopups, useSettings } from '../services/parcelService';
 import { submitClientPurchase, useClientData, useClientPendingPurchase } from '../services/clientService';
-import { Client } from '../types';
+import { Client, findFeeTier } from '../types';
 import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { storage } from '../lib/firebase';
 
 interface ServicesViewProps {
   loggedClient: Client | null;
   onOpenWallet: () => void;
   onRequestAuth: () => void;
-}
-
-const PAYMENT_METHODS = [
-  { id: 'moncash', label: 'MonCash', color: 'border-red-300 bg-red-50 text-red-700', activeColor: 'border-red-500 bg-red-100 text-red-800' },
-  { id: 'natcash', label: 'NatCash', color: 'border-amber-300 bg-amber-50 text-amber-700', activeColor: 'border-amber-500 bg-amber-100 text-amber-800' },
-  { id: 'paypal',  label: 'PayPal',  color: 'border-blue-300 bg-blue-50 text-blue-700',  activeColor: 'border-blue-500 bg-blue-100 text-blue-800'  },
-];
-
-function MoncashLogo({ size = 28 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
-      <rect width="40" height="40" rx="8" fill="#E31D1C"/>
-      <text x="50%" y="56%" dominantBaseline="middle" textAnchor="middle" fill="white" fontSize="10" fontWeight="900" fontFamily="Arial,sans-serif">M</text>
-    </svg>
-  );
-}
-function NatcashLogo({ size = 28 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
-      <rect width="40" height="40" rx="8" fill="#F59E0B"/>
-      <text x="50%" y="56%" dominantBaseline="middle" textAnchor="middle" fill="white" fontSize="10" fontWeight="900" fontFamily="Arial,sans-serif">N</text>
-    </svg>
-  );
-}
-function PaypalLogo({ size = 28 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
-      <rect width="40" height="40" rx="8" fill="#003087"/>
-      <text x="50%" y="54%" dominantBaseline="middle" textAnchor="middle" fill="white" fontSize="8" fontWeight="900" fontFamily="Arial,sans-serif">PP</text>
-    </svg>
-  );
-}
-const METHOD_LOGOS: Record<string, React.FC<{size?: number}>> = {
-  moncash: MoncashLogo,
-  natcash: NatcashLogo,
-  paypal:  PaypalLogo,
-};
-
-function ServiceMethodLogo({ methodId, logoUrl, size = 26 }: { methodId: string; logoUrl?: string; size?: number }) {
-  if (logoUrl) {
-    return (
-      <img src={logoUrl} alt="" className="rounded-lg object-contain"
-        style={{ width: size, height: size }}
-        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-    );
-  }
-  const Logo = METHOD_LOGOS[methodId];
-  return Logo ? <Logo size={size} /> : null;
 }
 
 const SERVICE_GRADIENTS = [
@@ -97,43 +47,11 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
   const [rechargeAmount, setRechargeAmount] = useState('');
   const [cardNumber, setCardNumber] = useState('');
   const [holderName, setHolderName] = useState('');
-  const [payMethod, setPayMethod] = useState<string>('moncash');
-  const [txInfo, setTxInfo] = useState('');
   const [dynamicFieldValues, setDynamicFieldValues] = useState<Record<string, string>>({});
 
-  // Creation pay
+  // Purchase loading
   const [purchaseLoading, setPurchaseLoading] = useState(false);
-
-  // Proof of payment upload
-  const [proofFile, setProofFile]       = useState<File | null>(null);
-  const [proofPreview, setProofPreview] = useState<string | null>(null);
-  const [proofUploading, setProofUploading] = useState(false);
-  const proofInputRef = useRef<HTMLInputElement>(null);
-
-  const handleProofSelect = (file: File | null) => {
-    if (!file) return;
-    setProofFile(file);
-    const reader = new FileReader();
-    reader.onload = e => setProofPreview(e.target?.result as string);
-    reader.readAsDataURL(file);
-  };
-
-  const uploadProof = async (): Promise<string | null> => {
-    if (!proofFile) return null;
-    setProofUploading(true);
-    try {
-      const path = `proofs/services/${Date.now()}_${proofFile.name}`;
-      const sRef = storageRef(storage, path);
-      const task = uploadBytesResumable(sRef, proofFile);
-      await new Promise<void>((res, rej) => task.on('state_changed', null, rej, res));
-      return await getDownloadURL(sRef);
-    } catch {
-      toast.error('Impossible de télécharger le justificatif.');
-      return null;
-    } finally {
-      setProofUploading(false);
-    }
-  };
+  const [rechargeLoading, setRechargeLoading] = useState(false);
 
   const openService = (svc: any) => {
     setSelected(svc);
@@ -141,11 +59,21 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
     setRechargeAmount(svc.presets?.[0]?.toString() || '');
     setCardNumber('');
     setHolderName('');
-    setTxInfo('');
-    setPayMethod('moncash');
     setDynamicFieldValues({});
-    setProofFile(null);
-    setProofPreview(null);
+  };
+
+  const computeRechargeFee = (svc: any, usd: number) => {
+    if (!usd || usd <= 0) return { feeUsd: 0, totalUsd: usd, label: '' };
+    const tier = findFeeTier(usd, svc.rechargeFeesTiers);
+    if (tier) {
+      const feeUsd = tier.feeType === 'fixed' ? tier.feeValue : parseFloat((usd * tier.feeValue / 100).toFixed(4));
+      const label = tier.feeType === 'fixed' ? `Frais fixe $${tier.feeValue}` : `Frais ${tier.feeValue}%`;
+      return { feeUsd, totalUsd: usd + feeUsd, label };
+    }
+    const globalFee = svc.rechargeFeePercent ?? 0;
+    const feeUsd = globalFee > 0 ? parseFloat((usd * globalFee / 100).toFixed(4)) : 0;
+    const label = globalFee > 0 ? `Frais ${globalFee}%` : '';
+    return { feeUsd, totalUsd: usd + feeUsd, label };
   };
 
   const closeModal = () => setSelected(null);
@@ -199,72 +127,64 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
     }
   };
 
-  // ── Créer: payment method (WhatsApp) ──────────────────────────────────────
-  const handleMethodCreate = async () => {
-    if (!selected) return;
-    const method = PAYMENT_METHODS.find(m => m.id === payMethod);
-    const proofUrl = await uploadProof();
-    openWhatsApp(`🎴 *CRÉATION SERVICE — Phénix Services*\n\n🛒 Service: *${selected.name}*\n💰 Prix: *${selected.price}*\n\n💳 Méthode de paiement: *${method?.label}*\n📝 Référence transaction: *${txInfo || 'Non fournie'}*${proofUrl ? `\n🖼️ Justificatif: ${proofUrl}` : ''}\n\nMerci de valider ma commande.`);
-    sendOrderNotification({
-      orderType: 'create',
-      serviceName: selected.name,
-      servicePrice: String(selected.price),
-      paymentMethod: method?.label || payMethod,
-      txRef: txInfo || '',
-      clientId: effectiveClient?.id || '',
-      clientName: effectiveClient?.name || 'Anonyme',
-      clientWalletId: effectiveClient?.walletId || '',
-      amount: 0,
-      amountHTG: parseFloat(String(selected.price ?? '0').replace(/[^\d.]/g, '')),
-      cardDetails: {},
-    });
-    setStep('success');
-  };
-
   // ── Recharge: submit ───────────────────────────────────────────────────────
   const handleRechargeSubmit = () => {
     if (!rechargeAmount) { toast.error('Veuillez entrer un montant'); return; }
     setStep('recharge_pay');
   };
 
-  const handleFinalRecharge = async () => {
-    if (!selected || !rechargeAmount) return;
-    const method = PAYMENT_METHODS.find(m => m.id === payMethod);
+  // ── Recharge: wallet pay ───────────────────────────────────────────────────
+  const handleWalletRecharge = async () => {
+    if (!effectiveClient || !selected || !rechargeAmount) return;
     const usd = parseFloat(rechargeAmount);
-    const feePercent = selected.rechargeFeePercent ?? 0;
-    const feeUsd = feePercent > 0 ? Math.round(usd * feePercent) / 100 : 0;
-    const totalUsd = usd + feeUsd;
-    const htg = Math.round(totalUsd * exchangeRate);
+    const { feeUsd, totalUsd } = computeRechargeFee(selected, usd);
+    const totalHTG = Math.round(totalUsd * exchangeRate);
+    if ((effectiveClient.balance ?? 0) < totalUsd) {
+      toast.error(`Solde insuffisant — vous avez $${(effectiveClient.balance ?? 0).toFixed(2)} USD`);
+      return;
+    }
     const hasCustomFields = selected.rechargeFields?.length > 0;
-    let dynamicLines = '';
     const cardDetails: Record<string, string> = {};
     if (hasCustomFields) {
-      dynamicLines = (selected.rechargeFields as { id: string; label: string }[]).map(f => {
-        const val = dynamicFieldValues[f.id] || 'Non spécifié';
-        cardDetails[f.label] = val;
-        return `${f.label}: *${val}*`;
-      }).join('\n');
+      (selected.rechargeFields as { id: string; label: string }[]).forEach(f => {
+        cardDetails[f.label] = dynamicFieldValues[f.id] || 'Non spécifié';
+      });
     } else {
-      dynamicLines = `👤 Titulaire: *${holderName || 'Non spécifié'}*\n🔢 Numéro/Info carte: *${cardNumber || 'Non spécifié'}*`;
       if (holderName) cardDetails['Titulaire'] = holderName;
       if (cardNumber) cardDetails['Numéro carte'] = cardNumber;
     }
-    const proofUrl = await uploadProof();
-    openWhatsApp(`💳 *RECHARGE CARTE — Phénix Services*\n\n🎴 Carte: *${selected.name}*\n${dynamicLines}\n💵 Montant USD: *$${usd}*${feePercent > 0 ? `\n💸 Frais (${feePercent}%): *$${feeUsd.toFixed(2)}*\n💵 Total: *$${totalUsd.toFixed(2)}*` : ''}\n🇭🇹 Équivalent: *${htg.toLocaleString()} HTG*\n\n💳 Méthode: *${method?.label}*\n📝 Référence: *${txInfo || 'Non fournie'}*${proofUrl ? `\n🖼️ Justificatif: ${proofUrl}` : ''}\n\nMerci de traiter ma recharge.`);
-    sendOrderNotification({
-      orderType: 'recharge',
-      serviceName: selected.name,
-      servicePrice: '',
-      paymentMethod: method?.label || payMethod,
-      txRef: txInfo || '',
-      clientId: effectiveClient?.id || '',
-      clientName: effectiveClient?.name || 'Anonyme',
-      clientWalletId: effectiveClient?.walletId || '',
-      amount: totalUsd,
-      amountHTG: htg,
-      cardDetails,
-    });
-    setStep('success');
+    setRechargeLoading(true);
+    try {
+      await submitClientPurchase(
+        effectiveClient,
+        `Recharge ${selected.name} — $${usd}${feeUsd > 0 ? ` + frais $${feeUsd.toFixed(2)}` : ''}`,
+        String(totalHTG),
+        totalUsd,
+      );
+      const now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const dynamicLines = hasCustomFields
+        ? (selected.rechargeFields as { id: string; label: string }[]).map(f => `${f.label}: *${dynamicFieldValues[f.id] || 'Non spécifié'}*`).join('\n')
+        : `👤 Titulaire: *${holderName || 'Non spécifié'}*\n🔢 Numéro/Info: *${cardNumber || 'Non spécifié'}*`;
+      openWhatsApp(`💳 *RECHARGE CARTE — Phénix Services*\n\n🎴 Carte: *${selected.name}*\n${dynamicLines}\n💵 Montant: *$${usd}*${feeUsd > 0 ? `\n💸 Frais: *$${feeUsd.toFixed(2)}*\n💵 Total: *$${totalUsd.toFixed(2)}*` : ''}\n🇭🇹 Équivalent: *${totalHTG.toLocaleString()} HTG*\n\n💳 Méthode: *Solde Wallet*\n👤 Client: *${effectiveClient.name}*\n🔑 Wallet: *#${effectiveClient.walletId || '—'}*\n📅 Date: *${now}*\n\n✅ Paiement traité. Veuillez activer.`);
+      sendOrderNotification({
+        orderType: 'recharge',
+        serviceName: selected.name,
+        servicePrice: '',
+        paymentMethod: 'Solde Wallet',
+        txRef: '',
+        clientId: effectiveClient.id || '',
+        clientName: effectiveClient.name || 'Anonyme',
+        clientWalletId: effectiveClient.walletId || '',
+        amount: totalUsd,
+        amountHTG: totalHTG,
+        cardDetails,
+      });
+      setStep('success');
+    } catch (err: any) {
+      toast.error(err.message || 'Erreur lors du paiement.');
+    } finally {
+      setRechargeLoading(false);
+    }
   };
 
   const balanceHTG = effectiveClient ? Math.round((effectiveClient.balance ?? 0) * exchangeRate) : 0;
@@ -476,11 +396,10 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
               {/* ── STEP: create_pay ── */}
               {step === 'create_pay' && (
                 <div className="p-5 space-y-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <button onClick={() => setStep('choice')} className="text-xs text-gray-400 hover:text-gray-600 font-bold flex items-center gap-1">
-                      ← Retour
-                    </button>
-                  </div>
+                  <button onClick={() => setStep('choice')} className="text-xs text-gray-400 hover:text-gray-600 font-bold flex items-center gap-1">
+                    ← Retour
+                  </button>
+
                   <div className="bg-indigo-50 rounded-2xl p-4 flex items-center justify-between">
                     <div>
                       <p className="text-xs text-gray-500 font-semibold">Total à payer</p>
@@ -492,76 +411,32 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
                     </div>
                   </div>
 
-                  {/* Wallet pay */}
                   {effectiveClient ? (
-                    <button
-                      disabled={purchaseLoading || !hasEnoughBalance || hasPendingPurchase}
-                      onClick={handleWalletCreate}
-                      className={`w-full h-13 py-3.5 rounded-2xl border-2 font-black text-sm flex items-center justify-center gap-2 transition-all ${hasEnoughBalance && !hasPendingPurchase ? 'border-emerald-300 text-emerald-700 hover:bg-emerald-50 active:scale-95' : 'border-red-200 text-red-400 opacity-60 cursor-not-allowed'}`}
-                    >
-                      {purchaseLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Wallet className="h-4 w-4" /> Payer avec mon solde</>}
-                    </button>
+                    <>
+                      {hasPendingPurchase && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-700 font-semibold">
+                          ⏳ Vous avez déjà une commande en attente de traitement.
+                        </div>
+                      )}
+                      <button
+                        disabled={purchaseLoading || !hasEnoughBalance || hasPendingPurchase}
+                        onClick={handleWalletCreate}
+                        className={`w-full py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all ${hasEnoughBalance && !hasPendingPurchase ? 'bg-emerald-500 hover:bg-emerald-600 text-white active:scale-95' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                      >
+                        {purchaseLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Wallet className="h-4 w-4" /> Payer avec mon solde</>}
+                      </button>
+                      {!hasEnoughBalance && (
+                        <button onClick={() => { closeModal(); onOpenWallet(); }} className="w-full py-3 rounded-2xl border-2 border-primary text-primary font-black text-sm flex items-center justify-center gap-2 hover:bg-primary/5 transition-all">
+                          Recharger mon solde →
+                        </button>
+                      )}
+                    </>
                   ) : (
                     <button onClick={onRequestAuth}
-                      className="w-full py-3.5 rounded-2xl bg-primary text-white font-black text-sm flex items-center justify-center gap-2 hover:bg-primary/90 transition-all">
-                      <Wallet className="h-4 w-4" /> Connexion pour payer avec solde
+                      className="w-full py-4 rounded-2xl bg-primary text-white font-black text-sm flex items-center justify-center gap-2 hover:bg-primary/90 transition-all">
+                      <Wallet className="h-4 w-4" /> Se connecter pour payer
                     </button>
                   )}
-
-                  <div className="flex items-center gap-2 my-1">
-                    <div className="h-px flex-1 bg-gray-100" />
-                    <span className="text-xs text-gray-400 font-semibold">OU</span>
-                    <div className="h-px flex-1 bg-gray-100" />
-                  </div>
-
-                  {/* Payment method */}
-                  <div className="space-y-2">
-                    <Label className="text-xs font-black text-gray-600">Méthode de paiement</Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {PAYMENT_METHODS.map(m => {
-                        const active = payMethod === m.id;
-                        const logoUrl = settings?.paymentMethods?.find(pm => pm.id === m.id)?.logoUrl;
-                        return (
-                          <button key={m.id} onClick={() => setPayMethod(m.id)}
-                            className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-xs font-black transition-all ${active ? m.activeColor : 'border-gray-100 text-gray-500 hover:border-gray-200 bg-white'}`}>
-                            <ServiceMethodLogo methodId={m.id} logoUrl={logoUrl} size={26} />
-                            {m.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div>
-                      <Label className="text-xs font-black text-gray-600">Référence / Transaction ID</Label>
-                      <Input value={txInfo} onChange={e => setTxInfo(e.target.value)}
-                        placeholder="Ex: REF123456" className="mt-1 rounded-xl border-gray-200" />
-                    </div>
-                  </div>
-
-                  {/* Proof of payment */}
-                  <div>
-                    <Label className="text-xs font-black text-gray-600">Justificatif de paiement (optionnel)</Label>
-                    <input ref={proofInputRef} type="file" accept="image/*" className="hidden"
-                      onChange={e => handleProofSelect(e.target.files?.[0] || null)} />
-                    {proofPreview ? (
-                      <div className="mt-1 relative rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
-                        <img src={proofPreview} alt="Justificatif" className="w-full max-h-32 object-cover" />
-                        <button onClick={() => { setProofFile(null); setProofPreview(null); }}
-                          className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/50 text-white flex items-center justify-center text-[10px] hover:bg-black/70">
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button onClick={() => proofInputRef.current?.click()}
-                        className="mt-1 w-full h-12 border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center gap-2 text-xs text-gray-400 font-semibold hover:border-indigo-300 hover:text-indigo-400 transition-colors">
-                        <Upload className="h-4 w-4" /> Ajouter une capture d'écran
-                      </button>
-                    )}
-                  </div>
-
-                  <Button onClick={handleMethodCreate} disabled={proofUploading}
-                    className="w-full h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm disabled:opacity-60">
-                    {proofUploading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Envoi...</> : 'Envoyer la demande via WhatsApp'}
-                  </Button>
                 </div>
               )}
 
@@ -632,22 +507,20 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
 
                     {rechargeAmount && (() => {
                       const usd = parseFloat(rechargeAmount || '0');
-                      const feePercent = selected?.rechargeFeePercent ?? 0;
-                      const feeUsd = feePercent > 0 ? Math.round(usd * feePercent) / 100 : 0;
-                      const totalUsd = usd + feeUsd;
+                      const { feeUsd, totalUsd, label } = computeRechargeFee(selected, usd);
                       const totalHtg = Math.round(totalUsd * exchangeRate);
                       return (
                         <div className="space-y-1.5">
-                          {feePercent > 0 && (
+                          {feeUsd > 0 && (
                             <div className="bg-amber-50 rounded-xl p-3 flex items-center justify-between border border-amber-100">
-                              <p className="text-xs text-amber-700 font-semibold">Frais de service ({feePercent}%)</p>
+                              <p className="text-xs text-amber-700 font-semibold">{label}</p>
                               <p className="font-black text-amber-700">${feeUsd.toFixed(2)}</p>
                             </div>
                           )}
                           <div className="bg-emerald-50 rounded-xl p-3 flex items-center justify-between">
-                            <p className="text-xs text-gray-500 font-semibold">{feePercent > 0 ? 'Total à payer' : 'Équivalent HTG'}</p>
+                            <p className="text-xs text-gray-500 font-semibold">{feeUsd > 0 ? 'Total à payer' : 'Équivalent HTG'}</p>
                             <p className="font-black text-emerald-600">
-                              {feePercent > 0 ? `$${totalUsd.toFixed(2)} = ` : ''}{totalHtg.toLocaleString()} HTG
+                              {feeUsd > 0 ? `$${totalUsd.toFixed(2)} = ` : ''}{totalHtg.toLocaleString()} HTG
                             </p>
                           </div>
                         </div>
@@ -658,73 +531,78 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
                   <Button onClick={handleRechargeSubmit}
                     disabled={!rechargeAmount}
                     className="w-full h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm disabled:opacity-50">
-                    Continuer → Choisir le paiement
+                    Continuer →
                   </Button>
                 </div>
               )}
 
               {/* ── STEP: recharge_pay ── */}
-              {step === 'recharge_pay' && (
-                <div className="p-5 space-y-4">
-                  <button onClick={() => setStep('recharge_form')} className="text-xs text-gray-400 hover:text-gray-600 font-bold">
-                    ← Retour
-                  </button>
+              {step === 'recharge_pay' && (() => {
+                const usd = parseFloat(rechargeAmount || '0');
+                const { feeUsd, totalUsd, label } = computeRechargeFee(selected, usd);
+                const totalHTG = Math.round(totalUsd * exchangeRate);
+                const walletUSD = effectiveClient?.balance ?? 0;
+                const canPay = walletUSD >= totalUsd && totalUsd > 0;
+                return (
+                  <div className="p-5 space-y-4">
+                    <button onClick={() => setStep('recharge_form')} className="text-xs text-gray-400 hover:text-gray-600 font-bold">
+                      ← Retour
+                    </button>
 
-                  <div className="bg-emerald-50 rounded-2xl p-4">
-                    <p className="text-xs text-gray-500 font-semibold">Récapitulatif</p>
-                    <p className="font-black text-gray-900 mt-1">{selected.name}</p>
-                    <p className="text-sm text-emerald-700 font-black">${rechargeAmount} USD = {Math.round(parseFloat(rechargeAmount || '0') * exchangeRate).toLocaleString()} HTG</p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-xs font-black text-gray-600">Méthode de paiement</Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {PAYMENT_METHODS.map(m => {
-                        const active = payMethod === m.id;
-                        const logoUrl = settings?.paymentMethods?.find(pm => pm.id === m.id)?.logoUrl;
-                        return (
-                          <button key={m.id} onClick={() => setPayMethod(m.id)}
-                            className={`flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 text-xs font-black transition-all ${active ? m.activeColor : 'border-gray-100 text-gray-500 hover:border-gray-200 bg-white'}`}>
-                            <ServiceMethodLogo methodId={m.id} logoUrl={logoUrl} size={26} />
-                            {m.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div>
-                      <Label className="text-xs font-black text-gray-600">Référence / Transaction ID</Label>
-                      <Input value={txInfo} onChange={e => setTxInfo(e.target.value)}
-                        placeholder="Ex: REF123456" className="mt-1 rounded-xl border-gray-200" />
-                    </div>
-                  </div>
-
-                  {/* Proof of payment */}
-                  <div>
-                    <Label className="text-xs font-black text-gray-600">Justificatif de paiement (optionnel)</Label>
-                    <input ref={proofInputRef} type="file" accept="image/*" className="hidden"
-                      onChange={e => handleProofSelect(e.target.files?.[0] || null)} />
-                    {proofPreview ? (
-                      <div className="mt-1 relative rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
-                        <img src={proofPreview} alt="Justificatif" className="w-full max-h-32 object-cover" />
-                        <button onClick={() => { setProofFile(null); setProofPreview(null); }}
-                          className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70">
-                          <X className="h-3 w-3" />
-                        </button>
+                    <div className="rounded-2xl border border-emerald-100 overflow-hidden text-sm">
+                      <div className="flex justify-between px-4 py-3 bg-white border-b border-emerald-50">
+                        <span className="text-gray-500 font-semibold">Carte</span>
+                        <span className="font-black">{selected.name}</span>
                       </div>
+                      <div className="flex justify-between px-4 py-3 bg-white border-b border-emerald-50">
+                        <span className="text-gray-500 font-semibold">Montant</span>
+                        <span className="font-black">${usd.toFixed(2)}</span>
+                      </div>
+                      {feeUsd > 0 && (
+                        <div className="flex justify-between px-4 py-3 bg-amber-50 border-b border-amber-100">
+                          <span className="text-amber-700 font-semibold">{label}</span>
+                          <span className="font-black text-amber-700">+${feeUsd.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between px-4 py-3 bg-emerald-50">
+                        <span className="font-black text-emerald-800 text-xs uppercase tracking-wide">Total</span>
+                        <span className="font-black text-emerald-700">${totalUsd.toFixed(2)} = {totalHTG.toLocaleString()} HTG</span>
+                      </div>
+                    </div>
+
+                    {effectiveClient ? (
+                      <>
+                        <div className={`rounded-xl px-4 py-3 flex items-center justify-between border ${canPay ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
+                          <div className="flex items-center gap-2">
+                            <Wallet className={`h-4 w-4 ${canPay ? 'text-emerald-600' : 'text-red-400'}`} />
+                            <span className="text-sm font-semibold text-gray-700">Solde wallet</span>
+                          </div>
+                          <span className={`font-black text-sm ${canPay ? 'text-emerald-600' : 'text-red-500'}`}>
+                            ${walletUSD.toFixed(2)} {canPay ? '✓' : '— insuffisant'}
+                          </span>
+                        </div>
+                        <Button
+                          disabled={rechargeLoading || !canPay}
+                          onClick={handleWalletRecharge}
+                          className={`w-full h-12 rounded-2xl font-black text-sm ${canPay ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                        >
+                          {rechargeLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Traitement...</> : <><Wallet className="h-4 w-4 mr-1" /> Payer avec mon solde</>}
+                        </Button>
+                        {!canPay && (
+                          <button onClick={() => { closeModal(); onOpenWallet(); }} className="w-full py-3 rounded-2xl border-2 border-primary text-primary font-black text-sm flex items-center justify-center gap-2 hover:bg-primary/5 transition-all">
+                            Recharger mon solde →
+                          </button>
+                        )}
+                      </>
                     ) : (
-                      <button onClick={() => proofInputRef.current?.click()}
-                        className="mt-1 w-full h-12 border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center gap-2 text-xs text-gray-400 font-semibold hover:border-emerald-300 hover:text-emerald-400 transition-colors">
-                        <Upload className="h-4 w-4" /> Ajouter une capture d'écran
+                      <button onClick={onRequestAuth}
+                        className="w-full py-4 rounded-2xl bg-primary text-white font-black text-sm flex items-center justify-center gap-2 hover:bg-primary/90 transition-all">
+                        <Wallet className="h-4 w-4" /> Se connecter pour payer
                       </button>
                     )}
                   </div>
-
-                  <Button onClick={handleFinalRecharge} disabled={proofUploading}
-                    className="w-full h-12 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm disabled:opacity-60">
-                    {proofUploading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Envoi...</> : 'Confirmer via WhatsApp'}
-                  </Button>
-                </div>
-              )}
+                );
+              })()}
 
               {/* ── STEP: success ── */}
               {step === 'success' && (
