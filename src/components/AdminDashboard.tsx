@@ -1430,16 +1430,26 @@ function SettingsTab() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<PaymentMethod>>({});
 
+  // Rates & fees state
+  const [exchangeRate, setExchangeRate] = useState<string>('');
+  const [depositFee, setDepositFee] = useState<string>('');
+  const [withdrawalFee, setWithdrawalFee] = useState<string>('');
+  const [savingRates, setSavingRates] = useState(false);
+
   useEffect(() => {
     (async () => {
       try {
         const data = await adminFetch('/api/admin/settings-data');
-        const saved: PaymentMethod[] = data.settings?.paymentMethods;
+        const s = data.settings || {};
+        const saved: PaymentMethod[] = s.paymentMethods;
         if (saved && saved.length > 0) {
           setMethods(saved);
         } else {
           setMethods(DEFAULT_PAYMENT_METHODS.map(m => ({ ...m })));
         }
+        if (s.exchangeRate !== undefined) setExchangeRate(String(s.exchangeRate));
+        if (s.depositFeePercent !== undefined) setDepositFee(String(s.depositFeePercent));
+        if (s.withdrawalFeePercent !== undefined) setWithdrawalFee(String(s.withdrawalFeePercent));
       } catch {
         setMethods(DEFAULT_PAYMENT_METHODS.map(m => ({ ...m })));
       } finally {
@@ -1447,6 +1457,27 @@ function SettingsTab() {
       }
     })();
   }, []);
+
+  const saveRates = async () => {
+    const rate = parseFloat(exchangeRate);
+    const depFee = parseFloat(depositFee);
+    const witFee = parseFloat(withdrawalFee);
+    if (isNaN(rate) || rate <= 0) { toast.error('Taux de conversion invalide.'); return; }
+    if (isNaN(depFee) || depFee < 0 || depFee > 100) { toast.error('Frais de dépôt invalide (0–100%).'); return; }
+    if (isNaN(witFee) || witFee < 0 || witFee > 100) { toast.error('Frais de retrait invalide (0–100%).'); return; }
+    setSavingRates(true);
+    try {
+      await adminFetch('/api/admin/settings', {
+        method: 'POST',
+        body: JSON.stringify({ exchangeRate: rate, depositFeePercent: depFee, withdrawalFeePercent: witFee }),
+      });
+      toast.success('Taux et frais enregistrés.');
+    } catch (e: any) {
+      toast.error(e.message || 'Erreur.');
+    } finally {
+      setSavingRates(false);
+    }
+  };
 
   const startEdit = (m: PaymentMethod) => {
     setEditingId(m.id);
@@ -1484,16 +1515,125 @@ function SettingsTab() {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-gray-900 flex items-center gap-2">
             <Settings className="h-6 w-6 text-blue-600" /> Paramètres
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">Méthodes de paiement — logos et configuration</p>
+          <p className="text-sm text-gray-500 mt-0.5">Taux, frais et méthodes de paiement</p>
         </div>
       </div>
 
+      {/* ── Taux de conversion & Frais ──────────────────────────────── */}
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <h2 className="font-black text-gray-800 flex items-center gap-2">
+            <DollarSign className="h-5 w-5 text-blue-600" />
+            Taux de conversion & Frais
+          </h2>
+          <p className="text-xs text-gray-500 mt-0.5">Ces valeurs s'appliquent aux wallets de tous les clients</p>
+        </div>
+        <div className="p-6 space-y-5">
+          {/* Exchange rate */}
+          <div>
+            <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <ArrowUpDown className="h-3.5 w-3.5" /> Taux de conversion (1 USD = X Gourdes)
+            </label>
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-gray-400">1 USD =</span>
+                <Input
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  value={exchangeRate}
+                  onChange={e => setExchangeRate(e.target.value)}
+                  placeholder="135"
+                  className="pl-16 pr-14 h-11 rounded-xl text-sm font-bold"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black text-indigo-500">HTG</span>
+              </div>
+            </div>
+            {exchangeRate && !isNaN(parseFloat(exchangeRate)) && parseFloat(exchangeRate) > 0 && (
+              <p className="text-[11px] text-gray-400 mt-1.5 ml-1">
+                → 1 HTG = ${(1 / parseFloat(exchangeRate)).toFixed(5)} USD
+              </p>
+            )}
+          </div>
+
+          {/* Fees row */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <Tag className="h-3.5 w-3.5 text-emerald-500" /> Frais de dépôt
+              </label>
+              <div className="relative">
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={depositFee}
+                  onChange={e => setDepositFee(e.target.value)}
+                  placeholder="0"
+                  className="pr-8 h-11 rounded-xl text-sm font-bold"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black text-emerald-500">%</span>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-black text-gray-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <Tag className="h-3.5 w-3.5 text-rose-500" /> Frais de retrait
+              </label>
+              <div className="relative">
+                <Input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={withdrawalFee}
+                  onChange={e => setWithdrawalFee(e.target.value)}
+                  placeholder="0"
+                  className="pr-8 h-11 rounded-xl text-sm font-bold"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black text-rose-500">%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Preview */}
+          {(depositFee || withdrawalFee) && (
+            <div className="bg-gray-50 rounded-2xl p-4 grid grid-cols-2 gap-3 text-center">
+              <div>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">Exemple dépôt 100 HTG</p>
+                <p className="text-base font-black text-gray-800 mt-0.5">
+                  {depositFee ? (100 - 100 * parseFloat(depositFee) / 100).toFixed(2) : '100'} HTG net
+                </p>
+                <p className="text-[10px] text-gray-400">{depositFee || '0'}% de frais</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">Exemple retrait 100 HTG</p>
+                <p className="text-base font-black text-gray-800 mt-0.5">
+                  {withdrawalFee ? (100 - 100 * parseFloat(withdrawalFee) / 100).toFixed(2) : '100'} HTG net
+                </p>
+                <p className="text-[10px] text-gray-400">{withdrawalFee || '0'}% de frais</p>
+              </div>
+            </div>
+          )}
+
+          <Button
+            onClick={saveRates}
+            disabled={savingRates}
+            className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold gap-2"
+          >
+            {savingRates ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            Enregistrer le taux et les frais
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Méthodes de paiement ─────────────────────────────────────── */}
       <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
           <h2 className="font-black text-gray-800 flex items-center gap-2">

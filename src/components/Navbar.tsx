@@ -1,4 +1,4 @@
-import { Package, ShieldCheck, LogIn, LogOut, Menu, X, Wallet, Bell, CheckCheck, Info, TrendingUp, TrendingDown, Trash2 } from 'lucide-react';
+import { Package, ShieldCheck, LogIn, LogOut, Menu, X, Wallet, Bell, CheckCheck, Info, TrendingUp, TrendingDown, Trash2, Download, Share2, Smartphone } from 'lucide-react';
 import RenaLogo from './RenaLogo';
 import { Button } from './ui/button';
 import { auth } from '@/lib/firebase';
@@ -39,6 +39,57 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
   const [confirmClearNotifs, setConfirmClearNotifs] = useState(false);
   const [clearingNotifs, setClearingNotifs] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const [showInstallMenu, setShowInstallMenu] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const installMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+    }
+    const handler = (e: any) => { e.preventDefault(); setDeferredPrompt(e); };
+    window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener('appinstalled', () => setIsInstalled(true));
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (installMenuRef.current && !installMenuRef.current.contains(e.target as Node)) {
+        setShowInstallMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleInstall = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') setDeferredPrompt(null);
+    } else {
+      alert("Pour installer l'application :\n• Sur iPhone : appuyez sur « Partager » puis « Sur l'écran d'accueil »\n• Sur Android : appuyez sur le menu du navigateur puis « Ajouter à l'écran d'accueil »");
+    }
+    setShowInstallMenu(false);
+  };
+
+  const handleShare = async () => {
+    const shareData = {
+      title: 'Phénix Services',
+      text: 'Gérez vos services et colis facilement avec Phénix Services.',
+      url: window.location.origin,
+    };
+    if (navigator.share) {
+      try { await navigator.share(shareData); } catch {}
+    } else {
+      await navigator.clipboard.writeText(window.location.origin);
+      alert('Lien copié dans le presse-papiers !');
+    }
+    setShowInstallMenu(false);
+  };
 
   const { notifications: clientNotifs, unreadCount: clientUnreadCount } = useClientNotifications(loggedClient?.id || null);
 
@@ -124,6 +175,52 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                 </button>
               )}
             </div>
+
+            {/* Download button — desktop */}
+            {!isInstalled && (
+              <div className="hidden md:block relative" ref={installMenuRef}>
+                <button
+                  onClick={() => setShowInstallMenu(v => !v)}
+                  className="flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-200 group hover:bg-emerald-50"
+                  aria-label="Télécharger l'application"
+                >
+                  <Download className="h-[18px] w-[18px] text-gray-400 group-hover:text-emerald-600 transition-colors" />
+                  <span className="text-[9px] font-bold uppercase tracking-wide text-gray-400/70 group-hover:text-emerald-600 transition-colors">App</span>
+                </button>
+                {showInstallMenu && (
+                  <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
+                    <div className="px-4 py-3 border-b border-gray-50 bg-gradient-to-r from-emerald-50 to-teal-50">
+                      <p className="text-xs font-black text-gray-800">Phénix Services</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">Accès rapide depuis votre écran</p>
+                    </div>
+                    <button
+                      onClick={handleInstall}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors text-left"
+                    >
+                      <div className="h-8 w-8 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+                        <Smartphone className="h-4 w-4 text-emerald-600" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm">Télécharger</p>
+                        <p className="text-[10px] text-gray-400">Installer sur l'appareil</p>
+                      </div>
+                    </button>
+                    <button
+                      onClick={handleShare}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors text-left border-t border-gray-50"
+                    >
+                      <div className="h-8 w-8 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+                        <Share2 className="h-4 w-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm">Partager</p>
+                        <p className="text-[10px] text-gray-400">Envoyer le lien</p>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Right side */}
             <div className="flex items-center gap-2 shrink-0">
@@ -354,6 +451,26 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
                     </span>
                   )}
                 </button>
+              )}
+
+              {!isInstalled && (
+                <>
+                  <div className="pt-2 pb-1 px-2">
+                    <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest">Application</p>
+                  </div>
+                  <button
+                    onClick={() => { handleInstall(); setMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-emerald-600 hover:bg-emerald-50 transition-all">
+                    <Smartphone className="h-5 w-5 shrink-0 text-emerald-500" />
+                    <span>Télécharger l'application</span>
+                  </button>
+                  <button
+                    onClick={() => { handleShare(); setMenuOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-blue-600 hover:bg-blue-50 transition-all">
+                    <Share2 className="h-5 w-5 shrink-0 text-blue-500" />
+                    <span>Partager l'application</span>
+                  </button>
+                </>
               )}
             </div>
 
