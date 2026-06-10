@@ -241,12 +241,11 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
   const handleWalletPurchase = async (formation: Formation) => {
     if (!loggedClient) { onOpenWallet(); return; }
     const rate = settings?.exchangeRate || 146;
-    const balanceHTG = Math.round((loggedClient.balance ?? 0) * rate);
-    if (balanceHTG < (formation.price ?? 0)) {
-      toast.error(`Solde insuffisant. Vous avez ${balanceHTG.toLocaleString()} HTG.`); return;
+    const priceUSD = (formation.price ?? 0) / rate;
+    if ((loggedClient.balance ?? 0) < priceUSD) {
+      toast.error(`Solde insuffisant. Vous avez $${(loggedClient.balance ?? 0).toFixed(2)} USD.`); return;
     }
     setPurchasing(true);
-    const priceUSD = (formation.price ?? 0) / rate;
     try {
       const res = await fetch('/api/formations/purchases/wallet', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -379,7 +378,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                 <div className="min-w-0">
                   <p className="font-black text-gray-900 text-sm truncate">{pendingFormation.title}</p>
                   <p className="text-xs text-violet-600 font-semibold">
-                    {pendingFormation.price === 0 ? 'Gratuit' : `${(pendingFormation.price || 0).toLocaleString()} HTG`}
+                    {pendingFormation.price === 0 ? 'Gratuit' : `$${((pendingFormation.price || 0) / (settings?.exchangeRate || 146)).toFixed(2)} USD`}
                   </p>
                 </div>
               </div>
@@ -470,7 +469,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                     <EmptyState icon={<Search className="h-10 w-10" />} title="Aucun résultat" sub="Essayez un autre mot-clé ou modifiez vos filtres." />
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {filtered.map((f, i) => <CourseCard key={f.id} formation={f} i={i} owned={isOwned(f)} fav={isFav(f)} disc={discount(f)} onOpen={() => openDetail(f)} onFav={(e) => toggleFavorite(f, e)} />)}
+                      {filtered.map((f, i) => <CourseCard key={f.id} formation={f} i={i} owned={isOwned(f)} fav={isFav(f)} disc={discount(f)} rate={settings?.exchangeRate || 146} onOpen={() => openDetail(f)} onFav={(e) => toggleFavorite(f, e)} />)}
                     </div>
                   )}
                 </div>
@@ -751,8 +750,8 @@ function EmptyState({ icon, title, sub }: { icon: React.ReactNode; title: string
   );
 }
 
-function CourseCard({ formation, i, owned, fav, disc, onOpen, onFav }: {
-  formation: Formation; i: number; owned: boolean; fav: boolean; disc: number;
+function CourseCard({ formation, i, owned, fav, disc, onOpen, onFav, rate = 146 }: {
+  formation: Formation; i: number; owned: boolean; fav: boolean; disc: number; rate?: number;
   onOpen: () => void; onFav: (e: React.MouseEvent) => void;
 }) {
   const isComingSoon = !!formation.comingSoon;
@@ -866,15 +865,15 @@ function CourseCard({ formation, i, owned, fav, disc, onOpen, onFav }: {
             {isComingSoon ? (
               <span className="text-sm font-black text-orange-500 flex items-center gap-1">
                 <Clock className="h-3.5 w-3.5" />
-                {formation.price > 0 ? `${(formation.price || 0).toLocaleString()} HTG` : 'Prix à venir'}
+                {formation.price > 0 ? `$${((formation.price || 0) / rate).toFixed(2)} USD` : 'Prix à venir'}
               </span>
             ) : (
               <>
                 <span className="text-base font-black text-violet-700">
-                  {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
+                  {formation.price === 0 ? 'Gratuit' : `$${((formation.price || 0) / rate).toFixed(2)} USD`}
                 </span>
                 {formation.originalPrice && formation.originalPrice > formation.price && (
-                  <span className="text-xs text-gray-400 line-through ml-1.5">{formation.originalPrice.toLocaleString()}</span>
+                  <span className="text-xs text-gray-400 line-through ml-1.5">${(formation.originalPrice / rate).toFixed(2)}</span>
                 )}
               </>
             )}
@@ -1576,7 +1575,8 @@ function PurchaseCard({
 }: any) {
 
   const rate = settings?.exchangeRate || 146;
-  const hasWalletFunds = loggedClient && Math.round((loggedClient.balance ?? 0) * rate) >= (formation.price ?? 0);
+  const priceUSD = (formation.price ?? 0) / rate;
+  const hasWalletFunds = loggedClient && (loggedClient.balance ?? 0) >= priceUSD;
 
   if (paymentStep === 'done') {
     return (
@@ -1606,10 +1606,10 @@ function PurchaseCard({
       <div className="p-5 border-b border-gray-50">
         <div className="flex items-center gap-3 mb-1">
           <span className="text-3xl font-black text-violet-700">
-            {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
+            {formation.price === 0 ? 'Gratuit' : `$${((formation.price || 0) / rate).toFixed(2)} USD`}
           </span>
           {formation.originalPrice && formation.originalPrice > formation.price && (
-            <span className="text-sm text-gray-400 line-through">{formation.originalPrice.toLocaleString()}</span>
+            <span className="text-sm text-gray-400 line-through">${(formation.originalPrice / rate).toFixed(2)}</span>
           )}
           {discount > 0 && (
             <span className="px-2 py-0.5 bg-rose-100 text-rose-600 text-xs font-black rounded-full">-{discount}%</span>
@@ -1619,7 +1619,7 @@ function PurchaseCard({
           <p className="text-xs text-gray-400 flex items-center gap-1.5">
             <Wallet className="h-3.5 w-3.5" />
             Votre solde : <span className={`font-bold ml-0.5 ${hasWalletFunds ? 'text-emerald-600' : 'text-rose-500'}`}>
-              {(loggedClient.balance ?? 0).toLocaleString()} HTG
+              ${(loggedClient.balance ?? 0).toFixed(2)} USD
             </span>
           </p>
         )}
@@ -1767,7 +1767,7 @@ function FeaturedCourseCard({ formation, owned, fav, disc, onOpen, onFav }: {
           <span className="bg-rose-500 text-white text-[9px] font-black px-2.5 py-1 rounded-full">-{disc}%</span>
         ) : (
           <span className="bg-white/20 backdrop-blur-sm text-white text-[10px] font-black px-2.5 py-1 rounded-full">
-            {formation.price === 0 ? 'Gratuit' : `${(formation.price || 0).toLocaleString()} HTG`}
+            {formation.price === 0 ? 'Gratuit' : `$${((formation.price || 0) / 146).toFixed(2)} USD`}
           </span>
         )}
       </div>

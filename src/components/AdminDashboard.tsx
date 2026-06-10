@@ -27,7 +27,7 @@ import {
   useParcels, saveParcel, deleteParcel,
 } from '../services/parcelService';
 import { toast } from 'sonner';
-import { AdminAccount, CardTopup, FeeTier, Parcel, ParcelStatus, PaymentMethod, DEFAULT_PAYMENT_METHODS, Formation, FormationPurchase, FormationModule } from '../types';
+import { AdminAccount, CardTopup, FeeTier, Parcel, ParcelStatus, PaymentMethod, DEFAULT_PAYMENT_METHODS, Formation, FormationPurchase, FormationModule, FormationChapter } from '../types';
 import { usePendingClientCount } from '../services/clientService';
 
 const ADMIN_SECRET = 'rena-admin-2024';
@@ -138,8 +138,13 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
       <div className="flex-1 min-w-0">
         {/* Mobile topbar */}
         <div className="md:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-100 sticky top-0 z-30">
-          <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-xl hover:bg-gray-100">
+          <button onClick={() => setSidebarOpen(true)} className="relative p-2 rounded-xl hover:bg-gray-100">
             <Menu className="h-5 w-5 text-gray-600" />
+            {(pendingClientCount ?? 0) > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center px-1 shadow">
+                {(pendingClientCount ?? 0) > 99 ? '99+' : pendingClientCount}
+              </span>
+            )}
           </button>
           <span className="font-black text-gray-800">
             {tabs.find(t => t.id === tab)?.label}
@@ -2159,24 +2164,21 @@ function FormationsAdminTab() {
               </label>
             </div>
 
-            {/* ── Chapitres / Vidéos ── */}
+            {/* ── Chapitres & Leçons ── */}
             <div className="border-t border-gray-100 pt-4">
               <div className="flex items-center justify-between mb-3">
                 <Label className="text-xs font-black text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
-                  <BookOpen className="h-3.5 w-3.5 text-purple-500" /> Chapitres & Vidéos
+                  <BookOpen className="h-3.5 w-3.5 text-purple-500" /> Chapitres & Leçons
                 </Label>
                 <button
                   type="button"
                   onClick={() => {
-                    const newModule: FormationModule = {
+                    const newChapter: FormationChapter = {
                       id: `ch-${Date.now()}`,
                       title: '',
-                      videoUrl: '',
-                      duration: '',
-                      order: (form.modules?.length ?? 0) + 1,
-                      description: '',
+                      order: (form.chapters?.length ?? 0) + 1,
                     };
-                    setForm(f => ({ ...f, modules: [...(f.modules || []), newModule] }));
+                    setForm(f => ({ ...f, chapters: [...(f.chapters || []), newChapter] }));
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-black transition-colors"
                 >
@@ -2184,72 +2186,120 @@ function FormationsAdminTab() {
                 </button>
               </div>
 
-              {(!form.modules || form.modules.length === 0) ? (
+              {(!form.chapters || form.chapters.length === 0) ? (
                 <div className="text-center py-6 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400">
                   <BookOpen className="h-8 w-8 mx-auto mb-2 opacity-30" />
                   <p className="text-xs font-bold">Aucun chapitre — cliquez sur « Ajouter un chapitre »</p>
+                  <p className="text-[10px] mt-1 text-gray-300">Chaque chapitre peut contenir plusieurs leçons.</p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {(form.modules || []).map((mod, idx) => (
-                    <div key={mod.id} className="bg-gray-50 rounded-2xl p-3 space-y-2 border border-gray-100">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest">Chapitre {idx + 1}</span>
-                        <button
-                          type="button"
-                          onClick={() => setForm(f => ({ ...f, modules: (f.modules || []).filter((_, i) => i !== idx) }))}
-                          className="p-1 rounded-lg hover:bg-red-100 text-gray-300 hover:text-red-500 transition-colors"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      <Input
-                        value={mod.title}
-                        onChange={e => {
-                          const updated = [...(form.modules || [])];
-                          updated[idx] = { ...updated[idx], title: e.target.value };
-                          setForm(f => ({ ...f, modules: updated }));
-                        }}
-                        placeholder="Titre du chapitre"
-                        className="rounded-xl h-9 text-sm bg-white"
-                      />
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div className="relative">
+                <div className="space-y-4">
+                  {(form.chapters || []).map((chapter, ci) => {
+                    const chapterLessons = (form.modules || []).filter(m => m.chapterId === chapter.id);
+                    return (
+                      <div key={chapter.id} className="bg-gray-50 rounded-2xl border border-gray-100 overflow-hidden">
+                        {/* Chapter header */}
+                        <div className="flex items-center gap-2 px-3 py-2.5 bg-purple-50/60 border-b border-purple-100/50">
+                          <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest shrink-0 w-8">Ch.{ci + 1}</span>
                           <Input
-                            value={mod.videoUrl}
+                            value={chapter.title}
                             onChange={e => {
-                              const updated = [...(form.modules || [])];
-                              updated[idx] = { ...updated[idx], videoUrl: e.target.value };
-                              setForm(f => ({ ...f, modules: updated }));
+                              const updated = [...(form.chapters || [])];
+                              updated[ci] = { ...updated[ci], title: e.target.value };
+                              setForm(f => ({ ...f, chapters: updated }));
                             }}
-                            placeholder="URL de la vidéo (YouTube, Vimeo…)"
-                            className="rounded-xl h-9 text-sm bg-white pl-8"
+                            placeholder="Titre du chapitre"
+                            className="rounded-xl h-8 text-sm bg-white flex-1 border-purple-100"
                           />
-                          <ExternalLink className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-300" />
+                          <button
+                            type="button"
+                            onClick={() => setForm(f => ({
+                              ...f,
+                              chapters: (f.chapters || []).filter((_, i) => i !== ci),
+                              modules: (f.modules || []).filter(m => m.chapterId !== chapter.id),
+                            }))}
+                            className="p-1.5 rounded-lg hover:bg-red-100 text-gray-300 hover:text-red-500 transition-colors shrink-0"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
                         </div>
-                        <Input
-                          value={mod.duration}
-                          onChange={e => {
-                            const updated = [...(form.modules || [])];
-                            updated[idx] = { ...updated[idx], duration: e.target.value };
-                            setForm(f => ({ ...f, modules: updated }));
-                          }}
-                          placeholder="Durée (ex: 12:30)"
-                          className="rounded-xl h-9 text-sm bg-white"
-                        />
+
+                        {/* Lessons */}
+                        <div className="p-3 space-y-2">
+                          {chapterLessons.map((lesson, li) => {
+                            const lessonGlobalIdx = (form.modules || []).findIndex(m => m.id === lesson.id);
+                            return (
+                              <div key={lesson.id} className="bg-white rounded-xl p-2.5 border border-gray-100 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[10px] font-black text-indigo-500 uppercase tracking-wide">Leçon {li + 1}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setForm(f => ({ ...f, modules: (f.modules || []).filter(m => m.id !== lesson.id) }))}
+                                    className="p-1 rounded-lg hover:bg-red-100 text-gray-300 hover:text-red-500 transition-colors"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                                <Input
+                                  value={lesson.title}
+                                  onChange={e => {
+                                    const updated = [...(form.modules || [])];
+                                    updated[lessonGlobalIdx] = { ...updated[lessonGlobalIdx], title: e.target.value };
+                                    setForm(f => ({ ...f, modules: updated }));
+                                  }}
+                                  placeholder="Titre de la leçon"
+                                  className="rounded-xl h-8 text-sm bg-gray-50"
+                                />
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <div className="relative">
+                                    <Input
+                                      value={lesson.videoUrl}
+                                      onChange={e => {
+                                        const updated = [...(form.modules || [])];
+                                        updated[lessonGlobalIdx] = { ...updated[lessonGlobalIdx], videoUrl: e.target.value };
+                                        setForm(f => ({ ...f, modules: updated }));
+                                      }}
+                                      placeholder="URL vidéo (YouTube…)"
+                                      className="rounded-xl h-8 text-sm bg-gray-50 pl-8"
+                                    />
+                                    <ExternalLink className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-300" />
+                                  </div>
+                                  <Input
+                                    value={lesson.duration}
+                                    onChange={e => {
+                                      const updated = [...(form.modules || [])];
+                                      updated[lessonGlobalIdx] = { ...updated[lessonGlobalIdx], duration: e.target.value };
+                                      setForm(f => ({ ...f, modules: updated }));
+                                    }}
+                                    placeholder="Durée (ex: 12:30)"
+                                    className="rounded-xl h-8 text-sm bg-gray-50"
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newLesson: FormationModule = {
+                                id: `les-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                                title: '',
+                                videoUrl: '',
+                                duration: '',
+                                order: chapterLessons.length + 1,
+                                description: '',
+                                chapterId: chapter.id,
+                              };
+                              setForm(f => ({ ...f, modules: [...(f.modules || []), newLesson] }));
+                            }}
+                            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border-2 border-dashed border-indigo-200 text-indigo-500 text-xs font-bold hover:bg-indigo-50 transition-colors"
+                          >
+                            <Plus className="h-3 w-3" /> Ajouter une leçon
+                          </button>
+                        </div>
                       </div>
-                      <Input
-                        value={mod.description || ''}
-                        onChange={e => {
-                          const updated = [...(form.modules || [])];
-                          updated[idx] = { ...updated[idx], description: e.target.value };
-                          setForm(f => ({ ...f, modules: updated }));
-                        }}
-                        placeholder="Description (optionnel)"
-                        className="rounded-xl h-9 text-sm bg-white"
-                      />
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

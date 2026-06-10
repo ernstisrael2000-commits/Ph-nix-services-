@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Globe, CreditCard, ShieldCheck, Clock, Phone, MessageCircle,
-  X, Wallet, Loader2, ChevronRight, Plus, RefreshCw, Check,
+  X, Wallet, Loader2, ChevronRight, Plus, RefreshCw, Check, Search,
 } from 'lucide-react';
 import { useCardTopups, useSettings } from '../services/parcelService';
 import { submitClientPurchase, useClientData, useClientPendingPurchase } from '../services/clientService';
@@ -38,6 +38,21 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
   const { client: liveClient } = useClientData(loggedClient?.id || null);
   const effectiveClient = liveClient || loggedClient;
   const hasPendingPurchase = useClientPendingPurchase(loggedClient?.id || null);
+
+  // Slideshow
+  const [slideIdx, setSlideIdx] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const SLIDES = [
+    { gradient: 'from-indigo-600 via-blue-600 to-cyan-500', title: 'Cartes Virtuelles & Physiques', sub: 'Créez votre carte en quelques clics, rechargez à tout moment.' },
+    { gradient: 'from-purple-600 via-violet-600 to-indigo-500', title: 'Recharge Instantanée', sub: 'Ajoutez des fonds à vos cartes facilement depuis votre portefeuille.' },
+    { gradient: 'from-emerald-500 via-teal-500 to-cyan-600', title: 'Paiement 100% Sécurisé', sub: 'Vos transactions sont protégées et disponibles 24h/24, 7j/7.' },
+  ];
+
+  useEffect(() => {
+    const id = setInterval(() => setSlideIdx(i => (i + 1) % SLIDES.length), 4000);
+    return () => clearInterval(id);
+  }, []);
 
   // Modal state
   const [selected, setSelected] = useState<any>(null);
@@ -191,52 +206,81 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
   const creationPriceNum = selected ? parseFloat(String(selected.price ?? '0').replace(/[^\d.]/g, '')) : 0;
   const hasEnoughBalance = balanceHTG >= creationPriceNum && creationPriceNum > 0;
 
+  const filteredServices = services.filter(s =>
+    !searchQuery || s.name?.toLowerCase().includes(searchQuery.toLowerCase()) || s.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className="min-h-screen bg-[#F4F6FB] pb-28">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 px-4 pt-6 pb-20">
-        <div className="max-w-3xl mx-auto">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-              <CreditCard className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-black text-white leading-none">Nos Services</h1>
-              <p className="text-white/60 text-xs font-medium mt-0.5">Créez et rechargez vos cartes facilement</p>
-            </div>
-          </div>
+      {/* Slideshow banner */}
+      <div className="relative h-48 overflow-hidden">
+        <AnimatePresence mode="wait">
+          {SLIDES.map((slide, idx) => idx === slideIdx && (
+            <motion.div
+              key={idx}
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -40 }}
+              transition={{ duration: 0.4 }}
+              className={`absolute inset-0 bg-gradient-to-br ${slide.gradient} flex flex-col justify-center px-6`}
+            >
+              <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2">
+                <CreditCard className="h-3.5 w-3.5" /> Services Phénix
+              </p>
+              <h2 className="text-2xl font-black text-white leading-tight mb-1">{slide.title}</h2>
+              <p className="text-white/70 text-sm leading-snug max-w-xs">{slide.sub}</p>
+              {/* Decorative circles */}
+              <div className="absolute -top-10 -right-10 w-44 h-44 rounded-full bg-white/8 pointer-events-none" />
+              <div className="absolute bottom-0 right-16 w-20 h-20 rounded-full bg-white/6 pointer-events-none" />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        {/* Dot indicators */}
+        <div className="absolute bottom-3 right-4 flex gap-1.5">
+          {SLIDES.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setSlideIdx(i)}
+              className={`h-1.5 rounded-full transition-all ${i === slideIdx ? 'w-5 bg-white' : 'w-1.5 bg-white/40'}`}
+            />
+          ))}
+        </div>
+      </div>
 
-          <div className="grid grid-cols-3 gap-3 mt-5">
-            {[
-              { label: 'Sécurisé', value: '100%', icon: ShieldCheck },
-              { label: 'Disponibilité', value: '24/7', icon: Clock },
-              { label: 'Satisfaction', value: '99%', icon: Globe },
-            ].map(s => (
-              <div key={s.label} className="bg-white/15 backdrop-blur-sm rounded-2xl p-3 text-center border border-white/10">
-                <s.icon className="h-4 w-4 text-white/70 mx-auto mb-1" />
-                <p className="text-lg font-black text-white leading-none">{s.value}</p>
-                <p className="text-[9px] text-white/60 font-bold uppercase tracking-wide mt-0.5">{s.label}</p>
-              </div>
-            ))}
-          </div>
+      {/* Search bar */}
+      <div className="max-w-3xl mx-auto px-4 pt-4 pb-2">
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Rechercher un service…"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full h-11 pl-10 pr-4 rounded-2xl border border-gray-200 bg-white text-sm text-gray-800 placeholder-gray-400 outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-300 transition-all shadow-sm"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
 
       {/* Cards grid */}
-      <div className="max-w-3xl mx-auto px-4 -mt-10">
+      <div className="max-w-3xl mx-auto px-4 pt-2">
         {loading ? (
           <div className="flex justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
           </div>
-        ) : services.length === 0 ? (
+        ) : filteredServices.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200 shadow-sm">
             <CreditCard className="h-12 w-12 text-gray-200 mx-auto mb-3" />
-            <p className="text-gray-400 text-sm font-semibold">Aucun service disponible pour le moment.</p>
-            <p className="text-gray-300 text-xs mt-1">L'administrateur peut en ajouter depuis le tableau de bord.</p>
+            <p className="text-gray-400 text-sm font-semibold">{searchQuery ? 'Aucun service trouvé.' : 'Aucun service disponible pour le moment.'}</p>
+            <p className="text-gray-300 text-xs mt-1">{searchQuery ? 'Essayez un autre terme de recherche.' : "L'administrateur peut en ajouter depuis le tableau de bord."}</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {services.map((svc, i) => (
+            {filteredServices.map((svc, i) => (
               <motion.div
                 key={svc.id}
                 initial={{ opacity: 0, scale: 0.95, y: 10 }}
