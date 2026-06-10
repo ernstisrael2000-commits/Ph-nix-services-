@@ -4559,6 +4559,14 @@ router.get('/api/admin/slider-images-list', requireDb, requireAdminSecret, async
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// Public endpoint — no admin secret required (images are public content)
+router.get('/api/slider-images', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('slider_images').orderBy('createdAt', 'asc').get();
+    res.json({ images: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 router.get('/api/admin/nav-buttons-list', requireDb, requireAdminSecret, async (_req, res) => {
   try {
     const snap = await adminDb.collection('nav_buttons').orderBy('order', 'asc').get();

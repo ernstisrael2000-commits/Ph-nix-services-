@@ -450,20 +450,14 @@ export const useSliderImages = () => {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const q = query(collection(db, 'slider_images'), orderBy('createdAt', 'asc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (cancelled) return;
-      setSliderImages(snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as { id: string, url: string, title?: string, description?: string }[]);
-      setLoading(false);
-    }, async (_err) => {
-      if (cancelled) return;
-      try {
-        const data = await adminGet('/api/admin/slider-images-list');
-        if (!cancelled) setSliderImages(data.images || []);
-      } catch {}
-      if (!cancelled) setLoading(false);
-    });
-    return () => { cancelled = true; unsubscribe(); };
+    // Use the server-side API (Admin SDK) — avoids the wrong-database issue
+    // that occurs when using the client-side Firestore SDK with a named DB.
+    fetch('/api/slider-images')
+      .then(r => r.json())
+      .then(data => { if (!cancelled) setSliderImages(data.images || []); })
+      .catch(() => { if (!cancelled) setSliderImages([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [refreshKey]);
 
   return { sliderImages, loading };
