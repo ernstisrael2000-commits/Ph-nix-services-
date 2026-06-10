@@ -73,8 +73,13 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
   const [certificate, setCertificate] = useState<any>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const introRef = useRef<HTMLVideoElement>(null);
   const positionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mainContentRef = useRef<HTMLDivElement>(null);
+
+  // Intro video state — plays before each lesson video
+  const [showingIntro, setShowingIntro] = useState(false);
+  const [introDismissed, setIntroDismissed] = useState<Set<string>>(new Set());
 
   const modules = getSortedModules(formation);
   const currentModule = modules.find(m => m.id === currentModuleId) ?? null;
@@ -273,6 +278,21 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
       videoRef.current.currentTime = lastPositionSeconds;
     }
   }, [currentModuleId]);
+
+  // ── Intro video — show before each lesson that has a video ─────────────────
+  useEffect(() => {
+    if (currentModuleId && currentModule?.videoUrl && !introDismissed.has(currentModuleId)) {
+      setShowingIntro(true);
+    } else {
+      setShowingIntro(false);
+    }
+  }, [currentModuleId]);
+
+  const skipIntro = () => {
+    if (introRef.current) { introRef.current.pause(); }
+    if (currentModuleId) setIntroDismissed(prev => new Set([...prev, currentModuleId]));
+    setShowingIntro(false);
+  };
 
   // ── Navigation ─────────────────────────────────────────────────────────────
   const scrollTop = () => {
@@ -620,7 +640,27 @@ export default function CoursePlayer({ formation, loggedClient, onBack }: Course
           ) : (
             <>
               {/* ── Video area — stays black (player standard) ─────────────── */}
-              <div className="bg-black w-full shrink-0 shadow-md">
+              <div className="bg-black w-full shrink-0 shadow-md relative">
+                {/* Intro overlay */}
+                {showingIntro && (
+                  <div className="absolute inset-0 z-20 bg-black">
+                    <video
+                      ref={introRef}
+                      src="/intro-platform.mp4"
+                      autoPlay
+                      playsInline
+                      className="w-full h-full object-contain"
+                      style={{ background: '#000' }}
+                      onEnded={skipIntro}
+                    />
+                    <button
+                      onClick={skipIntro}
+                      className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-black/60 hover:bg-black/80 text-white text-xs font-bold px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/20 transition-all"
+                    >
+                      Passer <span className="text-white/60">›</span>
+                    </button>
+                  </div>
+                )}
                 {!currentModule.videoUrl ? (
                   <div className="aspect-video flex flex-col items-center justify-center text-gray-400 bg-gray-100">
                     <FileText className="h-12 w-12 mb-3 text-gray-300" />
