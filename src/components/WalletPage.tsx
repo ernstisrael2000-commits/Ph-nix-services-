@@ -760,6 +760,68 @@ export default function WalletPage({ clientId, initialClient, onLogout, onBack }
               <p className="text-[10px] text-gray-400">{depositMessage.length}/300</p>
             </div>
 
+            {/* SafacilPay — paiement en ligne direct */}
+            {parseFloat(htgAmount) > 0 && (
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 overflow-hidden">
+                <div className="px-4 py-2 bg-blue-600 flex items-center gap-2">
+                  <span className="text-[10px] font-black text-white uppercase tracking-widest">Payer en ligne — Automatique</span>
+                </div>
+                <div className="p-3 space-y-2">
+                  <p className="text-[11px] text-blue-700 font-bold">
+                    Payez directement avec SafacilPay — votre solde est crédité automatiquement après confirmation.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={actionLoading || !client || parseFloat(htgAmount) <= 0}
+                    onClick={async () => {
+                      if (!client) return;
+                      const htg = parseFloat(htgAmount);
+                      if (isNaN(htg) || htg <= 0) { toast.error('Entrez un montant valide.'); return; }
+                      const usd = htg / rate;
+                      if (usd < minDeposit) { toast.error(`Minimum: $${minDeposit.toFixed(2)} USD`); return; }
+                      if (usd > maxDeposit) { toast.error(`Maximum: $${maxDeposit.toFixed(2)} USD`); return; }
+                      setActionLoading(true);
+                      try {
+                        const res = await fetch('/api/payments/safacilpay/initiate', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            clientId: client.id,
+                            clientName: client.name,
+                            clientWalletId: client.walletId,
+                            htgAmount: htg,
+                            exchangeRate: rate,
+                          }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok || !data.paymentUrl) throw new Error(data.error || 'Erreur SafacilPay.');
+                        setIsDepositOpen(false);
+                        resetDeposit();
+                        window.location.href = data.paymentUrl;
+                      } catch (err: any) {
+                        toast.error(err.message || 'Erreur SafacilPay.');
+                      } finally {
+                        setActionLoading(false);
+                      }
+                    }}
+                    className="w-full h-11 rounded-xl font-black text-white text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                    style={{ background: 'linear-gradient(135deg, #1D6FE8 0%, #0D47A1 100%)' }}
+                  >
+                    {actionLoading
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="shrink-0">
+                            <rect width="24" height="24" rx="6" fill="white" fillOpacity="0.2"/>
+                            <path d="M5 12h14M13 6l6 6-6 6" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                          Payer {Number(htgAmount).toLocaleString()} HTG avec SafacilPay
+                        </>
+                    }
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-start gap-2">
               <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
               <p className="text-xs text-blue-700"><strong>Étape suivante :</strong> Vous serez redirigé sur WhatsApp pour confirmer.</p>

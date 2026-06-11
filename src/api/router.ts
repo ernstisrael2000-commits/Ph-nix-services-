@@ -5667,6 +5667,297 @@ router.post('/api/webhooks/moncashconnect', async (req, res) => {
   }
 });
 
+// ── SafacilPay Integration ────────────────────────────────────────────────────
+const SAFACIL_API_KEY    = process.env.SAFACILPAY_API_KEY    || '';
+const SAFACIL_SECRET_KEY = process.env.SAFACILPAY_SECRET_KEY || '';
+const SAFACIL_BASE_URL   = 'https://api.safacilpay.com';
+
+function generateSafacilRef(): string {
+  const year = new Date().getFullYear();
+  const ts   = Date.now().toString().slice(-8);
+  const rand = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+  return `SAF_${year}_${ts}${rand}`;
+}
+
+async function creditClientSafacil(
+  deposit: any,
+  referenceId: string,
+  transactionId: string,
+  source: 'webhook' | 'polling'
+) {
+  const settingsSnap = await adminDb.collection('settings').doc('global').get();
+  const sData    = settingsSnap.exists ? settingsSnap.data()! : {};
+  const feePct   = Number(sData.depositFeePercent || 0);
+  const affPct   = Number(sData.affiliateDepositFeeSharePercent || 0);
+  const exchRate = Number(sData.exchangeRate || 135);
+
+  let netUsd      = deposit.usdAmount;
+  const batch     = adminDb.batch();
+  const depositRef = adminDb.collection('safacilpay_deposits').doc(referenceId);
+  const clientRef  = adminDb.collection('clients').doc(deposit.clientId);
+
+  if (feePct > 0) {
+    const feeAmt = parseFloat((deposit.usdAmount * feePct / 100).toFixed(4));
+    if (feeAmt > 0) {
+      netUsd = parseFloat((deposit.usdAmount - feeAmt).toFixed(4));
+      const affShare   = parseFloat((feeAmt * affPct / 100).toFixed(4));
+      const adminShare = parseFloat((feeAmt - affShare).toFixed(4));
+      if (adminShare > 0)
+        batch.update(adminDb.collection('settings').doc('global'), {
+          feesBalance: FieldValue.increment(adminShare),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      if (affShare > 0) {
+        try {
+          const cSnap = await clientRef.get();
+          const sponsorId = cSnap.exists ? cSnap.data()!.directSponsorId : null;
+          if (sponsorId)
+            batch.update(adminDb.collection('affiliates').doc(sponsorId), {
+              commissionBalance: FieldValue.increment(affShare),
+              totalEarnings: FieldValue.increment(affShare),
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+        } catch {}
+      }
+    }
+  }
+
+  batch.update(depositRef, {
+    status: 'completed',
+    webhookReceived: source === 'webhook',
+    verifiedByPolling: source === 'polling',
+    netUsdAmount: netUsd,
+    ...(transactionId && { providerTransactionId: transactionId }),
+    completedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  batch.update(clientRef, { balance: FieldValue.increment(netUsd), updatedAt: FieldValue.serverTimestamp() });
+
+  const txRef = adminDb.collection('client_transactions').doc();
+  batch.set(txRef, {
+    clientId: deposit.clientId, clientName: deposit.clientName,
+    type: 'deposit', amount: netUsd, usdAmount: netUsd,
+    htgAmount: deposit.htgAmount, exchangeRate: deposit.exchangeRate,
+    status: 'completed', method: 'SafacilPay', provider: 'safacilpay',
+    referenceId, ...(transactionId && { providerTransactionId: transactionId }),
+    description: `Dépôt SafacilPay — ${Number(deposit.htgAmount).toLocaleString()} HTG — Réf: ${referenceId}`,
+    createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  const notifRef = adminDb.collection('client_notifications').doc();
+  batch.set(notifRef, {
+    clientId: deposit.clientId, type: 'deposit_approved',
+    title: '✅ Dépôt SafacilPay confirmé',
+    message: `${Number(deposit.htgAmount).toLocaleString()} HTG (≈ $${netUsd.toFixed(2)}) crédités sur votre compte.`,
+    amount: netUsd, referenceId, read: false, createdAt: FieldValue.serverTimestamp(),
+  });
+
+  await batch.commit();
+  try { pushClientEvent(deposit.clientId, 'tx_approved', { type: 'deposit', htg: Math.round(netUsd * exchRate), usd: netUsd }); } catch {}
+  sendFcmToClient(deposit.clientId, '✅ Dépôt SafacilPay confirmé',
+    `${Number(deposit.htgAmount).toLocaleString()} HTG crédités automatiquement.`,
+    { type: 'deposit_approved', referenceId });
+  console.log(`[safacilpay/${source}] ✅ Credited $${netUsd} to ${deposit.clientId} ref=${referenceId}`);
+  return netUsd;
+}
+
+// POST /api/payments/safacilpay/initiate
+router.post('/api/payments/safacilpay/initiate', requireDb, async (req, res) => {
+  try {
+    const { clientId, clientName, clientWalletId, htgAmount, exchangeRate } = req.body;
+    if (!clientId || !clientName || !htgAmount)
+      return res.status(400).json({ error: 'Paramètres manquants.' });
+    if (!SAFACIL_API_KEY || !SAFACIL_SECRET_KEY)
+      return res.status(503).json({ error: "Service SafacilPay non configuré. Contactez l'administrateur." });
+
+    const htg = Number(htgAmount);
+    if (isNaN(htg) || htg <= 0)
+      return res.status(400).json({ error: 'Montant invalide.' });
+
+    const settingsSnap = await adminDb.collection('settings').doc('global').get();
+    const sData = settingsSnap.exists ? settingsSnap.data()! : {};
+    const rate  = Number(exchangeRate || sData.exchangeRate || 135);
+    const usdAmount = parseFloat((htg / rate).toFixed(4));
+
+    const minD = Number(sData.minDepositUSD || 0);
+    const maxD = Number(sData.maxDepositUSD || Infinity);
+    if (minD > 0 && usdAmount < minD) return res.status(400).json({ error: `Montant minimum: $${minD.toFixed(2)} USD` });
+    if (maxD < Infinity && usdAmount > maxD) return res.status(400).json({ error: `Montant maximum: $${maxD.toFixed(2)} USD` });
+
+    const clientSnap = await adminDb.collection('clients').doc(clientId).get();
+    if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
+
+    let referenceId = '';
+    let unique = false;
+    while (!unique) {
+      referenceId = generateSafacilRef();
+      const ex = await adminDb.collection('safacilpay_deposits').doc(referenceId).get();
+      if (!ex.exists) unique = true;
+    }
+
+    const proto     = (req.headers['x-forwarded-proto'] as string) || 'https';
+    const host      = (req.headers['x-forwarded-host']  as string) || (req.headers.host as string) || '';
+    const returnUrl = `${proto}://${host}/?safacilpay_ref=${referenceId}`;
+    const alertUrl  = `${proto}://${host}/api/webhooks/safacilpay`;
+
+    const sfRes = await fetch(`${SAFACIL_BASE_URL}/payment/initiate`, {
+      method : 'POST',
+      headers: {
+        'Content-Type' : 'application/json',
+        'Accept'       : 'application/json',
+        'X-Api-Key'    : SAFACIL_API_KEY,
+        'X-Secret-Key' : SAFACIL_SECRET_KEY,
+      },
+      body: JSON.stringify({
+        amount     : htg,
+        currency   : 'HTG',
+        reference  : referenceId,
+        return_url : returnUrl,
+        alert_url  : alertUrl,
+        description: `Dépôt Phénix Services — ${clientName}`,
+      }),
+    });
+
+    const rawText = await sfRes.text();
+    console.log(`[safacilpay/initiate] status=${sfRes.status} body=${rawText.slice(0, 400)}`);
+
+    let sfData: any = {};
+    try { sfData = JSON.parse(rawText); } catch {}
+
+    const paymentUrl = sfData.payment_url || sfData.paymentUrl || sfData.redirect_url || sfData.url;
+    if (!sfRes.ok || !paymentUrl)
+      return res.status(502).json({ error: sfData.message || sfData.error || "Impossible d'initier le paiement SafacilPay." });
+
+    await adminDb.collection('safacilpay_deposits').doc(referenceId).set({
+      clientId, clientName, clientWalletId: clientWalletId || '',
+      referenceId, htgAmount: htg, usdAmount, exchangeRate: rate,
+      status: 'pending', provider: 'safacilpay', webhookReceived: false,
+      paymentUrl,
+      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    console.log(`[safacilpay/initiate] ✅ ref=${referenceId} htg=${htg} usd=${usdAmount} client=${clientId}`);
+    res.json({ success: true, paymentUrl, referenceId });
+  } catch (e: any) {
+    console.error('[safacilpay/initiate]', e);
+    res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// GET /api/payments/safacilpay/status/:referenceId
+router.get('/api/payments/safacilpay/status/:referenceId', requireDb, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('safacilpay_deposits').doc(req.params.referenceId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const d = snap.data()!;
+    res.json({ referenceId: req.params.referenceId, status: d.status, usdAmount: d.usdAmount, htgAmount: d.htgAmount });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/payments/safacilpay/verify
+router.post('/api/payments/safacilpay/verify', requireDb, async (req, res) => {
+  try {
+    const { referenceId } = req.body;
+    if (!referenceId) return res.status(400).json({ error: 'referenceId manquant.' });
+    if (!SAFACIL_API_KEY || !SAFACIL_SECRET_KEY)
+      return res.status(503).json({ error: 'SafacilPay non configuré.' });
+
+    const snap = await adminDb.collection('safacilpay_deposits').doc(referenceId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    const d = snap.data()!;
+    if (d.status !== 'pending')
+      return res.json({ referenceId, status: d.status, usdAmount: d.usdAmount, htgAmount: d.htgAmount });
+
+    const sfRes = await fetch(`${SAFACIL_BASE_URL}/payment/status/${referenceId}`, {
+      method : 'GET',
+      headers: {
+        'Accept'      : 'application/json',
+        'X-Api-Key'   : SAFACIL_API_KEY,
+        'X-Secret-Key': SAFACIL_SECRET_KEY,
+      },
+    });
+    const rawText = await sfRes.text();
+    console.log(`[safacilpay/verify] status=${sfRes.status} body=${rawText.slice(0, 300)}`);
+    let sfData: any = {};
+    try { sfData = JSON.parse(rawText); } catch {}
+
+    const sfStatus = (sfData?.status || sfData?.payment_status || sfData?.state || '').toLowerCase();
+    const transactionId = sfData?.transaction_id || sfData?.transactionId || sfData?.id || '';
+
+    if (['completed', 'success', 'paid', 'approved', 'confirmed'].includes(sfStatus)) {
+      const netUsd = await creditClientSafacil(d, referenceId, transactionId, 'polling');
+      return res.json({ referenceId, status: 'completed', usdAmount: netUsd, htgAmount: d.htgAmount });
+    }
+
+    res.json({ referenceId, status: d.status, usdAmount: d.usdAmount, htgAmount: d.htgAmount, sfStatus });
+  } catch (e: any) {
+    console.error('[safacilpay/verify]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/webhooks/safacilpay  (Alert URL)
+router.post('/api/webhooks/safacilpay', async (req, res) => {
+  if (!adminDb) return res.status(503).json({ error: 'DB non disponible.' });
+  try {
+    const payload = req.body;
+    const referenceId  = payload.reference || payload.referenceId || payload.reference_id || '';
+    const wStatus      = (payload.status || payload.payment_status || '').toLowerCase();
+    const transactionId = payload.transaction_id || payload.transactionId || '';
+
+    console.log(`[webhook/safacilpay] ref=${referenceId} status=${wStatus}`);
+    if (!referenceId) return res.status(400).json({ error: 'reference manquant.' });
+
+    const depositRef  = adminDb.collection('safacilpay_deposits').doc(referenceId);
+    const depositSnap = await depositRef.get();
+    if (!depositSnap.exists) {
+      console.warn('[webhook/safacilpay] Not found:', referenceId);
+      return res.status(404).json({ error: 'Transaction introuvable.' });
+    }
+    const deposit = depositSnap.data()!;
+
+    if (deposit.status !== 'pending') {
+      console.log('[webhook/safacilpay] Already processed:', referenceId, deposit.status);
+      return res.status(200).json({ ok: true, skipped: true });
+    }
+
+    if (['completed', 'success', 'paid', 'approved', 'confirmed'].includes(wStatus)) {
+      await creditClientSafacil(deposit, referenceId, transactionId, 'webhook');
+    } else if (['failed', 'cancelled', 'error', 'rejected'].includes(wStatus)) {
+      await depositRef.update({
+        status: wStatus === 'cancelled' ? 'cancelled' : 'failed',
+        webhookReceived: true, updatedAt: FieldValue.serverTimestamp(),
+      });
+      sendFcmToClient(deposit.clientId, '❌ Dépôt SafacilPay échoué',
+        `Votre dépôt de ${Number(deposit.htgAmount).toLocaleString()} HTG n'a pas abouti.`,
+        { type: 'deposit_failed', referenceId });
+    } else {
+      await depositRef.update({ lastWebhookStatus: wStatus, updatedAt: FieldValue.serverTimestamp() });
+    }
+
+    res.status(200).json({ ok: true });
+  } catch (e: any) {
+    console.error('[webhook/safacilpay]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/admin/safacilpay-deposits (monitoring)
+router.get('/api/admin/safacilpay-deposits', requireDb, async (req, res) => {
+  try {
+    const { status, limit: lim, clientId: cId } = req.query;
+    let q: any = adminDb.collection('safacilpay_deposits').orderBy('createdAt', 'desc');
+    if (status) q = q.where('status', '==', status);
+    if (cId)    q = q.where('clientId', '==', cId);
+    const snap = await q.limit(Number(lim) || 200).get();
+    res.json({ deposits: snap.docs.map((d: any) => serializeDoc(d)), total: snap.size });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────
 router.all('/api/*', (_req, res) => {
   res.status(404).json({ error: 'Route API introuvable.' });

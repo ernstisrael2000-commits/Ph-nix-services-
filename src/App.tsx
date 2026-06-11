@@ -23,8 +23,9 @@ const AdminDashboard     = lazy(() => import('./components/AdminDashboard'));
 const AdminLogin         = lazy(() => import('./components/AdminLogin'));
 const ClientDashboard    = lazy(() => import('./components/ClientDashboard'));
 const WalletPage         = lazy(() => import('./components/WalletPage'));
-const PaymentSuccessView = lazy(() => import('./components/PaymentSuccessView'));
-const PaymentSuccessPage = lazy(() => import('./components/PaymentSuccessPage'));
+const PaymentSuccessView    = lazy(() => import('./components/PaymentSuccessView'));
+const PaymentSuccessPage    = lazy(() => import('./components/PaymentSuccessPage'));
+const SafacilPaySuccessView = lazy(() => import('./components/SafacilPaySuccessView'));
 const UserAuthModal      = lazy(() => import('./components/UserAuthModal'));
 const FormationsView     = lazy(() => import('./components/FormationsView'));
 const FormationsNavbar   = lazy(() => import('./components/FormationsNavbar'));
@@ -47,7 +48,8 @@ export default function App() {
   const [showClientDashboard, setShowClientDashboard] = useState(false);
   const [walletInitialAction, setWalletInitialAction] = useState<'deposit' | 'withdrawal' | undefined>(undefined);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [moncashReturnRef, setMoncashReturnRef] = useState<string | null>(null);
+  const [moncashReturnRef, setMoncashReturnRef]       = useState<string | null>(null);
+  const [safacilReturnRef, setSafacilReturnRef]       = useState<string | null>(null);
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(() =>
     window.location.pathname === '/payment-success'
   );
@@ -90,12 +92,17 @@ export default function App() {
     };
   }, []);
 
-  // Detect MonCash return redirect
+  // Detect MonCash / SafacilPay return redirect
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const ref = params.get('moncash_ref');
-    if (ref) {
-      setMoncashReturnRef(ref);
+    const moncashRef  = params.get('moncash_ref');
+    const safacilRef  = params.get('safacilpay_ref');
+    if (moncashRef) {
+      setMoncashReturnRef(moncashRef);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    if (safacilRef) {
+      setSafacilReturnRef(safacilRef);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
     if (window.location.pathname === '/payment-success') {
@@ -331,6 +338,15 @@ export default function App() {
               <PaymentSuccessView
                 referenceId={moncashReturnRef}
                 onClose={() => { setMoncashReturnRef(null); setShowClientDashboard(true); }}
+              />
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {safacilReturnRef && (
+              <SafacilPaySuccessView
+                referenceId={safacilReturnRef}
+                onClose={() => { setSafacilReturnRef(null); setShowClientDashboard(true); }}
               />
             )}
           </AnimatePresence>
