@@ -5673,13 +5673,14 @@ const SAFACIL_CLIENT_SECRET = process.env.SAFACILPAY_CLIENT_SECRET || '';
 const SAFACIL_BASE_URL      = 'https://safacilpay.com';
 
 // Token expires after 59 s — always fetch fresh before each API call
+// Documented endpoint: GET https://safacilpay.com/sandbox/oauth/{CLIENT_ID}/{CLIENT_SECRET}
 async function getSafacilToken(): Promise<string> {
-  const tokenUrl = `${SAFACIL_BASE_URL}/oauth/${SAFACIL_CLIENT_ID}/${SAFACIL_CLIENT_SECRET}`;
+  const tokenUrl = `${SAFACIL_BASE_URL}/sandbox/oauth/${SAFACIL_CLIENT_ID}/${SAFACIL_CLIENT_SECRET}`;
   const res = await fetch(tokenUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
   const raw = await res.text();
   let data: any = {};
   try { data = JSON.parse(raw); } catch {}
-  console.log(`[safacilpay/token] status=${res.status} token=${data.token ? 'ok' : 'missing'}`);
+  console.log(`[safacilpay/token] status=${res.status} token=${data.token ? 'ok' : 'missing'} body=${raw.slice(0, 100)}`);
   if (!data.token) throw new Error(`SafacilPay token error: ${raw.slice(0, 200)}`);
   return data.token;
 }
