@@ -5670,12 +5670,12 @@ router.post('/api/webhooks/moncashconnect', async (req, res) => {
 // ── SafacilPay Integration ────────────────────────────────────────────────────
 const SAFACIL_CLIENT_ID     = process.env.SAFACILPAY_CLIENT_ID     || '';
 const SAFACIL_CLIENT_SECRET = process.env.SAFACILPAY_CLIENT_SECRET || '';
-const SAFACIL_BASE_URL      = 'https://safacilpay.com';
+const SAFACIL_BASE_URL      = 'https://safacilpay.com/rest';
 
 // Token expires after 59 s — always fetch fresh before each API call
-// Documented endpoint: GET https://safacilpay.com/sandbox/oauth/{CLIENT_ID}/{CLIENT_SECRET}
+// Production: GET https://safacilpay.com/rest/oauth/{CLIENT_ID}/{CLIENT_SECRET}
 async function getSafacilToken(): Promise<string> {
-  const tokenUrl = `${SAFACIL_BASE_URL}/sandbox/oauth/${SAFACIL_CLIENT_ID}/${SAFACIL_CLIENT_SECRET}`;
+  const tokenUrl = `${SAFACIL_BASE_URL}/oauth/${SAFACIL_CLIENT_ID}/${SAFACIL_CLIENT_SECRET}`;
   const res = await fetch(tokenUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
   const raw = await res.text();
   let data: any = {};
