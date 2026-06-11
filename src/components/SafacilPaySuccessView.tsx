@@ -5,18 +5,20 @@ import { Button } from './ui/button';
 
 interface Props {
   referenceId: string;
+  transactionId?: string;
   onClose: () => void;
 }
 
 type Status = 'checking' | 'pending' | 'completed' | 'failed' | 'cancelled';
 
-export default function SafacilPaySuccessView({ referenceId, onClose }: Props) {
+export default function SafacilPaySuccessView({ referenceId, transactionId, onClose }: Props) {
   const [status, setStatus]     = useState<Status>('checking');
   const [usdAmount, setUsd]     = useState<number | null>(null);
   const [htgAmount, setHtg]     = useState<number | null>(null);
   const [attempts, setAttempts] = useState(0);
-  const MAX = 40;
+  const MAX = 30;
 
+  // First call: verify with SafacilPay using the transactionId from the return URL
   useEffect(() => {
     let cancelled = false;
     async function verifyNow() {
@@ -24,7 +26,7 @@ export default function SafacilPaySuccessView({ referenceId, onClose }: Props) {
         const res  = await fetch('/api/payments/safacilpay/verify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ referenceId }),
+          body: JSON.stringify({ referenceId, transactionId }),
         });
         const data = await res.json();
         if (cancelled) return;
@@ -41,8 +43,9 @@ export default function SafacilPaySuccessView({ referenceId, onClose }: Props) {
     }
     verifyNow();
     return () => { cancelled = true; };
-  }, [referenceId]);
+  }, [referenceId, transactionId]);
 
+  // Polling fallback: re-check Firestore every 4s while still pending
   useEffect(() => {
     if (status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'checking') return;
     const timer = setTimeout(async () => {
@@ -59,7 +62,7 @@ export default function SafacilPaySuccessView({ referenceId, onClose }: Props) {
       } catch {
         setAttempts(p => p + 1);
       }
-    }, 3000);
+    }, 4000);
     return () => clearTimeout(timer);
   }, [referenceId, status, attempts]);
 

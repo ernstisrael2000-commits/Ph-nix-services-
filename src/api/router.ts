@@ -5686,10 +5686,10 @@ async function getSafacilToken(): Promise<string> {
 }
 
 function generateSafacilRef(): string {
-  const year = new Date().getFullYear();
-  const ts   = Date.now().toString().slice(-8);
-  const rand = Math.floor(Math.random() * 100).toString().padStart(2, '0');
-  return `SAF_${year}_${ts}${rand}`;
+  // SafacilPay requires orderId to be a numeric integer.
+  // We use a 13-digit timestamp (milliseconds) + 2-digit random suffix → fits in a JS safe integer.
+  const rand = Math.floor(Math.random() * 99) + 1;
+  return String(Date.now()) + String(rand).padStart(2, '0');
 }
 
 async function creditClientSafacil(
@@ -5808,39 +5808,32 @@ router.post('/api/payments/safacilpay/initiate', requireDb, async (req, res) => 
       if (!ex.exists) unique = true;
     }
 
-    const proto       = (req.headers['x-forwarded-proto'] as string) || 'https';
-    const host        = (req.headers['x-forwarded-host']  as string) || (req.headers.host as string) || '';
-    const returnUrl   = `${proto}://${host}/?safacilpay_ref=${referenceId}`;
-    const callbackUrl = `${proto}://${host}/api/webhooks/safacilpay`;
-
-    // Step 1 — get short-lived Bearer token (expires in 59 s)
+    // SafacilPay: POST /rest/payment  (form-urlencoded)
+    //   body: amount (Int HTG) + orderId (Int/String, unique per order)
+    //   returns: { url: "https://safacilpay.com/rest/middleware/index.php?r=...", status: 200 }
+    // The return URL is configured in the merchant portal at safacilpay.com/sc
+    // SafacilPay redirects back as: return_url?transactionId=XXXXXXXX
     const token = await getSafacilToken();
 
-    // Step 2 — create the payment
-    const sfRes = await fetch(`${SAFACIL_BASE_URL}/api/payment/create`, {
+    const body = new URLSearchParams({
+      amount : String(htg),
+      orderId: referenceId,
+    });
+    const sfRes = await fetch(`${SAFACIL_BASE_URL}/payment`, {
       method : 'POST',
       headers: {
-        'Content-Type' : 'application/json',
-        'Accept'       : 'application/json',
+        'Content-Type' : 'application/x-www-form-urlencoded',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify({
-        amount      : htg,
-        currency    : 'HTG',
-        order_id    : referenceId,
-        description : `Dépôt Phénix Services — ${clientName}`,
-        return_url  : returnUrl,
-        callback_url: callbackUrl,
-      }),
+      body: body.toString(),
     });
-
     const rawText = await sfRes.text();
-    console.log(`[safacilpay/initiate] status=${sfRes.status} body=${rawText.slice(0, 400)}`);
+    console.log(`[safacilpay/initiate] status=${sfRes.status} body=${rawText.slice(0, 300)}`);
 
     let sfData: any = {};
     try { sfData = JSON.parse(rawText); } catch {}
 
-    const paymentUrl = sfData.payment_url || sfData.paymentUrl || sfData.redirect_url || sfData.url;
+    const paymentUrl = sfData.url;
     if (!sfRes.ok || !paymentUrl)
       return res.status(502).json({ error: sfData.message || sfData.error || "Impossible d'initier le paiement SafacilPay." });
 
@@ -5852,7 +5845,7 @@ router.post('/api/payments/safacilpay/initiate', requireDb, async (req, res) => 
       createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
     });
 
-    console.log(`[safacilpay/initiate] ✅ ref=${referenceId} htg=${htg} usd=${usdAmount} client=${clientId}`);
+    console.log(`[safacilpay/initiate] ✅ ref=${referenceId} htg=${htg} usd=${usdAmount} client=${clientId} url=${paymentUrl.slice(0, 80)}...`);
     res.json({ success: true, paymentUrl, referenceId });
   } catch (e: any) {
     console.error('[safacilpay/initiate]', e);
@@ -5873,9 +5866,11 @@ router.get('/api/payments/safacilpay/status/:referenceId', requireDb, async (req
 });
 
 // POST /api/payments/safacilpay/verify
+// Called after SafacilPay redirects back to the app with ?transactionId=XXXX
+// We verify with SafacilPay's /rest/transaction endpoint, then credit the client.
 router.post('/api/payments/safacilpay/verify', requireDb, async (req, res) => {
   try {
-    const { referenceId } = req.body;
+    const { referenceId, transactionId } = req.body;
     if (!referenceId) return res.status(400).json({ error: 'referenceId manquant.' });
     if (!SAFACIL_CLIENT_ID || !SAFACIL_CLIENT_SECRET)
       return res.status(503).json({ error: 'SafacilPay non configuré.' });
@@ -5883,33 +5878,40 @@ router.post('/api/payments/safacilpay/verify', requireDb, async (req, res) => {
     const snap = await adminDb.collection('safacilpay_deposits').doc(referenceId).get();
     if (!snap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
     const d = snap.data()!;
+
+    // Already processed — return current state
     if (d.status !== 'pending')
       return res.json({ referenceId, status: d.status, usdAmount: d.usdAmount, htgAmount: d.htgAmount });
 
-    // Fresh token for each status check
-    const token = await getSafacilToken();
+    // If we have a transactionId from the return URL, verify with SafacilPay
+    if (transactionId) {
+      try {
+        const token = await getSafacilToken();
+        const sfRes = await fetch(`${SAFACIL_BASE_URL}/transaction`, {
+          method : 'POST',
+          headers: {
+            'Content-Type' : 'application/x-www-form-urlencoded',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: `txID=${encodeURIComponent(transactionId)}`,
+        });
+        const rawText = await sfRes.text();
+        console.log(`[safacilpay/verify] txID=${transactionId} status=${sfRes.status} body=${rawText.slice(0, 300)}`);
+        let sfData: any = {};
+        try { sfData = JSON.parse(rawText); } catch {}
 
-    const sfRes = await fetch(`${SAFACIL_BASE_URL}/api/payment/status/${referenceId}`, {
-      method : 'GET',
-      headers: {
-        'Accept'       : 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-    const rawText = await sfRes.text();
-    console.log(`[safacilpay/verify] status=${sfRes.status} body=${rawText.slice(0, 300)}`);
-    let sfData: any = {};
-    try { sfData = JSON.parse(rawText); } catch {}
-
-    const sfStatus = (sfData?.status || sfData?.payment_status || sfData?.state || '').toLowerCase();
-    const transactionId = sfData?.transaction_id || sfData?.transactionId || sfData?.id || '';
-
-    if (['completed', 'success', 'paid', 'approved', 'confirmed', 'successful'].includes(sfStatus)) {
-      const netUsd = await creditClientSafacil(d, referenceId, transactionId, 'polling');
-      return res.json({ referenceId, status: 'completed', usdAmount: netUsd, htgAmount: d.htgAmount });
+        if (sfData.message === 'successful' && sfData.transactionId) {
+          const netUsd = await creditClientSafacil(d, referenceId, String(sfData.transactionId), 'polling');
+          return res.json({ referenceId, status: 'completed', usdAmount: netUsd, htgAmount: d.htgAmount });
+        }
+      } catch (verErr: any) {
+        console.error('[safacilpay/verify] transaction check error:', verErr.message);
+      }
     }
 
-    res.json({ referenceId, status: d.status, usdAmount: d.usdAmount, htgAmount: d.htgAmount, sfStatus });
+    // No transactionId yet or verification inconclusive — return current Firestore state
+    console.log(`[safacilpay/verify] ref=${referenceId} status=${d.status} (no txID confirmation)`);
+    res.json({ referenceId, status: d.status, usdAmount: d.usdAmount, htgAmount: d.htgAmount });
   } catch (e: any) {
     console.error('[safacilpay/verify]', e);
     res.status(500).json({ error: e.message });

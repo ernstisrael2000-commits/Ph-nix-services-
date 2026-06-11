@@ -50,6 +50,7 @@ export default function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [moncashReturnRef, setMoncashReturnRef]       = useState<string | null>(null);
   const [safacilReturnRef, setSafacilReturnRef]       = useState<string | null>(null);
+  const [safacilTransactionId, setSafacilTransactionId] = useState<string | null>(null);
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(() =>
     window.location.pathname === '/payment-success'
   );
@@ -102,7 +103,10 @@ export default function App() {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
     if (safacilRef) {
+      // SafacilPay appends ?transactionId=XXXXX to the return URL on success
+      const txId = params.get('transactionId') || '';
       setSafacilReturnRef(safacilRef);
+      if (txId) setSafacilTransactionId(txId);
       window.history.replaceState({}, document.title, window.location.pathname);
     }
     if (window.location.pathname === '/payment-success') {
@@ -346,7 +350,8 @@ export default function App() {
             {safacilReturnRef && (
               <SafacilPaySuccessView
                 referenceId={safacilReturnRef}
-                onClose={() => { setSafacilReturnRef(null); setShowClientDashboard(true); }}
+                transactionId={safacilTransactionId || undefined}
+                onClose={() => { setSafacilReturnRef(null); setSafacilTransactionId(null); setShowClientDashboard(true); }}
               />
             )}
           </AnimatePresence>
