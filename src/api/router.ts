@@ -5668,9 +5668,21 @@ router.post('/api/webhooks/moncashconnect', async (req, res) => {
 });
 
 // ── SafacilPay Integration ────────────────────────────────────────────────────
-const SAFACIL_API_KEY    = process.env.SAFACILPAY_API_KEY    || '';
-const SAFACIL_SECRET_KEY = process.env.SAFACILPAY_SECRET_KEY || '';
-const SAFACIL_BASE_URL   = 'https://api.safacilpay.com';
+const SAFACIL_CLIENT_ID     = process.env.SAFACILPAY_CLIENT_ID     || '';
+const SAFACIL_CLIENT_SECRET = process.env.SAFACILPAY_CLIENT_SECRET || '';
+const SAFACIL_BASE_URL      = 'https://safacilpay.com';
+
+// Token expires after 59 s — always fetch fresh before each API call
+async function getSafacilToken(): Promise<string> {
+  const tokenUrl = `${SAFACIL_BASE_URL}/oauth/${SAFACIL_CLIENT_ID}/${SAFACIL_CLIENT_SECRET}`;
+  const res = await fetch(tokenUrl, { method: 'GET', headers: { 'Accept': 'application/json' } });
+  const raw = await res.text();
+  let data: any = {};
+  try { data = JSON.parse(raw); } catch {}
+  console.log(`[safacilpay/token] status=${res.status} token=${data.token ? 'ok' : 'missing'}`);
+  if (!data.token) throw new Error(`SafacilPay token error: ${raw.slice(0, 200)}`);
+  return data.token;
+}
 
 function generateSafacilRef(): string {
   const year = new Date().getFullYear();
@@ -5767,7 +5779,7 @@ router.post('/api/payments/safacilpay/initiate', requireDb, async (req, res) => 
     const { clientId, clientName, clientWalletId, htgAmount, exchangeRate } = req.body;
     if (!clientId || !clientName || !htgAmount)
       return res.status(400).json({ error: 'Paramètres manquants.' });
-    if (!SAFACIL_API_KEY || !SAFACIL_SECRET_KEY)
+    if (!SAFACIL_CLIENT_ID || !SAFACIL_CLIENT_SECRET)
       return res.status(503).json({ error: "Service SafacilPay non configuré. Contactez l'administrateur." });
 
     const htg = Number(htgAmount);
@@ -5795,26 +5807,29 @@ router.post('/api/payments/safacilpay/initiate', requireDb, async (req, res) => 
       if (!ex.exists) unique = true;
     }
 
-    const proto     = (req.headers['x-forwarded-proto'] as string) || 'https';
-    const host      = (req.headers['x-forwarded-host']  as string) || (req.headers.host as string) || '';
-    const returnUrl = `${proto}://${host}/?safacilpay_ref=${referenceId}`;
-    const alertUrl  = `${proto}://${host}/api/webhooks/safacilpay`;
+    const proto       = (req.headers['x-forwarded-proto'] as string) || 'https';
+    const host        = (req.headers['x-forwarded-host']  as string) || (req.headers.host as string) || '';
+    const returnUrl   = `${proto}://${host}/?safacilpay_ref=${referenceId}`;
+    const callbackUrl = `${proto}://${host}/api/webhooks/safacilpay`;
 
-    const sfRes = await fetch(`${SAFACIL_BASE_URL}/payment/initiate`, {
+    // Step 1 — get short-lived Bearer token (expires in 59 s)
+    const token = await getSafacilToken();
+
+    // Step 2 — create the payment
+    const sfRes = await fetch(`${SAFACIL_BASE_URL}/api/payment/create`, {
       method : 'POST',
       headers: {
         'Content-Type' : 'application/json',
         'Accept'       : 'application/json',
-        'X-Api-Key'    : SAFACIL_API_KEY,
-        'X-Secret-Key' : SAFACIL_SECRET_KEY,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({
-        amount     : htg,
-        currency   : 'HTG',
-        reference  : referenceId,
-        return_url : returnUrl,
-        alert_url  : alertUrl,
-        description: `Dépôt Phénix Services — ${clientName}`,
+        amount      : htg,
+        currency    : 'HTG',
+        order_id    : referenceId,
+        description : `Dépôt Phénix Services — ${clientName}`,
+        return_url  : returnUrl,
+        callback_url: callbackUrl,
       }),
     });
 
@@ -5861,7 +5876,7 @@ router.post('/api/payments/safacilpay/verify', requireDb, async (req, res) => {
   try {
     const { referenceId } = req.body;
     if (!referenceId) return res.status(400).json({ error: 'referenceId manquant.' });
-    if (!SAFACIL_API_KEY || !SAFACIL_SECRET_KEY)
+    if (!SAFACIL_CLIENT_ID || !SAFACIL_CLIENT_SECRET)
       return res.status(503).json({ error: 'SafacilPay non configuré.' });
 
     const snap = await adminDb.collection('safacilpay_deposits').doc(referenceId).get();
@@ -5870,12 +5885,14 @@ router.post('/api/payments/safacilpay/verify', requireDb, async (req, res) => {
     if (d.status !== 'pending')
       return res.json({ referenceId, status: d.status, usdAmount: d.usdAmount, htgAmount: d.htgAmount });
 
-    const sfRes = await fetch(`${SAFACIL_BASE_URL}/payment/status/${referenceId}`, {
+    // Fresh token for each status check
+    const token = await getSafacilToken();
+
+    const sfRes = await fetch(`${SAFACIL_BASE_URL}/api/payment/status/${referenceId}`, {
       method : 'GET',
       headers: {
-        'Accept'      : 'application/json',
-        'X-Api-Key'   : SAFACIL_API_KEY,
-        'X-Secret-Key': SAFACIL_SECRET_KEY,
+        'Accept'       : 'application/json',
+        'Authorization': `Bearer ${token}`,
       },
     });
     const rawText = await sfRes.text();
@@ -5886,7 +5903,7 @@ router.post('/api/payments/safacilpay/verify', requireDb, async (req, res) => {
     const sfStatus = (sfData?.status || sfData?.payment_status || sfData?.state || '').toLowerCase();
     const transactionId = sfData?.transaction_id || sfData?.transactionId || sfData?.id || '';
 
-    if (['completed', 'success', 'paid', 'approved', 'confirmed'].includes(sfStatus)) {
+    if (['completed', 'success', 'paid', 'approved', 'confirmed', 'successful'].includes(sfStatus)) {
       const netUsd = await creditClientSafacil(d, referenceId, transactionId, 'polling');
       return res.json({ referenceId, status: 'completed', usdAmount: netUsd, htgAmount: d.htgAmount });
     }
@@ -5898,17 +5915,18 @@ router.post('/api/payments/safacilpay/verify', requireDb, async (req, res) => {
   }
 });
 
-// POST /api/webhooks/safacilpay  (Alert URL)
+// POST /api/webhooks/safacilpay  (callback_url)
 router.post('/api/webhooks/safacilpay', async (req, res) => {
   if (!adminDb) return res.status(503).json({ error: 'DB non disponible.' });
   try {
     const payload = req.body;
-    const referenceId  = payload.reference || payload.referenceId || payload.reference_id || '';
-    const wStatus      = (payload.status || payload.payment_status || '').toLowerCase();
+    // SafacilPay sends order_id (our referenceId) and transaction_id
+    const referenceId   = payload.order_id || payload.reference || payload.referenceId || payload.reference_id || '';
+    const wStatus       = (payload.status || payload.payment_status || '').toLowerCase();
     const transactionId = payload.transaction_id || payload.transactionId || '';
 
-    console.log(`[webhook/safacilpay] ref=${referenceId} status=${wStatus}`);
-    if (!referenceId) return res.status(400).json({ error: 'reference manquant.' });
+    console.log(`[webhook/safacilpay] ref=${referenceId} status=${wStatus} raw=${JSON.stringify(payload).slice(0, 200)}`);
+    if (!referenceId) return res.status(400).json({ error: 'order_id manquant.' });
 
     const depositRef  = adminDb.collection('safacilpay_deposits').doc(referenceId);
     const depositSnap = await depositRef.get();
@@ -5923,7 +5941,7 @@ router.post('/api/webhooks/safacilpay', async (req, res) => {
       return res.status(200).json({ ok: true, skipped: true });
     }
 
-    if (['completed', 'success', 'paid', 'approved', 'confirmed'].includes(wStatus)) {
+    if (['completed', 'success', 'paid', 'approved', 'confirmed', 'successful'].includes(wStatus)) {
       await creditClientSafacil(deposit, referenceId, transactionId, 'webhook');
     } else if (['failed', 'cancelled', 'error', 'rejected'].includes(wStatus)) {
       await depositRef.update({
