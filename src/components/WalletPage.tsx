@@ -350,6 +350,7 @@ export default function WalletPage({ clientId, initialClient, onLogout, onBack }
   const getMethodInfo = (methodId: string) => {
     const pm = settings?.paymentMethods?.find(m => m.id === methodId);
     const number = pm?.number
+      || pm?.address
       || (methodId === 'moncash' ? (settings as any)?.moncashNumber : null)
       || (methodId === 'natcash' ? (settings as any)?.natcashNumber : null)
       || null;
@@ -357,7 +358,8 @@ export default function WalletPage({ clientId, initialClient, onLogout, onBack }
       || (methodId === 'moncash' ? (settings as any)?.moncashQR : null)
       || (methodId === 'natcash' ? (settings as any)?.natcashQR : null)
       || null;
-    return { number, qr, accountName: pm?.accountName || null };
+    const isEmail = !!pm?.address && !pm?.number;
+    return { number, qr, accountName: pm?.accountName || null, isEmail };
   };
 
   const resetDeposit = () => {
@@ -387,31 +389,39 @@ export default function WalletPage({ clientId, initialClient, onLogout, onBack }
     // ── Flux WhatsApp classique ─────────────────────────────────────────────
     if (RECAPTCHA_SITE_KEY && !depositCaptchaToken) { toast.error('Validez le captcha.'); return; }
     setActionLoading(true);
+    const proofFileSnapshot = depositProofFile; // snapshot before reset
     try {
-      let proofImageUrl: string | undefined;
-      if (depositProofFile) {
-        toast.loading('Téléchargement de la preuve...', { id: 'proof-upload' });
-        proofImageUrl = await uploadProofImage(depositProofFile);
-        toast.dismiss('proof-upload');
-      }
-      await submitClientDeposit(
+      // 1. Submit to Firestore immediately — no upload wait
+      const result = await submitClientDeposit(
         client!, usd, depositMethod.name, depositTxId || undefined,
         depositCaptchaToken || undefined, depositMessage || undefined,
-        htg, rate, proofImageUrl,
+        htg, rate, undefined,
       );
+      // 2. Open WhatsApp instantly
       const msg = `Bonjour Phénix 👋,\n\nDemande de *DÉPÔT* :\n`
         + `👤 *${client!.name}* · Wallet: *${client!.walletId}*\n`
         + `💵 *$${usd.toFixed(2)} USD* ≈ *${htg.toLocaleString()} HTG* (taux: ${rate})\n`
         + `💳 Via: *${depositMethod.name}*`
-        + (depositTxId   ? `\n🔖 Réf: *${depositTxId}*`          : '')
-        + (depositMessage ? `\n💬 ${depositMessage}`                : '')
-        + (proofImageUrl  ? `\n🖼️ Preuve: ${proofImageUrl}`        : '')
+        + (depositTxId    ? `\n🔖 Réf: *${depositTxId}*`  : '')
+        + (depositMessage ? `\n💬 ${depositMessage}`        : '')
+        + (proofFileSnapshot ? `\n🖼️ Preuve jointe (en cours d'envoi...)` : '')
         + `\n\nMerci de valider mon dépôt. 🙏`;
       openWhatsApp(msg);
       toast.success('Demande envoyée !');
       setIsDepositOpen(false); resetDeposit();
+      // 3. Upload proof in background then patch the transaction
+      if (proofFileSnapshot && result?.transactionId) {
+        const txId = result.transactionId;
+        const cId  = client!.id;
+        uploadProofImage(proofFileSnapshot).then(url => {
+          fetch(`/api/client/deposit/${txId}/proof`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ proofImageUrl: url, clientId: cId }),
+          }).catch(() => {});
+        }).catch(() => {});
+      }
     } catch (err: any) {
-      toast.dismiss('proof-upload');
       toast.error(err.message);
       depositCaptchaRef.current?.reset(); setDepositCaptchaToken(null);
     } finally { setActionLoading(false); }
@@ -690,19 +700,24 @@ export default function WalletPage({ clientId, initialClient, onLogout, onBack }
 
             {/* Account info after selection */}
             {(() => {
-              const { number, qr, accountName } = getMethodInfo(depositMethod.id);
+              const { number, qr, accountName, isEmail } = getMethodInfo(depositMethod.id);
               if (!number && !qr) return null;
               return (
                 <div className="rounded-2xl overflow-hidden border border-emerald-100">
                   <div className="px-4 py-2 bg-emerald-600">
-                    <p className="text-[10px] font-black text-white uppercase tracking-widest">Compte {depositMethod.name}</p>
+                    <p className="text-[10px] font-black text-white uppercase tracking-widest">
+                      {isEmail ? `Email ${depositMethod.name}` : `Numéro ${depositMethod.name}`}
+                    </p>
                   </div>
                   <div className="p-3 space-y-2 bg-emerald-50">
                     {number && (
                       <div className="flex items-center justify-between gap-3 bg-white rounded-xl p-3 border border-emerald-100">
                         <div className="min-w-0">
                           {accountName && <p className="text-[11px] font-bold text-gray-600">{accountName}</p>}
-                          <p className="font-black text-gray-900 font-mono text-base tracking-wider">{number}</p>
+                          <p className={`font-black text-gray-900 text-base tracking-wider ${isEmail ? '' : 'font-mono'}`}>{number}</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">
+                            {isEmail ? 'Envoyez votre paiement à cette adresse' : 'Envoyez vers ce numéro'}
+                          </p>
                         </div>
                         <button type="button" onClick={() => { navigator.clipboard.writeText(number); toast.success('Copié !'); }}
                           className="h-9 w-9 flex items-center justify-center rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 hover:bg-emerald-100 shrink-0">

@@ -781,6 +781,29 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
   }
 });
 
+// ── Deposit: update proof URL (background upload) ─────────────────────────────
+router.patch('/api/client/deposit/:txId/proof', requireDb, async (req, res) => {
+  try {
+    const { txId } = req.params;
+    const { proofImageUrl, clientId } = req.body;
+    if (!txId || !proofImageUrl) return res.status(400).json({ error: 'Paramètres manquants.' });
+    const txRef = adminDb.collection('client_transactions').doc(txId);
+    const snap = await txRef.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Transaction introuvable.' });
+    if (clientId && snap.data()?.clientId !== clientId)
+      return res.status(403).json({ error: 'Accès refusé.' });
+    await txRef.update({ proofImageUrl, updatedAt: FieldValue.serverTimestamp() });
+    const notifSnap = await adminDb.collection('admin_notifications')
+      .where('transactionId', '==', txId).limit(1).get();
+    if (!notifSnap.empty) {
+      await notifSnap.docs[0].ref.update({ proofImageUrl });
+    }
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Withdrawal ────────────────────────────────────────────────────────────────
 router.post('/api/client/withdrawal', requireDb, async (req, res) => {
   try {

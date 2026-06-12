@@ -278,6 +278,12 @@ export default function AdminWalletManager() {
   const [methodsChanged, setMethodsChanged] = useState(false);
   const [editingMethod, setEditingMethod] = useState<PaymentMethod | null | 'new'>(null);
 
+  // Quick numbers state (MonCash, NatCash, PayPal)
+  const [quickMoncash, setQuickMoncash]   = useState('');
+  const [quickNatcash, setQuickNatcash]   = useState('');
+  const [quickPaypal,  setQuickPaypal]    = useState('');
+  const [isSavingQuick, setIsSavingQuick] = useState(false);
+
   // Transaction filters
   const [txSearch, setTxSearch] = useState('');
   const [txType, setTxType] = useState('all');
@@ -294,13 +300,36 @@ export default function AdminWalletManager() {
       setMinWithdrawInput(String(settings.minWithdrawalUSD || 0.01));
       setMaxWithdrawInput(String(settings.maxWithdrawalUSD || 10000));
       const m = settings.paymentMethods;
-      if (m && m.length > 0) {
-        setMethods(m);
-      } else {
-        setMethods(DEFAULT_PAYMENT_METHODS);
-      }
+      const saved = (m && m.length > 0) ? m : DEFAULT_PAYMENT_METHODS;
+      setMethods(saved);
+      setQuickMoncash(saved.find(x => x.id === 'moncash')?.number  || '');
+      setQuickNatcash(saved.find(x => x.id === 'natcash')?.number  || '');
+      setQuickPaypal( saved.find(x => x.id === 'paypal')?.address  || '');
     }
   }, [settings]);
+
+  const saveQuickNumbers = async () => {
+    setIsSavingQuick(true);
+    try {
+      const updated = methods.map(m => {
+        if (m.id === 'moncash') return { ...m, number: quickMoncash, enabled: true, forDeposit: true, forWithdrawal: true };
+        if (m.id === 'natcash') return { ...m, number: quickNatcash, enabled: true, forDeposit: true, forWithdrawal: true };
+        if (m.id === 'paypal')  return { ...m, address: quickPaypal, enabled: true, forDeposit: true, forWithdrawal: true };
+        return m;
+      });
+      const hasMoncash = updated.some(m => m.id === 'moncash');
+      const hasNatcash = updated.some(m => m.id === 'natcash');
+      const hasPaypal  = updated.some(m => m.id === 'paypal');
+      const merged = [...updated];
+      if (!hasMoncash) merged.push({ id: 'moncash', name: 'MonCash', type: 'mobile_money', icon: '📱', enabled: true, forDeposit: true, forWithdrawal: true, number: quickMoncash });
+      if (!hasNatcash) merged.push({ id: 'natcash', name: 'NatCash', type: 'mobile_money', icon: '💳', enabled: true, forDeposit: true, forWithdrawal: true, number: quickNatcash });
+      if (!hasPaypal)  merged.push({ id: 'paypal',  name: 'PayPal',  type: 'payment_app',  icon: '🅿️', enabled: true, forDeposit: true, forWithdrawal: true, address: quickPaypal });
+      setMethods(merged);
+      await updateSettings({ paymentMethods: merged } as any);
+      toast.success('Numéros sauvegardés !');
+    } catch { toast.error('Erreur lors de la sauvegarde.'); }
+    finally { setIsSavingQuick(false); }
+  };
 
   // ── Stats ────────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -500,6 +529,50 @@ export default function AdminWalletManager() {
             <Button onClick={saveRate} disabled={isSaving} className="bg-primary text-white font-black rounded-xl h-11 px-6">
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
               Sauvegarder le taux
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Quick Numbers ── */}
+      <div>
+        <h2 className="text-xl font-black text-dark mb-4 flex items-center gap-2">
+          <Smartphone className="h-5 w-5 text-primary" />
+          Numéros de réception
+        </h2>
+        <Card className="border-gray-100 shadow-sm">
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-blue-50 border border-blue-100">
+              <Info className="h-4 w-4 text-blue-500 shrink-0" />
+              <p className="text-xs text-blue-700">Ces numéros sont affichés aux clients lorsqu'ils choisissent une méthode de dépôt.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-subtext flex items-center gap-1">
+                  <span>📱</span> MonCash
+                </Label>
+                <Input value={quickMoncash} onChange={e => setQuickMoncash(e.target.value)}
+                  placeholder="+509 XXXX XXXX" className="h-11 rounded-xl font-mono" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-subtext flex items-center gap-1">
+                  <span>💳</span> NatCash
+                </Label>
+                <Input value={quickNatcash} onChange={e => setQuickNatcash(e.target.value)}
+                  placeholder="+509 XXXX XXXX" className="h-11 rounded-xl font-mono" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-subtext flex items-center gap-1">
+                  <span>🅿️</span> PayPal (email)
+                </Label>
+                <Input value={quickPaypal} onChange={e => setQuickPaypal(e.target.value)}
+                  placeholder="exemple@paypal.com" className="h-11 rounded-xl" type="email" />
+              </div>
+            </div>
+            <Button onClick={saveQuickNumbers} disabled={isSavingQuick}
+              className="bg-primary text-white font-black rounded-xl h-11 px-6">
+              {isSavingQuick ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              Sauvegarder les numéros
             </Button>
           </CardContent>
         </Card>

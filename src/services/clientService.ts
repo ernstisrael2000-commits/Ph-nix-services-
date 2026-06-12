@@ -200,9 +200,9 @@ export const submitClientDeposit = async (
   htgAmount?: number,
   exchangeRate?: number,
   proofImageUrl?: string
-) => {
+): Promise<{ transactionId?: string }> => {
   if (usdAmount <= 0) throw new Error("Montant invalide.");
-  await apiPost('/api/client/deposit', {
+  const data = await apiPost('/api/client/deposit', {
     clientId: client.id,
     clientName: client.name,
     clientWalletId: client.walletId || '',
@@ -216,6 +216,7 @@ export const submitClientDeposit = async (
     ...(proofImageUrl && { proofImageUrl }),
     ...(captchaToken && captchaToken !== 'bypass' && { captchaToken })
   });
+  return { transactionId: data?.transactionId };
 };
 
 // ─── Withdrawal ──────────────────────────────────────────────────────────────
