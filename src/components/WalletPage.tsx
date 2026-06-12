@@ -27,14 +27,12 @@ const RECAPTCHA_SITE_KEY = process.env.RECAPTCHA_SITE_KEY || '';
 
 // ── Official brand logos ───────────────────────────────────────────────────────
 
-function SafacilPayIcon({ size = 52 }: { size?: number }) {
+function MonCashIcon({ size = 52 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 52 52" fill="none">
-      <rect width="52" height="52" rx="13" fill="#1D6FE8"/>
-      <rect x="8" y="16" width="36" height="22" rx="5" fill="white" fillOpacity="0.18"/>
-      <rect x="8" y="22" width="36" height="6" fill="white" fillOpacity="0.35"/>
-      <rect x="12" y="31" width="12" height="3" rx="1.5" fill="white" fillOpacity="0.8"/>
-      <rect x="28" y="31" width="12" height="3" rx="1.5" fill="white" fillOpacity="0.5"/>
+      <rect width="52" height="52" rx="13" fill="#CC0001"/>
+      <text x="26" y="33" textAnchor="middle" fill="white" fontSize="22" fontWeight="900"
+        fontFamily="'Arial Black',Arial,sans-serif">M</text>
     </svg>
   );
 }
@@ -75,9 +73,9 @@ function MethodLogo({ logoUrl, FallbackIcon, size = 40 }: {
 
 const WALLET_METHODS = [
   {
-    id: 'safacilpay', name: 'SafacilPay', Icon: SafacilPayIcon, forDeposit: true, forWithdrawal: false,
-    activeDeposit: 'border-blue-400 bg-blue-50 ring-2 ring-blue-100',
-    activeWithdraw: '',
+    id: 'moncash', name: 'MonCash', Icon: MonCashIcon, forDeposit: true, forWithdrawal: true,
+    activeDeposit: 'border-red-400 bg-red-50 ring-2 ring-red-100',
+    activeWithdraw: 'border-red-400 bg-red-50 ring-2 ring-red-100',
   },
   {
     id: 'natcash', name: 'NatCash', Icon: NatCashIcon, forDeposit: true, forWithdrawal: true,
@@ -325,8 +323,16 @@ export default function WalletPage({ clientId, initialClient, onLogout, onBack }
     }
   };
 
-  const openWhatsApp = (msg: string) =>
-    window.open(`https://wa.me/${whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+  const openWhatsApp = (msg: string) => {
+    const url = `https://wa.me/${whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   useEffect(() => {
     if (!clientId) return;
@@ -378,35 +384,7 @@ export default function WalletPage({ clientId, initialClient, onLogout, onBack }
     if (usd > maxDeposit)          { toast.error(`Maximum: $${maxDeposit.toFixed(2)} USD`); return; }
     if (!depositMethod)            { toast.error('Choisissez une méthode.'); return; }
 
-    // ── SafacilPay: redirect flow (no WhatsApp, no proof) ──────────────────
-    if (depositMethod.id === 'safacilpay') {
-      setActionLoading(true);
-      try {
-        const res = await fetch('/api/payments/safacilpay/initiate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            clientId: client.id,
-            clientName: client.name,
-            clientWalletId: client.walletId,
-            htgAmount: htg,
-            exchangeRate: rate,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok || !data.paymentUrl) throw new Error(data.error || 'Erreur SafacilPay.');
-        setIsDepositOpen(false);
-        resetDeposit();
-        window.location.href = data.paymentUrl;
-      } catch (err: any) {
-        toast.error(err.message || 'Erreur SafacilPay.');
-      } finally {
-        setActionLoading(false);
-      }
-      return;
-    }
-
-    // ── Autres méthodes : flux WhatsApp classique ───────────────────────────
+    // ── Flux WhatsApp classique ─────────────────────────────────────────────
     if (RECAPTCHA_SITE_KEY && !depositCaptchaToken) { toast.error('Validez le captcha.'); return; }
     setActionLoading(true);
     try {
@@ -768,69 +746,45 @@ export default function WalletPage({ clientId, initialClient, onLogout, onBack }
               )}
             </div>
 
-            {/* Champs manuels — masqués pour SafacilPay */}
-            {depositMethod.id !== 'safacilpay' && (
-              <>
-                <ProofUpload
-                  file={depositProofFile} preview={depositProofPreview}
-                  onChange={(f, p) => { setDepositProofFile(f); setDepositProofPreview(p); }}
-                  accent="emerald"
-                />
+            <ProofUpload
+              file={depositProofFile} preview={depositProofPreview}
+              onChange={(f, p) => { setDepositProofFile(f); setDepositProofPreview(p); }}
+              accent="emerald"
+            />
 
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Référence / ID transaction</Label>
-                  <Input value={depositTxId} onChange={e => setDepositTxId(e.target.value)}
-                    placeholder="Ex: TX-1234567890" className="h-11 rounded-xl font-mono" />
-                </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Référence / ID transaction</Label>
+              <Input value={depositTxId} onChange={e => setDepositTxId(e.target.value)}
+                placeholder="Ex: TX-1234567890" className="h-11 rounded-xl font-mono" />
+            </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Message (optionnel)</Label>
-                  <textarea value={depositMessage} onChange={e => setDepositMessage(e.target.value)}
-                    placeholder="Informations supplémentaires..."
-                    className="w-full min-h-[60px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-300 transition-all"
-                    maxLength={300} />
-                  <p className="text-[10px] text-gray-400">{depositMessage.length}/300</p>
-                </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Message (optionnel)</Label>
+              <textarea value={depositMessage} onChange={e => setDepositMessage(e.target.value)}
+                placeholder="Informations supplémentaires..."
+                className="w-full min-h-[60px] px-3 py-2.5 rounded-xl border border-gray-200 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-300 transition-all"
+                maxLength={300} />
+              <p className="text-[10px] text-gray-400">{depositMessage.length}/300</p>
+            </div>
 
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-start gap-2">
-                  <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
-                  <p className="text-xs text-blue-700"><strong>Étape suivante :</strong> Vous serez redirigé sur WhatsApp pour confirmer.</p>
-                </div>
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-start gap-2">
+              <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+              <p className="text-xs text-blue-700"><strong>Étape suivante :</strong> Vous serez redirigé sur WhatsApp pour confirmer.</p>
+            </div>
 
-                {RECAPTCHA_SITE_KEY && (
-                  <div className="flex flex-col items-center">
-                    <CaptchaWidget sitekey={RECAPTCHA_SITE_KEY} captchaRef={depositCaptchaRef}
-                      onChange={t => setDepositCaptchaToken(t)} onExpired={() => setDepositCaptchaToken(null)} />
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Panneau SafacilPay */}
-            {depositMethod.id === 'safacilpay' && (
-              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-                  <p className="text-[11px] font-black text-blue-700 uppercase tracking-widest">Paiement sécurisé en ligne</p>
-                </div>
-                <p className="text-xs text-blue-700 leading-relaxed">
-                  Vous serez redirigé vers SafacilPay pour finaliser le paiement. Votre solde est crédité <strong>automatiquement</strong> dès confirmation — aucune validation manuelle requise.
-                </p>
+            {RECAPTCHA_SITE_KEY && (
+              <div className="flex flex-col items-center">
+                <CaptchaWidget sitekey={RECAPTCHA_SITE_KEY} captchaRef={depositCaptchaRef}
+                  onChange={t => setDepositCaptchaToken(t)} onExpired={() => setDepositCaptchaToken(null)} />
               </div>
             )}
 
             <Button type="submit"
-              disabled={actionLoading || !client || !depositMethod || (depositMethod.id !== 'safacilpay' && !!RECAPTCHA_SITE_KEY && !depositCaptchaToken)}
-              className={`w-full h-12 rounded-xl font-black text-white border-0 transition-all ${
-                depositMethod.id === 'safacilpay'
-                  ? 'bg-blue-600 hover:bg-blue-700'
-                  : 'bg-emerald-600 hover:bg-emerald-700'
-              }`}>
+              disabled={actionLoading || !client || !depositMethod || (!!RECAPTCHA_SITE_KEY && !depositCaptchaToken)}
+              className="w-full h-12 rounded-xl font-black text-white border-0 bg-emerald-600 hover:bg-emerald-700 transition-all">
               {actionLoading
                 ? <Loader2 className="h-5 w-5 animate-spin" />
-                : depositMethod.id === 'safacilpay'
-                  ? 'Payer avec SafacilPay →'
-                  : 'Confirmer et envoyer →'
+                : 'Confirmer et envoyer →'
               }
             </Button>
           </form>
