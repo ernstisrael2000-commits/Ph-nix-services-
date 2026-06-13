@@ -4518,6 +4518,47 @@ router.delete('/api/admin/shipping-config/:id', requireDb, requireAdminSecret, a
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Notifications système (admin broadcast) ────────────────────────────────────
+router.get('/api/admin/system-notifications', requireDb, requireAdminSecret, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('notifications').orderBy('createdAt', 'desc').limit(200).get();
+    res.json({ notifications: snap.docs.map(serializeDoc) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/api/admin/system-notifications', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { title, message, type, adminName } = req.body;
+    if (!message?.trim()) return res.status(400).json({ error: 'Message requis.' });
+    const ref = await adminDb.collection('notifications').add({
+      title: title || null,
+      message: message.trim(),
+      type: type || 'info',
+      adminName: adminName || 'Administrateur',
+      read: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    res.json({ success: true, id: ref.id });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/api/admin/system-notifications/clear-all', requireDb, requireAdminSecret, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('notifications').limit(500).get();
+    const batch = adminDb.batch();
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+    res.json({ success: true, deleted: snap.size });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/api/admin/system-notifications/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    await adminDb.collection('notifications').doc(req.params.id).delete();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Admin: Settings ───────────────────────────────────────────────────────────
 router.post('/api/admin/settings', requireDb, requireAdminSecret, async (req, res) => {
   try {
