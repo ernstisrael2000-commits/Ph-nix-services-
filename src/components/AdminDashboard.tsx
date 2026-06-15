@@ -175,8 +175,12 @@ function AdminSidebar({ section, setSection, admin, onLogout, pendingCount, onCl
           </div>
         </div>
         {onClose && (
-          <button onClick={onClose} className="text-gray-400 hover:text-white lg:hidden">
-            <X className="h-5 w-5" />
+          <button
+            onClick={onClose}
+            className="lg:hidden flex items-center justify-center h-9 w-9 rounded-xl bg-gray-800 hover:bg-red-500 text-gray-400 hover:text-white transition-all duration-200 shadow-sm shrink-0"
+            aria-label="Fermer le menu"
+          >
+            <X className="h-5 w-5" strokeWidth={2.5} />
           </button>
         )}
       </div>
