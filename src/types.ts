@@ -17,11 +17,13 @@ export type PaymentStatus = 'Payé' | 'Non payé';
 export interface Parcel {
   id?: string;
   trackingNumber: string;
+  clientName?: string;
   status: ParcelStatus;
   currentLocation: string;
   estimatedArrival?: string;
   proofOfDelivery?: string;
   paymentStatus: PaymentStatus;
+  priceToPay?: string;
   createdAt: any;
   updatedAt: any;
 }

@@ -5,7 +5,9 @@ import {
   LogOut, X, LayoutGrid, ChevronDown, Info,
   AlertTriangle, Zap, Wallet, QrCode,
   ToggleLeft, ToggleRight, CreditCard, Smartphone,
-  Building2, Globe, Bitcoin,
+  Building2, Globe, Bitcoin, GraduationCap, Settings,
+  DollarSign, ArrowDownToLine, ArrowUpFromLine, ShoppingBag,
+  Tag, Star, Users, CheckCheck, RefreshCw,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -17,11 +19,13 @@ import {
   useParcels, saveParcel, deleteParcel,
   useProducts, saveProduct, deleteProduct,
   useSettings, updateSettings,
+  useAdminFormations, saveAdminFormation, deleteAdminFormation,
 } from '../services/parcelService';
 import {
   AdminAccount, Parcel, ParcelStatus, PaymentStatus, Product,
-  PaymentMethod, DEFAULT_PAYMENT_METHODS,
+  PaymentMethod, DEFAULT_PAYMENT_METHODS, Formation, FormationLevel,
 } from '../types';
+import AdminWalletManager from './AdminWalletManager';
 
 const ADMIN_SECRET = 'rena-admin-2024';
 
@@ -30,7 +34,7 @@ interface AdminDashboardProps {
   onLogout: () => void;
 }
 
-type Section = 'parcels' | 'products' | 'payment-methods' | 'notifications';
+type Section = 'parcels' | 'products' | 'payment-methods' | 'notifications' | 'requests' | 'formations' | 'wallet';
 
 interface SystemNotif {
   id: string;
@@ -39,6 +43,30 @@ interface SystemNotif {
   type: 'info' | 'success' | 'warning' | 'error';
   adminName: string;
   read: boolean;
+  createdAt: any;
+}
+
+interface AdminNotif {
+  id: string;
+  type: 'client_deposit' | 'client_withdrawal' | 'card_order' | string;
+  clientId?: string;
+  clientName?: string;
+  clientWalletId?: string;
+  transactionId?: string;
+  amount?: number;
+  htgAmount?: number;
+  exchangeRate?: number;
+  method?: string;
+  accountNumber?: string;
+  accountName?: string;
+  orderType?: string;
+  serviceName?: string;
+  servicePrice?: string;
+  cardDetails?: Record<string, any>;
+  message?: string;
+  title?: string;
+  read: boolean;
+  status?: 'pending' | 'approved' | 'rejected';
   createdAt: any;
 }
 
@@ -102,6 +130,24 @@ function useSystemNotifications() {
   return { notifications, loading, reload: load };
 }
 
+// ─── Hook: admin notifications (demandes clients) ──────────────────────────────
+function useAdminNotifications() {
+  const [notifications, setNotifications] = useState<AdminNotif[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    fetch('/api/admin/notifications', { headers: { 'x-admin-secret': ADMIN_SECRET } })
+      .then(r => r.json())
+      .then(d => setNotifications(d.notifications || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+  return { notifications, loading, reload: load };
+}
+
 // ─── Section: Colis & Tracking ───────────────────────────────────────────────
 function ParcelsSection({ admin }: { admin: AdminAccount }) {
   const { parcels, loading } = useParcels();
@@ -112,17 +158,19 @@ function ParcelsSection({ admin }: { admin: AdminAccount }) {
   const [parcelToDelete, setParcelToDelete] = useState<Parcel | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [quickSaving, setQuickSaving] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   const emptyForm: Partial<Parcel> = {
-    trackingNumber: '', status: 'En route', currentLocation: '',
-    estimatedArrival: '', paymentStatus: 'Non payé',
+    trackingNumber: '', clientName: '', status: 'En route', currentLocation: '',
+    estimatedArrival: '', paymentStatus: 'Non payé', priceToPay: '',
   };
   const [form, setForm] = useState<Partial<Parcel>>(emptyForm);
 
   const filtered = parcels.filter(p =>
     p.trackingNumber?.toLowerCase().includes(search.toLowerCase()) ||
-    p.currentLocation?.toLowerCase().includes(search.toLowerCase())
+    p.currentLocation?.toLowerCase().includes(search.toLowerCase()) ||
+    p.clientName?.toLowerCase().includes(search.toLowerCase())
   );
 
   function openAdd() { setEditingParcel(null); setForm(emptyForm); setError(''); setDialogOpen(true); }
@@ -135,6 +183,13 @@ function ParcelsSection({ admin }: { admin: AdminAccount }) {
     try { await saveParcel(form, editingParcel?.id); setDialogOpen(false); }
     catch (e: any) { setError(e.message || 'Erreur lors de la sauvegarde.'); }
     finally { setSaving(false); }
+  }
+
+  async function handleQuickStatus(parcel: Parcel, newStatus: ParcelStatus) {
+    setQuickSaving(parcel.id || null);
+    try { await saveParcel({ ...parcel, status: newStatus }, parcel.id); }
+    catch {}
+    finally { setQuickSaving(null); }
   }
 
   async function handleDelete() {
@@ -150,7 +205,7 @@ function ParcelsSection({ admin }: { admin: AdminAccount }) {
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input className="pl-9 rounded-xl border-gray-200" placeholder="Rechercher par numéro ou lieu…" value={search} onChange={e => setSearch(e.target.value)} />
+          <Input className="pl-9 rounded-xl border-gray-200" placeholder="Rechercher par numéro, client ou lieu…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <Button onClick={openAdd} className="rounded-xl bg-primary hover:bg-primary/90 text-white gap-2 shadow-sm">
           <Plus className="h-4 w-4" />Nouveau colis
@@ -171,30 +226,53 @@ function ParcelsSection({ admin }: { admin: AdminAccount }) {
               <thead>
                 <tr className="bg-gray-50 border-b">
                   <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">N° Suivi</th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider hidden sm:table-cell">Client</th>
                   <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Statut</th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider hidden sm:table-cell">Localisation</th>
-                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider hidden md:table-cell">Arrivée</th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider hidden md:table-cell">Localisation</th>
                   <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Paiement</th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Prix à payer</th>
                   <th className="text-right px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filtered.map(parcel => {
                   const sc = STATUS_CONFIG[parcel.status] || STATUS_CONFIG['En route'];
+                  const isQuickSaving = quickSaving === parcel.id;
                   return (
                     <tr key={parcel.id} className="hover:bg-gray-50/60 transition-colors">
                       <td className="px-4 py-3 font-mono font-semibold text-gray-800 text-xs">{parcel.trackingNumber}</td>
+                      <td className="px-4 py-3 text-gray-600 hidden sm:table-cell text-xs max-w-[120px] truncate">{parcel.clientName || '—'}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${sc.color}`}>
-                          {sc.icon}{sc.label}
-                        </span>
+                        <Select
+                          value={parcel.status}
+                          onValueChange={v => handleQuickStatus(parcel, v as ParcelStatus)}
+                          disabled={isQuickSaving}
+                        >
+                          <SelectTrigger className={`h-7 w-36 text-xs rounded-full border-0 px-2 font-bold ${sc.color} [&>svg]:h-3 [&>svg]:w-3`}>
+                            <div className="flex items-center gap-1">
+                              {isQuickSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : sc.icon}
+                              <SelectValue />
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(Object.keys(STATUS_CONFIG) as ParcelStatus[]).map(k => (
+                              <SelectItem key={k} value={k} className="text-xs">{STATUS_CONFIG[k].label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </td>
-                      <td className="px-4 py-3 text-gray-600 hidden sm:table-cell max-w-[160px] truncate">{parcel.currentLocation}</td>
-                      <td className="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">{parcel.estimatedArrival || '—'}</td>
+                      <td className="px-4 py-3 text-gray-600 hidden md:table-cell max-w-[160px] truncate text-xs">{parcel.currentLocation}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-bold ${parcel.paymentStatus === 'Payé' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                           {parcel.paymentStatus}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        {parcel.priceToPay ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            <Tag className="h-2.5 w-2.5" />{parcel.priceToPay}
+                          </span>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1">
@@ -226,6 +304,10 @@ function ParcelsSection({ admin }: { admin: AdminAccount }) {
               <Input className="rounded-xl" placeholder="Ex: NP2024001" value={form.trackingNumber || ''} onChange={e => setForm(f => ({ ...f, trackingNumber: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
+              <Label>Nom du client</Label>
+              <Input className="rounded-xl" placeholder="Ex: Jean Dupont" value={form.clientName || ''} onChange={e => setForm(f => ({ ...f, clientName: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
               <Label>Statut</Label>
               <Select value={form.status || 'En route'} onValueChange={v => setForm(f => ({ ...f, status: v as ParcelStatus }))}>
                 <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
@@ -244,15 +326,21 @@ function ParcelsSection({ admin }: { admin: AdminAccount }) {
               <Label>Arrivée prévue</Label>
               <Input className="rounded-xl" placeholder="Ex: 15/12/2024" value={form.estimatedArrival || ''} onChange={e => setForm(f => ({ ...f, estimatedArrival: e.target.value }))} />
             </div>
-            <div className="space-y-1.5">
-              <Label>Statut paiement</Label>
-              <Select value={form.paymentStatus || 'Non payé'} onValueChange={v => setForm(f => ({ ...f, paymentStatus: v as PaymentStatus }))}>
-                <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Non payé">Non payé</SelectItem>
-                  <SelectItem value="Payé">Payé</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Statut paiement</Label>
+                <Select value={form.paymentStatus || 'Non payé'} onValueChange={v => setForm(f => ({ ...f, paymentStatus: v as PaymentStatus }))}>
+                  <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Non payé">Non payé</SelectItem>
+                    <SelectItem value="Payé">Payé</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Prix à payer</Label>
+                <Input className="rounded-xl" placeholder="Ex: 2 500 HTG" value={form.priceToPay || ''} onChange={e => setForm(f => ({ ...f, priceToPay: e.target.value }))} />
+              </div>
             </div>
           </div>
           <DialogFooter className="gap-2">
@@ -269,6 +357,457 @@ function ParcelsSection({ admin }: { admin: AdminAccount }) {
           <DialogHeader>
             <DialogTitle>Supprimer le colis</DialogTitle>
             <DialogDescription>Le colis <strong>{parcelToDelete?.trackingNumber}</strong> sera définitivement supprimé.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="rounded-xl" onClick={() => setDeleteDialogOpen(false)}>Annuler</Button>
+            <Button variant="destructive" className="rounded-xl" onClick={handleDelete} disabled={deleting}>
+              {deleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Supprimer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── Section: Demandes clients ────────────────────────────────────────────────
+function RequestsSection() {
+  const { notifications, loading, reload } = useAdminNotifications();
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [selectedNotif, setSelectedNotif] = useState<AdminNotif | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'pending' | 'done'>('pending');
+
+  const clientRequests = notifications.filter(n =>
+    ['client_deposit', 'client_withdrawal', 'card_order'].includes(n.type)
+  );
+
+  const filtered = clientRequests.filter(n => {
+    if (filterType === 'pending') return !n.read && n.status !== 'approved' && n.status !== 'rejected';
+    if (filterType === 'done') return n.read || n.status === 'approved' || n.status === 'rejected';
+    return true;
+  });
+
+  const pendingCount = clientRequests.filter(n => !n.read && n.status !== 'approved' && n.status !== 'rejected').length;
+
+  async function approveDeposit(n: AdminNotif) {
+    if (!n.transactionId) return;
+    setActionLoading(n.id);
+    try {
+      const res = await fetch(`/api/admin/client-deposit/${n.transactionId}/approve`, {
+        method: 'POST', headers: { 'x-admin-secret': ADMIN_SECRET },
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+      await fetch(`/api/admin/notifications/${n.id}/read`, { method: 'PATCH', headers: { 'x-admin-secret': ADMIN_SECRET } });
+      reload();
+    } catch (e: any) { alert(e.message || 'Erreur'); }
+    finally { setActionLoading(null); }
+  }
+
+  async function approveWithdrawal(n: AdminNotif) {
+    if (!n.transactionId) return;
+    setActionLoading(n.id);
+    try {
+      const res = await fetch(`/api/admin/client-withdrawal/${n.transactionId}/approve`, {
+        method: 'POST', headers: { 'x-admin-secret': ADMIN_SECRET },
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+      await fetch(`/api/admin/notifications/${n.id}/read`, { method: 'PATCH', headers: { 'x-admin-secret': ADMIN_SECRET } });
+      reload();
+    } catch (e: any) { alert(e.message || 'Erreur'); }
+    finally { setActionLoading(null); }
+  }
+
+  async function rejectRequest(n: AdminNotif) {
+    if (!n.transactionId) return;
+    setActionLoading(n.id);
+    try {
+      const endpoint = n.type === 'client_deposit'
+        ? `/api/admin/client-deposit/${n.transactionId}/reject`
+        : `/api/admin/client-withdrawal/${n.transactionId}/reject`;
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
+        body: JSON.stringify({ reason: rejectReason }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+      await fetch(`/api/admin/notifications/${n.id}/read`, { method: 'PATCH', headers: { 'x-admin-secret': ADMIN_SECRET } });
+      setRejectDialogOpen(false); setRejectReason(''); setSelectedNotif(null); reload();
+    } catch (e: any) { alert(e.message || 'Erreur'); }
+    finally { setActionLoading(null); }
+  }
+
+  async function markDone(n: AdminNotif) {
+    setActionLoading(n.id);
+    try {
+      await fetch(`/api/admin/notifications/${n.id}/read`, { method: 'PATCH', headers: { 'x-admin-secret': ADMIN_SECRET } });
+      reload();
+    } catch {}
+    finally { setActionLoading(null); }
+  }
+
+  function getTypeBadge(type: string) {
+    switch (type) {
+      case 'client_deposit':    return { label: 'Dépôt',    color: 'bg-blue-100 text-blue-700',    icon: <ArrowDownToLine className="h-3 w-3" /> };
+      case 'client_withdrawal': return { label: 'Retrait',  color: 'bg-purple-100 text-purple-700', icon: <ArrowUpFromLine className="h-3 w-3" /> };
+      case 'card_order':        return { label: 'Commande', color: 'bg-amber-100 text-amber-700',   icon: <ShoppingBag className="h-3 w-3" /> };
+      default:                  return { label: type,       color: 'bg-gray-100 text-gray-700',     icon: <Bell className="h-3 w-3" /> };
+    }
+  }
+
+  function isProcessed(n: AdminNotif) {
+    return n.read || n.status === 'approved' || n.status === 'rejected';
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex gap-2">
+          {(['pending', 'all', 'done'] as const).map(f => (
+            <button key={f} onClick={() => setFilterType(f)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${filterType === f ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              {f === 'pending' ? `En attente${pendingCount > 0 ? ` (${pendingCount})` : ''}` : f === 'all' ? 'Tout voir' : 'Traités'}
+            </button>
+          ))}
+        </div>
+        <Button variant="outline" size="sm" className="rounded-xl gap-2" onClick={reload}>
+          <RefreshCw className="h-3.5 w-3.5" />Actualiser
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-gray-400">
+          <CheckCheck className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p className="font-semibold">{filterType === 'pending' ? 'Aucune demande en attente' : 'Aucune demande'}</p>
+          <p className="text-sm mt-1">{filterType === 'pending' ? 'Toutes les demandes ont été traitées' : ''}</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map(n => {
+            const badge = getTypeBadge(n.type);
+            const processed = isProcessed(n);
+            const isLoading = actionLoading === n.id;
+            const amount = n.amount || 0;
+
+            return (
+              <div key={n.id} className={`rounded-2xl border bg-white p-4 shadow-sm transition-all ${processed ? 'opacity-60' : ''}`}>
+                <div className="flex items-start gap-3">
+                  <div className={`mt-0.5 h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${badge.color}`}>
+                    {badge.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${badge.color}`}>
+                        {badge.icon}{badge.label}
+                      </span>
+                      {processed && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700">
+                          <CheckCircle2 className="h-2.5 w-2.5" />Traité
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="font-bold text-gray-900 mt-1.5 text-sm">
+                      {n.clientName || 'Client anonyme'}
+                      {n.clientWalletId && <span className="text-gray-400 font-normal ml-1">· #{n.clientWalletId}</span>}
+                    </p>
+
+                    {/* Deposit / Withdrawal details */}
+                    {(n.type === 'client_deposit' || n.type === 'client_withdrawal') && (
+                      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                        {amount > 0 && (
+                          <span className="font-bold text-gray-900 text-sm">${amount.toFixed(2)} USD
+                            {n.htgAmount && <span className="text-gray-400 font-normal"> ≈ {Math.round(n.htgAmount).toLocaleString()} HTG</span>}
+                          </span>
+                        )}
+                        {n.method && <span>Méthode: <strong>{n.method}</strong></span>}
+                        {n.accountNumber && <span>Compte: <strong className="font-mono">{n.accountNumber}</strong></span>}
+                        {n.accountName && <span>Titulaire: <strong>{n.accountName}</strong></span>}
+                      </div>
+                    )}
+
+                    {/* Card order details */}
+                    {n.type === 'card_order' && (
+                      <div className="mt-1.5 text-xs text-gray-600 space-y-0.5">
+                        {n.title && <p className="font-semibold text-gray-800">{n.title}</p>}
+                        {n.message && <p className="text-gray-500">{n.message}</p>}
+                        {n.cardDetails && Object.entries(n.cardDetails).map(([k, v]) => v ? (
+                          <span key={k} className="mr-3"><strong>{k}:</strong> {String(v)}</span>
+                        ) : null)}
+                      </div>
+                    )}
+
+                    <p className="text-[10px] text-gray-400 mt-1.5">{formatDate(n.createdAt)}</p>
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                {!processed && (
+                  <div className="mt-3 flex gap-2 pt-3 border-t border-gray-50">
+                    {n.type === 'client_deposit' && (
+                      <>
+                        <Button size="sm" className="flex-1 rounded-xl bg-green-600 hover:bg-green-700 text-white gap-1.5 h-9" onClick={() => approveDeposit(n)} disabled={isLoading}>
+                          {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}Approuver
+                        </Button>
+                        <Button size="sm" variant="outline" className="flex-1 rounded-xl border-red-200 text-red-600 hover:bg-red-50 gap-1.5 h-9"
+                          onClick={() => { setSelectedNotif(n); setRejectReason(''); setRejectDialogOpen(true); }} disabled={isLoading}>
+                          <X className="h-3.5 w-3.5" />Rejeter
+                        </Button>
+                      </>
+                    )}
+                    {n.type === 'client_withdrawal' && (
+                      <>
+                        <Button size="sm" className="flex-1 rounded-xl bg-green-600 hover:bg-green-700 text-white gap-1.5 h-9" onClick={() => approveWithdrawal(n)} disabled={isLoading}>
+                          {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}Approuver
+                        </Button>
+                        <Button size="sm" variant="outline" className="flex-1 rounded-xl border-red-200 text-red-600 hover:bg-red-50 gap-1.5 h-9"
+                          onClick={() => { setSelectedNotif(n); setRejectReason(''); setRejectDialogOpen(true); }} disabled={isLoading}>
+                          <X className="h-3.5 w-3.5" />Rejeter
+                        </Button>
+                      </>
+                    )}
+                    {n.type === 'card_order' && (
+                      <Button size="sm" variant="outline" className="rounded-xl gap-1.5 h-9" onClick={() => markDone(n)} disabled={isLoading}>
+                        {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}Marquer traité
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Reject dialog */}
+      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rejeter la demande</DialogTitle>
+            <DialogDescription>
+              {selectedNotif?.type === 'client_deposit' ? 'Dépôt' : 'Retrait'} de <strong>{selectedNotif?.clientName}</strong>
+              {selectedNotif?.amount ? ` — $${selectedNotif.amount.toFixed(2)} USD` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 space-y-2">
+            <Label>Raison du rejet (optionnel)</Label>
+            <Textarea className="rounded-xl resize-none" rows={3} placeholder="Ex: Preuve de paiement invalide…"
+              value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="rounded-xl" onClick={() => setRejectDialogOpen(false)}>Annuler</Button>
+            <Button variant="destructive" className="rounded-xl" onClick={() => selectedNotif && rejectRequest(selectedNotif)}
+              disabled={actionLoading === selectedNotif?.id}>
+              {actionLoading === selectedNotif?.id && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Confirmer le rejet
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── Section: Formations ───────────────────────────────────────────────────────
+const LEVEL_CONFIG: Record<FormationLevel, { label: string; color: string }> = {
+  debutant:      { label: 'Débutant',      color: 'bg-green-100 text-green-700' },
+  intermediaire: { label: 'Intermédiaire', color: 'bg-blue-100 text-blue-700' },
+  avance:        { label: 'Avancé',        color: 'bg-purple-100 text-purple-700' },
+};
+
+function FormationsAdminSection() {
+  const { formations, loading, refresh } = useAdminFormations();
+  const [search, setSearch] = useState('');
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editingFormation, setEditingFormation] = useState<Formation | null>(null);
+  const [formationToDelete, setFormationToDelete] = useState<Formation | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState('');
+
+  const emptyForm: Partial<Formation> = {
+    title: '', description: '', shortDescription: '', coverImage: '',
+    price: 0, originalPrice: undefined, level: 'debutant',
+    rating: 5, studentsCount: 0, modules: [], published: false,
+  };
+  const [form, setForm] = useState<Partial<Formation>>(emptyForm);
+
+  const filtered = formations.filter(f =>
+    f.title?.toLowerCase().includes(search.toLowerCase()) ||
+    f.shortDescription?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  function openAdd() { setEditingFormation(null); setForm(emptyForm); setError(''); setDialogOpen(true); }
+  function openEdit(f: Formation) { setEditingFormation(f); setForm({ ...f }); setError(''); setDialogOpen(true); }
+
+  async function handleSave() {
+    if (!form.title?.trim()) { setError('Le titre est requis.'); return; }
+    if (!form.price && form.price !== 0) { setError('Le prix est requis.'); return; }
+    setSaving(true); setError('');
+    try {
+      await saveAdminFormation({
+        ...form,
+        price: Number(form.price) || 0,
+        originalPrice: form.originalPrice ? Number(form.originalPrice) : undefined,
+        modules: form.modules || [],
+      }, editingFormation?.id);
+      setDialogOpen(false); refresh();
+    } catch (e: any) { setError(e.message || 'Erreur lors de la sauvegarde.'); }
+    finally { setSaving(false); }
+  }
+
+  async function handleDelete() {
+    if (!formationToDelete?.id) return;
+    setDeleting(true);
+    try { await deleteAdminFormation(formationToDelete.id); setDeleteDialogOpen(false); setFormationToDelete(null); refresh(); }
+    catch (e: any) { setError(e.message || 'Erreur suppression.'); }
+    finally { setDeleting(false); }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input className="pl-9 rounded-xl border-gray-200" placeholder="Rechercher une formation…" value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <Button onClick={openAdd} className="rounded-xl bg-primary hover:bg-primary/90 text-white gap-2 shadow-sm">
+          <Plus className="h-4 w-4" />Nouvelle formation
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-gray-400">
+          <GraduationCap className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p className="font-semibold">{search ? 'Aucun résultat' : 'Aucune formation enregistrée'}</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map(f => {
+            const lc = LEVEL_CONFIG[f.level] || LEVEL_CONFIG.debutant;
+            const discount = f.originalPrice && f.originalPrice > f.price
+              ? Math.round((1 - f.price / f.originalPrice) * 100) : 0;
+            return (
+              <div key={f.id} className="bg-white rounded-2xl border hover:shadow-md transition-shadow overflow-hidden group">
+                {f.coverImage && (
+                  <div className="aspect-video overflow-hidden bg-gray-100">
+                    <img src={f.coverImage} alt={f.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                  </div>
+                )}
+                <div className="p-4">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${lc.color}`}>{lc.label}</span>
+                        {!f.published && <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-gray-100 text-gray-500">Brouillon</span>}
+                        {discount > 0 && <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-600">-{discount}%</span>}
+                      </div>
+                      <h3 className="font-bold text-gray-900 truncate text-sm">{f.title}</h3>
+                      <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{f.shortDescription}</p>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-primary text-sm">${f.price}</span>
+                      {f.originalPrice && f.originalPrice > f.price && (
+                        <span className="text-xs text-gray-400 line-through">${f.originalPrice}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-400">
+                      <span className="flex items-center gap-0.5"><Star className="h-3 w-3 fill-amber-400 text-amber-400" />{f.rating}</span>
+                      <span className="flex items-center gap-0.5"><Users className="h-3 w-3" />{f.studentsCount}</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <Button variant="outline" size="sm" className="flex-1 rounded-xl text-xs h-8" onClick={() => openEdit(f)}>
+                      <Edit2 className="h-3 w-3 mr-1" />Modifier
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-xl text-red-500 hover:bg-red-50"
+                      onClick={() => { setFormationToDelete(f); setDeleteDialogOpen(true); }}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{editingFormation ? 'Modifier la formation' : 'Nouvelle formation'}</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            {error && <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+            <div className="space-y-1.5">
+              <Label>Titre *</Label>
+              <Input className="rounded-xl" placeholder="Ex: Marketing Digital" value={form.title || ''} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Résumé court</Label>
+              <Input className="rounded-xl" placeholder="Une phrase décrivant la formation" value={form.shortDescription || ''} onChange={e => setForm(f => ({ ...f, shortDescription: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Description complète</Label>
+              <Textarea className="rounded-xl resize-none" rows={3} value={form.description || ''} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Image de couverture (URL)</Label>
+              <Input className="rounded-xl" placeholder="https://…" value={form.coverImage || ''} onChange={e => setForm(f => ({ ...f, coverImage: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label>Prix ($) *</Label>
+                <Input className="rounded-xl" type="number" placeholder="0" value={form.price ?? ''} onChange={e => setForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Prix barré ($)</Label>
+                <Input className="rounded-xl" type="number" placeholder="Optionnel" value={form.originalPrice ?? ''} onChange={e => setForm(f => ({ ...f, originalPrice: parseFloat(e.target.value) || undefined }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Niveau</Label>
+                <Select value={form.level || 'debutant'} onValueChange={v => setForm(f => ({ ...f, level: v as FormationLevel }))}>
+                  <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="debutant">Débutant</SelectItem>
+                    <SelectItem value="intermediaire">Intermédiaire</SelectItem>
+                    <SelectItem value="avance">Avancé</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+              <div>
+                <p className="text-sm font-bold text-gray-800">Publié</p>
+                <p className="text-xs text-gray-500">Visible dans le catalogue</p>
+              </div>
+              <button onClick={() => setForm(f => ({ ...f, published: !f.published }))}>
+                {form.published
+                  ? <ToggleRight className="h-8 w-8 text-primary" />
+                  : <ToggleLeft className="h-8 w-8 text-gray-300" />}
+              </button>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="rounded-xl" onClick={() => setDialogOpen(false)}>Annuler</Button>
+            <Button className="rounded-xl bg-primary hover:bg-primary/90 text-white" onClick={handleSave} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}{editingFormation ? 'Modifier' : 'Ajouter'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="rounded-2xl max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Supprimer la formation</DialogTitle>
+            <DialogDescription>La formation <strong>{formationToDelete?.title}</strong> sera définitivement supprimée.</DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button variant="outline" className="rounded-xl" onClick={() => setDeleteDialogOpen(false)}>Annuler</Button>
@@ -451,7 +990,7 @@ function ProductsSection({ admin }: { admin: AdminAccount }) {
               </button>
               {showFieldEditor && (
                 <div className="p-4 space-y-3 bg-white">
-                  <p className="text-xs text-gray-500">Ces champs seront affichés au client lors de la commande (numéro de compte, montant, etc.).</p>
+                  <p className="text-xs text-gray-500">Ces champs seront affichés au client lors de la commande.</p>
                   {customFields.map((field, i) => (
                     <div key={field.id} className="flex flex-col gap-2 p-3 bg-gray-50 rounded-xl border">
                       <div className="flex items-center justify-between">
@@ -691,7 +1230,6 @@ function PaymentMethodsSection() {
         </div>
       )}
 
-      {/* Dialog édition méthode */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="rounded-2xl max-w-md max-h-[90vh] overflow-y-auto">
           {editingMethod && (
@@ -703,7 +1241,6 @@ function PaymentMethodsSection() {
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4 py-2">
-                {/* Toggle actif */}
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                   <div>
                     <p className="text-sm font-bold text-gray-800">Méthode activée</p>
@@ -716,7 +1253,6 @@ function PaymentMethodsSection() {
                   </button>
                 </div>
 
-                {/* Pour dépôt / retrait */}
                 <div className="grid grid-cols-2 gap-2">
                   <button onClick={() => setEditingMethod(m => m ? { ...m, forDeposit: !m.forDeposit } : m)}
                     className={`flex items-center gap-2 p-3 rounded-xl border-2 text-sm font-semibold transition-colors ${editingMethod.forDeposit ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-400'}`}>
@@ -730,7 +1266,6 @@ function PaymentMethodsSection() {
                   </button>
                 </div>
 
-                {/* Numéro / email / adresse — libellé adapté au type */}
                 <div className="space-y-1.5">
                   <Label>{getContactLabel(editingMethod)}</Label>
                   <Input className="rounded-xl font-mono"
@@ -751,7 +1286,6 @@ function PaymentMethodsSection() {
                   />
                 </div>
 
-                {/* Nom du titulaire */}
                 <div className="space-y-1.5">
                   <Label>Nom du titulaire (affiché au client)</Label>
                   <Input className="rounded-xl" placeholder="Ex: Jean Dupont"
@@ -759,7 +1293,6 @@ function PaymentMethodsSection() {
                     onChange={e => setEditingMethod(m => m ? { ...m, accountName: e.target.value } : m)} />
                 </div>
 
-                {/* QR Code */}
                 <div className="space-y-1.5">
                   <Label className="flex items-center gap-2">
                     <QrCode className="h-4 w-4 text-primary" />QR Code — URL de l'image (optionnel)
@@ -771,20 +1304,18 @@ function PaymentMethodsSection() {
                     <div className="mt-2 flex items-center gap-3 p-3 bg-gray-50 rounded-xl border">
                       <img src={editingMethod.qrUrl} alt="QR preview" className="h-16 w-16 object-contain rounded-lg border bg-white"
                         onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                      <p className="text-xs text-gray-500">Aperçu du QR code. Le client pourra le scanner pour envoyer le paiement.</p>
+                      <p className="text-xs text-gray-500">Aperçu du QR code.</p>
                     </div>
                   )}
                 </div>
 
-                {/* Logo */}
                 <div className="space-y-1.5">
                   <Label>URL du logo (optionnel)</Label>
-                  <Input className="rounded-xl" placeholder="https://… (logo de la méthode)"
+                  <Input className="rounded-xl" placeholder="https://…"
                     value={editingMethod.logoUrl || ''}
                     onChange={e => setEditingMethod(m => m ? { ...m, logoUrl: e.target.value } : m)} />
                 </div>
 
-                {/* Instructions */}
                 <div className="space-y-1.5">
                   <Label>Instructions pour le client</Label>
                   <Textarea className="rounded-xl resize-none" rows={2}
@@ -969,13 +1500,22 @@ function NotificationsSection({ admin }: { admin: AdminAccount }) {
 
 // ─── Dashboard principal ──────────────────────────────────────────────────────
 export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps) {
-  const [section, setSection] = useState<Section>('parcels');
+  const [section, setSection] = useState<Section>('requests');
+  const { notifications: adminNotifs } = useAdminNotifications();
 
-  const SECTIONS: { id: Section; label: string; icon: React.ReactNode }[] = [
-    { id: 'parcels',         label: 'Colis & Tracking', icon: <Package className="h-4 w-4" /> },
-    { id: 'products',        label: 'Produits',          icon: <LayoutGrid className="h-4 w-4" /> },
-    { id: 'payment-methods', label: 'Paiements',         icon: <Wallet className="h-4 w-4" /> },
-    { id: 'notifications',   label: 'Notifications',     icon: <Bell className="h-4 w-4" /> },
+  const pendingCount = adminNotifs.filter(n =>
+    ['client_deposit', 'client_withdrawal', 'card_order'].includes(n.type) &&
+    !n.read && n.status !== 'approved' && n.status !== 'rejected'
+  ).length;
+
+  const SECTIONS: { id: Section; label: string; icon: React.ReactNode; badge?: number }[] = [
+    { id: 'requests',        label: 'Demandes',        icon: <Bell className="h-4 w-4" />,         badge: pendingCount },
+    { id: 'parcels',         label: 'Colis',           icon: <Package className="h-4 w-4" /> },
+    { id: 'products',        label: 'Produits',         icon: <LayoutGrid className="h-4 w-4" /> },
+    { id: 'formations',      label: 'Formations',       icon: <GraduationCap className="h-4 w-4" /> },
+    { id: 'payment-methods', label: 'Paiements',        icon: <Wallet className="h-4 w-4" /> },
+    { id: 'notifications',   label: 'Annonces',         icon: <Info className="h-4 w-4" /> },
+    { id: 'wallet',          label: 'Paramètres',       icon: <Settings className="h-4 w-4" /> },
   ];
 
   return (
@@ -999,13 +1539,18 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
 
       <nav className="bg-white border-b border-gray-100">
         <div className="max-w-6xl mx-auto px-4">
-          <div className="flex gap-1 overflow-x-auto">
+          <div className="flex gap-0 overflow-x-auto">
             {SECTIONS.map(s => (
               <button key={s.id} onClick={() => setSection(s.id)}
-                className={`flex items-center gap-2 px-4 py-3.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
+                className={`relative flex items-center gap-2 px-4 py-3.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
                   section === s.id ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-800'
                 }`}>
                 {s.icon}{s.label}
+                {s.badge && s.badge > 0 ? (
+                  <span className="absolute -top-0.5 right-1 h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center">
+                    {s.badge > 99 ? '99+' : s.badge}
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
@@ -1013,10 +1558,13 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
       </nav>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
+        {section === 'requests'        && <RequestsSection />}
         {section === 'parcels'         && <ParcelsSection admin={admin} />}
         {section === 'products'        && <ProductsSection admin={admin} />}
+        {section === 'formations'      && <FormationsAdminSection />}
         {section === 'payment-methods' && <PaymentMethodsSection />}
         {section === 'notifications'   && <NotificationsSection admin={admin} />}
+        {section === 'wallet'          && <AdminWalletManager />}
       </main>
     </div>
   );
