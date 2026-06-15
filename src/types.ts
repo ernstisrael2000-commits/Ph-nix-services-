@@ -18,12 +18,18 @@ export interface Parcel {
   id?: string;
   trackingNumber: string;
   clientName?: string;
+  recipientName?: string;
+  image?: string;
   status: ParcelStatus;
   currentLocation: string;
+  origin?: string;
+  destination?: string;
   estimatedArrival?: string;
   proofOfDelivery?: string;
   paymentStatus: PaymentStatus;
   priceToPay?: string;
+  weight?: string;
+  notes?: string;
   createdAt: any;
   updatedAt: any;
 }
