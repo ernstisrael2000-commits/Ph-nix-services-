@@ -802,6 +802,17 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
               onClick={e => e.stopPropagation()}
               className="relative bg-white rounded-3xl w-full max-w-sm shadow-2xl max-h-[90vh] overflow-y-auto">
 
+              {/* Bouton fermeture ✕ */}
+              {!orderModal.submitting && (
+                <button
+                  onClick={() => setOrderModal(null)}
+                  className="absolute top-3 right-3 z-20 h-8 w-8 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/40 transition-colors"
+                  aria-label="Fermer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+
               {orderModal.success ? (
                 /* ── Popup succès ── */
                 <motion.div
@@ -1094,8 +1105,8 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
         )}
       </AnimatePresence>
 
-      {/* Tab bar — bottom floating pill (same style as BottomNav) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-[290]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      {/* Tab bar — caché quand le modal de commande est ouvert */}
+      <nav className={`fixed bottom-0 left-0 right-0 z-[290] transition-all duration-200 ${orderModal ? 'opacity-0 pointer-events-none translate-y-4' : 'opacity-100 translate-y-0'}`} style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <div className="relative mx-4 mb-3 pt-8">
           {/* White rounded pill */}
           <div className="h-[58px] bg-white rounded-[28px] shadow-[0_-4px_24px_rgba(0,0,0,0.08),0_4px_16px_rgba(0,0,0,0.06)]" />
