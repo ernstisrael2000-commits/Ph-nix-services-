@@ -357,7 +357,7 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
   const [search, setSearch] = useState('');
   const [mainVideoUrl, setMainVideoUrl] = useState('');
   const { settings } = useSettings();
-  const exchangeRate = settings?.exchangeRate || 146;
+  const exchangeRate = settings?.exchangeRate || 135;
 
   // Listen for tab switch events from burger menu
   useEffect(() => {
@@ -452,10 +452,10 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
       return;
     }
 
-    const totalPriceHTG = Math.round(orderModal.svc.pricePerUnit * orderModal.qty);
-    const rate = exchangeRate > 0 ? exchangeRate : 146;
+    const totalPriceHTG = Math.round((orderModal.svc.pricePerUnit ?? 0) * orderModal.qty);
+    const rate = exchangeRate > 0 ? exchangeRate : 135;
     const clientBalanceHTG = Math.round((client.balance ?? 0) * rate);
-    if (clientBalanceHTG < totalPriceHTG) return; // bouton déjà désactivé, sécurité double
+    if (totalPriceHTG > 0 && clientBalanceHTG < totalPriceHTG) return; // bouton déjà désactivé, sécurité double
 
     setOrderModal(m => m ? { ...m, submitting: true } : null);
     try {
@@ -486,9 +486,9 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
     }
   };
 
-  const totalPrice = orderModal ? Math.round(orderModal.svc.pricePerUnit * orderModal.qty) : 0;
-  const clientBalanceHTG = Math.round((client.balance ?? 0) * (exchangeRate > 0 ? exchangeRate : 146));
-  const hasEnoughBalance = clientBalanceHTG >= totalPrice;
+  const totalPrice = orderModal ? Math.round((orderModal.svc.pricePerUnit ?? 0) * orderModal.qty) : 0;
+  const clientBalanceHTG = Math.round((client.balance ?? 0) * (exchangeRate > 0 ? exchangeRate : 135));
+  const hasEnoughBalance = totalPrice === 0 || clientBalanceHTG >= totalPrice;
   const platformVideoUrl = selectedPlatform ? getPlatformVideoUrl(selectedPlatform) : '';
 
   // Search
