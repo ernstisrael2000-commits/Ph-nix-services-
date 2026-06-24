@@ -866,25 +866,59 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
 
                   {/* Quantity */}
                   <div className="mb-4">
-                    <label className="text-xs font-black text-gray-600 uppercase tracking-widest block mb-2">
-                      Quantité ({orderModal.svc.unit})
+                    <label className="text-xs font-black text-gray-600 uppercase tracking-widest block mb-3">
+                      Quantité — {orderModal.svc.unit}
                     </label>
-                    <div className="flex items-center gap-3">
-                      <button onClick={() => setOrderModal(m => m ? { ...m, qty: Math.max(m.svc.minQty || 100, m.qty - Math.ceil((m.svc.minQty || 100) / 5)) } : null)}
-                        className="h-9 w-9 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 font-black transition-colors text-lg">−</button>
-                      <input type="number" value={orderModal.qty}
+
+                    {/* Quick-select chips */}
+                    {(() => {
+                      const min = orderModal.svc.minQty || 100;
+                      const max = orderModal.svc.maxQty || 100000;
+                      const presets = [min, 500, 1000, 5000, 10000, 50000].filter(v => v >= min && v <= max);
+                      const unique = [...new Set(presets)].slice(0, 6);
+                      return unique.length > 1 ? (
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {unique.map(v => (
+                            <button
+                              key={v}
+                              onClick={() => setOrderModal(m => m ? { ...m, qty: v } : null)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all border ${
+                                orderModal.qty === v
+                                  ? 'bg-primary text-white border-primary shadow-sm'
+                                  : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-primary/40 hover:text-primary'
+                              }`}>
+                              {v >= 1000 ? `${(v / 1000).toLocaleString()}k` : v.toLocaleString()}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null;
+                    })()}
+
+                    {/* Direct input */}
+                    <div className="flex items-center gap-2 bg-gray-50 rounded-2xl px-4 py-3 border-2 border-gray-100 focus-within:border-primary/30 transition-colors">
+                      <button
+                        onClick={() => setOrderModal(m => m ? { ...m, qty: Math.max(m.svc.minQty || 100, m.qty - (m.svc.minQty || 100)) } : null)}
+                        className="h-8 w-8 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-gray-600 font-black text-lg hover:bg-gray-100 shrink-0 transition-colors">−</button>
+                      <input
+                        type="number"
+                        value={orderModal.qty}
                         onChange={e => {
-                          const v = Math.max(orderModal.svc.minQty || 0, Math.min(orderModal.svc.maxQty || 999999, Number(e.target.value) || 0));
+                          const raw = Number(e.target.value) || 0;
+                          const v = Math.max(orderModal.svc.minQty || 0, Math.min(orderModal.svc.maxQty || 999999, raw));
                           setOrderModal(m => m ? { ...m, qty: v } : null);
                         }}
-                        min={orderModal.svc.minQty} max={orderModal.svc.maxQty}
-                        className="flex-1 text-center font-black text-gray-900 text-base border border-gray-200 rounded-xl py-2 focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                      <button onClick={() => setOrderModal(m => m ? { ...m, qty: Math.min(m.svc.maxQty || 999999, m.qty + Math.ceil((m.svc.minQty || 100) / 5)) } : null)}
-                        className="h-9 w-9 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 font-black transition-colors text-lg">+</button>
+                        min={orderModal.svc.minQty}
+                        max={orderModal.svc.maxQty}
+                        className="flex-1 text-center font-black text-gray-900 text-2xl bg-transparent focus:outline-none w-0 min-w-0"
+                      />
+                      <span className="text-xs font-bold text-gray-400 shrink-0 mr-1">{orderModal.svc.unit}</span>
+                      <button
+                        onClick={() => setOrderModal(m => m ? { ...m, qty: Math.min(m.svc.maxQty || 999999, m.qty + (m.svc.minQty || 100)) } : null)}
+                        className="h-8 w-8 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-gray-600 font-black text-lg hover:bg-gray-100 shrink-0 transition-colors">+</button>
                     </div>
-                    <div className="flex justify-between mt-1.5 text-[10px] text-gray-400 font-semibold">
-                      <span>Min: {(orderModal.svc.minQty || 100).toLocaleString()}</span>
-                      <span>Max: {(orderModal.svc.maxQty || 100000).toLocaleString()}</span>
+                    <div className="flex justify-between mt-1.5 text-[10px] text-gray-400 font-semibold px-1">
+                      <span>Min : {(orderModal.svc.minQty || 100).toLocaleString()}</span>
+                      <span>Max : {(orderModal.svc.maxQty || 100000).toLocaleString()}</span>
                     </div>
                   </div>
 
