@@ -395,11 +395,13 @@ export default function AdminPromotionSection() {
                     return (
                       <div key={p.id} className={`relative bg-white rounded-2xl border-2 overflow-hidden flex flex-col transition-all ${p.active ? 'border-gray-100' : 'border-dashed border-gray-200 opacity-60'}`}>
                         {/* Logo / gradient header */}
-                        <div className={`h-20 w-full bg-gradient-to-br ${p.gradient} flex items-center justify-center relative`}>
+                        <div className={`h-20 w-full bg-gradient-to-br ${p.gradient} relative overflow-hidden`}>
                           {p.logoUrl ? (
-                            <img src={p.logoUrl} alt={p.name} className="h-12 w-12 object-contain drop-shadow-md" />
+                            <img src={p.logoUrl} alt={p.name} className="w-full h-full object-cover" />
                           ) : (
-                            <span className="text-white font-black text-3xl drop-shadow">{p.name.charAt(0).toUpperCase()}</span>
+                            <div className="w-full h-full flex items-center justify-center">
+                              <span className="text-white font-black text-3xl drop-shadow">{p.name.charAt(0).toUpperCase()}</span>
+                            </div>
                           )}
                           {/* Active badge */}
                           <span className={`absolute top-2 right-2 h-2 w-2 rounded-full ${p.active ? 'bg-emerald-400' : 'bg-gray-300'}`} />

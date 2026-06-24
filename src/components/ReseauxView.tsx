@@ -262,7 +262,7 @@ function PlatformCard({ platform, svcCount, onClick }: { platform: any; svcCount
     >
       <div className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${platform.gradient || cfg.gradient || 'from-gray-400 to-gray-600'} flex items-center justify-center overflow-hidden shadow-md`}>
         {platform.logoUrl ? (
-          <img src={platform.logoUrl} alt={platform.name} className="h-10 w-10 object-contain" />
+          <img src={platform.logoUrl} alt={platform.name} className="w-full h-full object-cover" />
         ) : (
           <PlatformIcon pKey={platform.key} className="h-8 w-8 text-white" />
         )}
@@ -278,7 +278,6 @@ function PlatformCard({ platform, svcCount, onClick }: { platform: any; svcCount
 // ─── Catalog service card ──────────────────────────────────────────────────────
 function ServiceCard({ svc, plt, catCfg, onOrder }: { svc: any; plt: any; catCfg: any; onOrder: (s: any) => void }) {
   if (!plt) return null;
-  const packages = buildPackages(svc);
   const gradient = catCfg?.gradient || plt.gradient;
   return (
     <motion.div
@@ -286,59 +285,51 @@ function ServiceCard({ svc, plt, catCfg, onOrder }: { svc: any; plt: any; catCfg
       animate={{ opacity: 1, y: 0 }}
       className={`relative bg-white rounded-3xl border overflow-hidden transition-all hover:shadow-lg ${svc.popular ? 'border-primary/30 ring-1 ring-primary/20' : 'border-gray-100'}`}
     >
-      {svc.popular && (
-        <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${gradient}`} />
-      )}
-      {svc.popular && (
-        <span className="absolute top-3 right-3 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[9px] font-black uppercase flex items-center gap-1">
-          <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" /> Populaire
-        </span>
-      )}
+      {svc.popular && <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${gradient}`} />}
 
       <div className="p-5">
         {/* Header */}
         <div className="flex items-start gap-3 mb-4">
-          <div className={`h-11 w-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shrink-0 shadow-md`}>
-            <PlatformIcon pKey={plt.key} className="h-5 w-5" />
+          <div className={`h-11 w-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shrink-0 shadow-md overflow-hidden`}>
+            {plt.logoUrl
+              ? <img src={plt.logoUrl} alt={plt.name} className="w-full h-full object-cover" />
+              : <PlatformIcon pKey={plt.key} className="h-5 w-5" />}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-black text-gray-900 text-sm leading-tight">{svc.name}</p>
-            <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{svc.description}</p>
-          </div>
-        </div>
-
-        {/* Package pricing pills */}
-        <div className="mb-4">
-          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Packages disponibles</p>
-          <div className="space-y-2">
-            {packages.map((pkg, i) => (
-              <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-xl ${i === 0 ? `${catCfg?.lightBg || 'bg-primary/5'} border border-current/10` : 'bg-gray-50'}`}>
-                <span className={`text-xs font-bold ${i === 0 ? catCfg?.text || 'text-primary' : 'text-gray-500'}`}>
-                  {pkg.qty.toLocaleString()} {svc.unit}
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-black text-gray-900 text-sm leading-tight">{svc.name}</p>
+              {svc.popular && (
+                <span className="shrink-0 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[9px] font-black uppercase flex items-center gap-0.5">
+                  <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" /> Top
                 </span>
-                <div className="flex items-center gap-1.5">
-                  <ChevronRight className="h-3 w-3 text-gray-300" />
-                  <span className={`text-sm font-black ${i === 0 ? catCfg?.text || 'text-primary' : 'text-gray-700'}`}>
-                    {pkg.price.toLocaleString()} HTG
-                  </span>
-                </div>
-              </div>
-            ))}
+              )}
+            </div>
+            {svc.description && <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{svc.description}</p>}
           </div>
         </div>
 
-        {/* Price per unit */}
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-[11px] text-gray-400 font-semibold">
-            {svc.pricePerUnit} HTG / {svc.unit} · max {(svc.maxQty || 100000).toLocaleString()}
-          </p>
+        {/* Pricing info */}
+        <div className={`flex items-center justify-between px-4 py-3 rounded-2xl mb-4 ${catCfg?.lightBg || 'bg-primary/5'}`}>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Prix unitaire</p>
+            <p className={`text-xl font-black ${catCfg?.text || 'text-primary'}`}>
+              {svc.pricePerUnit?.toLocaleString()} <span className="text-sm font-bold">HTG</span>
+              <span className="text-xs font-semibold text-gray-400 ml-1">/ {svc.unit}</span>
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-semibold text-gray-400">Min · Max</p>
+            <p className="text-xs font-bold text-gray-600">
+              {(svc.minQty || 100).toLocaleString()} – {(svc.maxQty || 100000).toLocaleString()}
+            </p>
+          </div>
         </div>
 
         {/* CTA */}
         <button onClick={() => onOrder(svc)}
           className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-black text-white bg-gradient-to-r ${gradient} hover:opacity-90 transition-all active:scale-95 shadow-md`}>
           <ShoppingCart className="h-4 w-4" />
-          Choisir ce service
+          Commander ce service
         </button>
       </div>
     </motion.div>
@@ -531,7 +522,7 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
                     </button>
                     <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${activePlatformData.gradient} flex items-center justify-center text-white shrink-0 overflow-hidden`}>
                       {activePlatformData.logoUrl
-                        ? <img src={activePlatformData.logoUrl} alt={activePlatformData.name} className="h-7 w-7 object-contain" />
+                        ? <img src={activePlatformData.logoUrl} alt={activePlatformData.name} className="w-full h-full object-cover" />
                         : <PlatformIcon pKey={selectedPlatform} className="h-4 w-4" />}
                     </div>
                     <div>
@@ -584,7 +575,7 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
                     </button>
                     <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${activePlatformData.gradient} flex items-center justify-center text-white shrink-0 overflow-hidden`}>
                       {activePlatformData.logoUrl
-                        ? <img src={activePlatformData.logoUrl} alt={activePlatformData.name} className="h-7 w-7 object-contain" />
+                        ? <img src={activePlatformData.logoUrl} alt={activePlatformData.name} className="w-full h-full object-cover" />
                         : <PlatformIcon pKey={selectedPlatform} className="h-4 w-4" />}
                     </div>
                     <div className="flex items-center gap-1.5 text-[11px] text-gray-400 font-bold">
