@@ -33,6 +33,7 @@ import {
 } from '../types';
 import AdminWalletManager from './AdminWalletManager';
 import AdminPromotionSection from './AdminPromotionSection';
+import PhenixAgent from './PhenixAgent';
 
 const ADMIN_SECRET = 'rena-admin-2024';
 
@@ -1916,6 +1917,9 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
           {section === 'promotion'       && <AdminPromotionSection />}
         </main>
       </div>
+
+      {/* Agent Phénix IA flottant */}
+      <PhenixAgent />
     </div>
   );
 }

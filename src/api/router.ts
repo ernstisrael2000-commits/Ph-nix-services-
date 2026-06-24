@@ -6200,6 +6200,85 @@ router.patch('/api/admin/promotion/orders/:id', requireDb, requireAdminSecret, a
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Agent Phénix — chat IA (Groq) ─────────────────────────────────────────────
+router.post('/api/admin/phenix-chat', requireAdminSecret, async (req, res) => {
+  const groqKey = process.env.GROQ_API_KEY;
+  if (!groqKey) return res.status(503).json({ error: 'GROQ_API_KEY non configuré.' });
+
+  const { messages } = req.body as { messages: Array<{ role: string; content: string }> };
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'messages requis.' });
+  }
+
+  const systemPrompt = `Tu es Phénix, l'assistant IA intégré dans le tableau de bord administrateur de la plateforme "Phénix Services".
+Tu connais parfaitement toutes les fonctionnalités de l'administration :
+
+SECTIONS DU TABLEAU DE BORD ADMIN :
+- Demandes : Gestion des dépôts, retraits et commandes clients. Tu peux approuver ou rejeter.
+  → Clique sur "Demandes" dans la sidebar pour y accéder.
+- Colis : Suivi et gestion des colis expédiés. Statuts : En route, En transit, Arrivé, Livré.
+  → Clique sur "Colis" dans la sidebar.
+- Produits : Catalogue des produits/services vendus. Tu peux ajouter, modifier, supprimer.
+  → Clique sur "Produits" → bouton "+" pour ajouter un produit.
+- Cartes : Gestion des cartes virtuelles/physiques (Visa, Mastercard, etc.).
+  → Clique sur "Cartes" dans la sidebar.
+- Formations : Gestion du catalogue de cours en ligne (modules, chapitres, ressources, certificats).
+  → Clique sur "Formations" → bouton "+" pour créer une formation.
+- Promotion : Gestion des plateformes sociales (TikTok, YouTube, Instagram...) et services de boost.
+  → Clique sur "Promotion" → onglet "Plateformes" ou "Services".
+- Paiements : Configuration des méthodes de paiement (MonCash, NatCash, Crypto, Banque...).
+  → Clique sur "Paiements" dans la sidebar.
+- Annonces : Envoi de notifications système à tous les utilisateurs.
+  → Clique sur "Annonces" → remplis le titre et le message → "Envoyer".
+- Paramètres : Taux de change, limites de dépôt/retrait, configuration globale.
+  → Clique sur "Paramètres" dans la sidebar.
+
+COMMENT EFFECTUER DES ACTIONS COURANTES :
+- Ajouter un produit : Produits → bouton "Nouveau produit" (icône +) → remplir nom, image, prix, description → Sauvegarder.
+- Approuver un dépôt : Demandes → trouver la demande → cliquer "Approuver".
+- Créer une formation : Formations → "+" → remplir les infos générales → ajouter des modules et chapitres.
+- Ajouter une plateforme promotion : Promotion → onglet "Plateformes" → "+" → configurer nom, gradient, champs personnalisés.
+- Changer le taux de change : Paramètres → "Taux de change" → modifier la valeur → Sauvegarder.
+- Envoyer une annonce : Annonces → remplir titre + message → choisir le type → "Envoyer l'annonce".
+
+CONSEILS ET BONNES PRATIQUES :
+- Vérifie régulièrement l'onglet "Demandes" pour les transactions en attente.
+- Pour les formations, ajoute toujours une image de couverture attractive.
+- Les champs personnalisés des plateformes promotion permettent de collecter des infos spécifiques à chaque commande.
+
+Réponds toujours en français, de façon concise, claire et utile. Si l'admin te pose une question sur une action, guide-le étape par étape. Tu peux utiliser des emojis pour rendre la réponse plus lisible. Ne dépasse pas 200 mots par réponse.`;
+
+  try {
+    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${groqKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...messages.slice(-12),
+        ],
+        max_tokens: 400,
+        temperature: 0.65,
+      }),
+    });
+
+    if (!groqRes.ok) {
+      const err = await groqRes.text();
+      return res.status(502).json({ error: `Groq error: ${err}` });
+    }
+
+    const data: any = await groqRes.json();
+    const reply = data.choices?.[0]?.message?.content || 'Désolé, je n\'ai pas pu générer une réponse.';
+    res.json({ reply });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────
 router.all('/api/*', (_req, res) => {
   res.status(404).json({ error: 'Route API introuvable.' });

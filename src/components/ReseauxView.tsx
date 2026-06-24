@@ -819,48 +819,83 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
                   <button onClick={() => setOrderModal(null)} className="w-full mt-2 py-2 text-sm text-gray-400">Fermer</button>
                 </div>
               ) : (
-                <div className="p-6">
-                  <h3 className="font-black text-gray-900 text-base mb-1">{orderModal.svc.name}</h3>
-                  <p className="text-sm text-gray-500 mb-4">{orderModal.svc.description}</p>
+                <div>
+                  {/* Modal header with gradient */}
+                  {(() => {
+                    const plt = activePlatformData;
+                    const catCfg = getCategoryConfig(activeCategory);
+                    const gradient = catCfg?.gradient || plt?.gradient || 'from-indigo-500 to-purple-600';
+                    return (
+                      <div className={`bg-gradient-to-br ${gradient} px-6 pt-6 pb-5 rounded-t-3xl`}>
+                        <div className="flex items-start gap-3">
+                          <div className="h-12 w-12 rounded-2xl bg-white/20 flex items-center justify-center shrink-0 overflow-hidden">
+                            {plt?.logoUrl
+                              ? <img src={plt.logoUrl} alt={plt.name} className="w-full h-full object-cover" />
+                              : <PlatformIcon pKey={selectedPlatform || ''} className="h-6 w-6 text-white" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-black text-white text-base leading-tight">{orderModal.svc.name}</p>
+                            <p className="text-white/70 text-xs mt-0.5">{plt?.label || plt?.name} · {activeCategory}</p>
+                            {orderModal.svc.description && (
+                              <p className="text-white/60 text-xs mt-1 leading-relaxed">{orderModal.svc.description}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="p-6">
 
                   {/* Custom form fields */}
                   {selectedPlatform && getPlatformCustomFields(selectedPlatform).length > 0 && (
-                    <div className="mb-4 space-y-3">
-                      <p className="text-xs font-black text-gray-500 uppercase tracking-widest">Informations requises</p>
-                      {getPlatformCustomFields(selectedPlatform).map((field: any) => (
-                        <div key={field.id}>
-                          <label className="text-xs font-bold text-gray-700 block mb-1.5">
-                            {field.label} {field.required && <span className="text-red-500">*</span>}
-                          </label>
-                          {field.type === 'textarea' ? (
-                            <textarea
-                              value={orderModal.customFieldValues[field.label] || ''}
-                              onChange={e => setOrderModal(m => m ? { ...m, customFieldValues: { ...m.customFieldValues, [field.label]: e.target.value } } : null)}
-                              placeholder={field.placeholder}
-                              rows={3}
-                              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 resize-none"
-                            />
-                          ) : field.type === 'select' ? (
-                            <select
-                              value={orderModal.customFieldValues[field.label] || ''}
-                              onChange={e => setOrderModal(m => m ? { ...m, customFieldValues: { ...m.customFieldValues, [field.label]: e.target.value } } : null)}
-                              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20">
-                              <option value="">-- Choisir --</option>
-                              {(field.options || '').split(',').map((opt: string) => opt.trim()).filter(Boolean).map((opt: string) => (
-                                <option key={opt} value={opt}>{opt}</option>
-                              ))}
-                            </select>
-                          ) : (
-                            <input
-                              type={field.type === 'url' ? 'url' : 'text'}
-                              value={orderModal.customFieldValues[field.label] || ''}
-                              onChange={e => setOrderModal(m => m ? { ...m, customFieldValues: { ...m.customFieldValues, [field.label]: e.target.value } } : null)}
-                              placeholder={field.placeholder}
-                              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50"
-                            />
-                          )}
+                    <div className="mb-5">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="h-5 w-5 rounded-lg bg-indigo-100 flex items-center justify-center">
+                          <span className="text-indigo-600 text-[10px] font-black">✏</span>
                         </div>
-                      ))}
+                        <p className="text-xs font-black text-gray-700 uppercase tracking-widest">Informations requises</p>
+                      </div>
+                      <div className="space-y-3">
+                        {getPlatformCustomFields(selectedPlatform).map((field: any) => (
+                          <div key={field.id}>
+                            <label className="text-xs font-bold text-gray-700 block mb-1.5 flex items-center gap-1">
+                              {field.label}
+                              {field.required && (
+                                <span className="px-1.5 py-0.5 rounded-md bg-red-50 text-red-500 text-[9px] font-black">Requis</span>
+                              )}
+                            </label>
+                            {field.type === 'textarea' ? (
+                              <textarea
+                                value={orderModal.customFieldValues[field.label] || ''}
+                                onChange={e => setOrderModal(m => m ? { ...m, customFieldValues: { ...m.customFieldValues, [field.label]: e.target.value } } : null)}
+                                placeholder={field.placeholder || `Entrez ${field.label.toLowerCase()}...`}
+                                rows={3}
+                                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300/40 focus:border-indigo-400 resize-none transition-all bg-gray-50 focus:bg-white"
+                              />
+                            ) : field.type === 'select' ? (
+                              <select
+                                value={orderModal.customFieldValues[field.label] || ''}
+                                onChange={e => setOrderModal(m => m ? { ...m, customFieldValues: { ...m.customFieldValues, [field.label]: e.target.value } } : null)}
+                                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300/40 focus:border-indigo-400 bg-gray-50 focus:bg-white transition-all">
+                                <option value="">— Sélectionner —</option>
+                                {(field.options || '').split(',').map((opt: string) => opt.trim()).filter(Boolean).map((opt: string) => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                type={field.type === 'url' ? 'url' : 'text'}
+                                value={orderModal.customFieldValues[field.label] || ''}
+                                onChange={e => setOrderModal(m => m ? { ...m, customFieldValues: { ...m.customFieldValues, [field.label]: e.target.value } } : null)}
+                                placeholder={field.placeholder || (field.type === 'url' ? 'https://...' : `Entrez ${field.label.toLowerCase()}...`)}
+                                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300/40 focus:border-indigo-400 bg-gray-50 focus:bg-white transition-all"
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 border-t border-dashed border-gray-100 pt-3" />
                     </div>
                   )}
 
@@ -947,6 +982,7 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
                   </button>
                   <button onClick={() => setOrderModal(null)} disabled={orderModal.submitting}
                     className="w-full mt-2 py-2.5 text-sm text-gray-400 font-semibold">Annuler</button>
+                  </div>
                 </div>
               )}
             </motion.div>
