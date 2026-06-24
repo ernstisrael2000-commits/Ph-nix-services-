@@ -260,12 +260,16 @@ function PlatformCard({ platform, svcCount, onClick }: { platform: any; svcCount
       onClick={onClick}
       className="flex flex-col items-center justify-center gap-3 bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md hover:border-gray-200 transition-all text-center"
     >
-      <div className={`h-14 w-14 rounded-2xl ${cfg.iconBg || 'bg-gray-100'} flex items-center justify-center`}>
-        <PlatformIcon pKey={platform.key} className={`h-8 w-8 ${cfg.iconColor || 'text-gray-600'}`} />
+      <div className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${platform.gradient || cfg.gradient || 'from-gray-400 to-gray-600'} flex items-center justify-center overflow-hidden shadow-md`}>
+        {platform.logoUrl ? (
+          <img src={platform.logoUrl} alt={platform.name} className="h-10 w-10 object-contain" />
+        ) : (
+          <PlatformIcon pKey={platform.key} className="h-8 w-8 text-white" />
+        )}
       </div>
       <div>
         <p className="font-black text-gray-900 text-sm leading-tight">{platform.label || platform.name}</p>
-        <p className="text-[11px] text-gray-400 font-semibold mt-0.5">{svcCount} SÉVIS</p>
+        <p className="text-[11px] text-gray-400 font-semibold mt-0.5">{svcCount} service{svcCount !== 1 ? 's' : ''}</p>
       </div>
     </motion.button>
   );
@@ -525,8 +529,10 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
                       className="h-9 w-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-colors shrink-0">
                       <ChevronLeft className="h-5 w-5 text-gray-600" />
                     </button>
-                    <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${activePlatformData.gradient} flex items-center justify-center text-white shrink-0`}>
-                      <PlatformIcon pKey={selectedPlatform} className="h-4 w-4" />
+                    <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${activePlatformData.gradient} flex items-center justify-center text-white shrink-0 overflow-hidden`}>
+                      {activePlatformData.logoUrl
+                        ? <img src={activePlatformData.logoUrl} alt={activePlatformData.name} className="h-7 w-7 object-contain" />
+                        : <PlatformIcon pKey={selectedPlatform} className="h-4 w-4" />}
                     </div>
                     <div>
                       <h2 className="font-black text-gray-900 text-base leading-tight">{activePlatformData.label || activePlatformData.name}</h2>
@@ -576,8 +582,10 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
                       className="h-9 w-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-colors shrink-0">
                       <ChevronLeft className="h-5 w-5 text-gray-600" />
                     </button>
-                    <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${activePlatformData.gradient} flex items-center justify-center text-white shrink-0`}>
-                      <PlatformIcon pKey={selectedPlatform} className="h-4 w-4" />
+                    <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${activePlatformData.gradient} flex items-center justify-center text-white shrink-0 overflow-hidden`}>
+                      {activePlatformData.logoUrl
+                        ? <img src={activePlatformData.logoUrl} alt={activePlatformData.name} className="h-7 w-7 object-contain" />
+                        : <PlatformIcon pKey={selectedPlatform} className="h-4 w-4" />}
                     </div>
                     <div className="flex items-center gap-1.5 text-[11px] text-gray-400 font-bold">
                       <span>{activePlatformData.label || activePlatformData.name}</span>
