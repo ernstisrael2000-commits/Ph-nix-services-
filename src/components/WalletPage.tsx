@@ -20,8 +20,6 @@ import {
 } from '../services/clientService';
 import { useSettings } from '../services/parcelService';
 import { Client, findFeeTier } from '../types';
-import { ref as storageRef, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { storage } from '../lib/firebase';
 
 const RECAPTCHA_SITE_KEY = process.env.RECAPTCHA_SITE_KEY || '';
 
@@ -103,13 +101,25 @@ const typeLabel: Record<string, string> = {
 
 async function uploadProofImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
-    const safeName = file.name.replace(/[^a-zA-Z0-9._]/g, '_');
-    const path = `proofs/transactions/${Date.now()}_${safeName}`;
-    const sRef = storageRef(storage, path);
-    const task = uploadBytesResumable(sRef, file, { contentType: file.type });
-    task.on('state_changed', null, reject, async () => {
-      resolve(await getDownloadURL(task.snapshot.ref));
-    });
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.split(',')[1];
+        const res = await fetch('/api/client/upload-proof', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ base64, mimeType: file.type, filename: file.name }),
+        });
+        if (!res.ok) throw new Error('Échec de l\'upload');
+        const data = await res.json();
+        resolve(data.url);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error('Lecture du fichier échouée'));
+    reader.readAsDataURL(file);
   });
 }
 

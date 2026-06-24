@@ -460,7 +460,7 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
     setOrderModal(m => m ? { ...m, submitting: true } : null);
     try {
       const plt = activePlatformData;
-      await fetch('/api/promotion/orders', {
+      const resp = await fetch('/api/promotion/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -476,13 +476,19 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
           unit: orderModal.svc.unit,
           qty: orderModal.qty,
           totalPrice: totalPriceHTG,
+          exchangeRate: exchangeRate > 0 ? exchangeRate : 135,
           customFieldValues: orderModal.customFieldValues,
         }),
       });
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error(errData.error || 'Erreur lors de la commande.');
+      }
       setOrderModal(m => m ? { ...m, submitting: false, success: true } : null);
-    } catch {
+      loadMyOrders();
+    } catch (err: any) {
       setOrderModal(m => m ? { ...m, submitting: false } : null);
-      toast.error('Erreur de connexion. Veuillez réessayer.');
+      toast.error(err.message || 'Erreur de connexion. Veuillez réessayer.');
     }
   };
 

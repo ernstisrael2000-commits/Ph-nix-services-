@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { initializeApp, cert, getApps, App } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getMessaging as getAdminMessaging } from 'firebase-admin/messaging';
+import { getStorage as getAdminStorage } from 'firebase-admin/storage';
 import {
   emailDepositSubmitted, emailDepositApproved, emailDepositRejected,
   emailWithdrawalSubmitted, emailWithdrawalApproved, emailWithdrawalRejected,
@@ -778,6 +779,31 @@ router.post('/api/client/deposit', requireDb, async (req, res) => {
   } catch (e: any) {
     console.error('[deposit]', e);
     res.status(500).json({ error: e.message || 'Erreur serveur.' });
+  }
+});
+
+// ── Upload preuve de paiement via Admin SDK (contourne les règles Storage côté client) ──
+const STORAGE_BUCKET = 'neopay-446f3.firebasestorage.app';
+
+router.post('/api/client/upload-proof', requireDb, async (req, res) => {
+  try {
+    const { base64, mimeType, filename } = req.body;
+    if (!base64 || !mimeType || !filename) return res.status(400).json({ error: 'Paramètres manquants.' });
+    const buffer = Buffer.from(base64, 'base64');
+    const safeName = (filename as string).replace(/[^a-zA-Z0-9._]/g, '_');
+    const path = `proofs/transactions/${Date.now()}_${safeName}`;
+    const token = randomBytes(16).toString('hex');
+    const bucket = getAdminStorage(adminApp).bucket(STORAGE_BUCKET);
+    const file = bucket.file(path);
+    await file.save(buffer, {
+      contentType: mimeType,
+      metadata: { metadata: { firebaseStorageDownloadTokens: token } },
+    });
+    const url = `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o/${encodeURIComponent(path)}?alt=media&token=${token}`;
+    res.json({ url });
+  } catch (e: any) {
+    console.error('[upload-proof]', e);
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -6163,16 +6189,55 @@ router.put('/api/admin/promotion/settings', requireDb, requireAdminSecret, async
 
 // ── Promotion Orders ──────────────────────────────────────────────────────────
 
-// POST /api/promotion/orders  (client submits an order)
+// POST /api/promotion/orders  (client submits an order + deduct wallet balance)
 router.post('/api/promotion/orders', requireDb, async (req, res) => {
   try {
-    const data = {
+    const { clientId, clientName, totalPrice, exchangeRate: rate, serviceName, platformName, qty, unit } = req.body;
+
+    // Déduire le solde si le client est identifié et que le prix est > 0
+    if (clientId && totalPrice > 0) {
+      const exRate = Number(rate) > 0 ? Number(rate) : 135;
+      const amountUSD = totalPrice / exRate; // convertir HTG → USD
+
+      const clientRef = adminDb.collection('clients').doc(clientId);
+      const clientSnap = await clientRef.get();
+      if (!clientSnap.exists) return res.status(404).json({ error: 'Client introuvable.' });
+
+      const currentBalanceUSD: number = clientSnap.data()?.balance ?? 0;
+      if (currentBalanceUSD < amountUSD - 0.001) {
+        return res.status(400).json({ error: 'Solde insuffisant.' });
+      }
+
+      // Déduire le solde et créer la transaction dans un batch
+      const batch = adminDb.batch();
+      batch.update(clientRef, {
+        balance: FieldValue.increment(-amountUSD),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      const txRef = adminDb.collection('client_transactions').doc();
+      batch.set(txRef, {
+        clientId,
+        clientName: clientName || '',
+        type: 'purchase',
+        amount: amountUSD,
+        htgAmount: totalPrice,
+        exchangeRate: exRate,
+        status: 'completed',
+        description: `Promotion — ${platformName || ''} · ${serviceName || ''} (${qty} ${unit || ''})`.trim(),
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+    }
+
+    const orderRef = await adminDb.collection('promotion_orders').add({
       ...req.body,
       status: 'pending',
       createdAt: FieldValue.serverTimestamp(),
-    };
-    const ref = await adminDb.collection('promotion_orders').add(data);
-    res.json({ id: ref.id });
+    });
+    res.json({ id: orderRef.id });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
