@@ -1,4 +1,4 @@
-import { Package, ShieldCheck, LogIn, LogOut, Menu, X, Wallet, Bell, CheckCheck, Info, TrendingUp, TrendingDown, Trash2, Download, Share2, Smartphone, GraduationCap } from 'lucide-react';
+import { Package, ShieldCheck, LogIn, LogOut, Menu, X, Wallet, Bell, CheckCheck, Info, TrendingUp, TrendingDown, Trash2, Download, Share2, Smartphone, GraduationCap, MessageCircle, ArrowLeft } from 'lucide-react';
 import RenaLogo from './RenaLogo';
 import { Button } from './ui/button';
 import { auth } from '@/lib/firebase';
@@ -413,16 +413,40 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
             )}
 
             <div className="flex-1 p-3 space-y-1">
-              {NAV_ITEMS.map(item => {
-                const active = currentView === item.key;
-                return (
-                  <button key={item.key} onClick={() => handleNav(item.key)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${active ? 'bg-primary/10 text-primary' : 'text-gray-600 hover:bg-gray-100'}`}>
-                    <item.icon className={`h-5 w-5 shrink-0 ${active ? 'text-primary' : 'text-gray-400'}`} />
-                    <span>{item.label}</span>
+              {currentView === 'promotion' ? (
+                <>
+                  {/* Promotion-specific burger menu */}
+                  {loggedClient && (
+                    <button onClick={() => { onOpenWallet(); setMenuOpen(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-gray-600 hover:bg-primary/10 hover:text-primary transition-all">
+                      <Wallet className="h-5 w-5 shrink-0 text-gray-400" />
+                      <span>Mon Portefeuille</span>
+                    </button>
+                  )}
+                  <a href="https://wa.me/50944009339" target="_blank" rel="noopener noreferrer"
+                    onClick={() => setMenuOpen(false)}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-gray-600 hover:bg-emerald-50 hover:text-emerald-700 transition-all">
+                    <MessageCircle className="h-5 w-5 shrink-0 text-gray-400" />
+                    <span>Support WhatsApp</span>
+                  </a>
+                  <button onClick={() => handleNav('services')}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 transition-all">
+                    <ArrowLeft className="h-5 w-5 shrink-0 text-gray-400" />
+                    <span>Retour aux Services</span>
                   </button>
-                );
-              })}
+                </>
+              ) : (
+                NAV_ITEMS.map(item => {
+                  const active = currentView === item.key;
+                  return (
+                    <button key={item.key} onClick={() => handleNav(item.key)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${active ? 'bg-primary/10 text-primary' : 'text-gray-600 hover:bg-gray-100'}`}>
+                      <item.icon className={`h-5 w-5 shrink-0 ${active ? 'text-primary' : 'text-gray-400'}`} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })
+              )}
 
               {showAdminButton && (
                 <button onClick={() => handleNav('admin')}

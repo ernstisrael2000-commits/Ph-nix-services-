@@ -6043,6 +6043,102 @@ router.get('/api/admin/safacilpay-deposits', requireDb, async (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// PROMOTION — platforms & services CRUD
+// ══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/promotion/platforms (public)
+router.get('/api/promotion/platforms', requireDb, async (_req, res) => {
+  try {
+    const snap = await adminDb.collection('promotion_platforms').orderBy('order', 'asc').get();
+    res.json({ platforms: snap.docs.map((d: any) => serializeDoc(d)) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/admin/promotion/platforms
+router.post('/api/admin/promotion/platforms', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const data = { ...req.body, createdAt: FieldValue.serverTimestamp(), order: req.body.order ?? 99 };
+    const ref = await adminDb.collection('promotion_platforms').add(data);
+    res.json({ id: ref.id });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /api/admin/promotion/platforms/:id
+router.put('/api/admin/promotion/platforms/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await adminDb.collection('promotion_platforms').doc(id).update({ ...req.body, updatedAt: FieldValue.serverTimestamp() });
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/admin/promotion/platforms/:id
+router.delete('/api/admin/promotion/platforms/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await adminDb.collection('promotion_platforms').doc(id).delete();
+    // Also delete all services for this platform
+    const snap = await adminDb.collection('promotion_services').where('platformId', '==', id).get();
+    const batch = adminDb.batch();
+    snap.docs.forEach((d: any) => batch.delete(d.ref));
+    await batch.commit();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/promotion/services (public, optional ?platformId=&category=)
+router.get('/api/promotion/services', requireDb, async (req, res) => {
+  try {
+    const { platformId, platformKey, category } = req.query;
+    let q: any = adminDb.collection('promotion_services').where('active', '==', true).orderBy('order', 'asc');
+    if (platformId) q = adminDb.collection('promotion_services').where('platformId', '==', platformId).where('active', '==', true).orderBy('order', 'asc');
+    else if (platformKey) q = adminDb.collection('promotion_services').where('platformKey', '==', platformKey).where('active', '==', true).orderBy('order', 'asc');
+    const snap = await q.get();
+    let services = snap.docs.map((d: any) => serializeDoc(d));
+    if (category) services = services.filter((s: any) => s.category === category);
+    res.json({ services });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/admin/promotion/services
+router.post('/api/admin/promotion/services', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const data = { ...req.body, createdAt: FieldValue.serverTimestamp(), order: req.body.order ?? 99, active: req.body.active ?? true };
+    const ref = await adminDb.collection('promotion_services').add(data);
+    res.json({ id: ref.id });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /api/admin/promotion/services/:id
+router.put('/api/admin/promotion/services/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await adminDb.collection('promotion_services').doc(id).update({ ...req.body, updatedAt: FieldValue.serverTimestamp() });
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/admin/promotion/services/:id
+router.delete('/api/admin/promotion/services/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await adminDb.collection('promotion_services').doc(id).delete();
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/admin/promotion/services (all, not filtered by active)
+router.get('/api/admin/promotion/services', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { platformId } = req.query;
+    let q: any = adminDb.collection('promotion_services').orderBy('order', 'asc');
+    if (platformId) q = adminDb.collection('promotion_services').where('platformId', '==', platformId).orderBy('order', 'asc');
+    const snap = await q.get();
+    res.json({ services: snap.docs.map((d: any) => serializeDoc(d)) });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────
 router.all('/api/*', (_req, res) => {
   res.status(404).json({ error: 'Route API introuvable.' });

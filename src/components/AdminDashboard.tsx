@@ -11,6 +11,7 @@ import {
   MapPin, Weight, FileText, ChevronUp, Video,
   Link as LinkIcon, ArrowLeft, BookOpen,
   Layers, Save, Eye, EyeOff, GripVertical,
+  Wifi, TrendingUp, List, ChevronRight,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -31,6 +32,7 @@ import {
   FormationModule, FormationChapter, FormationResource, CardTopup,
 } from '../types';
 import AdminWalletManager from './AdminWalletManager';
+import AdminPromotionSection from './AdminPromotionSection';
 
 const ADMIN_SECRET = 'rena-admin-2024';
 
@@ -39,7 +41,7 @@ interface AdminDashboardProps {
   onLogout: () => void;
 }
 
-type Section = 'parcels' | 'products' | 'payment-methods' | 'notifications' | 'requests' | 'formations' | 'wallet' | 'cards';
+type Section = 'parcels' | 'products' | 'payment-methods' | 'notifications' | 'requests' | 'formations' | 'wallet' | 'cards' | 'promotion';
 
 interface SystemNotif {
   id: string;
@@ -146,6 +148,7 @@ const NAV_SECTIONS = [
   { id: 'products'        as Section, label: 'Produits',    icon: LayoutGrid },
   { id: 'cards'           as Section, label: 'Cartes',      icon: CreditCard },
   { id: 'formations'      as Section, label: 'Formations',  icon: GraduationCap },
+  { id: 'promotion'       as Section, label: 'Promotion',   icon: Wifi },
   { id: 'payment-methods' as Section, label: 'Paiements',   icon: Wallet },
   { id: 'notifications'   as Section, label: 'Annonces',    icon: Info },
   { id: 'wallet'          as Section, label: 'Paramètres',  icon: Settings },
@@ -1845,6 +1848,7 @@ const SECTION_LABELS: Record<Section, string> = {
   products: 'Produits & Services',
   cards: 'Cartes & Recharges',
   formations: 'Formations',
+  promotion: 'Gestion Promotion',
   'payment-methods': 'Méthodes de paiement',
   notifications: 'Annonces système',
   wallet: 'Paramètres',
@@ -1909,6 +1913,7 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
           {section === 'payment-methods' && <PaymentMethodsSection />}
           {section === 'notifications'   && <NotificationsSection admin={admin} />}
           {section === 'wallet'          && <AdminWalletManager />}
+          {section === 'promotion'       && <AdminPromotionSection />}
         </main>
       </div>
     </div>

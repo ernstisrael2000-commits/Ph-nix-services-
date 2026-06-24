@@ -252,7 +252,7 @@ export default function App() {
           />
         )}
 
-        <main className={`animate-in fade-in duration-300 ${view !== 'wallet' && view !== 'promotion' ? 'pt-14' : ''} flex-grow relative ${view !== 'admin' && view !== 'wallet' && view !== 'promotion' ? 'pb-[74px]' : ''}`}>
+        <main className={`animate-in fade-in duration-300 ${view !== 'wallet' ? 'pt-14' : ''} flex-grow relative ${view !== 'admin' && view !== 'wallet' && view !== 'promotion' ? 'pb-[74px]' : ''}`}>
           <Suspense fallback={<PageSpinner />}>
             {view === 'tracking' && (
               <TrackingView
