@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, useInView } from 'motion/react';
+import { useSettings } from '../services/parcelService';
 import {
   Youtube, Instagram, Facebook, TrendingUp, Star, ChevronLeft,
   Check, ArrowRight, Users, BarChart3, Zap, Shield, Clock,
@@ -140,13 +141,29 @@ function AnimatedCounter({ target, duration = 2200, prefix = '', suffix = '' }: 
   return <span ref={ref}>{prefix}{count.toLocaleString()}{suffix}</span>;
 }
 
+// ─── Normalise une URL vidéo vers le format embed ────────────────────────────
+function normalizeVideoUrl(url: string): string {
+  if (!url) return url;
+  // youtu.be/VIDEO_ID
+  const short = url.match(/youtu\.be\/([^?&]+)/);
+  if (short) return `https://www.youtube.com/embed/${short[1]}`;
+  // youtube.com/watch?v=VIDEO_ID
+  const watch = url.match(/youtube\.com\/watch\?(?:.*&)?v=([^&]+)/);
+  if (watch) return `https://www.youtube.com/embed/${watch[1]}`;
+  // youtube.com/shorts/VIDEO_ID
+  const shorts = url.match(/youtube\.com\/shorts\/([^?&]+)/);
+  if (shorts) return `https://www.youtube.com/embed/${shorts[1]}`;
+  return url;
+}
+
 // ─── Video section component ──────────────────────────────────────────────────
 function VideoSection({ videoUrl }: { videoUrl?: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(true);
-  const src = videoUrl || '/intro-platform.mp4';
-  const isEmbed = src.includes('youtube.com/embed') || src.includes('vimeo.com');
+  const rawSrc = videoUrl || '';
+  const src = normalizeVideoUrl(rawSrc);
+  const isEmbed = src.includes('youtube.com/embed') || src.includes('vimeo.com') || src.includes('youtube-nocookie.com');
 
   const toggle = () => {
     const v = videoRef.current;
@@ -275,6 +292,8 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
   } | null>(null);
   const [search, setSearch] = useState('');
   const [mainVideoUrl, setMainVideoUrl] = useState('');
+  const { settings } = useSettings();
+  const exchangeRate = settings?.exchangeRate || 146;
 
   // Listen for tab switch events from burger menu
   useEffect(() => {
@@ -368,6 +387,15 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
       toast.error(`Remplissez les champs obligatoires : ${missing.map((f: any) => f.label).join(', ')}`);
       return;
     }
+
+    const totalPriceHTG = Math.round(orderModal.svc.pricePerUnit * orderModal.qty);
+    const clientBalanceHTG = Math.round((client.balance ?? 0) * exchangeRate);
+    if (clientBalanceHTG < totalPriceHTG) {
+      toast.error(`Solde insuffisant — vous avez ${clientBalanceHTG.toLocaleString()} HTG, mais la commande coûte ${totalPriceHTG.toLocaleString()} HTG. Veuillez recharger votre wallet.`);
+      onOpenWallet();
+      return;
+    }
+
     setOrderModal(m => m ? { ...m, submitting: true } : null);
     try {
       const plt = activePlatformData;
@@ -386,7 +414,7 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
           serviceCategory: orderModal.svc.category || '',
           unit: orderModal.svc.unit,
           qty: orderModal.qty,
-          totalPrice: Math.round(orderModal.svc.pricePerUnit * orderModal.qty),
+          totalPrice: totalPriceHTG,
           customFieldValues: orderModal.customFieldValues,
         }),
       });
