@@ -452,12 +452,9 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
     }
 
     const totalPriceHTG = Math.round(orderModal.svc.pricePerUnit * orderModal.qty);
-    const clientBalanceHTG = Math.round((client.balance ?? 0) * exchangeRate);
-    if (clientBalanceHTG < totalPriceHTG) {
-      toast.error(`Solde insuffisant — vous avez ${clientBalanceHTG.toLocaleString()} HTG, mais la commande coûte ${totalPriceHTG.toLocaleString()} HTG. Veuillez recharger votre wallet.`);
-      onOpenWallet();
-      return;
-    }
+    const rate = exchangeRate > 0 ? exchangeRate : 146;
+    const clientBalanceHTG = Math.round((client.balance ?? 0) * rate);
+    if (clientBalanceHTG < totalPriceHTG) return; // bouton déjà désactivé, sécurité double
 
     setOrderModal(m => m ? { ...m, submitting: true } : null);
     try {
@@ -482,14 +479,15 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
         }),
       });
       setOrderModal(m => m ? { ...m, submitting: false, success: true } : null);
-      toast.success('Commande soumise ! Notre équipe la traitera sous 24h.');
     } catch {
       setOrderModal(m => m ? { ...m, submitting: false } : null);
-      toast.error('Erreur lors de la soumission.');
+      toast.error('Erreur de connexion. Veuillez réessayer.');
     }
   };
 
   const totalPrice = orderModal ? Math.round(orderModal.svc.pricePerUnit * orderModal.qty) : 0;
+  const clientBalanceHTG = Math.round((client.balance ?? 0) * (exchangeRate > 0 ? exchangeRate : 146));
+  const hasEnoughBalance = clientBalanceHTG >= totalPrice;
   const platformVideoUrl = selectedPlatform ? getPlatformVideoUrl(selectedPlatform) : '';
 
   // Search
@@ -805,19 +803,72 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
               className="relative bg-white rounded-3xl w-full max-w-sm shadow-2xl max-h-[90vh] overflow-y-auto">
 
               {orderModal.success ? (
-                /* Success state */
-                <div className="p-8 text-center">
-                  <div className="h-16 w-16 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                /* ── Popup succès ── */
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.92 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ type: 'spring', bounce: 0.3, duration: 0.5 }}
+                  className="p-8 text-center"
+                >
+                  {/* Cercle animé */}
+                  <div className="relative mx-auto mb-5 h-20 w-20">
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: [0, 1.18, 1] }}
+                      transition={{ duration: 0.5, times: [0, 0.6, 1] }}
+                      className="absolute inset-0 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 shadow-lg shadow-emerald-200"
+                    />
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.25, duration: 0.3 }}
+                      className="absolute inset-0 flex items-center justify-center"
+                    >
+                      <CheckCircle2 className="h-10 w-10 text-white drop-shadow" />
+                    </motion.div>
+                    {/* Pulse ring */}
+                    <motion.div
+                      initial={{ opacity: 0.6, scale: 1 }}
+                      animate={{ opacity: 0, scale: 1.8 }}
+                      transition={{ delay: 0.3, duration: 0.7 }}
+                      className="absolute inset-0 rounded-full bg-emerald-300"
+                    />
                   </div>
-                  <h3 className="font-black text-gray-900 text-lg mb-2">Commande soumise !</h3>
-                  <p className="text-sm text-gray-500 mb-6">Notre équipe traitera votre commande sous 24h. Suivez son statut dans l'onglet "Commandes".</p>
-                  <button onClick={() => { setOrderModal(null); setTab('orders'); loadMyOrders(); }}
-                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-black text-sm shadow-lg">
-                    Voir mes commandes →
-                  </button>
-                  <button onClick={() => setOrderModal(null)} className="w-full mt-2 py-2 text-sm text-gray-400">Fermer</button>
-                </div>
+
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+                    <h3 className="font-black text-gray-900 text-xl mb-1">Commande soumise !</h3>
+                    <p className="text-sm text-gray-500 mb-1">
+                      <span className="font-bold text-gray-700">{orderModal.svc.name}</span>
+                    </p>
+                    <p className="text-xs text-gray-400 mb-6 leading-relaxed">
+                      Notre équipe traitera votre commande sous 24h.<br />Suivez son statut dans l'onglet "Commandes".
+                    </p>
+
+                    {/* Résumé commande */}
+                    <div className="bg-emerald-50 rounded-2xl p-3 mb-5 flex items-center justify-between border border-emerald-100">
+                      <div className="text-left">
+                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Montant</p>
+                        <p className="font-black text-emerald-700 text-base">{totalPrice.toLocaleString()} HTG</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Statut</p>
+                        <span className="flex items-center gap-1 text-xs font-black text-emerald-700">
+                          <Clock className="h-3 w-3" /> En attente
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => { setOrderModal(null); setTab('orders'); loadMyOrders(); }}
+                      className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-black text-sm shadow-lg shadow-emerald-200 hover:opacity-90 transition-all active:scale-95"
+                    >
+                      Voir mes commandes →
+                    </button>
+                    <button onClick={() => setOrderModal(null)} className="w-full mt-2 py-2 text-sm text-gray-400 font-semibold hover:text-gray-600 transition-colors">
+                      Fermer
+                    </button>
+                  </motion.div>
+                </motion.div>
               ) : (
                 <div>
                   {/* Modal header with gradient */}
@@ -957,27 +1008,80 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
                     </div>
                   </div>
 
-                  {/* Price */}
-                  <div className="bg-gray-50 rounded-2xl p-4 mb-5">
-                    <div className="flex justify-between text-sm mb-1.5">
-                      <span className="text-gray-500">Prix unitaire</span>
-                      <span className="font-bold">{orderModal.svc.pricePerUnit} HTG/{orderModal.svc.unit}</span>
+                  {/* Price recap */}
+                  <div className="rounded-2xl overflow-hidden border border-gray-100 mb-4">
+                    <div className="bg-gray-50 px-4 py-3 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Prix unitaire</span>
+                        <span className="font-bold text-gray-700">{orderModal.svc.pricePerUnit?.toLocaleString()} HTG / {orderModal.svc.unit}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Quantité</span>
+                        <span className="font-bold text-gray-700">{orderModal.qty.toLocaleString()} {orderModal.svc.unit}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-sm mb-1.5">
-                      <span className="text-gray-500">Quantité</span>
-                      <span className="font-bold">{orderModal.qty.toLocaleString()} {orderModal.svc.unit}</span>
+                    <div className="flex justify-between items-center px-4 py-3 bg-white border-t border-gray-100">
+                      <span className="font-bold text-gray-800 text-sm">Total à payer</span>
+                      <span className="font-black text-gray-900 text-lg">{totalPrice.toLocaleString()} HTG</span>
                     </div>
-                    <div className="flex justify-between border-t border-gray-200 pt-2 mt-1">
-                      <span className="font-bold text-gray-700">Total</span>
-                      <span className="font-black text-gray-900 text-base">{totalPrice.toLocaleString()} HTG</span>
+                    {/* Balance row */}
+                    <div className={`flex justify-between items-center px-4 py-2.5 border-t ${hasEnoughBalance ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
+                      <div className="flex items-center gap-1.5">
+                        <Wallet className={`h-3.5 w-3.5 ${hasEnoughBalance ? 'text-emerald-500' : 'text-red-400'}`} />
+                        <span className={`text-xs font-bold ${hasEnoughBalance ? 'text-emerald-600' : 'text-red-500'}`}>Votre solde</span>
+                      </div>
+                      <span className={`text-sm font-black ${hasEnoughBalance ? 'text-emerald-600' : 'text-red-500'}`}>
+                        {clientBalanceHTG.toLocaleString()} HTG
+                      </span>
                     </div>
                   </div>
 
-                  <button onClick={submitOrder} disabled={orderModal.submitting}
-                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-black text-sm shadow-lg shadow-indigo-200 hover:opacity-90 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-70">
+                  {/* Solde insuffisant — bannière inline */}
+                  <AnimatePresence>
+                    {!hasEnoughBalance && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -6, scale: 0.97 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                        transition={{ type: 'spring', bounce: 0.2, duration: 0.35 }}
+                        className="mb-4 rounded-2xl bg-red-50 border border-red-200 p-4"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="h-8 w-8 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                            <AlertCircle className="h-4 w-4 text-red-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-black text-red-700 text-sm">Solde insuffisant</p>
+                            <p className="text-red-500 text-xs mt-0.5 leading-relaxed">
+                              Il vous manque <span className="font-black">{(totalPrice - clientBalanceHTG).toLocaleString()} HTG</span> pour cette commande. Rechargez votre wallet pour continuer.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => { setOrderModal(null); onOpenWallet(); }}
+                          className="mt-3 w-full py-2.5 rounded-xl bg-red-500 text-white text-xs font-black hover:bg-red-600 transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          <Wallet className="h-3.5 w-3.5" /> Recharger mon wallet
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* CTA */}
+                  <button
+                    onClick={submitOrder}
+                    disabled={orderModal.submitting || !hasEnoughBalance}
+                    className={`w-full py-4 rounded-2xl text-white font-black text-sm transition-all flex items-center justify-center gap-2 ${
+                      !hasEnoughBalance
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-indigo-500 to-purple-600 shadow-lg shadow-indigo-200 hover:opacity-90 active:scale-95'
+                    } disabled:opacity-70`}
+                  >
                     {orderModal.submitting
                       ? <><Loader2 className="h-4 w-4 animate-spin" /> Traitement en cours...</>
-                      : <><ShoppingCart className="h-4 w-4" /> Acheter le service — {totalPrice.toLocaleString()} HTG</>
+                      : !hasEnoughBalance
+                        ? <><AlertCircle className="h-4 w-4" /> Solde insuffisant</>
+                        : <><ShoppingCart className="h-4 w-4" /> Commander — {totalPrice.toLocaleString()} HTG</>
                     }
                   </button>
                   <button onClick={() => setOrderModal(null)} disabled={orderModal.submitting}
