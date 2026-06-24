@@ -274,6 +274,7 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
     success: boolean;
   } | null>(null);
   const [search, setSearch] = useState('');
+  const [mainVideoUrl, setMainVideoUrl] = useState('');
 
   // Listen for tab switch events from burger menu
   useEffect(() => {
@@ -289,9 +290,11 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
     Promise.all([
       fetch('/api/promotion/platforms').then(r => r.json()).catch(() => ({ platforms: [] })),
       fetch('/api/promotion/services').then(r => r.json()).catch(() => ({ services: [] })),
-    ]).then(([pData, sData]) => {
+      fetch('/api/promotion/settings').then(r => r.json()).catch(() => ({})),
+    ]).then(([pData, sData, sett]) => {
       setApiPlatforms(pData.platforms || []);
       setApiServices(sData.services || []);
+      if (sett.mainVideoUrl) setMainVideoUrl(sett.mainVideoUrl);
     }).finally(() => setLoadingServices(false));
   }, []);
 
@@ -509,7 +512,7 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
                 /* ── Platform grid home view ── */
                 <div>
                   {/* Video section */}
-                  <VideoSection />
+                  {mainVideoUrl && <VideoSection videoUrl={mainVideoUrl} />}
 
                   {/* Search */}
                   <div className="relative mb-5">
@@ -807,14 +810,17 @@ function PromotionLanding({ onLogin }: { onLogin: () => void }) {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [apiPlatforms, setApiPlatforms] = useState<any[]>([]);
   const [apiServices, setApiServices] = useState<any[]>([]);
+  const [mainVideoUrl, setMainVideoUrl] = useState('');
 
   useEffect(() => {
     Promise.all([
       fetch('/api/promotion/platforms').then(r => r.json()).catch(() => ({ platforms: [] })),
       fetch('/api/promotion/services').then(r => r.json()).catch(() => ({ services: [] })),
-    ]).then(([pData, sData]) => {
+      fetch('/api/promotion/settings').then(r => r.json()).catch(() => ({})),
+    ]).then(([pData, sData, sett]) => {
       setApiPlatforms(pData.platforms || []);
       setApiServices(sData.services || []);
+      if (sett.mainVideoUrl) setMainVideoUrl(sett.mainVideoUrl);
     });
   }, []);
 
@@ -984,6 +990,11 @@ function PromotionLanding({ onLogin }: { onLogin: () => void }) {
           <p className="text-xs font-black uppercase tracking-widest text-primary mb-2">3 Etap Fasil</p>
           <h2 className="text-2xl sm:text-3xl font-black text-gray-900">Kijan li travay ?</h2>
         </div>
+        {mainVideoUrl && (
+          <div className="max-w-2xl mx-auto mb-10">
+            <VideoSection videoUrl={mainVideoUrl} />
+          </div>
+        )}
         <div className="grid sm:grid-cols-3 gap-6">
           {[{ n: '01', title: 'Créez votre compte', desc: 'Inscrivez-vous gratuitement. Aucune carte bancaire requise.', icon: Users },
             { n: '02', title: 'Choisissez un service', desc: 'Sélectionnez la plateforme, catégorie et remplissez le formulaire.', icon: Target },

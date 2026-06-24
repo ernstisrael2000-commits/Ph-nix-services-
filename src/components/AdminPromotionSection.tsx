@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Plus, Trash2, Edit2, Loader2, X, Save, Eye, EyeOff, Check,
   Wifi, ClipboardList, Clock, Zap, CheckCircle2, XCircle,
-  ChevronDown, Video, FormInput, GripVertical, AlertCircle,
+  ChevronDown, Video, FormInput, GripVertical, Settings,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -97,12 +97,16 @@ function newField(): CustomField {
 }
 
 export default function AdminPromotionSection() {
-  const [tab, setTab] = useState<'platforms' | 'services' | 'orders'>('platforms');
+  const [tab, setTab] = useState<'platforms' | 'services' | 'orders' | 'settings'>('platforms');
   const [platforms, setPlatforms] = useState<PromoPlatform[]>([]);
   const [services, setServices] = useState<PromoService[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const [mainVideoUrl, setMainVideoUrl] = useState('');
+  const [mainVideoUrlInput, setMainVideoUrlInput] = useState('');
 
   const [showPlatformModal, setShowPlatformModal] = useState(false);
   const [editingPlatform, setEditingPlatform] = useState<PromoPlatform | null>(null);
@@ -147,11 +151,37 @@ export default function AdminPromotionSection() {
     setLoading(false);
   }, []);
 
+  const loadSettings = useCallback(async () => {
+    try {
+      const r = await fetch('/api/promotion/settings');
+      const d = await r.json();
+      const url = d.mainVideoUrl || '';
+      setMainVideoUrl(url);
+      setMainVideoUrlInput(url);
+    } catch {}
+  }, []);
+
+  const saveSettings = async () => {
+    setSettingsSaving(true);
+    try {
+      await fetch('/api/admin/promotion/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
+        body: JSON.stringify({ mainVideoUrl: mainVideoUrlInput }),
+      });
+      setMainVideoUrl(mainVideoUrlInput);
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 2500);
+    } catch {}
+    setSettingsSaving(false);
+  };
+
   useEffect(() => {
     loadPlatforms();
     loadServices();
     loadOrders();
-  }, [loadPlatforms, loadServices, loadOrders]);
+    loadSettings();
+  }, [loadPlatforms, loadServices, loadOrders, loadSettings]);
 
   // ── Platform CRUD ──────────────────────────────────────────────────────────
   const openAddPlatform = () => {
@@ -294,7 +324,7 @@ export default function AdminPromotionSection() {
             {platforms.length} plateforme{platforms.length !== 1 ? 's' : ''} · {services.length} service{services.length !== 1 ? 's' : ''} · {orders.length} commande{orders.length !== 1 ? 's' : ''}
           </p>
         </div>
-        {tab !== 'orders' && (
+        {(tab === 'platforms' || tab === 'services') && (
           <Button onClick={tab === 'platforms' ? openAddPlatform : openAddService}
             size="sm" className="gap-1.5 rounded-xl text-xs">
             <Plus className="h-3.5 w-3.5" />
@@ -310,12 +340,17 @@ export default function AdminPromotionSection() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-2xl w-fit">
-        {(['platforms', 'services', 'orders'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`relative px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${tab === t ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
-            {t === 'platforms' ? 'Plateformes' : t === 'services' ? 'Services' : 'Commandes'}
-            {t === 'orders' && pendingCount > 0 && (
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-2xl w-fit flex-wrap">
+        {([
+          { key: 'platforms', label: 'Plateformes' },
+          { key: 'services',  label: 'Services' },
+          { key: 'orders',    label: 'Commandes' },
+          { key: 'settings',  label: 'Paramètres' },
+        ] as const).map(({ key, label }) => (
+          <button key={key} onClick={() => setTab(key)}
+            className={`relative px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${tab === key ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
+            {label}
+            {key === 'orders' && pendingCount > 0 && (
               <span className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center bg-red-500 text-white text-[9px] font-black rounded-full">
                 {pendingCount > 9 ? '9+' : pendingCount}
               </span>
@@ -366,7 +401,18 @@ export default function AdminPromotionSection() {
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                        <button
+                          onClick={() => {
+                            setEditingService(null);
+                            setServiceForm({ ...EMPTY_SERVICE, platformId: p.id, platformKey: p.key });
+                            setShowServiceModal(true);
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-black transition-colors"
+                          title="Ajouter un service à cette plateforme"
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Service
+                        </button>
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${p.active ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-50 text-gray-400'}`}>
                           {p.active ? 'Actif' : 'Inactif'}
                         </span>
@@ -565,6 +611,80 @@ export default function AdminPromotionSection() {
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ── Settings Tab ── */}
+          {tab === 'settings' && (
+            <div className="space-y-6">
+              {/* Main video */}
+              <div className="bg-white rounded-2xl border border-gray-100 p-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Video className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-black text-gray-900 text-sm">Vidéo "Comment ça marche"</p>
+                    <p className="text-[11px] text-gray-400">Affichée sur la page d'accueil de la section Promotion</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  <div>
+                    <Label className="text-xs font-bold mb-1.5 block">URL de la vidéo</Label>
+                    <Input
+                      value={mainVideoUrlInput}
+                      onChange={e => setMainVideoUrlInput(e.target.value)}
+                      placeholder="https://youtube.com/embed/XXXX  ou  /ma-video.mp4"
+                      className="rounded-xl"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1.5 leading-relaxed">
+                      Accepte : lien <strong>YouTube embed</strong> (youtube.com/embed/…), lien <strong>Vimeo embed</strong>, ou un fichier vidéo direct (.mp4). Laissez vide pour masquer la section vidéo.
+                    </p>
+                  </div>
+
+                  {mainVideoUrlInput && (
+                    <div className="rounded-xl overflow-hidden border border-gray-100 bg-gray-50 aspect-video">
+                      {mainVideoUrlInput.includes('youtube.com') || mainVideoUrlInput.includes('vimeo.com') ? (
+                        <iframe src={mainVideoUrlInput} className="w-full h-full" allow="autoplay; encrypted-media" allowFullScreen title="Aperçu vidéo" />
+                      ) : (
+                        <video src={mainVideoUrlInput} className="w-full h-full object-cover" controls />
+                      )}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={saveSettings}
+                    disabled={settingsSaving || mainVideoUrlInput === mainVideoUrl}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-black disabled:opacity-50 hover:bg-primary/90 transition-all"
+                  >
+                    {settingsSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : settingsSaved ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Save className="h-3.5 w-3.5" />}
+                    {settingsSaved ? 'Enregistré !' : 'Enregistrer la vidéo'}
+                  </button>
+
+                  {mainVideoUrl && (
+                    <p className="text-[10px] text-emerald-600 flex items-center gap-1">
+                      <Check className="h-3 w-3" /> Vidéo active : {mainVideoUrl.length > 55 ? mainVideoUrl.slice(0, 55) + '…' : mainVideoUrl}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Quick links */}
+              <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-3">Accès rapides</p>
+                <div className="space-y-2">
+                  <button onClick={() => setTab('platforms')} className="w-full flex items-center gap-3 px-3 py-2.5 bg-white rounded-xl border border-gray-100 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors text-left">
+                    <Wifi className="h-4 w-4 text-primary shrink-0" /> Gérer les plateformes ({platforms.length})
+                  </button>
+                  <button onClick={() => setTab('services')} className="w-full flex items-center gap-3 px-3 py-2.5 bg-white rounded-xl border border-gray-100 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors text-left">
+                    <Settings className="h-4 w-4 text-blue-500 shrink-0" /> Gérer les services ({services.length})
+                  </button>
+                  <button onClick={() => setTab('orders')} className="w-full flex items-center gap-3 px-3 py-2.5 bg-white rounded-xl border border-gray-100 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-colors text-left">
+                    <ClipboardList className="h-4 w-4 text-amber-500 shrink-0" /> Voir les commandes ({orders.length})
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </>

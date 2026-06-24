@@ -6139,6 +6139,27 @@ router.get('/api/admin/promotion/services', requireDb, requireAdminSecret, async
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Promotion Settings ────────────────────────────────────────────────────────
+
+// GET /api/promotion/settings  (public)
+router.get('/api/promotion/settings', requireDb, async (_req, res) => {
+  try {
+    const doc = await adminDb.collection('promotion_settings').doc('main').get();
+    res.json(doc.exists ? doc.data() : {});
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// PUT /api/admin/promotion/settings  (admin only)
+router.put('/api/admin/promotion/settings', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    await adminDb.collection('promotion_settings').doc('main').set(
+      { ...req.body, updatedAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    );
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Promotion Orders ──────────────────────────────────────────────────────────
 
 // POST /api/promotion/orders  (client submits an order)
