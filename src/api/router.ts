@@ -6091,12 +6091,13 @@ router.delete('/api/admin/promotion/platforms/:id', requireDb, requireAdminSecre
 router.get('/api/promotion/services', requireDb, async (req, res) => {
   try {
     const { platformId, platformKey, category } = req.query;
-    let q: any = adminDb.collection('promotion_services').where('active', '==', true).orderBy('order', 'asc');
-    if (platformId) q = adminDb.collection('promotion_services').where('platformId', '==', platformId).where('active', '==', true).orderBy('order', 'asc');
-    else if (platformKey) q = adminDb.collection('promotion_services').where('platformKey', '==', platformKey).where('active', '==', true).orderBy('order', 'asc');
-    const snap = await q.get();
+    const snap = await adminDb.collection('promotion_services').get();
     let services = snap.docs.map((d: any) => serializeDoc(d));
+    services = services.filter((s: any) => s.active === true || s.active === undefined);
+    if (platformId) services = services.filter((s: any) => s.platformId === platformId);
+    else if (platformKey) services = services.filter((s: any) => s.platformKey === platformKey);
     if (category) services = services.filter((s: any) => s.category === category);
+    services.sort((a: any, b: any) => (a.order ?? 99) - (b.order ?? 99));
     res.json({ services });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });

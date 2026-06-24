@@ -509,32 +509,7 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Tab bar */}
-      <div className="bg-white border-b sticky top-14 z-10 shadow-sm">
-        <div className="flex items-center justify-around max-w-2xl mx-auto px-2">
-          {[
-            { key: 'home' as const, icon: Home, label: 'Accueil' },
-            { key: 'orders' as const, icon: Package, label: 'Commandes' },
-            { key: 'profile' as const, icon: User, label: 'Profil' },
-          ].map(({ key, icon: Icon, label }) => {
-            const active = tab === key;
-            return (
-              <button key={key} onClick={() => { setTab(key); if (key === 'home') setSelectedPlatform(null); }}
-                className={`relative flex-1 flex flex-col items-center py-3 gap-0.5 transition-colors ${active ? 'text-primary' : 'text-gray-400'}`}>
-                <Icon className={`h-[18px] w-[18px] ${active ? 'text-primary' : 'text-gray-400'}`} strokeWidth={active ? 2.5 : 1.75} />
-                <span className={`text-[10px] font-bold leading-none ${active ? 'text-primary' : 'text-gray-400'}`}>{label}</span>
-                {active && (
-                  <motion.div layoutId="promotion-tab-indicator"
-                    className="absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 w-8 bg-primary rounded-full"
-                    transition={{ type: 'spring', bounce: 0.2, duration: 0.3 }} />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="max-w-2xl mx-auto px-4 pb-6">
+      <div className="max-w-2xl mx-auto px-4 pb-24">
         <AnimatePresence mode="wait">
 
           {/* ─ Home tab ─ */}
@@ -945,6 +920,31 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Tab bar — bottom */}
+      <div className="bg-white border-t sticky bottom-0 z-10 shadow-[0_-2px_12px_rgba(0,0,0,0.06)]">
+        <div className="flex items-center justify-around max-w-2xl mx-auto px-2">
+          {[
+            { key: 'home' as const, icon: Home, label: 'Accueil' },
+            { key: 'orders' as const, icon: Package, label: 'Commandes' },
+            { key: 'profile' as const, icon: User, label: 'Profil' },
+          ].map(({ key, icon: Icon, label }) => {
+            const active = tab === key;
+            return (
+              <button key={key} onClick={() => { setTab(key); if (key === 'home') setSelectedPlatform(null); }}
+                className={`relative flex-1 flex flex-col items-center py-3 gap-0.5 transition-colors ${active ? 'text-primary' : 'text-gray-400'}`}>
+                <Icon className={`h-[18px] w-[18px] ${active ? 'text-primary' : 'text-gray-400'}`} strokeWidth={active ? 2.5 : 1.75} />
+                <span className={`text-[10px] font-bold leading-none ${active ? 'text-primary' : 'text-gray-400'}`}>{label}</span>
+                {active && (
+                  <motion.div layoutId="promotion-tab-indicator"
+                    className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 bg-primary rounded-full"
+                    transition={{ type: 'spring', bounce: 0.2, duration: 0.3 }} />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
