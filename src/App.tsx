@@ -29,6 +29,7 @@ const SafacilPaySuccessView = lazy(() => import('./components/SafacilPaySuccessV
 const UserAuthModal      = lazy(() => import('./components/UserAuthModal'));
 const FormationsView     = lazy(() => import('./components/FormationsView'));
 const FormationsNavbar   = lazy(() => import('./components/FormationsNavbar'));
+const ReseauxView        = lazy(() => import('./components/ReseauxView'));
 
 function PageSpinner() {
   return (
@@ -38,7 +39,7 @@ function PageSpinner() {
   );
 }
 
-type ViewType = 'tracking' | 'services' | 'admin' | 'wallet' | 'formations';
+type ViewType = 'tracking' | 'services' | 'admin' | 'wallet' | 'formations' | 'reseaux';
 
 export default function App() {
   const [view, setView] = useState<ViewType>('services');
@@ -284,6 +285,17 @@ export default function App() {
               />
             )}
 
+            {view === 'reseaux' && (
+              <ReseauxView
+                loggedClient={loggedClient}
+                onRequestAuth={() => setShowAuthModal(true)}
+                onOpenWallet={() => {
+                  if (!loggedClient) { setShowAuthModal(true); return; }
+                  handleViewChange('wallet');
+                }}
+              />
+            )}
+
             {view === 'formations' && (
               <FormationsView
                 loggedClient={loggedClient}
@@ -305,7 +317,7 @@ export default function App() {
           </Suspense>
         </main>
 
-        {view !== 'admin' && view !== 'formations' && view !== 'tracking' && (
+        {view !== 'admin' && view !== 'formations' && view !== 'tracking' && view !== 'reseaux' && (
           <footer className="py-12 border-t mt-auto bg-white pb-24">
             <div className="max-w-7xl mx-auto px-4 text-center">
               <div className="flex items-center justify-center gap-2 mb-4">

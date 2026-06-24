@@ -10,7 +10,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent } from './ui/dialog';
 import { Client, AdminAccount } from '../types';
 import UserAuthModal from './UserAuthModal';
-import { Package as ColisIcon, Globe } from 'lucide-react';
+import { Package as ColisIcon, Globe, Wifi } from 'lucide-react';
 
 interface NavbarProps {
   currentView: string;
@@ -27,6 +27,7 @@ const NAV_ITEMS = [
   { key: 'services',   icon: Globe,          label: 'Services'   },
   { key: 'tracking',   icon: ColisIcon,      label: 'Colis'      },
   { key: 'formations', icon: GraduationCap,  label: 'Formations' },
+  { key: 'reseaux',    icon: Wifi,           label: 'Réseaux'    },
 ];
 
 export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet, onAdminLogin, loggedAdmin }: NavbarProps) {
