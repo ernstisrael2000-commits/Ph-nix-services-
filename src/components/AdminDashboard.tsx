@@ -29,7 +29,7 @@ import {
 import {
   AdminAccount, Parcel, ParcelStatus, PaymentStatus, Product,
   PaymentMethod, DEFAULT_PAYMENT_METHODS, Formation, FormationLevel,
-  FormationModule, FormationChapter, FormationResource, CardTopup,
+  FormationModule, FormationChapter, FormationResource, CardTopup, RechargeField,
 } from '../types';
 import AdminWalletManager from './AdminWalletManager';
 import AdminPromotionSection from './AdminPromotionSection';
@@ -1273,20 +1273,25 @@ function CardsSection() {
 
   const emptyForm: Partial<CardTopup> = { name: '', image: '', description: '', price: '', stock: undefined, whatsappMessage: '' };
   const [form, setForm] = useState<Partial<CardTopup>>(emptyForm);
+  const [createFields, setCreateFields] = useState<RechargeField[]>([]);
+  const [showCreateFieldEditor, setShowCreateFieldEditor] = useState(false);
 
   const filtered = cards.filter(c =>
     c.name?.toLowerCase().includes(search.toLowerCase()) ||
     c.description?.toLowerCase().includes(search.toLowerCase())
   );
 
-  function openAdd() { setEditingCard(null); setForm(emptyForm); setError(''); setDialogOpen(true); }
-  function openEdit(c: CardTopup) { setEditingCard(c); setForm({ ...c }); setError(''); setDialogOpen(true); }
+  function openAdd() { setEditingCard(null); setForm(emptyForm); setCreateFields([]); setShowCreateFieldEditor(false); setError(''); setDialogOpen(true); }
+  function openEdit(c: CardTopup) { setEditingCard(c); setForm({ ...c }); const cf = (c as any).createFields || []; setCreateFields(cf); setShowCreateFieldEditor(cf.length > 0); setError(''); setDialogOpen(true); }
+  function addCreateField() { setCreateFields(f => [...f, { id: uid(), label: '', placeholder: '', required: false }]); }
+  function removeCreateField(id: string) { setCreateFields(f => f.filter(x => x.id !== id)); }
+  function updateCreateField(id: string, key: keyof RechargeField, value: any) { setCreateFields(f => f.map(x => x.id === id ? { ...x, [key]: value } : x)); }
 
   async function handleSave() {
     if (!form.name?.trim()) { setError('Le nom est requis.'); return; }
     if (!form.price?.trim()) { setError('Le prix est requis.'); return; }
     setSaving(true); setError('');
-    try { await saveCardTopup(form, editingCard?.id); setDialogOpen(false); }
+    try { await saveCardTopup({ ...form, createFields } as any, editingCard?.id); setDialogOpen(false); }
     catch (e: any) { setError(e.message || 'Erreur.'); }
     finally { setSaving(false); }
   }
@@ -1355,7 +1360,7 @@ function CardsSection() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="rounded-2xl max-w-md">
+        <DialogContent className="rounded-2xl max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingCard ? 'Modifier la carte' : 'Nouvelle carte'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             {error && <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
@@ -1384,6 +1389,52 @@ function CardsSection() {
             <div className="space-y-1.5">
               <Label>Message WhatsApp</Label>
               <Textarea className="rounded-xl resize-none" rows={2} value={form.whatsappMessage || ''} onChange={e => setForm(f => ({ ...f, whatsappMessage: e.target.value }))} />
+            </div>
+
+            {/* ── Champs du formulaire de commande ── */}
+            <div className="border rounded-xl overflow-hidden">
+              <button type="button"
+                className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-sm font-semibold text-gray-700"
+                onClick={() => setShowCreateFieldEditor(v => !v)}>
+                <span className="flex items-center gap-2">
+                  <LayoutGrid className="h-4 w-4 text-indigo-500" />
+                  Formulaire de commande
+                  {createFields.length > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-bold">{createFields.length} champ{createFields.length > 1 ? 's' : ''}</span>}
+                </span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${showCreateFieldEditor ? 'rotate-180' : ''}`} />
+              </button>
+              {showCreateFieldEditor && (
+                <div className="p-4 space-y-3 bg-white">
+                  <p className="text-xs text-gray-400">Ces champs seront demandés au client lors d'une commande "Créer".</p>
+                  {createFields.map((field, i) => (
+                    <div key={field.id} className="flex flex-col gap-2 p-3 bg-gray-50 rounded-xl border">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-gray-400 uppercase">Champ {i + 1}</span>
+                        <button type="button" onClick={() => removeCreateField(field.id)} className="text-red-400 hover:text-red-600"><X className="h-4 w-4" /></button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="col-span-2 space-y-1">
+                          <Label className="text-xs">Libellé *</Label>
+                          <Input className="rounded-lg h-8 text-sm" placeholder="Ex: Numéro de compte" value={field.label} onChange={e => updateCreateField(field.id, 'label', e.target.value)} />
+                        </div>
+                        <div className="col-span-2 space-y-1">
+                          <Label className="text-xs">Placeholder</Label>
+                          <Input className="rounded-lg h-8 text-sm" placeholder="Ex: Entrez votre numéro…" value={field.placeholder} onChange={e => updateCreateField(field.id, 'placeholder', e.target.value)} />
+                        </div>
+                        <div className="flex items-end pb-1">
+                          <label className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer">
+                            <input type="checkbox" className="rounded" checked={field.required || false} onChange={e => updateCreateField(field.id, 'required', e.target.checked)} />
+                            Obligatoire
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <Button type="button" variant="outline" size="sm" className="w-full rounded-xl border-dashed gap-2" onClick={addCreateField}>
+                    <Plus className="h-3.5 w-3.5" />Ajouter un champ
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter className="gap-2">

@@ -27,9 +27,13 @@ const SERVICE_GRADIENTS = [
   'from-cyan-500 to-blue-600',
 ];
 
-type ModalStep = 'choice' | 'create_pay' | 'recharge_form' | 'recharge_pay' | 'success';
+type ModalStep = 'choice' | 'create_form' | 'create_pay' | 'recharge_form' | 'recharge_pay' | 'success';
 
-export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth }: ServicesViewProps) {
+interface ServicesViewPropsExtended extends ServicesViewProps {
+  onModalOpen?: (open: boolean) => void;
+}
+
+export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth, onModalOpen }: ServicesViewPropsExtended) {
   const { cards: services, loading } = useCardTopups();
   const { settings } = useSettings();
   const exchangeRate = settings?.exchangeRate || 146;
@@ -70,6 +74,7 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
   const [cardNumber, setCardNumber] = useState('');
   const [holderName, setHolderName] = useState('');
   const [dynamicFieldValues, setDynamicFieldValues] = useState<Record<string, string>>({});
+  const [createFieldValues, setCreateFieldValues] = useState<Record<string, string>>({});
 
   // Purchase loading
   const [purchaseLoading, setPurchaseLoading] = useState(false);
@@ -82,7 +87,13 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
     setCardNumber('');
     setHolderName('');
     setDynamicFieldValues({});
+    setCreateFieldValues({});
   };
+
+  // Notify parent when modal opens/closes
+  React.useEffect(() => {
+    onModalOpen?.(!!selected);
+  }, [selected]);
 
   const computeRechargeFee = (svc: any, usd: number) => {
     if (!usd || usd <= 0) return { feeUsd: 0, totalUsd: usd, label: '' };
@@ -127,7 +138,10 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
       const priceUSD = numericPrice / exchangeRate;
       await submitClientPurchase(effectiveClient, selected.name, String(selected.price), priceUSD);
       const now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-      openWhatsApp(`🎴 *CRÉATION SERVICE — Phénix Services*\n\n👤 Client: *${effectiveClient.name}*\n🔑 Wallet ID: *#${effectiveClient.walletId || '—'}*\n📱 Téléphone: *${effectiveClient.phone || '—'}*\n🛒 Service: *${selected.name}*\n💰 Montant payé: *${numericPrice.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n📅 Date: *${now}*\n\n✅ Paiement traité. Veuillez activer le service.`);
+      const createFieldLines = selected.createFields?.length > 0
+        ? '\n' + (selected.createFields as { id: string; label: string }[]).map(f => `📋 ${f.label}: *${createFieldValues[f.id] || 'Non renseigné'}*`).join('\n')
+        : '';
+      openWhatsApp(`🎴 *CRÉATION SERVICE — Phénix Services*\n\n👤 Client: *${effectiveClient.name}*\n🔑 Wallet ID: *#${effectiveClient.walletId || '—'}*\n📱 Téléphone: *${effectiveClient.phone || '—'}*\n🛒 Service: *${selected.name}*${createFieldLines}\n💰 Montant payé: *${numericPrice.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n📅 Date: *${now}*\n\n✅ Paiement traité. Veuillez activer le service.`);
       sendOrderNotification({
         orderType: 'create',
         serviceName: selected.name,
@@ -440,7 +454,10 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
                   <p className="text-sm font-black text-gray-500 uppercase tracking-widest text-center mb-4">Que voulez-vous faire ?</p>
 
                   <button
-                    onClick={() => setStep('create_pay')}
+                    onClick={() => {
+                      if (selected?.createFields?.length > 0) setStep('create_form');
+                      else setStep('create_pay');
+                    }}
                     className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-indigo-100 bg-indigo-50 hover:border-indigo-300 hover:bg-indigo-100 transition-all group"
                   >
                     <div className="h-12 w-12 rounded-2xl bg-indigo-500 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
@@ -466,6 +483,44 @@ export default function ServicesView({ loggedClient, onOpenWallet, onRequestAuth
                     </div>
                     <ChevronRight className="h-5 w-5 text-emerald-400" />
                   </button>
+                </div>
+              )}
+
+              {/* ── STEP: create_form ── */}
+              {step === 'create_form' && (
+                <div className="p-5 space-y-4">
+                  <button onClick={() => setStep('choice')} className="text-xs text-gray-400 hover:text-gray-600 font-bold flex items-center gap-1">
+                    ← Retour
+                  </button>
+                  <div>
+                    <p className="font-black text-gray-900 text-base">Informations requises</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Remplissez les champs ci-dessous pour continuer.</p>
+                  </div>
+                  <div className="space-y-3">
+                    {(selected?.createFields || []).map((f: { id: string; label: string; placeholder: string; required?: boolean }) => (
+                      <div key={f.id}>
+                        <Label className="text-xs font-black text-gray-600">
+                          {f.label}{f.required && <span className="text-red-500 ml-0.5">*</span>}
+                        </Label>
+                        <Input
+                          value={createFieldValues[f.id] || ''}
+                          onChange={e => setCreateFieldValues(v => ({ ...v, [f.id]: e.target.value }))}
+                          placeholder={f.placeholder || f.label}
+                          className="mt-1 rounded-xl border-gray-200"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    onClick={() => {
+                      const missing = (selected?.createFields || []).filter((f: any) => f.required && !createFieldValues[f.id]?.trim());
+                      if (missing.length > 0) { toast.error(`Champs obligatoires : ${missing.map((f: any) => f.label).join(', ')}`); return; }
+                      setStep('create_pay');
+                    }}
+                    className="w-full h-12 rounded-2xl bg-indigo-500 hover:bg-indigo-600 text-white font-black text-sm"
+                  >
+                    Suivant →
+                  </Button>
                 </div>
               )}
 

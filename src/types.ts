@@ -111,6 +111,7 @@ export interface CardTopup {
   whatsappMessage?: string;
   goldRate?: number;
   presets?: number[];
+  createFields?: RechargeField[];
   rechargeFields?: RechargeField[];
   rechargeFeePercent?: number;
   rechargeFeesTiers?: FeeTier[];

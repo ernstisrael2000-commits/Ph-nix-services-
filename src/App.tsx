@@ -60,6 +60,7 @@ export default function App() {
   const [formationsSearch, setFormationsSearch] = useState('');
   const [formationsPlayerActive, setFormationsPlayerActive] = useState(false);
   const [showFormationsAuth, setShowFormationsAuth] = useState(false);
+  const [isServicesModalOpen, setIsServicesModalOpen] = useState(false);
 
   const [loggedAdmin, setLoggedAdmin] = useState<AdminAccount | null>(() => {
     try { const s = localStorage.getItem('rena_admin'); return s ? JSON.parse(s) : null; } catch { return null; }
@@ -228,7 +229,7 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {view !== 'admin' && view !== 'promotion' && (
+        {view !== 'admin' && view !== 'promotion' && !isServicesModalOpen && (
           <BottomNav
             currentView={view}
             onViewChange={(v) => {
@@ -273,6 +274,7 @@ export default function App() {
                   handleViewChange('wallet');
                 }}
                 onRequestAuth={() => setShowAuthModal(true)}
+                onModalOpen={setIsServicesModalOpen}
               />
             )}
 
