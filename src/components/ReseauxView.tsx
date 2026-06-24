@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence, useInView } from 'motion/react';
 import { useSettings } from '../services/parcelService';
+import { useClientData } from '../services/clientService';
 import {
   Youtube, Instagram, Facebook, TrendingUp, Star, ChevronLeft,
   Check, ArrowRight, Users, BarChart3, Zap, Shield, Clock,
