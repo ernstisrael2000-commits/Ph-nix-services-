@@ -359,6 +359,12 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
   const { settings } = useSettings();
   const exchangeRate = settings?.exchangeRate || 135;
 
+  // Solde local pour mise à jour immédiate après commande (avant que onSnapshot Firestore propage)
+  const [localBalanceUSD, setLocalBalanceUSD] = useState<number>(client.balance ?? 0);
+  useEffect(() => {
+    setLocalBalanceUSD(client.balance ?? 0);
+  }, [client.balance]);
+
   // Listen for tab switch events from burger menu
   useEffect(() => {
     const handler = (e: any) => {
@@ -484,6 +490,10 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
         const errData = await resp.json().catch(() => ({}));
         throw new Error(errData.error || 'Erreur lors de la commande.');
       }
+      // Déduction locale immédiate pour refléter le nouveau solde sans attendre Firestore
+      const rate = exchangeRate > 0 ? exchangeRate : 135;
+      const deductedUSD = totalPriceHTG / rate;
+      setLocalBalanceUSD(prev => Math.max(0, prev - deductedUSD));
       setOrderModal(m => m ? { ...m, submitting: false, success: true } : null);
       loadMyOrders();
     } catch (err: any) {
@@ -493,7 +503,7 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
   };
 
   const totalPrice = orderModal ? Math.round((orderModal.svc.pricePerUnit ?? 0) * orderModal.qty) : 0;
-  const clientBalanceHTG = Math.round((client.balance ?? 0) * (exchangeRate > 0 ? exchangeRate : 135));
+  const clientBalanceHTG = Math.round(localBalanceUSD * (exchangeRate > 0 ? exchangeRate : 135));
   const hasEnoughBalance = totalPrice === 0 || clientBalanceHTG >= totalPrice;
   const platformVideoUrl = selectedPlatform ? getPlatformVideoUrl(selectedPlatform) : '';
 

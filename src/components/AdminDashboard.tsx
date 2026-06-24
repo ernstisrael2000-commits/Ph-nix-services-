@@ -134,13 +134,20 @@ function useSystemNotifications() {
 function useAdminNotifications() {
   const [notifications, setNotifications] = useState<AdminNotif[]>([]);
   const [loading, setLoading] = useState(true);
-  const load = useCallback(() => {
-    setLoading(true);
+  const load = useCallback((silent = false) => {
+    if (!silent) setLoading(true);
     fetch('/api/admin/notifications', { headers: { 'x-admin-secret': ADMIN_SECRET } })
-      .then(r => r.json()).then(d => setNotifications(d.notifications || [])).catch(() => {}).finally(() => setLoading(false));
+      .then(r => r.json())
+      .then(d => setNotifications(d.notifications || []))
+      .catch(() => {})
+      .finally(() => { if (!silent) setLoading(false); });
   }, []);
-  useEffect(() => { load(); }, [load]);
-  return { notifications, loading, reload: load };
+  useEffect(() => {
+    load();
+    const interval = setInterval(() => load(true), 20000);
+    return () => clearInterval(interval);
+  }, [load]);
+  return { notifications, loading, reload: () => load(false) };
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
