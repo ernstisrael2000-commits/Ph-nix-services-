@@ -70,6 +70,7 @@ interface AdminNotif {
   cardDetails?: Record<string, any>;
   message?: string;
   title?: string;
+  proofImageUrl?: string;
   read: boolean;
   status?: 'pending' | 'approved' | 'rejected';
   createdAt: any;
@@ -658,6 +659,7 @@ function RequestsSection() {
   const [selectedNotif, setSelectedNotif] = useState<AdminNotif | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'pending' | 'done'>('pending');
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const clientRequests = notifications.filter(n => ['client_deposit', 'client_withdrawal', 'card_order'].includes(n.type));
   const filtered = clientRequests.filter(n => {
@@ -771,6 +773,25 @@ function RequestsSection() {
                         {n.message && <p>{n.message}</p>}
                       </div>
                     )}
+                    {n.proofImageUrl && (n.type === 'client_deposit' || n.type === 'client_withdrawal') && (
+                      <div className="mt-2">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Preuve de paiement</p>
+                        <button
+                          onClick={() => setLightboxUrl(n.proofImageUrl!)}
+                          className="relative group rounded-xl overflow-hidden border border-gray-200 hover:border-primary/40 transition-colors block"
+                          style={{ width: 120, height: 80 }}
+                        >
+                          <img
+                            src={n.proofImageUrl}
+                            alt="Preuve de paiement"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                          />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                            <span className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-[10px] font-bold bg-black/50 px-2 py-0.5 rounded-full">Voir</span>
+                          </div>
+                        </button>
+                      </div>
+                    )}
                     <p className="text-[10px] text-gray-400 mt-1.5">{formatDate(n.createdAt)}</p>
                   </div>
                 </div>
@@ -825,6 +846,37 @@ function RequestsSection() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Lightbox preuve de paiement ── */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <div className="relative max-w-2xl w-full" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setLightboxUrl(null)}
+              className="absolute -top-10 right-0 text-white/70 hover:text-white font-bold text-sm flex items-center gap-1.5 transition-colors"
+            >
+              <X className="h-4 w-4" /> Fermer
+            </button>
+            <img
+              src={lightboxUrl}
+              alt="Preuve de paiement"
+              className="w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl"
+            />
+            <a
+              href={lightboxUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 flex items-center justify-center gap-2 text-white/60 hover:text-white text-xs font-semibold transition-colors"
+              onClick={e => e.stopPropagation()}
+            >
+              Ouvrir en plein écran →
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
