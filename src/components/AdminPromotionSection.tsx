@@ -87,10 +87,9 @@ interface PromoService {
   category: string;
   name: string;
   description: string;
-  pricePerUnit: number;
   unit: string;
-  minQty: number;
-  maxQty: number;
+  fixedQty: number;
+  fixedPrice: number;
   popular: boolean;
   active: boolean;
   order: number;
