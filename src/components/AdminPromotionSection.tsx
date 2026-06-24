@@ -822,83 +822,132 @@ export default function AdminPromotionSection() {
       <Dialog open={showServiceModal} onOpenChange={setShowServiceModal}>
         <DialogContent className="max-w-lg rounded-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingService ? 'Modifier' : 'Ajouter'} un service</DialogTitle>
+            <DialogTitle className="text-base font-black">
+              {editingService ? '✏️ Modifier le service' : '➕ Ajouter un service'}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs font-bold mb-1.5 block">Plateforme *</Label>
-                <select value={serviceForm.platformId} onChange={e => {
-                  const plt = platforms.find(p => p.id === e.target.value);
-                  setServiceForm(f => ({ ...f, platformId: e.target.value, platformKey: plt?.key || '' }));
-                }} className="w-full border rounded-xl p-2 text-sm">
-                  <option value="">-- Choisir --</option>
-                  {platforms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <Label className="text-xs font-bold mb-1.5 block">Catégorie *</Label>
-                <select value={serviceForm.category} onChange={e => setServiceForm(f => ({ ...f, category: e.target.value }))}
-                  className="w-full border rounded-xl p-2 text-sm">
-                  {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
+            {/* Platform */}
+            <div>
+              <Label className="text-xs font-bold mb-1.5 block">Plateforme *</Label>
+              <select value={serviceForm.platformId} onChange={e => {
+                const plt = platforms.find(p => p.id === e.target.value);
+                setServiceForm(f => ({ ...f, platformId: e.target.value, platformKey: plt?.key || '' }));
+              }} className="w-full border border-gray-200 rounded-xl p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20">
+                <option value="">-- Choisir une plateforme --</option>
+                {platforms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
             </div>
+
+            {/* Name */}
             <div>
               <Label className="text-xs font-bold mb-1.5 block">Nom du service *</Label>
-              <Input value={serviceForm.name} onChange={e => setServiceForm(f => ({ ...f, name: e.target.value }))} placeholder="ex: Abonnés YouTube Premium" className="rounded-xl" />
+              <Input value={serviceForm.name} onChange={e => setServiceForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="ex: Abonnés YouTube Premium" className="rounded-xl" />
             </div>
-            <div>
-              <Label className="text-xs font-bold mb-1.5 block">Description</Label>
-              <Textarea value={serviceForm.description} onChange={e => setServiceForm(f => ({ ...f, description: e.target.value }))} placeholder="Description du service..." className="rounded-xl text-sm" rows={2} />
-            </div>
+
+            {/* Category + Unit */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs font-bold mb-1.5 block">Prix par unité (HTG) *</Label>
-                <Input type="number" value={serviceForm.pricePerUnit} onChange={e => setServiceForm(f => ({ ...f, pricePerUnit: Number(e.target.value) }))} className="rounded-xl" />
+                <Label className="text-xs font-bold mb-1.5 block">Catégorie *</Label>
+                <input
+                  list="category-suggestions"
+                  value={serviceForm.category}
+                  onChange={e => setServiceForm(f => ({ ...f, category: e.target.value }))}
+                  placeholder="ex: Abonnés"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <datalist id="category-suggestions">
+                  {CATEGORY_OPTIONS.map(c => <option key={c} value={c} />)}
+                </datalist>
               </div>
               <div>
                 <Label className="text-xs font-bold mb-1.5 block">Unité</Label>
-                <select value={serviceForm.unit} onChange={e => setServiceForm(f => ({ ...f, unit: e.target.value }))}
-                  className="w-full border rounded-xl p-2 text-sm">
-                  {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
+                <input
+                  list="unit-suggestions"
+                  value={serviceForm.unit}
+                  onChange={e => setServiceForm(f => ({ ...f, unit: e.target.value }))}
+                  placeholder="ex: abonnés"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <datalist id="unit-suggestions">
+                  {UNIT_OPTIONS.map(u => <option key={u} value={u} />)}
+                </datalist>
               </div>
             </div>
+
+            {/* Description */}
+            <div>
+              <Label className="text-xs font-bold mb-1.5 block">Description</Label>
+              <Textarea value={serviceForm.description} onChange={e => setServiceForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Description du service..." className="rounded-xl text-sm" rows={2} />
+            </div>
+
+            {/* Price */}
+            <div>
+              <Label className="text-xs font-bold mb-1.5 block">Prix par unité (HTG) *</Label>
+              <Input type="number" min={0} value={serviceForm.pricePerUnit}
+                onChange={e => setServiceForm(f => ({ ...f, pricePerUnit: Number(e.target.value) }))} className="rounded-xl" />
+            </div>
+
+            {/* Qty min/max */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs font-bold mb-1.5 block">Quantité min</Label>
-                <Input type="number" value={serviceForm.minQty} onChange={e => setServiceForm(f => ({ ...f, minQty: Number(e.target.value) }))} className="rounded-xl" />
+                <Input type="number" min={1} value={serviceForm.minQty}
+                  onChange={e => setServiceForm(f => ({ ...f, minQty: Number(e.target.value) }))} className="rounded-xl" />
               </div>
               <div>
                 <Label className="text-xs font-bold mb-1.5 block">Quantité max</Label>
-                <Input type="number" value={serviceForm.maxQty} onChange={e => setServiceForm(f => ({ ...f, maxQty: Number(e.target.value) }))} className="rounded-xl" />
+                <Input type="number" min={1} value={serviceForm.maxQty}
+                  onChange={e => setServiceForm(f => ({ ...f, maxQty: Number(e.target.value) }))} className="rounded-xl" />
               </div>
             </div>
+
+            {/* Order + checkboxes */}
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <Label className="text-xs font-bold mb-1.5 block">Ordre</Label>
-                <Input type="number" value={serviceForm.order} onChange={e => setServiceForm(f => ({ ...f, order: Number(e.target.value) }))} className="rounded-xl" />
+                <Label className="text-xs font-bold mb-1.5 block">Ordre d'affichage</Label>
+                <Input type="number" min={0} value={serviceForm.order}
+                  onChange={e => setServiceForm(f => ({ ...f, order: Number(e.target.value) }))} className="rounded-xl" />
               </div>
-              <div className="flex items-end pb-1">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={serviceForm.popular} onChange={e => setServiceForm(f => ({ ...f, popular: e.target.checked }))} />
-                  <span className="text-sm font-semibold">Populaire</span>
+              <div className="flex items-end pb-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" className="w-4 h-4 rounded accent-primary" checked={serviceForm.popular}
+                    onChange={e => setServiceForm(f => ({ ...f, popular: e.target.checked }))} />
+                  <span className="text-sm font-semibold text-gray-700">⭐ Populaire</span>
                 </label>
               </div>
-              <div className="flex items-end pb-1">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={serviceForm.active} onChange={e => setServiceForm(f => ({ ...f, active: e.target.checked }))} />
-                  <span className="text-sm font-semibold">Actif</span>
+              <div className="flex items-end pb-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" className="w-4 h-4 rounded accent-primary" checked={serviceForm.active}
+                    onChange={e => setServiceForm(f => ({ ...f, active: e.target.checked }))} />
+                  <span className="text-sm font-semibold text-gray-700">Actif</span>
                 </label>
               </div>
             </div>
+
+            {/* Preview */}
+            {(serviceForm.name || serviceForm.pricePerUnit > 0) && (
+              <div className="rounded-2xl bg-gray-50 border border-gray-100 p-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Aperçu</p>
+                <p className="font-black text-sm text-gray-900">{serviceForm.name || '—'}</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {serviceForm.pricePerUnit > 0 ? `${serviceForm.pricePerUnit.toLocaleString()} HTG/${serviceForm.unit || 'unité'}` : '—'}
+                  {serviceForm.minQty > 0 ? ` · min ${serviceForm.minQty.toLocaleString()}` : ''}
+                  {serviceForm.maxQty > 0 ? ` · max ${serviceForm.maxQty.toLocaleString()}` : ''}
+                </p>
+                {serviceForm.category && (
+                  <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-primary/10 text-primary">{serviceForm.category}</span>
+                )}
+              </div>
+            )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button variant="ghost" onClick={() => setShowServiceModal(false)} className="rounded-xl">Annuler</Button>
-            <Button onClick={saveService} disabled={saving || !serviceForm.name || !serviceForm.platformId} className="rounded-xl gap-1.5">
+            <Button onClick={saveService} disabled={saving || !serviceForm.name || !serviceForm.platformId || !serviceForm.category} className="rounded-xl gap-1.5">
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-              Enregistrer
+              {editingService ? 'Sauvegarder les modifications' : 'Créer le service'}
             </Button>
           </DialogFooter>
         </DialogContent>
