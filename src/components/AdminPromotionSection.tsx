@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Plus, Trash2, Edit2, Loader2, X, Save, Youtube, Instagram, Facebook,
-  ChevronDown, ChevronRight, Eye, EyeOff, Check, Wifi,
+  Plus, Trash2, Edit2, Loader2, X, Save, Eye, EyeOff, Check,
+  Wifi, ClipboardList, Clock, Zap, CheckCircle2, XCircle,
+  ChevronDown, Video, FormInput, GripVertical, AlertCircle,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Textarea } from './ui/textarea';
 
 const ADMIN_SECRET = 'rena-admin-2024';
@@ -18,14 +18,38 @@ const GRADIENT_OPTIONS = [
   { label: 'Rose Instagram', value: 'from-pink-500 to-purple-600' },
   { label: 'Bleu Facebook', value: 'from-blue-500 to-blue-700' },
   { label: 'Indigo', value: 'from-indigo-500 to-indigo-700' },
-  { label: 'Vert', value: 'from-emerald-500 to-teal-600' },
+  { label: 'Vert Spotify', value: 'from-emerald-500 to-teal-600' },
   { label: 'Violet', value: 'from-purple-500 to-violet-600' },
   { label: 'Orange', value: 'from-orange-500 to-amber-600' },
+  { label: 'Bleu Telegram', value: 'from-sky-400 to-blue-500' },
+  { label: 'Gris X/Twitter', value: 'from-gray-600 to-gray-800' },
+  { label: 'Rouge Google', value: 'from-red-400 to-yellow-400' },
 ];
 
 const CATEGORY_OPTIONS = ['Vues', 'Abonnés', 'Likes', 'Commentaires', 'Partages', 'Impressions', 'Followers', 'Réactions', 'Cœurs'];
-
 const UNIT_OPTIONS = ['vues', 'abonnés', 'likes', 'commentaires', 'partages', 'followers', 'cœurs', 'impressions', 'réactions'];
+const FIELD_TYPE_OPTIONS = [
+  { value: 'url', label: 'URL (lien)' },
+  { value: 'text', label: 'Texte court' },
+  { value: 'textarea', label: 'Texte long' },
+  { value: 'select', label: 'Liste de choix' },
+];
+
+const ORDER_STATUS_MAP: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  pending:   { label: 'En attente', color: 'text-amber-600 bg-amber-50 border-amber-200',      icon: <Clock className="h-3 w-3" /> },
+  active:    { label: 'En cours',   color: 'text-blue-600 bg-blue-50 border-blue-200',          icon: <Zap className="h-3 w-3" /> },
+  completed: { label: 'Terminé',    color: 'text-emerald-600 bg-emerald-50 border-emerald-200', icon: <CheckCircle2 className="h-3 w-3" /> },
+  cancelled: { label: 'Annulé',     color: 'text-red-500 bg-red-50 border-red-200',             icon: <XCircle className="h-3 w-3" /> },
+};
+
+interface CustomField {
+  id: string;
+  label: string;
+  type: 'url' | 'text' | 'textarea' | 'select';
+  placeholder: string;
+  required: boolean;
+  options?: string;
+}
 
 interface PromoPlatform {
   id: string;
@@ -37,6 +61,8 @@ interface PromoPlatform {
   text?: string;
   active: boolean;
   order: number;
+  videoUrl?: string;
+  customFields?: CustomField[];
 }
 
 interface PromoService {
@@ -55,28 +81,41 @@ interface PromoService {
   order: number;
 }
 
-const EMPTY_PLATFORM: Omit<PromoPlatform, 'id'> = { name: '', key: '', gradient: 'from-gray-500 to-gray-700', lightBg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700', active: true, order: 99 };
-const EMPTY_SERVICE: Omit<PromoService, 'id'> = { platformId: '', platformKey: '', category: 'Vues', name: '', description: '', pricePerUnit: 1000, unit: 'vues', minQty: 100, maxQty: 100000, popular: false, active: true, order: 99 };
+const EMPTY_PLATFORM: Omit<PromoPlatform, 'id'> = {
+  name: '', key: '', gradient: 'from-gray-500 to-gray-700',
+  lightBg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700',
+  active: true, order: 99, videoUrl: '', customFields: [],
+};
+
+const EMPTY_SERVICE: Omit<PromoService, 'id'> = {
+  platformId: '', platformKey: '', category: 'Vues', name: '', description: '',
+  pricePerUnit: 1000, unit: 'vues', minQty: 100, maxQty: 100000, popular: false, active: true, order: 99,
+};
+
+function newField(): CustomField {
+  return { id: crypto.randomUUID(), label: '', type: 'url', placeholder: '', required: true, options: '' };
+}
 
 export default function AdminPromotionSection() {
-  const [tab, setTab] = useState<'platforms' | 'services'>('platforms');
+  const [tab, setTab] = useState<'platforms' | 'services' | 'orders'>('platforms');
   const [platforms, setPlatforms] = useState<PromoPlatform[]>([]);
   const [services, setServices] = useState<PromoService[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Platform modal
   const [showPlatformModal, setShowPlatformModal] = useState(false);
   const [editingPlatform, setEditingPlatform] = useState<PromoPlatform | null>(null);
   const [platformForm, setPlatformForm] = useState<Omit<PromoPlatform, 'id'>>(EMPTY_PLATFORM);
 
-  // Service modal
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [editingService, setEditingService] = useState<PromoService | null>(null);
   const [serviceForm, setServiceForm] = useState<Omit<PromoService, 'id'>>(EMPTY_SERVICE);
 
-  // Filter
   const [selectedPlatformFilter, setSelectedPlatformFilter] = useState<string>('all');
+  const [ordersFilter, setOrdersFilter] = useState<string>('all');
+  const [orderDetailId, setOrderDetailId] = useState<string | null>(null);
+  const [updatingOrder, setUpdatingOrder] = useState<string | null>(null);
 
   const loadPlatforms = useCallback(async () => {
     setLoading(true);
@@ -98,24 +137,50 @@ export default function AdminPromotionSection() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadPlatforms(); loadServices(); }, [loadPlatforms, loadServices]);
+  const loadOrders = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch('/api/admin/promotion/orders', { headers: { 'x-admin-secret': ADMIN_SECRET } });
+      const d = await r.json();
+      setOrders(d.orders || []);
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadPlatforms();
+    loadServices();
+    loadOrders();
+  }, [loadPlatforms, loadServices, loadOrders]);
 
   // ── Platform CRUD ──────────────────────────────────────────────────────────
-  const openAddPlatform = () => { setEditingPlatform(null); setPlatformForm(EMPTY_PLATFORM); setShowPlatformModal(true); };
-  const openEditPlatform = (p: PromoPlatform) => { setEditingPlatform(p); setPlatformForm(p); setShowPlatformModal(true); };
+  const openAddPlatform = () => {
+    setEditingPlatform(null);
+    setPlatformForm({ ...EMPTY_PLATFORM, customFields: [] });
+    setShowPlatformModal(true);
+  };
+
+  const openEditPlatform = (p: PromoPlatform) => {
+    setEditingPlatform(p);
+    setPlatformForm({ ...p, customFields: p.customFields || [] });
+    setShowPlatformModal(true);
+  };
 
   const savePlatform = async () => {
     setSaving(true);
     try {
+      const payload = { ...platformForm };
       if (editingPlatform) {
         await fetch(`/api/admin/promotion/platforms/${editingPlatform.id}`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
-          body: JSON.stringify(platformForm),
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
+          body: JSON.stringify(payload),
         });
       } else {
         await fetch('/api/admin/promotion/platforms', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
-          body: JSON.stringify(platformForm),
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
+          body: JSON.stringify(payload),
         });
       }
       setShowPlatformModal(false);
@@ -138,6 +203,22 @@ export default function AdminPromotionSection() {
     await loadPlatforms();
   };
 
+  // ── Custom fields helpers ──────────────────────────────────────────────────
+  const addField = () => {
+    setPlatformForm(f => ({ ...f, customFields: [...(f.customFields || []), newField()] }));
+  };
+
+  const updateField = (fieldId: string, patch: Partial<CustomField>) => {
+    setPlatformForm(f => ({
+      ...f,
+      customFields: (f.customFields || []).map(cf => cf.id === fieldId ? { ...cf, ...patch } : cf),
+    }));
+  };
+
+  const removeField = (fieldId: string) => {
+    setPlatformForm(f => ({ ...f, customFields: (f.customFields || []).filter(cf => cf.id !== fieldId) }));
+  };
+
   // ── Service CRUD ───────────────────────────────────────────────────────────
   const openAddService = () => {
     const first = platforms[0];
@@ -145,6 +226,7 @@ export default function AdminPromotionSection() {
     setServiceForm({ ...EMPTY_SERVICE, platformId: first?.id || '', platformKey: first?.key || '' });
     setShowServiceModal(true);
   };
+
   const openEditService = (s: PromoService) => { setEditingService(s); setServiceForm(s); setShowServiceModal(true); };
 
   const saveService = async () => {
@@ -183,7 +265,24 @@ export default function AdminPromotionSection() {
     await loadServices();
   };
 
+  // ── Orders ─────────────────────────────────────────────────────────────────
+  const updateOrderStatus = async (id: string, status: string) => {
+    setUpdatingOrder(id);
+    try {
+      await fetch(`/api/admin/promotion/orders/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
+        body: JSON.stringify({ status }),
+      });
+      await loadOrders();
+    } catch {}
+    setUpdatingOrder(null);
+  };
+
   const filteredServices = selectedPlatformFilter === 'all' ? services : services.filter(s => s.platformId === selectedPlatformFilter);
+  const filteredOrders = ordersFilter === 'all' ? orders : orders.filter(o => o.status === ordersFilter);
+  const orderDetail = orderDetailId ? orders.find(o => o.id === orderDetailId) : null;
+
+  const pendingCount = orders.filter(o => o.status === 'pending').length;
 
   return (
     <div className="space-y-5">
@@ -191,26 +290,41 @@ export default function AdminPromotionSection() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-black text-gray-900">Gestion Promotion</h2>
-          <p className="text-xs text-gray-400 mt-0.5">{platforms.length} plateforme{platforms.length !== 1 ? 's' : ''} · {services.length} service{services.length !== 1 ? 's' : ''}</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {platforms.length} plateforme{platforms.length !== 1 ? 's' : ''} · {services.length} service{services.length !== 1 ? 's' : ''} · {orders.length} commande{orders.length !== 1 ? 's' : ''}
+          </p>
         </div>
-        <Button onClick={tab === 'platforms' ? openAddPlatform : openAddService}
-          size="sm" className="gap-1.5 rounded-xl text-xs">
-          <Plus className="h-3.5 w-3.5" />
-          {tab === 'platforms' ? 'Plateforme' : 'Service'}
-        </Button>
+        {tab !== 'orders' && (
+          <Button onClick={tab === 'platforms' ? openAddPlatform : openAddService}
+            size="sm" className="gap-1.5 rounded-xl text-xs">
+            <Plus className="h-3.5 w-3.5" />
+            {tab === 'platforms' ? 'Plateforme' : 'Service'}
+          </Button>
+        )}
+        {tab === 'orders' && (
+          <button onClick={loadOrders} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-600 transition-colors">
+            <Loader2 className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Actualiser
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-2xl w-fit">
-        {(['platforms', 'services'] as const).map(t => (
+        {(['platforms', 'services', 'orders'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${tab === t ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
-            {t === 'platforms' ? 'Plateformes' : 'Services'}
+            className={`relative px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${tab === t ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
+            {t === 'platforms' ? 'Plateformes' : t === 'services' ? 'Services' : 'Commandes'}
+            {t === 'orders' && pendingCount > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center bg-red-500 text-white text-[9px] font-black rounded-full">
+                {pendingCount > 9 ? '9+' : pendingCount}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
-      {loading ? (
+      {loading && tab !== 'orders' ? (
         <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
       ) : (
         <>
@@ -224,31 +338,51 @@ export default function AdminPromotionSection() {
                   <button onClick={openAddPlatform} className="mt-3 text-primary text-xs font-black hover:underline">+ Ajouter une plateforme</button>
                 </div>
               ) : (
-                platforms.map(p => (
-                  <div key={p.id} className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-4">
-                    <div className={`h-10 w-10 rounded-xl bg-gradient-to-br ${p.gradient} flex items-center justify-center text-white font-black text-sm shrink-0`}>
-                      {p.name.charAt(0)}
+                platforms.map(p => {
+                  const svcCount = services.filter(s => s.platformId === p.id).length;
+                  const fieldCount = (p.customFields || []).length;
+                  return (
+                    <div key={p.id} className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-4">
+                      <div className={`h-10 w-10 rounded-xl bg-gradient-to-br ${p.gradient} flex items-center justify-center text-white font-black text-sm shrink-0`}>
+                        {p.name.charAt(0)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-gray-900 text-sm">{p.name}</p>
+                        <div className="flex items-center gap-3 mt-0.5">
+                          <p className="text-xs text-gray-400">key: {p.key}</p>
+                          <span className="text-gray-200">·</span>
+                          <p className="text-xs text-gray-400">{svcCount} service{svcCount !== 1 ? 's' : ''}</p>
+                          {fieldCount > 0 && (
+                            <>
+                              <span className="text-gray-200">·</span>
+                              <p className="text-xs text-blue-500">{fieldCount} champ{fieldCount !== 1 ? 's' : ''}</p>
+                            </>
+                          )}
+                          {p.videoUrl && (
+                            <>
+                              <span className="text-gray-200">·</span>
+                              <p className="text-xs text-emerald-500 flex items-center gap-0.5"><Video className="h-3 w-3" /> vidéo</p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${p.active ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-50 text-gray-400'}`}>
+                          {p.active ? 'Actif' : 'Inactif'}
+                        </span>
+                        <button onClick={() => togglePlatformActive(p)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400">
+                          {p.active ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                        </button>
+                        <button onClick={() => openEditPlatform(p)} className="p-1.5 rounded-lg hover:bg-primary/10 transition-colors text-gray-400 hover:text-primary">
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button onClick={() => deletePlatform(p.id)} className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-400 hover:text-red-500">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-black text-gray-900 text-sm">{p.name}</p>
-                      <p className="text-xs text-gray-400">key: {p.key} · order: {p.order}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${p.active ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-50 text-gray-400'}`}>
-                        {p.active ? 'Actif' : 'Inactif'}
-                      </span>
-                      <button onClick={() => togglePlatformActive(p)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400">
-                        {p.active ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                      </button>
-                      <button onClick={() => openEditPlatform(p)} className="p-1.5 rounded-lg hover:bg-primary/10 transition-colors text-gray-400 hover:text-primary">
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                      <button onClick={() => deletePlatform(p.id)} className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-gray-400 hover:text-red-500">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}
@@ -256,7 +390,6 @@ export default function AdminPromotionSection() {
           {/* ── Services Tab ── */}
           {tab === 'services' && (
             <div className="space-y-4">
-              {/* Platform filter */}
               <div className="flex items-center gap-2 flex-wrap">
                 <button onClick={() => setSelectedPlatformFilter('all')}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${selectedPlatformFilter === 'all' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-500'}`}>
@@ -272,7 +405,6 @@ export default function AdminPromotionSection() {
                   );
                 })}
               </div>
-
               {filteredServices.length === 0 ? (
                 <div className="text-center py-12 bg-gray-50 rounded-2xl">
                   <p className="text-sm font-bold text-gray-400">Aucun service</p>
@@ -285,16 +417,11 @@ export default function AdminPromotionSection() {
                     return (
                       <div key={s.id} className={`bg-white rounded-2xl border p-4 flex items-center gap-3 ${s.active ? 'border-gray-100' : 'border-gray-100 opacity-60'}`}>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            {plt && (
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r ${plt.gradient} text-white`}>
-                                {plt.name}
-                              </span>
-                            )}
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-gray-100 text-gray-600">
-                              {s.category}
-                            </span>
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            {plt && <span className={`px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r ${plt.gradient} text-white`}>{plt.name}</span>}
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-gray-100 text-gray-600">{s.category}</span>
                             {s.popular && <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-600">⭐ Populaire</span>}
+                            {!s.active && <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-gray-100 text-gray-400">Inactif</span>}
                           </div>
                           <p className="font-black text-gray-900 text-sm">{s.name}</p>
                           <p className="text-xs text-gray-400 mt-0.5">{s.pricePerUnit} HTG/{s.unit} · min {s.minQty.toLocaleString()} · max {s.maxQty.toLocaleString()}</p>
@@ -317,16 +444,140 @@ export default function AdminPromotionSection() {
               )}
             </div>
           )}
+
+          {/* ── Orders Tab ── */}
+          {tab === 'orders' && (
+            <div className="space-y-4">
+              {/* Status filter */}
+              <div className="flex gap-2 flex-wrap">
+                {(['all', 'pending', 'active', 'completed', 'cancelled'] as const).map(s => {
+                  const cnt = s === 'all' ? orders.length : orders.filter(o => o.status === s).length;
+                  return (
+                    <button key={s} onClick={() => setOrdersFilter(s)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${ordersFilter === s
+                        ? s === 'all' ? 'bg-gray-800 text-white'
+                          : s === 'pending' ? 'bg-amber-500 text-white'
+                          : s === 'active' ? 'bg-blue-500 text-white'
+                          : s === 'completed' ? 'bg-emerald-500 text-white'
+                          : 'bg-red-500 text-white'
+                        : 'bg-gray-100 text-gray-500'
+                      }`}>
+                      {s === 'all' ? 'Toutes' : ORDER_STATUS_MAP[s]?.label} ({cnt})
+                    </button>
+                  );
+                })}
+              </div>
+
+              {loading ? (
+                <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+              ) : filteredOrders.length === 0 ? (
+                <div className="text-center py-16 bg-gray-50 rounded-2xl">
+                  <ClipboardList className="h-10 w-10 text-gray-200 mx-auto mb-3" />
+                  <p className="text-sm font-bold text-gray-400">Aucune commande</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredOrders.map(order => {
+                    const status = ORDER_STATUS_MAP[order.status] || ORDER_STATUS_MAP.pending;
+                    const isDetail = orderDetailId === order.id;
+                    const customValues = order.customFieldValues || {};
+                    return (
+                      <div key={order.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                        <div className="p-4">
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-[10px] font-black ${status.color}`}>
+                                  {status.icon}{status.label}
+                                </span>
+                                {order.platformName && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-gray-100 text-gray-600">{order.platformName}</span>
+                                )}
+                              </div>
+                              <p className="font-black text-gray-900 text-sm leading-tight">{order.serviceName}</p>
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                {order.qty?.toLocaleString()} {order.unit || ''} · {order.totalPrice?.toLocaleString()} HTG
+                              </p>
+                            </div>
+                            <button onClick={() => setOrderDetailId(isDetail ? null : order.id)}
+                              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors shrink-0">
+                              <ChevronDown className={`h-4 w-4 transition-transform ${isDetail ? 'rotate-180' : ''}`} />
+                            </button>
+                          </div>
+
+                          {/* Client info */}
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <div className="h-6 w-6 rounded-full bg-primary flex items-center justify-center text-white font-black text-[10px] shrink-0">
+                              {(order.clientName || 'C').charAt(0).toUpperCase()}
+                            </div>
+                            <span className="font-semibold">{order.clientName || 'Client'}</span>
+                            {order.clientPhone && <span className="text-gray-300">·</span>}
+                            {order.clientPhone && <span>{order.clientPhone}</span>}
+                            {order.createdAt && (
+                              <>
+                                <span className="text-gray-300">·</span>
+                                <span>{new Date(order.createdAt._seconds ? order.createdAt._seconds * 1000 : order.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Expanded detail */}
+                        {isDetail && (
+                          <div className="border-t border-gray-50 bg-gray-50/50 p-4 space-y-3">
+                            {/* Custom field values */}
+                            {Object.keys(customValues).length > 0 && (
+                              <div className="space-y-2">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Informations du client</p>
+                                {Object.entries(customValues).map(([key, val]) => (
+                                  <div key={key} className="flex items-start gap-2">
+                                    <span className="text-xs font-bold text-gray-500 shrink-0 min-w-24">{key}:</span>
+                                    <span className="text-xs text-gray-700 break-all font-medium">{String(val)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Status actions */}
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Changer le statut</p>
+                              <div className="flex gap-2 flex-wrap">
+                                {(['pending', 'active', 'completed', 'cancelled'] as const).map(s => (
+                                  <button key={s}
+                                    disabled={order.status === s || updatingOrder === order.id}
+                                    onClick={() => updateOrderStatus(order.id, s)}
+                                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black transition-all disabled:opacity-40 flex items-center gap-1 ${
+                                      order.status === s
+                                        ? ORDER_STATUS_MAP[s].color + ' border'
+                                        : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-300'
+                                    }`}>
+                                    {updatingOrder === order.id ? <Loader2 className="h-3 w-3 animate-spin" /> : ORDER_STATUS_MAP[s].icon}
+                                    {ORDER_STATUS_MAP[s].label}
+                                    {order.status === s && <Check className="h-3 w-3" />}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 
       {/* ── Platform Modal ── */}
       <Dialog open={showPlatformModal} onOpenChange={setShowPlatformModal}>
-        <DialogContent className="max-w-md rounded-3xl">
+        <DialogContent className="max-w-lg rounded-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingPlatform ? 'Modifier' : 'Ajouter'} une plateforme</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
+          <div className="space-y-4 py-2">
+            {/* Basic info */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs font-bold mb-1.5 block">Nom *</Label>
@@ -334,27 +585,107 @@ export default function AdminPromotionSection() {
               </div>
               <div>
                 <Label className="text-xs font-bold mb-1.5 block">Clé unique *</Label>
-                <Input value={platformForm.key} onChange={e => setPlatformForm(f => ({ ...f, key: e.target.value.toLowerCase() }))} placeholder="youtube" className="rounded-xl" />
+                <Input value={platformForm.key} onChange={e => setPlatformForm(f => ({ ...f, key: e.target.value.toLowerCase().replace(/\s+/g, '_') }))} placeholder="youtube" className="rounded-xl" />
               </div>
-            </div>
-            <div>
-              <Label className="text-xs font-bold mb-1.5 block">Gradient</Label>
-              <select value={platformForm.gradient} onChange={e => setPlatformForm(f => ({ ...f, gradient: e.target.value }))}
-                className="w-full border rounded-xl p-2 text-sm">
-                {GRADIENT_OPTIONS.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-              </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs font-bold mb-1.5 block">Ordre</Label>
+                <Label className="text-xs font-bold mb-1.5 block">Gradient couleur</Label>
+                <select value={platformForm.gradient} onChange={e => setPlatformForm(f => ({ ...f, gradient: e.target.value }))}
+                  className="w-full border rounded-xl p-2 text-sm">
+                  {GRADIENT_OPTIONS.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs font-bold mb-1.5 block">Ordre d'affichage</Label>
                 <Input type="number" value={platformForm.order} onChange={e => setPlatformForm(f => ({ ...f, order: Number(e.target.value) }))} className="rounded-xl" />
               </div>
-              <div className="flex items-end pb-1">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={platformForm.active} onChange={e => setPlatformForm(f => ({ ...f, active: e.target.checked }))} className="rounded" />
-                  <span className="text-sm font-semibold">Actif</span>
-                </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={platformForm.active} onChange={e => setPlatformForm(f => ({ ...f, active: e.target.checked }))} className="rounded" />
+                <span className="text-sm font-semibold">Plateforme active</span>
+              </label>
+            </div>
+
+            {/* Video URL */}
+            <div className="border-t pt-3">
+              <Label className="text-xs font-bold mb-1.5 flex items-center gap-1.5 block">
+                <Video className="h-3.5 w-3.5 text-primary" /> Vidéo d'explication (URL)
+              </Label>
+              <Input
+                value={platformForm.videoUrl || ''}
+                onChange={e => setPlatformForm(f => ({ ...f, videoUrl: e.target.value }))}
+                placeholder="https://youtube.com/embed/... ou /video.mp4"
+                className="rounded-xl"
+              />
+              <p className="text-[10px] text-gray-400 mt-1">URL d'une vidéo YouTube embed ou un fichier vidéo direct</p>
+            </div>
+
+            {/* Custom fields */}
+            <div className="border-t pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-xs font-bold flex items-center gap-1.5">
+                  <FormInput className="h-3.5 w-3.5 text-primary" /> Champs du formulaire de commande
+                </Label>
+                <button onClick={addField}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-[10px] font-black transition-colors">
+                  <Plus className="h-3 w-3" /> Ajouter un champ
+                </button>
               </div>
+              <p className="text-[10px] text-gray-400 mb-3">Ces champs seront demandés à l'utilisateur lors d'une commande sur cette plateforme.</p>
+
+              {(platformForm.customFields || []).length === 0 ? (
+                <div className="text-center py-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                  <p className="text-xs text-gray-400">Aucun champ. Cliquez sur "Ajouter un champ".</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {(platformForm.customFields || []).map((field, idx) => (
+                    <div key={field.id} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                      <div className="flex items-center gap-2 mb-2">
+                        <GripVertical className="h-4 w-4 text-gray-300 shrink-0" />
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Champ {idx + 1}</span>
+                        <button onClick={() => removeField(field.id)} className="ml-auto p-1 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-[10px] font-bold mb-1 block">Label *</Label>
+                          <Input value={field.label} onChange={e => updateField(field.id, { label: e.target.value })}
+                            placeholder="Lien de la chaîne" className="rounded-lg h-8 text-xs" />
+                        </div>
+                        <div>
+                          <Label className="text-[10px] font-bold mb-1 block">Type</Label>
+                          <select value={field.type} onChange={e => updateField(field.id, { type: e.target.value as any })}
+                            className="w-full border rounded-lg p-1.5 text-xs">
+                            {FIELD_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                          </select>
+                        </div>
+                        <div className="col-span-2">
+                          <Label className="text-[10px] font-bold mb-1 block">Placeholder</Label>
+                          <Input value={field.placeholder} onChange={e => updateField(field.id, { placeholder: e.target.value })}
+                            placeholder="ex: https://youtube.com/@machaîne" className="rounded-lg h-8 text-xs" />
+                        </div>
+                        {field.type === 'select' && (
+                          <div className="col-span-2">
+                            <Label className="text-[10px] font-bold mb-1 block">Options (séparées par des virgules)</Label>
+                            <Input value={field.options || ''} onChange={e => updateField(field.id, { options: e.target.value })}
+                              placeholder="Option 1, Option 2, Option 3" className="rounded-lg h-8 text-xs" />
+                          </div>
+                        )}
+                        <div className="col-span-2 flex items-center gap-2">
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" checked={field.required} onChange={e => updateField(field.id, { required: e.target.checked })} className="rounded" />
+                            <span className="text-xs font-semibold">Champ obligatoire</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>

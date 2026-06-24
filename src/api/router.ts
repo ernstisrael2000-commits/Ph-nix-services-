@@ -6139,6 +6139,45 @@ router.get('/api/admin/promotion/services', requireDb, requireAdminSecret, async
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Promotion Orders ──────────────────────────────────────────────────────────
+
+// POST /api/promotion/orders  (client submits an order)
+router.post('/api/promotion/orders', requireDb, async (req, res) => {
+  try {
+    const data = {
+      ...req.body,
+      status: 'pending',
+      createdAt: FieldValue.serverTimestamp(),
+    };
+    const ref = await adminDb.collection('promotion_orders').add(data);
+    res.json({ id: ref.id });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/admin/promotion/orders  (admin sees all orders)
+router.get('/api/admin/promotion/orders', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const snap = await adminDb.collection('promotion_orders').orderBy('createdAt', 'desc').get();
+    let orders = snap.docs.map((d: any) => serializeDoc(d));
+    const { status, platformKey } = req.query;
+    if (status && status !== 'all') orders = orders.filter((o: any) => o.status === status);
+    if (platformKey) orders = orders.filter((o: any) => o.platformKey === platformKey);
+    res.json({ orders });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/admin/promotion/orders/:id  (admin updates status)
+router.patch('/api/admin/promotion/orders/:id', requireDb, requireAdminSecret, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await adminDb.collection('promotion_orders').doc(id).update({
+      ...req.body,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Catch-all: unmatched /api/* → clean JSON 404 ─────────────────────────────
 router.all('/api/*', (_req, res) => {
   res.status(404).json({ error: 'Route API introuvable.' });

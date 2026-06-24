@@ -1,4 +1,4 @@
-import { Package, ShieldCheck, LogIn, LogOut, Menu, X, Wallet, Bell, CheckCheck, Info, TrendingUp, TrendingDown, Trash2, Download, Share2, Smartphone, GraduationCap, MessageCircle, ArrowLeft } from 'lucide-react';
+import { Package, ShieldCheck, LogIn, LogOut, Menu, X, Wallet, Bell, CheckCheck, Info, TrendingUp, TrendingDown, Trash2, Download, Share2, Smartphone, GraduationCap, MessageCircle, ArrowLeft, Home, User } from 'lucide-react';
 import RenaLogo from './RenaLogo';
 import { Button } from './ui/button';
 import { auth } from '@/lib/firebase';
@@ -415,14 +415,44 @@ export default function Navbar({ currentView, onViewChange, loggedClient, onClie
             <div className="flex-1 p-3 space-y-1">
               {currentView === 'promotion' ? (
                 <>
-                  {/* Promotion-specific burger menu */}
+                  {/* Promotion section label */}
+                  <div className="px-4 py-2 mb-1">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Phénix Réseaux</p>
+                  </div>
+
                   {loggedClient && (
-                    <button onClick={() => { onOpenWallet(); setMenuOpen(false); }}
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-gray-600 hover:bg-primary/10 hover:text-primary transition-all">
-                      <Wallet className="h-5 w-5 shrink-0 text-gray-400" />
-                      <span>Mon Portefeuille</span>
-                    </button>
+                    <>
+                      <button onClick={() => {
+                        window.dispatchEvent(new CustomEvent('promotion-nav', { detail: { tab: 'home' } }));
+                        setMenuOpen(false);
+                      }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-gray-600 hover:bg-primary/10 hover:text-primary transition-all">
+                        <Home className="h-5 w-5 shrink-0 text-gray-400" />
+                        <span>Accueil Promotion</span>
+                      </button>
+                      <button onClick={() => {
+                        window.dispatchEvent(new CustomEvent('promotion-nav', { detail: { tab: 'orders' } }));
+                        setMenuOpen(false);
+                      }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-gray-600 hover:bg-blue-50 hover:text-blue-700 transition-all">
+                        <Package className="h-5 w-5 shrink-0 text-gray-400" />
+                        <span>Mes Commandes</span>
+                      </button>
+                      <button onClick={() => {
+                        window.dispatchEvent(new CustomEvent('promotion-nav', { detail: { tab: 'profile' } }));
+                        setMenuOpen(false);
+                      }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-gray-600 hover:bg-purple-50 hover:text-purple-700 transition-all">
+                        <User className="h-5 w-5 shrink-0 text-gray-400" />
+                        <span>Mon Profil</span>
+                      </button>
+                      <button onClick={() => { onOpenWallet(); setMenuOpen(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-gray-600 hover:bg-primary/10 hover:text-primary transition-all">
+                        <Wallet className="h-5 w-5 shrink-0 text-gray-400" />
+                        <span>Mon Portefeuille</span>
+                      </button>
+                    </>
                   )}
+
+                  <div className="my-1 border-t border-gray-100" />
+
                   <a href="https://wa.me/50944009339" target="_blank" rel="noopener noreferrer"
                     onClick={() => setMenuOpen(false)}
                     className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-gray-600 hover:bg-emerald-50 hover:text-emerald-700 transition-all">
