@@ -27,7 +27,7 @@ const NAV_ITEMS = [
   { key: 'services',   icon: Globe,          label: 'Services'   },
   { key: 'tracking',   icon: ColisIcon,      label: 'Colis'      },
   { key: 'formations', icon: GraduationCap,  label: 'Formations' },
-  { key: 'reseaux',    icon: Wifi,           label: 'Réseaux'    },
+  { key: 'promotion',   icon: Wifi,           label: 'Promotion'  },
 ];
 
 export default function Navbar({ currentView, onViewChange, loggedClient, onClientLogin, onClientLogout, onOpenWallet, onAdminLogin, loggedAdmin }: NavbarProps) {

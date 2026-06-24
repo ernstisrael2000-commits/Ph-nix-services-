@@ -39,7 +39,7 @@ function PageSpinner() {
   );
 }
 
-type ViewType = 'tracking' | 'services' | 'admin' | 'wallet' | 'formations' | 'reseaux';
+type ViewType = 'tracking' | 'services' | 'admin' | 'wallet' | 'formations' | 'promotion';
 
 export default function App() {
   const [view, setView] = useState<ViewType>('services');
@@ -228,7 +228,7 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {view !== 'admin' && (
+        {view !== 'admin' && view !== 'promotion' && (
           <BottomNav
             currentView={view}
             onViewChange={(v) => {
@@ -252,7 +252,7 @@ export default function App() {
           />
         )}
 
-        <main className={`animate-in fade-in duration-300 ${view !== 'wallet' ? 'pt-14' : ''} flex-grow relative ${view !== 'admin' && view !== 'wallet' ? 'pb-[74px]' : ''}`}>
+        <main className={`animate-in fade-in duration-300 ${view !== 'wallet' && view !== 'promotion' ? 'pt-14' : ''} flex-grow relative ${view !== 'admin' && view !== 'wallet' && view !== 'promotion' ? 'pb-[74px]' : ''}`}>
           <Suspense fallback={<PageSpinner />}>
             {view === 'tracking' && (
               <TrackingView
@@ -285,7 +285,7 @@ export default function App() {
               />
             )}
 
-            {view === 'reseaux' && (
+            {view === 'promotion' && (
               <ReseauxView
                 loggedClient={loggedClient}
                 onRequestAuth={() => setShowAuthModal(true)}
@@ -293,6 +293,8 @@ export default function App() {
                   if (!loggedClient) { setShowAuthModal(true); return; }
                   handleViewChange('wallet');
                 }}
+                onBack={() => handleViewChange('services')}
+                onClientLogin={handleClientLogin}
               />
             )}
 
@@ -317,7 +319,7 @@ export default function App() {
           </Suspense>
         </main>
 
-        {view !== 'admin' && view !== 'formations' && view !== 'tracking' && view !== 'reseaux' && (
+        {view !== 'admin' && view !== 'formations' && view !== 'tracking' && view !== 'promotion' && (
           <footer className="py-12 border-t mt-auto bg-white pb-24">
             <div className="max-w-7xl mx-auto px-4 text-center">
               <div className="flex items-center justify-center gap-2 mb-4">
