@@ -7,6 +7,7 @@ import {
   MessageCircle, Play, Target, Award, Globe, Sparkles,
   Home, ClipboardList, User, Package, CheckCircle2, XCircle,
   Search, X, Wallet, Volume2, VolumeX, AlertCircle, Loader2,
+  Heart, Eye, Share2, ShoppingCart, ChevronRight,
 } from 'lucide-react';
 import { Client } from '../types';
 import { toast } from 'sonner';
@@ -84,6 +85,32 @@ const STATIC_SERVICES: Record<string, Record<string, Array<{ name: string; descr
     Partages:     [{ name: 'Partages Organiques', description: 'Partages réels', pricePerUnit: 5, unit: 'partages', minQty: 50, maxQty: 5000, popular: false }],
   },
 };
+
+// ─── Category config ──────────────────────────────────────────────────────────
+const CATEGORY_CONFIG: Record<string, { icon: React.ElementType; gradient: string; lightBg: string; text: string; desc: string }> = {
+  'Abonnés':      { icon: Users,         gradient: 'from-violet-500 to-indigo-600',  lightBg: 'bg-violet-50',  text: 'text-violet-700', desc: 'Augmentez votre base de fans' },
+  'Followers':    { icon: Users,         gradient: 'from-violet-500 to-indigo-600',  lightBg: 'bg-violet-50',  text: 'text-violet-700', desc: 'Augmentez votre base de fans' },
+  'Likes':        { icon: Heart,         gradient: 'from-pink-500 to-rose-600',       lightBg: 'bg-pink-50',    text: 'text-pink-700',   desc: 'Boostez vos engagements' },
+  'Cœurs':        { icon: Heart,         gradient: 'from-pink-500 to-rose-600',       lightBg: 'bg-pink-50',    text: 'text-pink-700',   desc: 'Boostez vos engagements' },
+  'Vues':         { icon: Eye,           gradient: 'from-blue-500 to-cyan-600',       lightBg: 'bg-blue-50',    text: 'text-blue-700',   desc: 'Maximisez votre visibilité' },
+  'Commentaires': { icon: MessageCircle, gradient: 'from-amber-500 to-orange-600',   lightBg: 'bg-amber-50',   text: 'text-amber-700',  desc: 'Générez des interactions' },
+  'Boostage':     { icon: Zap,           gradient: 'from-emerald-500 to-teal-600',   lightBg: 'bg-emerald-50', text: 'text-emerald-700',desc: 'Propulsez votre contenu' },
+  'Partages':     { icon: Share2,        gradient: 'from-emerald-500 to-teal-600',   lightBg: 'bg-emerald-50', text: 'text-emerald-700',desc: 'Étendez votre portée' },
+  'Impressions':  { icon: BarChart3,     gradient: 'from-slate-500 to-gray-700',     lightBg: 'bg-gray-50',    text: 'text-gray-700',   desc: 'Augmentez vos impressions' },
+  'Réactions':    { icon: Sparkles,      gradient: 'from-yellow-500 to-amber-600',   lightBg: 'bg-yellow-50',  text: 'text-yellow-700', desc: 'Multipliez les réactions' },
+};
+
+function getCategoryConfig(cat: string) {
+  return CATEGORY_CONFIG[cat] || { icon: Star, gradient: 'from-gray-500 to-gray-700', lightBg: 'bg-gray-50', text: 'text-gray-700', desc: 'Services disponibles' };
+}
+
+// ─── Package pricing helper ────────────────────────────────────────────────────
+function buildPackages(svc: any): Array<{ qty: number; price: number }> {
+  const min = svc.minQty || 100;
+  const max = svc.maxQty || 100000;
+  const tiers = [1, 5, 10].map(m => min * m).filter(q => q <= max);
+  return tiers.map(qty => ({ qty, price: Math.round(svc.pricePerUnit * qty) }));
+}
 
 const TESTIMONIALS = [
   { name: 'Jean-Marc D.', role: 'Créateur YouTube', text: 'Phénix Réseaux a boosté ma chaîne de 0 à 15K abonnés en 2 mois. Incroyable !', stars: 5, avatar: 'J' },
@@ -244,32 +271,73 @@ function PlatformCard({ platform, svcCount, onClick }: { platform: any; svcCount
   );
 }
 
-// ─── Service card ─────────────────────────────────────────────────────────────
-function ServiceCard({ svc, plt, onOrder }: { svc: any; plt: any; onOrder: (s: any) => void }) {
+// ─── Catalog service card ──────────────────────────────────────────────────────
+function ServiceCard({ svc, plt, catCfg, onOrder }: { svc: any; plt: any; catCfg: any; onOrder: (s: any) => void }) {
   if (!plt) return null;
+  const packages = buildPackages(svc);
+  const gradient = catCfg?.gradient || plt.gradient;
   return (
-    <div className={`relative bg-white rounded-2xl border p-4 transition-all hover:shadow-sm ${svc.popular ? 'border-primary/30 ring-1 ring-primary/20' : 'border-gray-100'}`}>
-      {svc.popular && <span className="absolute -top-2 left-3 px-2.5 py-0.5 rounded-full bg-primary text-white text-[9px] font-black uppercase">Populaire</span>}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="font-black text-gray-900 text-sm leading-tight">{svc.name}</p>
-          <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{svc.description}</p>
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`relative bg-white rounded-3xl border overflow-hidden transition-all hover:shadow-lg ${svc.popular ? 'border-primary/30 ring-1 ring-primary/20' : 'border-gray-100'}`}
+    >
+      {svc.popular && (
+        <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${gradient}`} />
+      )}
+      {svc.popular && (
+        <span className="absolute top-3 right-3 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[9px] font-black uppercase flex items-center gap-1">
+          <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" /> Populaire
+        </span>
+      )}
+
+      <div className="p-5">
+        {/* Header */}
+        <div className="flex items-start gap-3 mb-4">
+          <div className={`h-11 w-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shrink-0 shadow-md`}>
+            <PlatformIcon pKey={plt.key} className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-black text-gray-900 text-sm leading-tight">{svc.name}</p>
+            <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{svc.description}</p>
+          </div>
         </div>
-        <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${plt.gradient} flex items-center justify-center text-white shrink-0`}>
-          <PlatformIcon pKey={plt.key} className="h-4 w-4" />
+
+        {/* Package pricing pills */}
+        <div className="mb-4">
+          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Packages disponibles</p>
+          <div className="space-y-2">
+            {packages.map((pkg, i) => (
+              <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-xl ${i === 0 ? `${catCfg?.lightBg || 'bg-primary/5'} border border-current/10` : 'bg-gray-50'}`}>
+                <span className={`text-xs font-bold ${i === 0 ? catCfg?.text || 'text-primary' : 'text-gray-500'}`}>
+                  {pkg.qty.toLocaleString()} {svc.unit}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <ChevronRight className="h-3 w-3 text-gray-300" />
+                  <span className={`text-sm font-black ${i === 0 ? catCfg?.text || 'text-primary' : 'text-gray-700'}`}>
+                    {pkg.price.toLocaleString()} HTG
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
-      <div className="flex items-end justify-between mt-3">
-        <div>
-          <p className="text-base font-black text-gray-900">{svc.pricePerUnit} HTG<span className="text-xs font-semibold text-gray-400">/{svc.unit}</span></p>
-          <p className="text-[10px] text-gray-400">Min {(svc.minQty || 100).toLocaleString()} {svc.unit}</p>
+
+        {/* Price per unit */}
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[11px] text-gray-400 font-semibold">
+            {svc.pricePerUnit} HTG / {svc.unit} · max {(svc.maxQty || 100000).toLocaleString()}
+          </p>
         </div>
+
+        {/* CTA */}
         <button onClick={() => onOrder(svc)}
-          className={`px-4 py-2 rounded-xl text-xs font-black text-white bg-gradient-to-r ${plt.gradient} hover:opacity-90 transition-all active:scale-95 shadow-sm`}>
-          Commander
+          className={`w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-black text-white bg-gradient-to-r ${gradient} hover:opacity-90 transition-all active:scale-95 shadow-md`}>
+          <ShoppingCart className="h-4 w-4" />
+          Choisir ce service
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -473,17 +541,17 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
           {tab === 'home' && (
             <motion.div key="home" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} className="pt-4">
 
-              {/* Platform detail view */}
-              {selectedPlatform && activePlatformData ? (
+              {/* ── Step 2: Category selection ── */}
+              {selectedPlatform && activePlatformData && !activeCategory ? (
                 <div>
                   {/* Back + header */}
-                  <div className="flex items-center gap-3 mb-4">
+                  <div className="flex items-center gap-3 mb-5">
                     <button onClick={() => { setSelectedPlatform(null); setActiveCategory(''); }}
                       className="h-9 w-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-colors shrink-0">
                       <ChevronLeft className="h-5 w-5 text-gray-600" />
                     </button>
                     <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${activePlatformData.gradient} flex items-center justify-center text-white shrink-0`}>
-                      <PlatformIcon pKey={selectedPlatform} className="h-4.5 w-4.5" />
+                      <PlatformIcon pKey={selectedPlatform} className="h-4 w-4" />
                     </div>
                     <div>
                       <h2 className="font-black text-gray-900 text-base leading-tight">{activePlatformData.label || activePlatformData.name}</h2>
@@ -491,51 +559,99 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
                     </div>
                   </div>
 
-                  {/* Video if available */}
+                  {/* Platform video */}
                   {platformVideoUrl && <VideoSection videoUrl={platformVideoUrl} />}
 
-                  {/* Category pills */}
-                  {categories.length > 0 && (
-                    <>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Catégorie</p>
-                      <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-4">
-                        {categories.map(cat => (
-                          <button key={cat} onClick={() => setActiveCategory(cat)}
-                            className={`px-3 py-1.5 rounded-xl border text-xs font-bold shrink-0 transition-all ${
-                              activeCategory === cat
-                                ? `bg-gradient-to-r ${activePlatformData.gradient} text-white border-transparent shadow-sm`
-                                : `${activePlatformData.lightBg} ${activePlatformData.border} ${activePlatformData.text}`
-                            }`}>
-                            {cat}
-                          </button>
-                        ))}
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">Que souhaitez-vous booster ?</p>
+
+                  {/* Category cards */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {categories.map(cat => {
+                      const catCfg = getCategoryConfig(cat);
+                      const Icon = catCfg.icon;
+                      const svcCount = getServices(selectedPlatform, cat).length;
+                      return (
+                        <motion.button key={cat} whileTap={{ scale: 0.96 }}
+                          onClick={() => setActiveCategory(cat)}
+                          className="flex flex-col items-center justify-center gap-3 bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md hover:border-gray-200 transition-all text-center group">
+                          <div className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${catCfg.gradient} flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform`}>
+                            <Icon className="h-7 w-7" />
+                          </div>
+                          <div>
+                            <p className="font-black text-gray-900 text-sm leading-tight">{cat}</p>
+                            <p className="text-[10px] text-gray-400 font-medium mt-0.5 leading-snug">{catCfg.desc}</p>
+                            {svcCount > 0 && (
+                              <p className={`text-[10px] font-black mt-1.5 ${catCfg.text}`}>
+                                {svcCount} service{svcCount > 1 ? 's' : ''}
+                              </p>
+                            )}
+                          </div>
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+              ) : selectedPlatform && activePlatformData && activeCategory ? (
+                /* ── Step 3: Service catalog ── */
+                <div>
+                  {/* Breadcrumb back */}
+                  <div className="flex items-center gap-2 mb-5">
+                    <button onClick={() => setActiveCategory('')}
+                      className="h-9 w-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-colors shrink-0">
+                      <ChevronLeft className="h-5 w-5 text-gray-600" />
+                    </button>
+                    <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${activePlatformData.gradient} flex items-center justify-center text-white shrink-0`}>
+                      <PlatformIcon pKey={selectedPlatform} className="h-4 w-4" />
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[11px] text-gray-400 font-bold">
+                      <span>{activePlatformData.label || activePlatformData.name}</span>
+                      <ChevronRight className="h-3 w-3" />
+                      <span className={`font-black ${getCategoryConfig(activeCategory).text}`}>{activeCategory}</span>
+                    </div>
+                  </div>
+
+                  {/* Category badge hero */}
+                  {(() => {
+                    const catCfg = getCategoryConfig(activeCategory);
+                    const Icon = catCfg.icon;
+                    return (
+                      <div className={`flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-br ${catCfg.gradient} text-white mb-5`}>
+                        <div className="h-11 w-11 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                          <Icon className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <p className="font-black text-base leading-tight">{activeCategory}</p>
+                          <p className="text-white/75 text-xs mt-0.5">{catCfg.desc}</p>
+                        </div>
+                        <div className="ml-auto text-right">
+                          <p className="font-black text-lg leading-none">{currentServices.length}</p>
+                          <p className="text-white/70 text-[10px]">services</p>
+                        </div>
                       </div>
-                    </>
-                  )}
+                    );
+                  })()}
 
                   {/* Services */}
                   <AnimatePresence mode="wait">
                     <motion.div key={`${selectedPlatform}-${activeCategory}`}
                       initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-                      className="space-y-3">
-                      {!activeCategory ? (
-                        <div className="bg-white rounded-2xl border border-gray-100 p-6 text-center">
-                          <p className="text-sm text-gray-400 font-semibold">Choisissez une catégorie ci-dessus</p>
-                        </div>
-                      ) : loadingServices ? (
-                        <div className="flex justify-center py-8"><div className="h-5 w-5 rounded-full border-2 border-primary/20 border-t-primary animate-spin" /></div>
+                      className="space-y-4">
+                      {loadingServices ? (
+                        <div className="flex justify-center py-12"><div className="h-6 w-6 rounded-full border-2 border-primary/20 border-t-primary animate-spin" /></div>
                       ) : currentServices.length === 0 ? (
-                        <div className="bg-white rounded-2xl border border-gray-100 p-6 text-center">
+                        <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
                           <p className="text-sm text-gray-400 font-semibold">Aucun service dans cette catégorie</p>
                         </div>
                       ) : (
                         currentServices.map((svc: any, i: number) => (
-                          <ServiceCard key={svc.id || i} svc={svc} plt={activePlatformData} onOrder={openOrderModal} />
+                          <ServiceCard key={svc.id || i} svc={svc} plt={activePlatformData} catCfg={getCategoryConfig(activeCategory)} onOrder={openOrderModal} />
                         ))
                       )}
                     </motion.div>
                   </AnimatePresence>
                 </div>
+
               ) : (
                 /* ── Platform grid home view ── */
                 <div>
@@ -565,7 +681,7 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
                           <div className="bg-white rounded-2xl border border-gray-100 p-4 text-center text-sm text-gray-400">Aucun service trouvé</div>
                         ) : (
                           searchResults.map((svc, i) => (
-                            <ServiceCard key={i} svc={svc} plt={getPlatformConfig(svc.pKey)} onOrder={openOrderModal} />
+                            <ServiceCard key={i} svc={svc} plt={getPlatformConfig(svc.pKey)} catCfg={getCategoryConfig((svc as any).cat || '')} onOrder={openOrderModal} />
                           ))
                         )}
                       </motion.div>
@@ -590,8 +706,7 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
                               svcCount={getServiceCount(p.key)}
                               onClick={() => {
                                 setSelectedPlatform(p.key);
-                                const cats = getCategories(p.key);
-                                setActiveCategory(cats[0] || '');
+                                setActiveCategory('');
                               }}
                             />
                           ))}
@@ -816,9 +931,11 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
                   </div>
 
                   <button onClick={submitOrder} disabled={orderModal.submitting}
-                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-black text-sm shadow-lg shadow-indigo-200 hover:opacity-90 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-70">
-                    {orderModal.submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    {orderModal.submitting ? 'Envoi en cours...' : `Commander — ${totalPrice.toLocaleString()} HTG`}
+                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-black text-sm shadow-lg shadow-indigo-200 hover:opacity-90 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-70">
+                    {orderModal.submitting
+                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Traitement en cours...</>
+                      : <><ShoppingCart className="h-4 w-4" /> Acheter le service — {totalPrice.toLocaleString()} HTG</>
+                    }
                   </button>
                   <button onClick={() => setOrderModal(null)} disabled={orderModal.submitting}
                     className="w-full mt-2 py-2.5 text-sm text-gray-400 font-semibold">Annuler</button>
