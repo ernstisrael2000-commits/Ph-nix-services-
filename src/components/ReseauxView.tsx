@@ -921,30 +921,47 @@ function PromotionDashboard({ client, onOpenWallet }: { client: Client; onOpenWa
         )}
       </AnimatePresence>
 
-      {/* Tab bar — bottom */}
-      <div className="bg-white border-t sticky bottom-0 z-10 shadow-[0_-2px_12px_rgba(0,0,0,0.06)]">
-        <div className="flex items-center justify-around max-w-2xl mx-auto px-2">
-          {[
-            { key: 'home' as const, icon: Home, label: 'Accueil' },
-            { key: 'orders' as const, icon: Package, label: 'Commandes' },
-            { key: 'profile' as const, icon: User, label: 'Profil' },
-          ].map(({ key, icon: Icon, label }) => {
-            const active = tab === key;
-            return (
-              <button key={key} onClick={() => { setTab(key); if (key === 'home') setSelectedPlatform(null); }}
-                className={`relative flex-1 flex flex-col items-center py-3 gap-0.5 transition-colors ${active ? 'text-primary' : 'text-gray-400'}`}>
-                <Icon className={`h-[18px] w-[18px] ${active ? 'text-primary' : 'text-gray-400'}`} strokeWidth={active ? 2.5 : 1.75} />
-                <span className={`text-[10px] font-bold leading-none ${active ? 'text-primary' : 'text-gray-400'}`}>{label}</span>
-                {active && (
-                  <motion.div layoutId="promotion-tab-indicator"
-                    className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 bg-primary rounded-full"
-                    transition={{ type: 'spring', bounce: 0.2, duration: 0.3 }} />
-                )}
-              </button>
-            );
-          })}
+      {/* Tab bar — bottom floating pill (same style as BottomNav) */}
+      <nav className="fixed bottom-0 left-0 right-0 z-[290]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <div className="relative mx-4 mb-3 pt-8">
+          {/* White rounded pill */}
+          <div className="h-[58px] bg-white rounded-[28px] shadow-[0_-4px_24px_rgba(0,0,0,0.08),0_4px_16px_rgba(0,0,0,0.06)]" />
+          {/* Tabs overlay */}
+          <div className="absolute bottom-0 left-0 right-0 h-[58px] flex items-center">
+            {([
+              { key: 'home' as const, icon: Home, label: 'Accueil' },
+              { key: 'orders' as const, icon: Package, label: 'Commandes' },
+              { key: 'profile' as const, icon: User, label: 'Profil' },
+            ] as const).map(({ key, icon: Icon, label }) => {
+              const active = tab === key;
+              return (
+                <button key={key} onClick={() => { setTab(key); if (key === 'home') setSelectedPlatform(null); }}
+                  className="relative flex-1 flex flex-col items-center justify-center h-full group" aria-label={label}>
+                  {active && (
+                    <motion.div layoutId="promo-tab-bubble"
+                      className="absolute flex items-center justify-center w-14 h-14 rounded-full shadow-lg"
+                      style={{ top: '-28px', background: 'linear-gradient(145deg,#6366f1 0%,#818cf8 55%,#a78bfa 100%)', boxShadow: '0 8px 24px rgba(99,102,241,0.45)' }}
+                      transition={{ type: 'spring', bounce: 0.28, duration: 0.42 }}>
+                      <span className="absolute inset-1 rounded-full border border-white/20" />
+                      <Icon className="h-[22px] w-[22px] text-white drop-shadow-sm" strokeWidth={2.2} />
+                    </motion.div>
+                  )}
+                  <AnimatePresence>
+                    {!active && (
+                      <motion.div key="inactive" initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.85 }} transition={{ duration: 0.18 }}
+                        className="flex flex-col items-center gap-0.5">
+                        <Icon className="h-[20px] w-[20px] text-gray-400 group-hover:text-gray-600 transition-colors" strokeWidth={1.65} />
+                        <span className="text-[9px] font-bold text-gray-400 group-hover:text-gray-600 leading-none transition-colors">{label}</span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      </nav>
     </div>
   );
 }

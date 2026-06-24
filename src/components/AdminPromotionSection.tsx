@@ -3,6 +3,7 @@ import {
   Plus, Trash2, Edit2, Loader2, X, Save, Eye, EyeOff, Check,
   Wifi, ClipboardList, Clock, Zap, CheckCircle2, XCircle,
   ChevronDown, Video, FormInput, GripVertical, Settings,
+  Users, Heart, BarChart2, MessageCircle, Share2, ThumbsUp, UserPlus, Smile, Star,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -28,6 +29,19 @@ const GRADIENT_OPTIONS = [
 
 const CATEGORY_OPTIONS = ['Vues', 'Abonnés', 'Likes', 'Commentaires', 'Partages', 'Impressions', 'Followers', 'Réactions', 'Cœurs'];
 const UNIT_OPTIONS = ['vues', 'abonnés', 'likes', 'commentaires', 'partages', 'followers', 'cœurs', 'impressions', 'réactions'];
+
+const CATEGORY_CONFIG_ADMIN: Record<string, { icon: React.ElementType; gradient: string; text: string; unit: string }> = {
+  'Abonnés':     { icon: Users,         gradient: 'from-blue-500 to-indigo-600',    text: 'text-blue-600',   unit: 'abonnés' },
+  'Likes':       { icon: Heart,         gradient: 'from-pink-500 to-rose-600',      text: 'text-pink-600',   unit: 'likes' },
+  'Vues':        { icon: Eye,           gradient: 'from-violet-500 to-purple-600',  text: 'text-violet-600', unit: 'vues' },
+  'Commentaires':{ icon: MessageCircle, gradient: 'from-orange-500 to-amber-500',   text: 'text-orange-600', unit: 'commentaires' },
+  'Partages':    { icon: Share2,        gradient: 'from-emerald-500 to-teal-600',   text: 'text-emerald-600',unit: 'partages' },
+  'Followers':   { icon: UserPlus,      gradient: 'from-cyan-500 to-blue-500',      text: 'text-cyan-600',   unit: 'followers' },
+  'Réactions':   { icon: ThumbsUp,      gradient: 'from-yellow-400 to-orange-500',  text: 'text-yellow-600', unit: 'réactions' },
+  'Cœurs':       { icon: Heart,         gradient: 'from-red-500 to-pink-600',       text: 'text-red-500',    unit: 'cœurs' },
+  'Impressions': { icon: BarChart2,     gradient: 'from-teal-500 to-cyan-600',      text: 'text-teal-600',   unit: 'impressions' },
+  'Boostage':    { icon: Zap,           gradient: 'from-green-500 to-emerald-600',  text: 'text-green-600',  unit: 'boosts' },
+};
 const FIELD_TYPE_OPTIONS = [
   { value: 'url', label: 'URL (lien)' },
   { value: 'text', label: 'Texte court' },
@@ -846,34 +860,55 @@ export default function AdminPromotionSection() {
                 placeholder="ex: Abonnés YouTube Premium" className="rounded-xl" />
             </div>
 
-            {/* Category + Unit */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs font-bold mb-1.5 block">Catégorie *</Label>
-                <input
-                  list="category-suggestions"
-                  value={serviceForm.category}
-                  onChange={e => setServiceForm(f => ({ ...f, category: e.target.value }))}
-                  placeholder="ex: Abonnés"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-                <datalist id="category-suggestions">
-                  {CATEGORY_OPTIONS.map(c => <option key={c} value={c} />)}
-                </datalist>
+            {/* Category — visual card grid */}
+            <div>
+              <Label className="text-xs font-bold mb-2 block">Catégorie *</Label>
+              <div className="grid grid-cols-3 gap-2 mb-2">
+                {CATEGORY_OPTIONS.map(cat => {
+                  const cfg = CATEGORY_CONFIG_ADMIN[cat];
+                  const Icon = cfg?.icon || Star;
+                  const selected = serviceForm.category === cat;
+                  return (
+                    <button key={cat} type="button"
+                      onClick={() => setServiceForm(f => ({ ...f, category: cat, unit: cfg?.unit || f.unit }))}
+                      className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl border-2 transition-all text-center
+                        ${selected ? 'border-primary bg-primary/5 shadow-sm' : 'border-gray-100 bg-gray-50 hover:border-gray-200 hover:bg-white'}`}>
+                      <div className={`h-8 w-8 rounded-lg bg-gradient-to-br ${cfg?.gradient || 'from-gray-400 to-gray-500'} flex items-center justify-center text-white shadow-sm`}>
+                        <Icon className="h-4 w-4" strokeWidth={2} />
+                      </div>
+                      <span className={`text-[10px] font-black leading-tight ${selected ? 'text-primary' : 'text-gray-600'}`}>{cat}</span>
+                      {selected && <Check className="h-3 w-3 text-primary" />}
+                    </button>
+                  );
+                })}
               </div>
-              <div>
-                <Label className="text-xs font-bold mb-1.5 block">Unité</Label>
-                <input
-                  list="unit-suggestions"
-                  value={serviceForm.unit}
-                  onChange={e => setServiceForm(f => ({ ...f, unit: e.target.value }))}
-                  placeholder="ex: abonnés"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-                <datalist id="unit-suggestions">
-                  {UNIT_OPTIONS.map(u => <option key={u} value={u} />)}
-                </datalist>
-              </div>
+              {/* Custom category fallback */}
+              {serviceForm.category && !CATEGORY_OPTIONS.includes(serviceForm.category) && (
+                <div className="flex items-center gap-2 p-2 rounded-xl bg-primary/5 border border-primary/20">
+                  <span className="text-xs font-bold text-primary flex-1">Catégorie : {serviceForm.category}</span>
+                  <button type="button" onClick={() => setServiceForm(f => ({ ...f, category: '' }))} className="text-gray-400 hover:text-red-500">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              <input value={serviceForm.category} onChange={e => setServiceForm(f => ({ ...f, category: e.target.value }))}
+                placeholder="Ou saisir une catégorie personnalisée…"
+                className="mt-2 w-full border border-dashed border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/30" />
+            </div>
+
+            {/* Unit */}
+            <div>
+              <Label className="text-xs font-bold mb-1.5 block">Unité</Label>
+              <input
+                list="unit-suggestions"
+                value={serviceForm.unit}
+                onChange={e => setServiceForm(f => ({ ...f, unit: e.target.value }))}
+                placeholder="ex: abonnés"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+              <datalist id="unit-suggestions">
+                {UNIT_OPTIONS.map(u => <option key={u} value={u} />)}
+              </datalist>
             </div>
 
             {/* Description */}
