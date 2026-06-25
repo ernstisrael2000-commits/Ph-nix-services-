@@ -3,15 +3,12 @@
   "installCommand": "npm install --legacy-peer-deps",
   "outputDirectory": "dist",
   "framework": null,
-  "nodeVersion": "20.x",
   "functions": {
     "api/index.ts": {
-      "maxDuration": 30,
-      "memory": 1024
+      "maxDuration": 10
     },
     "api/formations.ts": {
-      "maxDuration": 30,
-      "memory": 512
+      "maxDuration": 10
     }
   },
   "rewrites": [
