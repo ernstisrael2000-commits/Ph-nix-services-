@@ -6,3 +6,16 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# ── Replit internal ────────────────────────────────────────────────────────────
+.replit
+.local/
+.agents/
+.cache/
+.upm/
+metadata.json
+skills-lock.json
+
+# ── Artefacts parasites ────────────────────────────────────────────────────────
+vite.config.js.bak
+rena-audit.html

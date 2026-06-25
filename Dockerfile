@@ -22,7 +22,8 @@ COPY --from=base /app/src ./src
 COPY --from=base /app/server.ts ./server.ts
 COPY --from=base /app/firebase-applet-config.json ./firebase-applet-config.json
 COPY --from=base /app/tsconfig.json ./tsconfig.json
+COPY --from=base /app/tsconfig.server.json ./tsconfig.server.json
 
 EXPOSE 5000
 
-CMD ["npx", "tsx", "server.ts"]
+CMD ["npm", "start"]
