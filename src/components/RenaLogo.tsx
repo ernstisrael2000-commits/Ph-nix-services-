@@ -1,12 +1,12 @@
 import { motion } from 'motion/react';
 
-interface RenaLogoProps {
+interface PhenixLogoProps {
   size?: number;
   className?: string;
   animated?: boolean;
 }
 
-export default function RenaLogo({ size = 48, className = '', animated = true }: RenaLogoProps) {
+export default function PhenixLogo({ size = 48, className = '', animated = true }: PhenixLogoProps) {
   return (
     <div className={className} style={{ width: size, height: size }}>
       <motion.svg

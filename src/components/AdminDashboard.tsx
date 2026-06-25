@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { toast } from 'sonner';
 import {
   Package, Plus, Trash2, Search, Bell, Edit2,
   Loader2, CheckCircle2, Truck, Clock, AlertCircle,
@@ -1975,6 +1976,19 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
     ['client_deposit', 'client_withdrawal', 'card_order'].includes(n.type) &&
     !n.read && n.status !== 'approved' && n.status !== 'rejected'
   ).length;
+
+  const prevPendingRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (prevPendingRef.current !== null && pendingCount > prevPendingRef.current) {
+      const newCount = pendingCount - prevPendingRef.current;
+      toast(`🔔 ${newCount} nouvelle${newCount > 1 ? 's' : ''} demande${newCount > 1 ? 's' : ''}`, {
+        description: 'Cliquez pour consulter les demandes en attente',
+        action: { label: 'Voir maintenant', onClick: () => setSection('requests') },
+        duration: 10000,
+      });
+    }
+    prevPendingRef.current = pendingCount;
+  }, [pendingCount]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">

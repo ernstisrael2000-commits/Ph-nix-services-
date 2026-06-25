@@ -53,7 +53,7 @@ const WalletPayButton = ({
       onSuccess();
       const adminNum = (window as any).__renaAdminPhone || WHATSAPP_NUMBER;
       const now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-      const msg = `🛍️ *ACHAT EFFECTUÉ — Rena*\n\n👤 Client: *${client.name}*\n🔑 ID Wallet: *#${client.walletId || '—'}*\n📱 Téléphone: *${client.phone || '—'}*\n🛒 Service: *${productName || '—'}*\n💰 Montant payé: *${numericPrice.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n📅 Date: *${now}*\n\n✅ Paiement traité automatiquement. Veuillez activer le service.`;
+      const msg = `🛍️ *ACHAT EFFECTUÉ — Phénix*\n\n👤 Client: *${client.name}*\n🔑 ID Wallet: *#${client.walletId || '—'}*\n📱 Téléphone: *${client.phone || '—'}*\n🛒 Service: *${productName || '—'}*\n💰 Montant payé: *${numericPrice.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n📅 Date: *${now}*\n\n✅ Paiement traité automatiquement. Veuillez activer le service.`;
       window.open(`https://wa.me/${adminNum.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
     } catch (err: any) {
       toast.error(err.message || "Erreur lors de l'achat.");
@@ -155,7 +155,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
     if (!paymentTarget || !selectedPaymentMethod) return;
     const methodLabel = selectedPaymentMethod === 'moncash' ? 'Mon Cash' : selectedPaymentMethod === 'natcash' ? 'Natcash' : 'Admi';
     const playerIdLine = (paymentTarget.type === 'game' && gamePlayerId.trim()) ? `\n🎮 ID Joueur : *${gamePlayerId.trim()}*` : '';
-    const message = `Bonjour Rena,\n\nJe souhaite commander :\n📦 *${paymentTarget.name}*\n💰 Prix : *${paymentTarget.price}*${playerIdLine}\n\n💳 Mode de paiement : *${methodLabel}*\n📝 Infos Transaction : *${paymentTransactionInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`;
+    const message = `Bonjour Phénix,\n\nJe souhaite commander :\n📦 *${paymentTarget.name}*\n💰 Prix : *${paymentTarget.price}*${playerIdLine}\n\n💳 Mode de paiement : *${methodLabel}*\n📝 Infos Transaction : *${paymentTransactionInfo || 'Non fournie'}*\n\nMerci de valider ma commande.`;
     openWhatsApp(message);
     setIsPaymentModalOpen(false);
     setPaymentTransactionInfo('');
@@ -178,7 +178,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
     if (!selectedCardForRecharge || !rechargeAmountUSD) return;
     const usd = parseFloat(rechargeAmountUSD);
     const gourdes = usd * (settings?.exchangeRate || 146);
-    const message = `Bonjour Rena,\n\nJe souhaite recharger ma carte :\n👤 Client : *${customerName || 'Non spécifié'}*\n💳 Carte : *${selectedCardForRecharge.name}*\n💵 Montant USD : *${usd}$*\n🇭🇹 Équivalent en Gourdes : *${gourdes.toLocaleString()} HTG*\n\n💳 Moyen de paiement : *${method}*\n\nMerci de valider ma recharge.`;
+    const message = `Bonjour Phénix,\n\nJe souhaite recharger ma carte :\n👤 Client : *${customerName || 'Non spécifié'}*\n💳 Carte : *${selectedCardForRecharge.name}*\n💵 Montant USD : *${usd}$*\n🇭🇹 Équivalent en Gourdes : *${gourdes.toLocaleString()} HTG*\n\n💳 Moyen de paiement : *${method}*\n\nMerci de valider ma recharge.`;
     openWhatsApp(message);
     setIsPaymentMethodDialogOpen(false);
     setRechargeAmountUSD('');
@@ -419,7 +419,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                         </div>
                       </div>
                       <div className="p-2.5">
-                        <p className="text-[10px] text-gray-400 line-clamp-2 leading-relaxed">{product.description || 'Service digital Rena'}</p>
+                        <p className="text-[10px] text-gray-400 line-clamp-2 leading-relaxed">{product.description || 'Service digital Phénix'}</p>
                         <div className="flex items-center gap-1 mt-2 text-[9px] text-primary font-black">
                           <Clock className="h-2.5 w-2.5" />
                           <span>24/7</span>
@@ -552,7 +552,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                                           toast.success(`✅ ${price.toLocaleString()} HTG débité.`);
                                           setIsGameCatalogOpen(false); setPayingItemKey(null);
                                           const adminNum = (window as any).__renaAdminPhone || WHATSAPP_NUMBER;
-                                          const msg = `🎮 *TOP-UP JEUX — Rena*\n\n👤 Client: *${loggedClient.name}*\n🔑 Wallet: *#${loggedClient.walletId || '—'}*\n🎮 Jeu: *${selectedGame.name}*\n📦 Offre: *${item.name}*\n🎯 ID Joueur: *${gamePlayerId.trim()}*\n💰 Montant: *${price.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n\n✅ Paiement auto. Veuillez activer.`;
+                                          const msg = `🎮 *TOP-UP JEUX — Phénix*\n\n👤 Client: *${loggedClient.name}*\n🔑 Wallet: *#${loggedClient.walletId || '—'}*\n🎮 Jeu: *${selectedGame.name}*\n📦 Offre: *${item.name}*\n🎯 ID Joueur: *${gamePlayerId.trim()}*\n💰 Montant: *${price.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n\n✅ Paiement auto. Veuillez activer.`;
                                           window.open(`https://wa.me/${adminNum.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
                                         } catch (err: any) { toast.error(err.message || 'Erreur paiement.'); }
                                         finally { setItemPurchaseLoading(false); }
@@ -896,7 +896,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h2 className="text-2xl font-black text-gray-900 leading-tight">{selectedProduct.name}</h2>
-                      <p className="text-gray-400 text-sm mt-0.5">Rena Digital · Livraison instantanée</p>
+                      <p className="text-gray-400 text-sm mt-0.5">Phénix Digital · Livraison instantanée</p>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 bg-amber-50 border border-amber-200 rounded-xl px-2.5 py-1.5">
                       <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
@@ -1032,7 +1032,7 @@ export default function ProductsView({ loggedClient, onOpenWallet, onViewChange,
                   </div>
                   <div>
                     <DialogTitle className="text-lg font-black uppercase text-white">Finaliser Paiement</DialogTitle>
-                    <DialogDescription className="text-white/60 text-[10px] font-bold uppercase tracking-widest">Paiement Sécurisé Rena</DialogDescription>
+                    <DialogDescription className="text-white/60 text-[10px] font-bold uppercase tracking-widest">Paiement Sécurisé Phénix</DialogDescription>
                   </div>
                 </div>
                 <DialogClose className="rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors">

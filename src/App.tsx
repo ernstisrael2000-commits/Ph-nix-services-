@@ -79,7 +79,7 @@ export default function App() {
 
   // Offline detection via browser network events (no Firestore round-trip)
   useEffect(() => {
-    const showOffline = () => toast.error("Connexion perdue. Rena fonctionne en mode hors-ligne.", {
+    const showOffline = () => toast.error("Connexion perdue. Phénix fonctionne en mode hors-ligne.", {
       description: "Certaines fonctionnalités peuvent être limitées.",
       duration: Infinity,
       icon: <WifiOff className="h-4 w-4" />,

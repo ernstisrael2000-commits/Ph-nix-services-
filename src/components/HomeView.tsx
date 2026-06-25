@@ -104,7 +104,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
 
   const imagesToDisplay = sliderImages.length > 0
     ? sliderImages.map(img => ({ url: img.url, description: img.description || '' }))
-    : SLIDER_IMAGES.map(url => ({ url, description: 'Rena Digital Services' }));
+    : SLIDER_IMAGES.map(url => ({ url, description: 'Phénix Digital Services' }));
 
   useEffect(() => {
     if (imagesToDisplay.length <= 1) return;
@@ -144,7 +144,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
 
   const openWhatsApp = () => {
     const num = settings?.whatsappAdminNumber || '+50939442830';
-    window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent('Bonjour Rena, je souhaite avoir plus de renseignements.')}`, '_blank');
+    window.open(`https://wa.me/${num.replace(/\D/g, '')}?text=${encodeURIComponent('Bonjour Phénix, je souhaite avoir plus de renseignements.')}`, '_blank');
   };
 
   return (
@@ -177,7 +177,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                         {[...Array(4)].map((_, i) => <div key={i} className="w-[5px] h-[5px] rounded-[1px] bg-yellow-800/40" />)}
                       </div>
                     </div>
-                    <span className="text-[10px] text-white/40 font-black uppercase tracking-widest">Rena Wallet</span>
+                    <span className="text-[10px] text-white/40 font-black uppercase tracking-widest">Phénix Wallet</span>
                   </div>
                   <Wallet className="h-5 w-5 text-white/25" />
                 </div>
@@ -384,9 +384,9 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
         <FeaturedFormations onGoToFormations={() => onViewChange('formations')} />
       </section>
 
-      {/* ── Why Rena ── */}
+      {/* ── Why Phénix ── */}
       <section className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
-        <h2 className="text-base font-black text-dark mb-4">Pourquoi choisir Rena ?</h2>
+        <h2 className="text-base font-black text-dark mb-4">Pourquoi choisir Phénix ?</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { icon: Zap, label: 'Rapide', desc: 'Traitement en quelques minutes', color: 'text-amber-500 bg-amber-50' },
@@ -490,7 +490,7 @@ export default function HomeView({ onTrackingClick, onViewChange, loggedClient, 
                             setSelectedItem(null);
                             const adminNum = (window as any).__renaAdminPhone || '';
                             const now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-                            const msg = `🛍️ *ACHAT EFFECTUÉ — Rena*\n\n👤 Client: *${effectiveClient.name}*\n🔑 ID Wallet: *#${effectiveClient.walletId || '—'}*\n🛒 Service: *${selectedItem.name}*\n💰 Montant: *${numericPrice.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n📅 Date: *${now}*\n\n✅ Paiement traité automatiquement. Veuillez activer le service.`;
+                            const msg = `🛍️ *ACHAT EFFECTUÉ — Phénix*\n\n👤 Client: *${effectiveClient.name}*\n🔑 ID Wallet: *#${effectiveClient.walletId || '—'}*\n🛒 Service: *${selectedItem.name}*\n💰 Montant: *${numericPrice.toLocaleString()} HTG*\n💳 Méthode: *Solde Wallet*\n📅 Date: *${now}*\n\n✅ Paiement traité automatiquement. Veuillez activer le service.`;
                             if (adminNum) window.open(`https://wa.me/${adminNum.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
                           } catch (err: any) {
                             toast.error(err.message || "Erreur lors de l'achat.");
@@ -665,7 +665,7 @@ function FeaturedFormations({ onGoToFormations }: { onGoToFormations: () => void
               {/* Footer */}
               <div className="px-2.5 py-2 bg-white flex items-center justify-between gap-1">
                 <p className="text-[9px] text-gray-400 truncate">
-                  {f.instructor || 'Rena Academy'}
+                  {f.instructor || 'Phénix Academy'}
                 </p>
                 {f.studentsCount > 0 && (
                   <p className="text-[9px] text-gray-400 shrink-0 flex items-center gap-0.5">

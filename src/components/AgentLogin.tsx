@@ -68,7 +68,7 @@ export default function AgentLogin({ onLogin }: AgentLoginProps) {
                 </div>
                 <h1 className="text-3xl font-black text-white tracking-tight">Accès Agent</h1>
                 <p className="text-white/40 text-sm font-medium mt-1.5">
-                  Connectez-vous avec votre compte Google autorisé par l'administration Rena.
+                  Connectez-vous avec votre compte Google autorisé par l'administration Phénix.
                 </p>
               </div>
             </div>
@@ -115,7 +115,7 @@ export default function AgentLogin({ onLogin }: AgentLoginProps) {
                 Seuls les agents enregistrés par l'administrateur peuvent accéder à cet espace.
               </p>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/15">
-                Système de Sécurité Rena
+                Système de Sécurité Phénix
               </p>
             </div>
           </div>

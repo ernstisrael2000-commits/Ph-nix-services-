@@ -281,7 +281,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
       const whatsappNum = settings?.whatsappAdminNumber?.replace(/\D/g, '') || '50939442830';
       const methodLabel = selectedPayMethod === 'moncash' ? 'MonCash' : 'NatCash';
       const msg = encodeURIComponent(
-        `Bonjour Rena 👋\n\nJe viens d'effectuer un paiement pour une formation :\n\n` +
+        `Bonjour Phénix 👋\n\nJe viens d'effectuer un paiement pour une formation :\n\n` +
         `👤 Nom: *${payFormData.name}*\n📧 Email: *${payFormData.email}*\n` +
         `🎓 Cours: *${selected.title}*\n💳 Méthode: *${methodLabel}*\n` +
         `💰 Montant: *${(selected.price || 0).toLocaleString()} HTG*\n` +
@@ -642,7 +642,7 @@ export default function FormationsView({ loggedClient, onOpenWallet, onClientLog
                   >
                     <div>
                       <Award className="h-10 w-10 mb-3 text-amber-300" />
-                      <h4 className="text-lg font-black mb-1.5">Certificats Rena Academy</h4>
+                      <h4 className="text-lg font-black mb-1.5">Certificats Phénix Academy</h4>
                       <p className="text-white/70 text-sm mb-5 max-w-xs leading-relaxed">
                         Obtenez un certificat reconnu après chaque formation complétée.
                       </p>
@@ -1186,7 +1186,7 @@ function StudentDashboard({ loggedClient, myCourses, progressMap, favorites, onP
       {/* ── Certificate banner */}
       <div className="rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-700 to-purple-900 p-6 text-white shadow-lg">
         <Award className="h-9 w-9 mb-3 text-amber-300" />
-        <h4 className="text-base font-black mb-1">Certificats Rena Academy</h4>
+        <h4 className="text-base font-black mb-1">Certificats Phénix Academy</h4>
         <p className="text-white/70 text-sm mb-4 leading-relaxed">
           Complétez une formation pour obtenir votre certificat reconnu.
         </p>

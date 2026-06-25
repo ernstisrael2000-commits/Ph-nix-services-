@@ -49,7 +49,7 @@ function buildTimeline(parcel: Parcel) {
   if (si >= 3) lines.push({ label: 'Colis livré', sub: parcel.currentLocation || '', time: fmtDate(parcel.updatedAt), active: true });
   if (si >= 2) lines.push({ label: 'Arrivé à destination', sub: parcel.currentLocation || '', time: fmtDate(parcel.updatedAt), active: si === 2 });
   if (si >= 1) lines.push({ label: 'En transit', sub: parcel.currentLocation || 'En cours de transport', time: fmtDate(parcel.createdAt), active: si === 1 });
-  lines.push({ label: 'Colis pris en charge', sub: 'Rena Logistics', time: fmtDate(parcel.createdAt), active: si === 0 });
+  lines.push({ label: 'Colis pris en charge', sub: 'Phénix Logistics', time: fmtDate(parcel.createdAt), active: si === 0 });
 
   return lines;
 }
@@ -189,7 +189,7 @@ export default function TrackingView({ loggedClient, onRequestAuth, onOpenWallet
                 <Package className="h-10 w-10 text-primary/40" />
               </div>
               <p className="text-gray-700 font-black text-lg">Suivez votre colis</p>
-              <p className="text-gray-400 text-sm mt-1 max-w-[240px]">Entrez votre numéro de suivi Rena pour connaître le statut de votre livraison.</p>
+              <p className="text-gray-400 text-sm mt-1 max-w-[240px]">Entrez votre numéro de suivi Phénix pour connaître le statut de votre livraison.</p>
             </motion.div>
           )}
 

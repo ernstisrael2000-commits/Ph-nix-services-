@@ -59,7 +59,7 @@ function baseHtml(title: string, accentColor: string, body: string): string {
         <tr>
           <td style="padding:20px 32px 28px;border-top:1px solid #f0f0f0;text-align:center;">
             <p style="margin:0;font-size:11px;color:#aaa;line-height:1.6;">
-              Cet email a été envoyé automatiquement par le système Rena Intelligence.<br/>
+              Cet email a été envoyé automatiquement par le système Phénix Intelligence.<br/>
               Ne répondez pas à cet email. Pour toute question, contactez le support.
             </p>
           </td>
@@ -119,7 +119,7 @@ export async function send(
   if (smtp) {
     try {
       const info = await smtp.sendMail({
-        from: `"Rena Intelligence" <${SMTP_USER}>`,
+        from: `"Phénix Intelligence" <${SMTP_USER}>`,
         to: validTo.join(', '),
         subject,
         html,

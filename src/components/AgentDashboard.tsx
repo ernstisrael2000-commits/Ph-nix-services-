@@ -444,7 +444,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
       <div className="max-w-md mx-auto mt-20 text-center space-y-4 px-4">
         <XCircle className="h-16 w-16 text-red-500 mx-auto" />
         <h2 className="text-2xl font-black">Accès Refusé</h2>
-        <p className="text-gray-500">Vous n'êtes pas enregistré en tant qu'agent Rena.</p>
+        <p className="text-gray-500">Vous n'êtes pas enregistré en tant qu'agent Phénix.</p>
         <Button onClick={onLogout} variant="outline" className="rounded-2xl h-12 w-full">Retour au Login</Button>
       </div>
     );
@@ -1184,7 +1184,7 @@ export default function AgentDashboard({ agentUid, onLogout }: AgentDashboardPro
             <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-blue-50 border border-blue-100">
               <AlertCircle className="h-4 w-4 text-blue-500 shrink-0" />
               <p className="text-xs text-blue-700 leading-relaxed">
-                Pour modifier vos informations ou votre solde, contactez l'administrateur Rena.
+                Pour modifier vos informations ou votre solde, contactez l'administrateur Phénix.
               </p>
             </div>
 

@@ -107,7 +107,7 @@ function VirtualCard({
         {/* Top row */}
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-white/40 text-[9px] font-black uppercase tracking-[0.3em] mb-1">Rena Wallet</p>
+            <p className="text-white/40 text-[9px] font-black uppercase tracking-[0.3em] mb-1">Phénix Wallet</p>
             <p className="text-white font-black text-base leading-tight tracking-wide">{client.name}</p>
           </div>
           <div className="flex items-center gap-2.5">
@@ -307,7 +307,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, ini
     try {
       await submitClientDeposit(client!, usd, depositMethod.name, depositTxId || undefined,
         depositCaptchaToken || undefined, depositMessage || undefined, htg, rate);
-      const msg = `Bonjour Rena 👋,\n\nDemande de *DÉPÔT* :\n` +
+      const msg = `Bonjour Phénix 👋,\n\nDemande de *DÉPÔT* :\n` +
         `👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n` +
         `💵 Montant: *$${usd.toFixed(2)} USD*\n≈ *${htg.toLocaleString()} HTG* (taux: ${rate})\n` +
         `💳 Via: *${depositMethod.name}*` +
@@ -341,7 +341,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, ini
         withdrawCaptchaToken || undefined, withdrawMessage || undefined,
         withdrawAccountName || undefined, rate);
       const num = settings?.whatsappAdminNumber || WHATSAPP_NUMBER;
-      const msg = `Bonjour Rena 👋,\n\nDemande de *RETRAIT* :\n` +
+      const msg = `Bonjour Phénix 👋,\n\nDemande de *RETRAIT* :\n` +
         `👤 Nom: *${client!.name}*\n🔑 ID Wallet: *${client!.walletId}*\n` +
         `💰 Montant: *${htg.toLocaleString()} HTG*\n≈ *$${usd.toFixed(2)} USD* (taux: ${rate})\n` +
         `💳 Via: *${withdrawMethod.name}*\n📞 Compte: *${withdrawAccount}*` +
@@ -509,7 +509,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, ini
                 <Shield className="h-4 w-4 text-violet-600" />
               </div>
               <p className="text-xs text-violet-700 leading-relaxed">
-                Toutes les transactions sont vérifiées par notre équipe sous 24h. Vos fonds sont sécurisés par Rena.
+                Toutes les transactions sont vérifiées par notre équipe sous 24h. Vos fonds sont sécurisés par Phénix.
               </p>
             </div>
 
@@ -968,7 +968,7 @@ export default function ClientDashboard({ clientId, onLogout, open, onClose, ini
                   {txSuccessModal.type === 'deposit'
                     ? `Votre dépôt${txSuccessModal.agentName ? ` via l'agent ${txSuccessModal.agentName}` : ''} a été crédité sur votre compte.`
                     : `Votre retrait${txSuccessModal.agentName ? ` chez l'agent ${txSuccessModal.agentName}` : ''} a été traité avec succès.`}
-                  {' '}Merci de faire confiance à Rena ! 🙏
+                  {' '}Merci de faire confiance à Phénix ! 🙏
                 </p>
                 <Button
                   onClick={() => setTxSuccessModal(null)}

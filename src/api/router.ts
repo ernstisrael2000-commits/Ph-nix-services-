@@ -157,7 +157,7 @@ function sendAdminEmail(subject: string, text: string): void {
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
   });
   transporter.sendMail({
-    from: `"Rena System" <${process.env.SMTP_USER}>`,
+    from: `"Phénix System" <${process.env.SMTP_USER}>`,
     to: process.env.SMTP_USER,
     subject,
     text,
@@ -342,7 +342,7 @@ router.post('/api/notify-registration', async (req, res) => {
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
     });
     await transporter.sendMail({
-      from: `"Rena System" <${process.env.SMTP_USER}>`,
+      from: `"Phénix System" <${process.env.SMTP_USER}>`,
       to: process.env.SMTP_USER,
       subject: `Nouvelle demande d'inscription affilié : ${name}`,
       text: `Nouvelle demande d'inscription reçue !\n\nNom: ${name}\nEmail: ${email}\nTéléphone: ${phone || 'Non fourni'}\nMessage: ${message || 'Aucun message'}\nDate: ${date}\n\nConnectez-vous au tableau de bord administrateur pour approuver ou rejeter cette demande.`,
@@ -4831,7 +4831,7 @@ router.post('/api/push/send', requireDb, async (req, res) => {
     return res.status(503).json({ error: 'Push notifications non configurées.' });
 
   const { title, body, url, tag } = req.body;
-  const payload = JSON.stringify({ title: title || 'Rena', body: body || '', url: url || '/', tag: tag || 'rena-notif', icon: '/icon.svg', badge: '/icon.svg' });
+  const payload = JSON.stringify({ title: title || 'Phénix', body: body || '', url: url || '/', tag: tag || 'phenix-notif', icon: '/icon.svg', badge: '/icon.svg' });
 
   const snap = await adminDb.collection('push_subscriptions').get();
   const subs = snap.docs.map(d => d.data().subscription);
@@ -6266,13 +6266,59 @@ router.patch('/api/admin/promotion/orders/:id', requireDb, requireAdminSecret, a
 });
 
 // ── Agent Phénix — chat IA (Groq) ─────────────────────────────────────────────
+function phenixFallbackResponse(messages: Array<{ role: string; content: string }>): string | null {
+  const lastUser = [...messages].reverse().find(m => m.role === 'user');
+  if (!lastUser) return null;
+  const q = lastUser.content.toLowerCase();
+  if (q.includes('dépôt') || q.includes('depot') || q.includes('approuv')) {
+    return '💰 **Approuver un dépôt :**\n1. Cliquez sur **Demandes** dans le menu\n2. Trouvez la demande de dépôt\n3. Vérifiez le montant et la preuve de paiement\n4. Cliquez sur **Approuver** ✅\n\nLe solde du client sera automatiquement mis à jour.';
+  }
+  if (q.includes('retrait') || q.includes('reject') || q.includes('refus')) {
+    return '💸 **Gérer un retrait :**\n1. Allez dans **Demandes**\n2. Sélectionnez la demande de retrait\n3. Cliquez **Approuver** pour valider ou **Rejeter** pour refuser\n4. En cas de rejet, saisissez un motif\n\nLe client sera notifié automatiquement.';
+  }
+  if (q.includes('produit') || q.includes('ajouter') || q.includes('service') || q.includes('catalogue')) {
+    return '🛍️ **Ajouter un produit :**\n1. Cliquez sur **Produits** dans la sidebar\n2. Appuyez sur le bouton **+** (Nouveau produit)\n3. Remplissez : nom, image, prix, description\n4. Cliquez **Sauvegarder**\n\nLe produit sera visible sur la page d\'accueil pour les clients.';
+  }
+  if (q.includes('formation') || q.includes('cours') || q.includes('module') || q.includes('chapitre')) {
+    return '🎓 **Créer une formation :**\n1. Allez dans **Formations** → bouton **+**\n2. Remplissez : titre, description, prix, niveau\n3. Ajoutez des **modules** → puis des **chapitres** dans chaque module\n4. Ajoutez des ressources (vidéos, PDF, liens)\n5. Publiez la formation ✅\n\nLes clients peuvent l\'acheter avec leur wallet.';
+  }
+  if (q.includes('taux') || q.includes('change') || q.includes('htg') || q.includes('paramètre') || q.includes('parametre') || q.includes('config')) {
+    return '⚙️ **Modifier le taux de change :**\n1. Cliquez sur **Paramètres** dans la sidebar\n2. Trouvez le champ **Taux de change** (USD → HTG)\n3. Entrez le nouveau taux\n4. Cliquez **Sauvegarder**\n\nTous les prix s\'ajusteront automatiquement.';
+  }
+  if (q.includes('annonce') || q.includes('notification') || q.includes('message') || q.includes('envoi')) {
+    return '📢 **Envoyer une annonce :**\n1. Allez dans **Annonces** dans la sidebar\n2. Remplissez le **titre** et le **message**\n3. Choisissez le type (info, succès, avertissement)\n4. Cliquez **Envoyer l\'annonce** 📤\n\nTous les utilisateurs connectés verront la notification.';
+  }
+  if (q.includes('promotion') || q.includes('plateforme') || q.includes('tiktok') || q.includes('youtube') || q.includes('instagram') || q.includes('boost')) {
+    return '📱 **Gérer les plateformes Promotion :**\n1. Cliquez sur **Promotion** dans la sidebar\n2. Onglet **Plateformes** → **+** pour en ajouter une\n3. Configurez : nom, clé, gradient, logo URL\n4. Ajoutez des **services** dans l\'onglet Services\n\nLes clients pourront commander via la section Promotion.';
+  }
+  if (q.includes('colis') || q.includes('tracking') || q.includes('livraison') || q.includes('suivi')) {
+    return '📦 **Gérer les colis :**\n1. Allez dans **Colis** dans la sidebar\n2. Cliquez **+** pour ajouter un nouveau colis\n3. Remplissez : ID, description, statut, dates\n4. Les clients peuvent suivre leur colis avec l\'ID\n\nStatuts disponibles : En route, En transit, Arrivé, Livré.';
+  }
+  if (q.includes('carte') || q.includes('visa') || q.includes('mastercard') || q.includes('virtual')) {
+    return '💳 **Gérer les cartes :**\n1. Allez dans **Cartes** dans la sidebar\n2. Ajoutez de nouveaux types de cartes avec **+**\n3. Configurez : nom, type (virtuelle/physique), prix\n4. Les clients peuvent commander depuis leur dashboard\n\nLes commandes apparaissent dans **Demandes**.';
+  }
+  if (q.includes('paiement') || q.includes('moncash') || q.includes('méthode') || q.includes('methode')) {
+    return '💳 **Configurer les méthodes de paiement :**\n1. Allez dans **Paiements** dans la sidebar\n2. Activez/désactivez les méthodes (MonCash, NatCash, Crypto...)\n3. Configurez les numéros et labels pour chaque méthode\n4. Sauvegardez les changements\n\nLes clients verront uniquement les méthodes actives.';
+  }
+  if (q.includes('client') || q.includes('wallet') || q.includes('solde') || q.includes('affilié')) {
+    return '👤 **Gérer les clients & wallets :**\n1. Allez dans **Paramètres** → section Wallets\n2. Recherchez un client par nom ou ID wallet\n3. Vous pouvez ajuster le solde manuellement\n4. Les affiliés sont gérés dans leur section dédiée\n\nPour les agents, configurez-les dans Firestore.';
+  }
+  if (q.includes('bonjour') || q.includes('salut') || q.includes('allo') || q.includes('hello') || q.includes('aide') || q.includes('help')) {
+    return '👋 **Bonjour ! Je suis Phénix, votre assistant IA.**\n\nJe peux vous aider avec :\n• 💰 Approuver/rejeter des dépôts et retraits\n• 🛍️ Ajouter et gérer des produits\n• 🎓 Créer des formations\n• 📱 Gérer les plateformes Promotion\n• ⚙️ Configurer les paramètres\n• 📢 Envoyer des annonces\n\nQuelle action souhaitez-vous effectuer ?';
+  }
+  return null;
+}
+
 router.post('/api/admin/phenix-chat', requireAdminSecret, async (req, res) => {
   const groqKey = process.env.GROQ_API_KEY;
-  if (!groqKey) return res.status(503).json({ error: 'GROQ_API_KEY non configuré.' });
-
   const { messages } = req.body as { messages: Array<{ role: string; content: string }> };
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'messages requis.' });
+  }
+  if (!groqKey) {
+    const fallback = phenixFallbackResponse(messages);
+    if (fallback) return res.json({ reply: fallback });
+    return res.json({ reply: '🤖 Je suis Phénix, votre assistant. Je peux répondre à des questions sur : les dépôts/retraits, les produits, les formations, les paramètres, les colis, les cartes, la promotion et les annonces. Posez-moi une question précise !' });
   }
 
   const systemPrompt = `Tu es Phénix, l'assistant IA intégré dans le tableau de bord administrateur de la plateforme "Phénix Services".

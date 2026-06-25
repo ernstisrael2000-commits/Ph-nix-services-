@@ -522,7 +522,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
         if (!res.ok) throw new Error(data.error || 'Erreur serveur');
         toast.success('Demande de dépôt soumise !');
         const adminPhone = settings?.whatsappAdminNumber || '+50939442830';
-        const msg = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Rena.\n\nMontant: ${amount} $\nMéthode: ${depositMethod}\nWallet: ${walletLabel}\nID Wallet: ${affiliate!.walletId}\nNom: ${affiliate!.name}`;
+        const msg = `Bonjour Admin, je souhaite effectuer un dépôt sur mon compte Phénix.\n\nMontant: ${amount} $\nMéthode: ${depositMethod}\nWallet: ${walletLabel}\nID Wallet: ${affiliate!.walletId}\nNom: ${affiliate!.name}`;
         window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(msg)}`, '_blank');
       }
       setIsDepositModalOpen(false); setDepositAmount(''); setAgentCode(''); setDepositWallet('principal');
@@ -1230,7 +1230,7 @@ export default function AffiliateDashboard({ affiliateId, onLogout }: AffiliateD
                     <Copy className="h-4 w-4" />
                   </button>
                   <button onClick={() => {
-                    const text = `Rejoignez-moi sur Rena ! Utilisez mon code ${affiliate.code} pour vous inscrire et profiter d'avantages exclusifs.`;
+                    const text = `Rejoignez-moi sur Phénix ! Utilisez mon code ${affiliate.code} pour vous inscrire et profiter d'avantages exclusifs.`;
                     if (navigator.share) navigator.share({ text });
                     else { navigator.clipboard.writeText(text); toast.success('Message copié !'); }
                   }} className="h-10 w-10 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors">
