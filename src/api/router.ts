@@ -103,6 +103,39 @@ function getFcmMessaging(): ReturnType<typeof getAdminMessaging> | null {
   }
 }
 
+// ─── In-memory cache (TTL-based) ──────────────────────────────────────────────
+const _cache = new Map<string, { data: any; expiresAt: number }>();
+
+function cacheGet(key: string): any | null {
+  const entry = _cache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) { _cache.delete(key); return null; }
+  return entry.data;
+}
+
+function cacheSet(key: string, data: any, ttlMs: number): void {
+  _cache.set(key, { data, expiresAt: Date.now() + ttlMs });
+}
+
+function cacheDel(...keys: string[]): void {
+  keys.forEach(k => _cache.delete(k));
+}
+
+function cacheDelPrefix(prefix: string): void {
+  for (const k of _cache.keys()) {
+    if (k.startsWith(prefix)) _cache.delete(k);
+  }
+}
+
+// Wrap an async data-fetcher with caching: returns cached value or fetches & stores
+async function withCache<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
+  const cached = cacheGet(key);
+  if (cached !== null) return cached as T;
+  const data = await fetcher();
+  cacheSet(key, data, ttlMs);
+  return data;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function serializeDoc(snap: FirebaseFirestore.DocumentSnapshot | FirebaseFirestore.QueryDocumentSnapshot): any {
@@ -3763,6 +3796,7 @@ router.post('/api/admin/formations', async (req, res) => {
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
+    cacheDel('formations-public');
     res.json({ success: true, id: ref.id });
   } catch (e: any) {
     console.error('[formations POST]', e);
@@ -3776,6 +3810,7 @@ router.put('/api/admin/formations/:id', async (req, res) => {
     await adminDb.collection('formations').doc(req.params.id).update({
       ...data, updatedAt: FieldValue.serverTimestamp(),
     });
+    cacheDel('formations-public');
     res.json({ success: true });
   } catch (e: any) {
     console.error('[formations PUT]', e);
@@ -3786,6 +3821,7 @@ router.put('/api/admin/formations/:id', async (req, res) => {
 router.delete('/api/admin/formations/:id', async (req, res) => {
   try {
     await adminDb.collection('formations').doc(req.params.id).delete();
+    cacheDel('formations-public');
     res.json({ success: true });
   } catch (e: any) {
     console.error('[formations DELETE]', e);
@@ -3875,8 +3911,11 @@ router.patch('/api/admin/formations/payment-requests/:id', requireDb, async (req
 // ── Online Sub-Services ───────────────────────────────────────────────────────
 router.get('/api/online-sub-services', requireDb, async (_req, res) => {
   try {
-    const snap = await adminDb.collection('online_sub_services').orderBy('order', 'asc').get();
-    res.json({ services: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+    const data = await withCache('online-sub-services', 45_000, async () => {
+      const snap = await adminDb.collection('online_sub_services').orderBy('order', 'asc').get();
+      return { services: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
+    });
+    res.json(data);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -3889,9 +3928,11 @@ router.post('/api/admin/online-sub-services', requireDb, async (req, res) => {
     const { id, createdAt: _c, ...data } = req.body;
     if (id) {
       await adminDb.collection('online_sub_services').doc(id).set({ ...data, updatedAt: new Date() }, { merge: true });
+      cacheDel('online-sub-services');
       return res.json({ success: true, id });
     } else {
       const ref = await adminDb.collection('online_sub_services').add({ ...data, createdAt: new Date() });
+      cacheDel('online-sub-services');
       return res.json({ success: true, id: ref.id });
     }
   } catch (e: any) {
@@ -3904,6 +3945,7 @@ router.delete('/api/admin/online-sub-services/:id', requireDb, async (req, res) 
     return res.status(403).json({ error: 'Non autorisé.' });
   try {
     await adminDb.collection('online_sub_services').doc(req.params.id).delete();
+    cacheDel('online-sub-services');
     res.json({ success: true });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -3915,9 +3957,12 @@ router.use('/api/formations', requireDb);
 
 router.get('/api/formations', async (_req, res) => {
   try {
-    const snap = await adminDb.collection('formations').orderBy('createdAt', 'desc').get();
-    const formations = snap.docs.map(serializeDoc).filter((f: any) => f.published || f.comingSoon);
-    res.json({ formations });
+    const data = await withCache('formations-public', 45_000, async () => {
+      const snap = await adminDb.collection('formations').orderBy('createdAt', 'desc').get();
+      const formations = snap.docs.map(serializeDoc).filter((f: any) => f.published || f.comingSoon);
+      return { formations };
+    });
+    res.json(data);
   } catch (e: any) {
     console.error('[formations public GET]', e);
     res.status(500).json({ error: e.message || 'Erreur.' });
@@ -4459,9 +4504,11 @@ router.post('/api/admin/card-topup', requireDb, requireAdminSecret, async (req, 
     const ts = FieldValue.serverTimestamp();
     if (id) {
       await adminDb.collection('card_topups').doc(id).update({ ...data, updatedAt: ts });
+      cacheDel('card-topups');
       return res.json({ success: true, id });
     }
     const ref = await adminDb.collection('card_topups').add({ ...data, createdAt: ts, updatedAt: ts });
+    cacheDel('card-topups');
     res.json({ success: true, id: ref.id });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -4469,6 +4516,7 @@ router.post('/api/admin/card-topup', requireDb, requireAdminSecret, async (req, 
 router.delete('/api/admin/card-topup/:id', requireDb, requireAdminSecret, async (req, res) => {
   try {
     await adminDb.collection('card_topups').doc(req.params.id).delete();
+    cacheDel('card-topups');
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -4502,6 +4550,7 @@ router.post('/api/admin/slider-image', requireDb, requireAdminSecret, async (req
       url, title: title || '', description: description || '',
       createdAt: FieldValue.serverTimestamp(),
     });
+    cacheDel('slider-images');
     res.json({ success: true, id: ref.id });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -4514,6 +4563,7 @@ router.put('/api/admin/slider-image/:id', requireDb, requireAdminSecret, async (
     if (title !== undefined) updates.title = title;
     if (description !== undefined) updates.description = description;
     await adminDb.collection('slider_images').doc(req.params.id).update(updates);
+    cacheDel('slider-images');
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -4521,6 +4571,7 @@ router.put('/api/admin/slider-image/:id', requireDb, requireAdminSecret, async (
 router.delete('/api/admin/slider-image/:id', requireDb, requireAdminSecret, async (req, res) => {
   try {
     await adminDb.collection('slider_images').doc(req.params.id).delete();
+    cacheDel('slider-images');
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -4593,6 +4644,7 @@ router.post('/api/admin/settings', requireDb, requireAdminSecret, async (req, re
       return acc;
     }, {});
     await adminDb.collection('settings').doc('global').set(cleanData, { merge: true });
+    cacheDel('settings-data');
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -4601,15 +4653,21 @@ router.post('/api/admin/settings', requireDb, requireAdminSecret, async (req, re
 
 router.get('/api/admin/card-topups', requireDb, requireAdminSecret, async (_req, res) => {
   try {
-    const snap = await adminDb.collection('card_topups').orderBy('createdAt', 'desc').get();
-    res.json({ cards: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+    const data = await withCache('card-topups', 30_000, async () => {
+      const snap = await adminDb.collection('card_topups').orderBy('createdAt', 'desc').get();
+      return { cards: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
+    });
+    res.json(data);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.get('/api/admin/products', requireDb, requireAdminSecret, async (_req, res) => {
   try {
-    const snap = await adminDb.collection('products').orderBy('createdAt', 'desc').get();
-    res.json({ products: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+    const data = await withCache('admin-products', 30_000, async () => {
+      const snap = await adminDb.collection('products').orderBy('createdAt', 'desc').get();
+      return { products: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
+    });
+    res.json(data);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
@@ -4652,8 +4710,11 @@ router.get('/api/admin/slider-images-list', requireDb, requireAdminSecret, async
 // Public endpoint — no admin secret required (images are public content)
 router.get('/api/slider-images', requireDb, async (_req, res) => {
   try {
-    const snap = await adminDb.collection('slider_images').orderBy('createdAt', 'asc').get();
-    res.json({ images: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+    const data = await withCache('slider-images', 60_000, async () => {
+      const snap = await adminDb.collection('slider_images').orderBy('createdAt', 'asc').get();
+      return { images: snap.docs.map(d => ({ id: d.id, ...d.data() })) };
+    });
+    res.json(data);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
@@ -4666,8 +4727,11 @@ router.get('/api/admin/nav-buttons-list', requireDb, requireAdminSecret, async (
 
 router.get('/api/admin/settings-data', requireDb, requireAdminSecret, async (_req, res) => {
   try {
-    const d = await adminDb.collection('settings').doc('global').get();
-    res.json({ settings: d.exists ? d.data() : null });
+    const data = await withCache('settings-data', 20_000, async () => {
+      const d = await adminDb.collection('settings').doc('global').get();
+      return { settings: d.exists ? d.data() : null };
+    });
+    res.json(data);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
@@ -6076,8 +6140,11 @@ router.get('/api/admin/safacilpay-deposits', requireDb, async (req, res) => {
 // GET /api/promotion/platforms (public)
 router.get('/api/promotion/platforms', requireDb, async (_req, res) => {
   try {
-    const snap = await adminDb.collection('promotion_platforms').orderBy('order', 'asc').get();
-    res.json({ platforms: snap.docs.map((d: any) => serializeDoc(d)) });
+    const data = await withCache('promotion-platforms', 30_000, async () => {
+      const snap = await adminDb.collection('promotion_platforms').orderBy('order', 'asc').get();
+      return { platforms: snap.docs.map((d: any) => serializeDoc(d)) };
+    });
+    res.json(data);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
@@ -6086,6 +6153,7 @@ router.post('/api/admin/promotion/platforms', requireDb, requireAdminSecret, asy
   try {
     const data = { ...req.body, createdAt: FieldValue.serverTimestamp(), order: req.body.order ?? 99 };
     const ref = await adminDb.collection('promotion_platforms').add(data);
+    cacheDel('promotion-platforms'); cacheDelPrefix('promotion-services:');
     res.json({ id: ref.id });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -6095,6 +6163,7 @@ router.put('/api/admin/promotion/platforms/:id', requireDb, requireAdminSecret, 
   try {
     const { id } = req.params;
     await adminDb.collection('promotion_platforms').doc(id).update({ ...req.body, updatedAt: FieldValue.serverTimestamp() });
+    cacheDel('promotion-platforms');
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -6109,6 +6178,7 @@ router.delete('/api/admin/promotion/platforms/:id', requireDb, requireAdminSecre
     const batch = adminDb.batch();
     snap.docs.forEach((d: any) => batch.delete(d.ref));
     await batch.commit();
+    cacheDel('promotion-platforms'); cacheDelPrefix('promotion-services:');
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -6117,14 +6187,18 @@ router.delete('/api/admin/promotion/platforms/:id', requireDb, requireAdminSecre
 router.get('/api/promotion/services', requireDb, async (req, res) => {
   try {
     const { platformId, platformKey, category } = req.query;
-    const snap = await adminDb.collection('promotion_services').get();
-    let services = snap.docs.map((d: any) => serializeDoc(d));
-    services = services.filter((s: any) => s.active === true || s.active === undefined);
-    if (platformId) services = services.filter((s: any) => s.platformId === platformId);
-    else if (platformKey) services = services.filter((s: any) => s.platformKey === platformKey);
-    if (category) services = services.filter((s: any) => s.category === category);
-    services.sort((a: any, b: any) => (a.order ?? 99) - (b.order ?? 99));
-    res.json({ services });
+    const cacheKey = `promotion-services:${platformId || ''}:${platformKey || ''}:${category || ''}`;
+    const data = await withCache(cacheKey, 30_000, async () => {
+      const snap = await adminDb.collection('promotion_services').get();
+      let services = snap.docs.map((d: any) => serializeDoc(d));
+      services = services.filter((s: any) => s.active === true || s.active === undefined);
+      if (platformId) services = services.filter((s: any) => s.platformId === platformId);
+      else if (platformKey) services = services.filter((s: any) => s.platformKey === platformKey);
+      if (category) services = services.filter((s: any) => s.category === category);
+      services.sort((a: any, b: any) => (a.order ?? 99) - (b.order ?? 99));
+      return { services };
+    });
+    res.json(data);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
@@ -6133,6 +6207,7 @@ router.post('/api/admin/promotion/services', requireDb, requireAdminSecret, asyn
   try {
     const data = { ...req.body, createdAt: FieldValue.serverTimestamp(), order: req.body.order ?? 99, active: req.body.active ?? true };
     const ref = await adminDb.collection('promotion_services').add(data);
+    cacheDelPrefix('promotion-services:');
     res.json({ id: ref.id });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -6142,6 +6217,7 @@ router.put('/api/admin/promotion/services/:id', requireDb, requireAdminSecret, a
   try {
     const { id } = req.params;
     await adminDb.collection('promotion_services').doc(id).update({ ...req.body, updatedAt: FieldValue.serverTimestamp() });
+    cacheDelPrefix('promotion-services:');
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -6151,6 +6227,7 @@ router.delete('/api/admin/promotion/services/:id', requireDb, requireAdminSecret
   try {
     const { id } = req.params;
     await adminDb.collection('promotion_services').doc(id).delete();
+    cacheDelPrefix('promotion-services:');
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -6171,8 +6248,11 @@ router.get('/api/admin/promotion/services', requireDb, requireAdminSecret, async
 // GET /api/promotion/settings  (public)
 router.get('/api/promotion/settings', requireDb, async (_req, res) => {
   try {
-    const doc = await adminDb.collection('promotion_settings').doc('main').get();
-    res.json(doc.exists ? doc.data() : {});
+    const data = await withCache('promotion-settings', 30_000, async () => {
+      const doc = await adminDb.collection('promotion_settings').doc('main').get();
+      return doc.exists ? doc.data() : {};
+    });
+    res.json(data);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
@@ -6183,6 +6263,7 @@ router.put('/api/admin/promotion/settings', requireDb, requireAdminSecret, async
       { ...req.body, updatedAt: FieldValue.serverTimestamp() },
       { merge: true }
     );
+    cacheDel('promotion-settings');
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });

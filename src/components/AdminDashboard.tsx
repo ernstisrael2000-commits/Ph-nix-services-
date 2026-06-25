@@ -2014,9 +2014,16 @@ export default function AdminDashboard({ admin, onLogout }: AdminDashboardProps)
         {/* Top bar (mobile header) */}
         <header className="shrink-0 bg-white border-b border-gray-100 shadow-sm lg:shadow-none">
           <div className="px-4 h-14 flex items-center gap-3">
-            <button onClick={() => setSidebarOpen(true)} className="lg:hidden h-9 w-9 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-600 transition-colors">
-              <Menu className="h-5 w-5" />
-            </button>
+            <div className="relative lg:hidden">
+              <button onClick={() => setSidebarOpen(true)} className="h-9 w-9 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-600 transition-colors">
+                <Menu className="h-5 w-5" />
+              </button>
+              {pendingCount > 0 && (
+                <span className="absolute -top-1 -right-1 h-4.5 min-w-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center leading-none pointer-events-none">
+                  {pendingCount > 99 ? '99+' : pendingCount}
+                </span>
+              )}
+            </div>
             <div className="flex-1 min-w-0">
               <h1 className="font-bold text-gray-900 truncate">{SECTION_LABELS[section]}</h1>
             </div>
