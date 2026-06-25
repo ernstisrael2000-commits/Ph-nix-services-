@@ -105,11 +105,12 @@ function getFcmMessaging(): ReturnType<typeof getAdminMessaging> | null {
 
 // ─── In-memory cache (TTL-based) ──────────────────────────────────────────────
 const _cache = new Map<string, { data: any; expiresAt: number }>();
+const _CACHE_MISS = Symbol('CACHE_MISS');
 
-function cacheGet(key: string): any | null {
+function cacheGet(key: string): any | typeof _CACHE_MISS {
   const entry = _cache.get(key);
-  if (!entry) return null;
-  if (Date.now() > entry.expiresAt) { _cache.delete(key); return null; }
+  if (!entry) return _CACHE_MISS;
+  if (Date.now() > entry.expiresAt) { _cache.delete(key); return _CACHE_MISS; }
   return entry.data;
 }
 
@@ -130,7 +131,7 @@ function cacheDelPrefix(prefix: string): void {
 // Wrap an async data-fetcher with caching: returns cached value or fetches & stores
 async function withCache<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
   const cached = cacheGet(key);
-  if (cached !== null) return cached as T;
+  if (cached !== _CACHE_MISS) return cached as T;
   const data = await fetcher();
   cacheSet(key, data, ttlMs);
   return data;
@@ -4462,9 +4463,11 @@ router.post('/api/admin/product', requireDb, requireAdminSecret, async (req, res
     const ts = FieldValue.serverTimestamp();
     if (id) {
       await adminDb.collection('products').doc(id).update({ ...data, updatedAt: ts });
+      cacheDel('admin-products');
       return res.json({ success: true, id });
     }
     const ref = await adminDb.collection('products').add({ ...data, createdAt: ts });
+    cacheDel('admin-products');
     res.json({ success: true, id: ref.id });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -4472,6 +4475,7 @@ router.post('/api/admin/product', requireDb, requireAdminSecret, async (req, res
 router.delete('/api/admin/product/:id', requireDb, requireAdminSecret, async (req, res) => {
   try {
     await adminDb.collection('products').doc(req.params.id).delete();
+    cacheDel('admin-products');
     res.json({ success: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
