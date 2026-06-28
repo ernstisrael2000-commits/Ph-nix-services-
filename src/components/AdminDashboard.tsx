@@ -12,7 +12,7 @@ import {
   MapPin, Weight, FileText, ChevronUp, Video,
   Link as LinkIcon, ArrowLeft, BookOpen,
   Layers, Save, Eye, EyeOff, GripVertical,
-  Wifi, TrendingUp, List, ChevronRight,
+  Wifi, TrendingUp, List, ChevronRight, Percent,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -30,7 +30,7 @@ import {
 import {
   AdminAccount, Parcel, ParcelStatus, PaymentStatus, Product,
   PaymentMethod, DEFAULT_PAYMENT_METHODS, Formation, FormationLevel,
-  FormationModule, FormationChapter, FormationResource, CardTopup, RechargeField,
+  FormationModule, FormationChapter, FormationResource, CardTopup, RechargeField, FeeTier,
 } from '../types';
 import AdminWalletManager from './AdminWalletManager';
 import AdminPromotionSection from './AdminPromotionSection';
@@ -1335,14 +1335,32 @@ function CardsSection() {
   const [form, setForm] = useState<Partial<CardTopup>>(emptyForm);
   const [createFields, setCreateFields] = useState<RechargeField[]>([]);
   const [showCreateFieldEditor, setShowCreateFieldEditor] = useState(false);
+  const [feeMode, setFeeMode] = useState<'none' | 'percent' | 'tiers'>('none');
+  const [feeTiers, setFeeTiers] = useState<FeeTier[]>([]);
+  const [showFeeEditor, setShowFeeEditor] = useState(false);
 
   const filtered = cards.filter(c =>
     c.name?.toLowerCase().includes(search.toLowerCase()) ||
     c.description?.toLowerCase().includes(search.toLowerCase())
   );
 
-  function openAdd() { setEditingCard(null); setForm(emptyForm); setCreateFields([]); setShowCreateFieldEditor(false); setError(''); setDialogOpen(true); }
-  function openEdit(c: CardTopup) { setEditingCard(c); setForm({ ...c }); const cf = (c as any).createFields || []; setCreateFields(cf); setShowCreateFieldEditor(cf.length > 0); setError(''); setDialogOpen(true); }
+  function openAdd() { setEditingCard(null); setForm(emptyForm); setCreateFields([]); setShowCreateFieldEditor(false); setFeeMode('none'); setFeeTiers([]); setShowFeeEditor(false); setError(''); setDialogOpen(true); }
+  function openEdit(c: CardTopup) {
+    setEditingCard(c);
+    setForm({ ...c });
+    const cf = (c as any).createFields || [];
+    setCreateFields(cf);
+    setShowCreateFieldEditor(cf.length > 0);
+    const tiers = c.rechargeFeesTiers || [];
+    if (tiers.length > 0) {
+      setFeeMode('tiers'); setFeeTiers(tiers); setShowFeeEditor(true);
+    } else if ((c.rechargeFeePercent ?? 0) > 0) {
+      setFeeMode('percent'); setFeeTiers([]); setShowFeeEditor(true);
+    } else {
+      setFeeMode('none'); setFeeTiers([]); setShowFeeEditor(false);
+    }
+    setError(''); setDialogOpen(true);
+  }
   function addCreateField() { setCreateFields(f => [...f, { id: uid(), label: '', placeholder: '', required: false }]); }
   function removeCreateField(id: string) { setCreateFields(f => f.filter(x => x.id !== id)); }
   function updateCreateField(id: string, key: keyof RechargeField, value: any) { setCreateFields(f => f.map(x => x.id === id ? { ...x, [key]: value } : x)); }
@@ -1351,7 +1369,15 @@ function CardsSection() {
     if (!form.name?.trim()) { setError('Le nom est requis.'); return; }
     if (!form.price?.trim()) { setError('Le prix est requis.'); return; }
     setSaving(true); setError('');
-    try { await saveCardTopup({ ...form, createFields } as any, editingCard?.id); setDialogOpen(false); }
+    try {
+      const feeData: Partial<CardTopup> = feeMode === 'percent'
+        ? { rechargeFeePercent: form.rechargeFeePercent || 0, rechargeFeesTiers: [] }
+        : feeMode === 'tiers'
+          ? { rechargeFeesTiers: feeTiers, rechargeFeePercent: 0 }
+          : { rechargeFeePercent: 0, rechargeFeesTiers: [] };
+      await saveCardTopup({ ...form, createFields, ...feeData } as any, editingCard?.id);
+      setDialogOpen(false);
+    }
     catch (e: any) { setError(e.message || 'Erreur.'); }
     finally { setSaving(false); }
   }
@@ -1493,6 +1519,129 @@ function CardsSection() {
                   <Button type="button" variant="outline" size="sm" className="w-full rounded-xl border-dashed gap-2" onClick={addCreateField}>
                     <Plus className="h-3.5 w-3.5" />Ajouter un champ
                   </Button>
+                </div>
+              )}
+            </div>
+
+            {/* ── Frais de recharge ── */}
+            <div className="border rounded-xl overflow-hidden">
+              <button type="button"
+                className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-sm font-semibold text-gray-700"
+                onClick={() => setShowFeeEditor(v => !v)}>
+                <span className="flex items-center gap-2">
+                  <Percent className="h-4 w-4 text-amber-500" />
+                  Frais de recharge
+                  {feeMode !== 'none' && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold">
+                      {feeMode === 'percent' ? `${form.rechargeFeePercent ?? 0}%` : `${feeTiers.length} palier${feeTiers.length > 1 ? 's' : ''}`}
+                    </span>
+                  )}
+                </span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${showFeeEditor ? 'rotate-180' : ''}`} />
+              </button>
+              {showFeeEditor && (
+                <div className="p-4 space-y-4 bg-white">
+                  {/* Sélecteur de mode */}
+                  <div className="flex gap-2 flex-wrap">
+                    {([
+                      { value: 'none', label: 'Aucun frais' },
+                      { value: 'percent', label: '% Global' },
+                      { value: 'tiers', label: 'Paliers' },
+                    ] as const).map(opt => (
+                      <button key={opt.value} type="button"
+                        onClick={() => setFeeMode(opt.value)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${feeMode === opt.value ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Mode : pourcentage global */}
+                  {feeMode === 'percent' && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Pourcentage de frais appliqué à la recharge</Label>
+                      <div className="relative">
+                        <Input className="rounded-xl pr-8" type="number" min="0" max="100" step="0.1"
+                          placeholder="Ex : 5"
+                          value={form.rechargeFeePercent ?? ''}
+                          onChange={e => setForm(f => ({ ...f, rechargeFeePercent: e.target.value ? parseFloat(e.target.value) : undefined }))} />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-bold">%</span>
+                      </div>
+                      <p className="text-xs text-gray-400">Ex : 5% sur un montant de $20 → frais $1, total $21.</p>
+                    </div>
+                  )}
+
+                  {/* Mode : paliers personnalisés */}
+                  {feeMode === 'tiers' && (
+                    <div className="space-y-3">
+                      <p className="text-xs text-gray-400">Définissez des frais selon le montant rechargé (USD). Max = 0 = sans limite supérieure.</p>
+                      {feeTiers.map((tier, i) => (
+                        <div key={i} className="p-3 bg-gray-50 rounded-xl border space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-gray-400 uppercase">Palier {i + 1}</span>
+                            <button type="button" onClick={() => setFeeTiers(t => t.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600">
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <Label className="text-xs">De ($)</Label>
+                              <Input className="rounded-lg h-8 text-sm" type="number" min="0" step="0.01"
+                                placeholder="0"
+                                value={tier.minAmount || ''}
+                                onChange={e => setFeeTiers(t => t.map((x, j) => j === i ? { ...x, minAmount: parseFloat(e.target.value) || 0 } : x))} />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">À ($, 0 = illimité)</Label>
+                              <Input className="rounded-lg h-8 text-sm" type="number" min="0" step="0.01"
+                                placeholder="0"
+                                value={tier.maxAmount || ''}
+                                onChange={e => setFeeTiers(t => t.map((x, j) => j === i ? { ...x, maxAmount: parseFloat(e.target.value) || 0 } : x))} />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Type de frais</Label>
+                              <select className="w-full h-8 rounded-lg text-sm border border-input bg-background px-2 focus:outline-none"
+                                value={tier.feeType}
+                                onChange={e => setFeeTiers(t => t.map((x, j) => j === i ? { ...x, feeType: e.target.value as 'fixed' | 'percent' } : x))}>
+                                <option value="fixed">Fixe ($)</option>
+                                <option value="percent">Pourcentage (%)</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Valeur</Label>
+                              <div className="relative">
+                                <Input className="rounded-lg h-8 text-sm pr-7" type="number" min="0" step="0.01"
+                                  placeholder={tier.feeType === 'fixed' ? '1.00' : '5'}
+                                  value={tier.feeValue || ''}
+                                  onChange={e => setFeeTiers(t => t.map((x, j) => j === i ? { ...x, feeValue: parseFloat(e.target.value) || 0 } : x))} />
+                                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs font-bold">{tier.feeType === 'fixed' ? '$' : '%'}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <Button type="button" variant="outline" size="sm" className="w-full rounded-xl border-dashed gap-2"
+                        onClick={() => setFeeTiers(t => [...t, { minAmount: 0, maxAmount: 0, feeType: 'fixed', feeValue: 0 }])}>
+                        <Plus className="h-3.5 w-3.5" />Ajouter un palier
+                      </Button>
+
+                      {/* Aperçu */}
+                      {feeTiers.length > 0 && (
+                        <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 space-y-1.5">
+                          <p className="text-xs font-bold text-amber-700 flex items-center gap-1.5">
+                            <Info className="h-3.5 w-3.5" />Aperçu des paliers
+                          </p>
+                          {feeTiers.map((tier, i) => (
+                            <p key={i} className="text-xs text-amber-700 font-medium">
+                              ${tier.minAmount}{tier.maxAmount === 0 ? ' et plus' : ` – $${tier.maxAmount}`}
+                              {' → '}
+                              <span className="font-bold">{tier.feeType === 'fixed' ? `$${tier.feeValue} fixe` : `${tier.feeValue}%`}</span>
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
