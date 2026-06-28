@@ -1338,19 +1338,25 @@ function CardsSection() {
   const [feeMode, setFeeMode] = useState<'none' | 'percent' | 'tiers'>('none');
   const [feeTiers, setFeeTiers] = useState<FeeTier[]>([]);
   const [showFeeEditor, setShowFeeEditor] = useState(false);
+  const fieldListEndRef = useRef<HTMLDivElement>(null);
 
   const filtered = cards.filter(c =>
     c.name?.toLowerCase().includes(search.toLowerCase()) ||
     c.description?.toLowerCase().includes(search.toLowerCase())
   );
 
-  function openAdd() { setEditingCard(null); setForm(emptyForm); setCreateFields([]); setShowCreateFieldEditor(false); setFeeMode('none'); setFeeTiers([]); setShowFeeEditor(false); setError(''); setDialogOpen(true); }
+  function openAdd() { setEditingCard(null); setForm(emptyForm); setCreateFields([]); setShowCreateFieldEditor(true); setFeeMode('none'); setFeeTiers([]); setShowFeeEditor(false); setError(''); setDialogOpen(true); }
   function openEdit(c: CardTopup) {
     setEditingCard(c);
     setForm({ ...c });
-    const cf = (c as any).createFields || [];
+    const cf: RechargeField[] = ((c as any).createFields || []).map((f: any) => ({
+      id: f.id || uid(),
+      label: f.label || '',
+      placeholder: f.placeholder || '',
+      required: !!f.required,
+    }));
     setCreateFields(cf);
-    setShowCreateFieldEditor(cf.length > 0);
+    setShowCreateFieldEditor(true);
     const tiers = c.rechargeFeesTiers || [];
     if (tiers.length > 0) {
       setFeeMode('tiers'); setFeeTiers(tiers); setShowFeeEditor(true);
@@ -1361,7 +1367,11 @@ function CardsSection() {
     }
     setError(''); setDialogOpen(true);
   }
-  function addCreateField() { setCreateFields(f => [...f, { id: uid(), label: '', placeholder: '', required: false }]); }
+  function addCreateField() {
+    setShowCreateFieldEditor(true);
+    setCreateFields(f => [...f, { id: uid(), label: '', placeholder: '', required: false }]);
+    setTimeout(() => fieldListEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }), 80);
+  }
   function removeCreateField(id: string) { setCreateFields(f => f.filter(x => x.id !== id)); }
   function updateCreateField(id: string, key: keyof RechargeField, value: any) { setCreateFields(f => f.map(x => x.id === id ? { ...x, [key]: value } : x)); }
 
@@ -1485,38 +1495,69 @@ function CardsSection() {
                 <span className="flex items-center gap-2">
                   <LayoutGrid className="h-4 w-4 text-indigo-500" />
                   Formulaire de commande
-                  {createFields.length > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-bold">{createFields.length} champ{createFields.length > 1 ? 's' : ''}</span>}
+                  {createFields.length > 0 && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-bold">
+                      {createFields.length} champ{createFields.length > 1 ? 's' : ''}
+                    </span>
+                  )}
                 </span>
                 <ChevronDown className={`h-4 w-4 transition-transform ${showCreateFieldEditor ? 'rotate-180' : ''}`} />
               </button>
               {showCreateFieldEditor && (
                 <div className="p-4 space-y-3 bg-white">
-                  <p className="text-xs text-gray-400">Ces champs seront demandés au client lors d'une commande "Créer".</p>
+                  <p className="text-xs text-gray-400">Ces champs seront demandés au client lors d'une commande "Créer". Modifiez directement les valeurs ci-dessous.</p>
+                  {createFields.length === 0 && (
+                    <div className="text-center py-4 text-gray-400 border border-dashed rounded-xl">
+                      <LayoutGrid className="h-6 w-6 mx-auto mb-1 opacity-40" />
+                      <p className="text-xs">Aucun champ. Cliquez sur "Ajouter un champ" pour commencer.</p>
+                    </div>
+                  )}
                   {createFields.map((field, i) => (
-                    <div key={field.id} className="flex flex-col gap-2 p-3 bg-gray-50 rounded-xl border">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-gray-400 uppercase">Champ {i + 1}</span>
-                        <button type="button" onClick={() => removeCreateField(field.id)} className="text-red-400 hover:text-red-600"><X className="h-4 w-4" /></button>
+                    <div key={field.id} className="rounded-xl border border-indigo-100 bg-indigo-50/30 overflow-hidden">
+                      <div className="flex items-center justify-between px-3 py-2 bg-indigo-50 border-b border-indigo-100">
+                        <span className="text-xs font-bold text-indigo-600 flex items-center gap-1.5">
+                          <Edit2 className="h-3 w-3" />Champ {i + 1}
+                        </span>
+                        <button type="button" onClick={() => removeCreateField(field.id)}
+                          className="text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg p-0.5 transition-colors">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="col-span-2 space-y-1">
-                          <Label className="text-xs">Libellé *</Label>
-                          <Input className="rounded-lg h-8 text-sm" placeholder="Ex: Numéro de compte" value={field.label} onChange={e => updateCreateField(field.id, 'label', e.target.value)} />
+                      <div className="p-3 space-y-2">
+                        <div className="space-y-1">
+                          <Label className="text-xs font-semibold text-gray-600">Libellé *</Label>
+                          <Input
+                            className="rounded-lg h-8 text-sm border-gray-200 focus:border-indigo-400 focus:ring-indigo-300"
+                            placeholder="Ex : Numéro de compte"
+                            value={field.label}
+                            onChange={e => updateCreateField(field.id, 'label', e.target.value)}
+                          />
                         </div>
-                        <div className="col-span-2 space-y-1">
-                          <Label className="text-xs">Placeholder</Label>
-                          <Input className="rounded-lg h-8 text-sm" placeholder="Ex: Entrez votre numéro…" value={field.placeholder} onChange={e => updateCreateField(field.id, 'placeholder', e.target.value)} />
+                        <div className="space-y-1">
+                          <Label className="text-xs font-semibold text-gray-600">Texte d'aide (placeholder)</Label>
+                          <Input
+                            className="rounded-lg h-8 text-sm border-gray-200 focus:border-indigo-400 focus:ring-indigo-300"
+                            placeholder="Ex : Entrez votre numéro…"
+                            value={field.placeholder}
+                            onChange={e => updateCreateField(field.id, 'placeholder', e.target.value)}
+                          />
                         </div>
-                        <div className="flex items-end pb-1">
-                          <label className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer">
-                            <input type="checkbox" className="rounded" checked={field.required || false} onChange={e => updateCreateField(field.id, 'required', e.target.checked)} />
-                            Obligatoire
-                          </label>
-                        </div>
+                        <label className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            className="rounded accent-indigo-600"
+                            checked={field.required || false}
+                            onChange={e => updateCreateField(field.id, 'required', e.target.checked)}
+                          />
+                          Champ obligatoire
+                        </label>
                       </div>
                     </div>
                   ))}
-                  <Button type="button" variant="outline" size="sm" className="w-full rounded-xl border-dashed gap-2" onClick={addCreateField}>
+                  <div ref={fieldListEndRef} />
+                  <Button type="button" variant="outline" size="sm"
+                    className="w-full rounded-xl border-dashed border-indigo-300 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-400 gap-2"
+                    onClick={addCreateField}>
                     <Plus className="h-3.5 w-3.5" />Ajouter un champ
                   </Button>
                 </div>
