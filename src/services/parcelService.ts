@@ -179,21 +179,10 @@ export const useCardTopups = () => {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const q = query(collection(db, 'card_topups'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (cancelled) return;
-      const fetched = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as CardTopup[];
-      setCards(fetched);
-      setLoading(false);
-    }, async (_err) => {
-      if (cancelled) return;
-      try {
-        const data = await adminGet('/api/admin/card-topups');
-        if (!cancelled && data.cards) setCards(data.cards);
-      } catch {}
-      if (!cancelled) setLoading(false);
-    });
-    return () => { cancelled = true; unsubscribe(); };
+    adminGet('/api/admin/card-topups').then(data => {
+      if (!cancelled && data.cards) setCards(data.cards);
+    }).catch(() => {}).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [refreshKey]);
 
   return { cards, loading };

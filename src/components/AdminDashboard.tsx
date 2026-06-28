@@ -1474,6 +1474,26 @@ function CardsSection() {
                 <Input className="rounded-xl" type="number" placeholder="Illimité" value={form.stock ?? ''} onChange={e => setForm(f => ({ ...f, stock: e.target.value ? parseInt(e.target.value) : undefined }))} />
               </div>
             </div>
+            {/* ── Taux personnalisé ── */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Taux personnalisé</Label>
+                <div className="relative">
+                  <Input className="rounded-xl pr-16" type="number" min="0" step="0.01"
+                    placeholder="Ex : 145"
+                    value={form.customRate ?? ''}
+                    onChange={e => setForm(f => ({ ...f, customRate: e.target.value ? parseFloat(e.target.value) : undefined }))} />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">HTG/USD</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Libellé du taux</Label>
+                <Input className="rounded-xl" placeholder="Ex : Taux du jour"
+                  value={form.customRateLabel ?? ''}
+                  onChange={e => setForm(f => ({ ...f, customRateLabel: e.target.value }))} />
+              </div>
+            </div>
+
             <div className="space-y-1.5">
               <Label>Image (URL)</Label>
               <Input className="rounded-xl" placeholder="https://…" value={form.image || ''} onChange={e => setForm(f => ({ ...f, image: e.target.value }))} />

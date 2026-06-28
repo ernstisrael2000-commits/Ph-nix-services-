@@ -110,6 +110,8 @@ export interface CardTopup {
   stock?: number;
   whatsappMessage?: string;
   goldRate?: number;
+  customRate?: number;
+  customRateLabel?: string;
   presets?: number[];
   createFields?: RechargeField[];
   rechargeFields?: RechargeField[];
